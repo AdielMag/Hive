@@ -1,7 +1,8 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { Send, Square, CornerDownLeft } from "lucide-react";
 import { useSessionStore } from "../store/session-store.ts";
 import { ContextRing } from "./ContextRing.tsx";
+import { ContextBreakdownModal } from "./ContextBreakdownModal.tsx";
 
 export const Composer: React.FC = () => {
   const {
@@ -20,6 +21,7 @@ export const Composer: React.FC = () => {
     extensionWidgets,
   } = useSessionStore();
 
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isRunning = transcript.running;
 
@@ -173,8 +175,15 @@ export const Composer: React.FC = () => {
             )}
 
             {/* Context Ring */}
-            <ContextRing tokens={contextTokens} total={contextWindow} percent={contextPercent} />
+            <ContextRing
+              tokens={contextTokens}
+              total={contextWindow}
+              percent={contextPercent}
+              onClick={() => setBreakdownOpen(true)}
+            />
           </div>
+
+          <ContextBreakdownModal isOpen={breakdownOpen} onClose={() => setBreakdownOpen(false)} />
 
           {/* Right: Send or Abort button */}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

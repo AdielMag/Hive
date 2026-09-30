@@ -563,3 +563,102 @@ export function buildTimeline(state: TranscriptState): Timeline {
 
   return { items, toolResults };
 }
+
+export interface ContextCategoryBreakdown {
+  label: string;
+  category: "system" | "user" | "assistant" | "tool" | "extension" | "summary";
+  tokens: number;
+  percentage: number;
+}
+
+export interface ContextBreakdownResult {
+  totalTokens: number;
+  isExact: boolean;
+  categories: ContextCategoryBreakdown[];
+  topItems: Array<{ label: string; tokens: number }>;
+}
+
+/**
+ * Calculates token split by category across the active branch.
+ * If exactTotalTokens is provided (from get_session_stats.contextUsage),
+ * the estimated categories are scaled to sum exactly to exactTotalTokens.
+ */
+export function estimateContextBreakdown(
+  state: TranscriptState,
+  exactTotalTokens?: number,
+): ContextBreakdownResult {
+  const catTokens: Record<string, { category: ContextCategoryBreakdown["category"]; tokens: number }> = {
+    "System Prompt": { category: "system", tokens: 0 },
+    "User Prompts": { category: "user", tokens: 0 },
+    "Assistant Text & Thinking": { category: "assistant", tokens: 0 },
+  };
+
+  const topItems: Array<{ label: string; tokens: number }> = [];
+
+  for (const entry of activePath(state)) {
+    if (entry.type === "message") {
+      const msg = entry.message as unknown as AnyMessage;
+      const jsonStr = JSON.stringify(msg);
+      const est = Math.ceil(jsonStr.length / 4);
+
+      if (msg.role === "system") {
+        catTokens["System Prompt"]!.tokens += est;
+      } else if (msg.role === "user") {
+        catTokens["User Prompts"]!.tokens += est;
+        const snippet = typeof msg.content === "string" ? msg.content.slice(0, 30) : "User prompt";
+        topItems.push({ label: `User: "${snippet}..."`, tokens: est });
+      } else if (msg.role === "assistant") {
+        catTokens["Assistant Text & Thinking"]!.tokens += est;
+        topItems.push({ label: "Assistant turn", tokens: est });
+      } else if (msg.role === "toolResult") {
+        const toolName = String(msg.toolName || "tool");
+        const catKey = `Tool: ${toolName}`;
+        if (!catTokens[catKey]) {
+          catTokens[catKey] = { category: "tool", tokens: 0 };
+        }
+        catTokens[catKey]!.tokens += est;
+        topItems.push({ label: `Tool result: ${toolName}`, tokens: est });
+      } else if (msg.role === "custom") {
+        const catKey = "Extension Messages";
+        if (!catTokens[catKey]) catTokens[catKey] = { category: "extension", tokens: 0 };
+        catTokens[catKey]!.tokens += est;
+      }
+    } else if (entry.type === "compaction" || entry.type === "branch_summary") {
+      const catKey = "Conversation Summaries";
+      const est = Math.ceil(JSON.stringify(entry).length / 4);
+      if (!catTokens[catKey]) catTokens[catKey] = { category: "summary", tokens: 0 };
+      catTokens[catKey]!.tokens += est;
+    }
+  }
+
+  const rawSum = Object.values(catTokens).reduce((acc, c) => acc + c.tokens, 0);
+  const targetTotal = exactTotalTokens && exactTotalTokens > 0 ? exactTotalTokens : rawSum;
+  const isExact = Boolean(exactTotalTokens && exactTotalTokens > 0);
+  const scale = rawSum > 0 && targetTotal > 0 ? targetTotal / rawSum : 1;
+
+  const categories: ContextCategoryBreakdown[] = Object.entries(catTokens)
+    .filter(([, v]) => v.tokens > 0)
+    .map(([label, v]) => {
+      const scaled = Math.round(v.tokens * scale);
+      return {
+        label,
+        category: v.category,
+        tokens: scaled,
+        percentage: targetTotal > 0 ? (scaled / targetTotal) * 100 : 0,
+      };
+    })
+    .sort((a, b) => b.tokens - a.tokens);
+
+  const scaledTop = topItems
+    .map((item) => ({ label: item.label, tokens: Math.round(item.tokens * scale) }))
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, 5);
+
+  return {
+    totalTokens: targetTotal,
+    isExact,
+    categories,
+    topItems: scaledTop,
+  };
+}
+
