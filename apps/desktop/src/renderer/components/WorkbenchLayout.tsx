@@ -17,9 +17,11 @@ import { WelcomeView } from "./WelcomeView.tsx";
 import { TabStrip } from "./TabStrip.tsx";
 import { Transcript } from "./Transcript.tsx";
 import { Composer } from "./Composer.tsx";
+import { FileViewerTab } from "./FileViewerTab.tsx";
+import { DiffViewerTab } from "./DiffViewerTab.tsx";
 import { AppTitleBar } from "./AppTitleBar.tsx";
 import { StatusBar } from "./StatusBar.tsx";
-import { ArcThemePicker } from "./ArcThemePicker.tsx";
+import { SettingsModal } from "./SettingsModal.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 
@@ -27,13 +29,30 @@ export type LeftPanelTab = "projects" | "files" | "git" | null;
 export type RightPanelTab = "marketplace" | "context" | "terminal" | null;
 
 export const WorkbenchLayout: React.FC = () => {
-  const { activeProject, tabs, error } = useSessionStore();
+  const { activeProject, tabs, activeTabId, error } = useSessionStore();
+  const activeTab = tabs.find((t) => t.id === activeTabId);
 
   const [activeLeft, setActiveLeft] = useState<LeftPanelTab>("projects");
   const [activeRight, setActiveRight] = useState<RightPanelTab>(null);
-  const [leftWidth, setLeftWidth] = useState(260);
-  const [rightWidth, setRightWidth] = useState(300);
-  const [arcThemeOpen, setArcThemeOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Resizable panel dimensions with localStorage persistence
+  const [leftWidth, setLeftWidth] = useState<number>(() => {
+    const saved = localStorage.getItem("pi_studio_left_width");
+    return saved ? Math.max(160, Math.min(650, parseInt(saved, 10))) : 260;
+  });
+  const [rightWidth, setRightWidth] = useState<number>(() => {
+    const saved = localStorage.getItem("pi_studio_right_width");
+    return saved ? Math.max(200, Math.min(650, parseInt(saved, 10))) : 300;
+  });
+  const [composerHeight, setComposerHeight] = useState<number>(() => {
+    const saved = localStorage.getItem("pi_studio_composer_height");
+    return saved ? Math.max(100, Math.min(500, parseInt(saved, 10))) : 160;
+  });
+
+  const [isDraggingLeft, setIsDraggingLeft] = useState(false);
+  const [isDraggingRight, setIsDraggingRight] = useState(false);
+  const [isDraggingComposer, setIsDraggingComposer] = useState(false);
 
   const toggleLeft = (tab: LeftPanelTab) => {
     setActiveLeft((prev) => (prev === tab ? null : tab));
@@ -41,6 +60,60 @@ export const WorkbenchLayout: React.FC = () => {
 
   const toggleRight = (tab: RightPanelTab) => {
     setActiveRight((prev) => (prev === tab ? null : tab));
+  };
+
+  const handleLeftResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingLeft(true);
+    const onMouseMove = (ev: MouseEvent) => {
+      // Activity bar width = 44px
+      const newWidth = Math.max(160, Math.min(650, ev.clientX - 44));
+      setLeftWidth(newWidth);
+      localStorage.setItem("pi_studio_left_width", String(newWidth));
+    };
+    const onMouseUp = () => {
+      setIsDraggingLeft(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleRightResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingRight(true);
+    const onMouseMove = (ev: MouseEvent) => {
+      // Right activity bar = 44px
+      const newWidth = Math.max(200, Math.min(650, window.innerWidth - 44 - ev.clientX));
+      setRightWidth(newWidth);
+      localStorage.setItem("pi_studio_right_width", String(newWidth));
+    };
+    const onMouseUp = () => {
+      setIsDraggingRight(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleComposerResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingComposer(true);
+    const onMouseMove = (ev: MouseEvent) => {
+      // Status bar height = 24px
+      const newHeight = Math.max(100, Math.min(500, window.innerHeight - 24 - ev.clientY));
+      setComposerHeight(newHeight);
+      localStorage.setItem("pi_studio_composer_height", String(newHeight));
+    };
+    const onMouseUp = () => {
+      setIsDraggingComposer(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   };
 
   const hasActiveSession = Boolean(activeProject && tabs.length > 0);
@@ -58,6 +131,19 @@ export const WorkbenchLayout: React.FC = () => {
         position: "relative",
       }}
     >
+      {/* Drag Overlay to prevent pointer events trapping during resize */}
+      {(isDraggingLeft || isDraggingRight || isDraggingComposer) && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 99999,
+            cursor: isDraggingComposer ? "row-resize" : "col-resize",
+            userSelect: "none",
+          }}
+        />
+      )}
+
       {/* SVG Grain Overlay */}
       <div
         className="grain-overlay"
@@ -129,30 +215,47 @@ export const WorkbenchLayout: React.FC = () => {
 
           <IconButton
             icon={<Settings size={18} />}
-            title="Settings & Palette"
-            active={arcThemeOpen}
-            onClick={() => setArcThemeOpen(true)}
+            title="Settings (Appearance, Accounts, Updates)"
+            active={settingsOpen}
+            onClick={() => setSettingsOpen(true)}
           />
         </div>
 
         {/* ==================== LEFT DRAWER PANEL ==================== */}
         {activeLeft && (
-          <div
-            style={{
-              width: leftWidth,
-              background: "var(--bg-sidebar)",
-              borderRight: "1px solid var(--border-subtle)",
-              display: "flex",
-              flexDirection: "column",
-              height: "100%",
-              overflow: "hidden",
-              zIndex: 30,
-            }}
-          >
-            {activeLeft === "projects" && <Sidebar />}
-            {activeLeft === "files" && <FilesPanel />}
-            {activeLeft === "git" && <GitPanel />}
-          </div>
+          <>
+            <div
+              style={{
+                width: leftWidth,
+                background: "var(--bg-sidebar)",
+                borderRight: "1px solid var(--border-subtle)",
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                overflow: "hidden",
+                zIndex: 30,
+              }}
+            >
+              {activeLeft === "projects" && <Sidebar />}
+              {activeLeft === "files" && <FilesPanel />}
+              {activeLeft === "git" && <GitPanel />}
+            </div>
+            {/* Left Vertical Resize Handle */}
+            <div
+              onMouseDown={handleLeftResizeStart}
+              title="Drag to resize panel width"
+              style={{
+                width: 6,
+                marginLeft: -3,
+                marginRight: -3,
+                cursor: "col-resize",
+                zIndex: 35,
+                position: "relative",
+                background: isDraggingLeft ? "var(--accent-base)" : "transparent",
+                transition: "background 0.15s ease",
+              }}
+            />
+          </>
         )}
 
         {/* ==================== CENTER WORKBENCH ==================== */}
@@ -168,7 +271,7 @@ export const WorkbenchLayout: React.FC = () => {
           }}
         >
           {/* Custom In-App Titlebar: sits cleanly across the center column */}
-          <AppTitleBar onOpenTheme={() => setArcThemeOpen(true)} />
+          <AppTitleBar onOpenSettings={() => setSettingsOpen(true)} />
 
           {/* Session TabStrip: sits cleanly between the sidebars */}
           <TabStrip />
@@ -190,11 +293,30 @@ export const WorkbenchLayout: React.FC = () => {
 
           {/* Center Main Content */}
           <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
-            {hasActiveSession ? (
-              <>
+            {activeTab?.kind === "file" ? (
+              <FileViewerTab tab={activeTab} />
+            ) : activeTab?.kind === "diff" ? (
+              <DiffViewerTab tab={activeTab} />
+            ) : hasActiveSession ? (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
                 <Transcript />
-                <Composer />
-              </>
+                {/* Horizontal Resize Handle for Composer */}
+                <div
+                  onMouseDown={handleComposerResizeStart}
+                  title="Drag to resize composer height"
+                  style={{
+                    height: 6,
+                    marginTop: -3,
+                    marginBottom: -3,
+                    cursor: "row-resize",
+                    zIndex: 25,
+                    position: "relative",
+                    background: isDraggingComposer ? "var(--accent-base)" : "transparent",
+                    transition: "background 0.15s ease",
+                  }}
+                />
+                <Composer height={composerHeight} />
+              </div>
             ) : (
               <WelcomeView />
             )}
@@ -203,32 +325,49 @@ export const WorkbenchLayout: React.FC = () => {
 
         {/* ==================== RIGHT DRAWER PANEL ==================== */}
         {activeRight && (
-          <div
-            style={{
-              width: rightWidth,
-              background: "var(--bg-sidebar)",
-              borderLeft: "1px solid var(--border-subtle)",
-              display: "flex",
-              flexDirection: "column",
-              height: "100%",
-              overflow: "hidden",
-              zIndex: 30,
-            }}
-          >
-            {activeRight === "marketplace" && <MarketplacePanel />}
-            {activeRight === "context" && (
-              <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
-                <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>Context Breakdown</div>
-                <div>Detailed token category inspector is also available by clicking the Context Ring below.</div>
-              </div>
-            )}
-            {activeRight === "terminal" && (
-              <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
-                <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>Integrated Terminal</div>
-                <div>Run files with the interpreter runner in the Files tab or launch terminal tasks.</div>
-              </div>
-            )}
-          </div>
+          <>
+            {/* Right Vertical Resize Handle */}
+            <div
+              onMouseDown={handleRightResizeStart}
+              title="Drag to resize panel width"
+              style={{
+                width: 6,
+                marginLeft: -3,
+                marginRight: -3,
+                cursor: "col-resize",
+                zIndex: 35,
+                position: "relative",
+                background: isDraggingRight ? "var(--accent-base)" : "transparent",
+                transition: "background 0.15s ease",
+              }}
+            />
+            <div
+              style={{
+                width: rightWidth,
+                background: "var(--bg-sidebar)",
+                borderLeft: "1px solid var(--border-subtle)",
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                overflow: "hidden",
+                zIndex: 30,
+              }}
+            >
+              {activeRight === "marketplace" && <MarketplacePanel />}
+              {activeRight === "context" && (
+                <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
+                  <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>Context Breakdown</div>
+                  <div>Detailed token category inspector is also available by clicking the Context Ring below.</div>
+                </div>
+              )}
+              {activeRight === "terminal" && (
+                <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
+                  <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>Integrated Terminal</div>
+                  <div>Run files with the interpreter runner in the Files tab or launch terminal tasks.</div>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* ==================== RIGHT ACTIVITY BAR ==================== */}
@@ -272,7 +411,7 @@ export const WorkbenchLayout: React.FC = () => {
 
       {/* Modals */}
       <ExtensionDialogModal />
-      <ArcThemePicker isOpen={arcThemeOpen} onClose={() => setArcThemeOpen(false)} />
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 };

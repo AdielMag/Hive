@@ -18,18 +18,29 @@ import {
   getGitStatus,
   getGitBranches,
   stageFile,
+  stageAll,
   unstageFile,
+  unstageAll,
   discardFile,
+  discardAll,
   gitCommit,
+  gitCheckout,
+  gitCreateBranch,
+  getGitDiff,
+  generateCommitMessage,
 } from "./git.ts";
-import { listDirectory, readFileContent, runWithInterpreter } from "./files.ts";
+import { listDirectory, readFileContent, readMediaFile, runWithInterpreter } from "./files.ts";
 import { MarketplaceService, type MarketplaceSourceKind } from "./marketplace.ts";
+import { AuthService } from "./auth.ts";
+import { AppUpdaterService } from "./updater.ts";
 
 let mainWindow: BrowserWindow | null = null;
 let sessionManager: MainSessionManager | null = null;
 let guiStore: GuiStore | null = null;
 let catalogService: SessionCatalogService | null = null;
+let authService: AuthService | null = null;
 const marketplaceService = new MarketplaceService();
+const updaterService = new AppUpdaterService();
 
 const piResult = locatePi();
 const testMode = process.env.PI_STUDIO_TEST_MODE === "1";
@@ -50,8 +61,7 @@ function createWindow(): void {
     show: false,
     backgroundColor: "#090a0d",
     title: "Pi Studio",
-    titleBarStyle: "hidden",
-    titleBarOverlay: process.platform === "win32" ? { color: "#0d0f14", symbolColor: "#9aa4b2", height: 36 } : false,
+    frame: false,
     webPreferences: {
       preload: preloadPath,
       sandbox: false,
@@ -64,11 +74,19 @@ function createWindow(): void {
   if (piResult.ok) {
     guiStore = new GuiStore(app.getPath("userData"));
     catalogService = new SessionCatalogService(piResult.info.packageRoot, guiStore);
+    authService = new AuthService(piResult.info.packageRoot);
     sessionManager = new MainSessionManager(piResult.info, () => mainWindow, testProviderPath);
   }
 
   mainWindow.on("ready-to-show", () => {
     mainWindow?.show();
+  });
+
+  mainWindow.on("maximize", () => {
+    mainWindow?.webContents.send(IPC.evtWindowMaximized, true);
+  });
+  mainWindow.on("unmaximize", () => {
+    mainWindow?.webContents.send(IPC.evtWindowMaximized, false);
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -114,6 +132,29 @@ ipcMain.handle(IPC.pickFolder, async (): Promise<string | null> => {
     title: "Select project folder",
   });
   return result.canceled ? null : (result.filePaths[0] ?? null);
+});
+
+ipcMain.handle(IPC.pickFiles, async (_event, options?: { allowImagesOnly?: boolean }): Promise<string[]> => {
+  if (!mainWindow) return [];
+  const filters = options?.allowImagesOnly
+    ? [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"] }]
+    : [
+        {
+          name: "All Supported",
+          extensions: [
+            "png", "jpg", "jpeg", "webp", "gif", "svg", "bmp",
+            "ts", "tsx", "js", "jsx", "json", "md", "txt", "css", "html", "py", "rs", "go", "sh", "yaml", "yml"
+          ],
+        },
+        { name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"] },
+        { name: "All Files", extensions: ["*"] },
+      ];
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openFile", "multiSelections"],
+    title: "Select files or images to attach",
+    filters,
+  });
+  return result.canceled ? [] : result.filePaths;
 });
 
 ipcMain.handle(IPC.startSession, async (_event, req: StartSessionRequest) => {
@@ -194,17 +235,39 @@ ipcMain.handle(IPC.gitStatus, async (_event, { cwd }) => {
 ipcMain.handle(IPC.gitBranches, async (_event, { cwd }) => {
   return getGitBranches(cwd);
 });
+ipcMain.handle(IPC.gitCheckout, async (_event, { cwd, branch }) => {
+  return gitCheckout(cwd, branch);
+});
+ipcMain.handle(IPC.gitCreateBranch, async (_event, { cwd, branch }) => {
+  return gitCreateBranch(cwd, branch);
+});
 ipcMain.handle(IPC.gitStage, async (_event, { cwd, filePath }) => {
   return stageFile(cwd, filePath);
+});
+ipcMain.handle(IPC.gitStageAll, async (_event, { cwd }) => {
+  return stageAll(cwd);
 });
 ipcMain.handle(IPC.gitUnstage, async (_event, { cwd, filePath }) => {
   return unstageFile(cwd, filePath);
 });
+ipcMain.handle(IPC.gitUnstageAll, async (_event, { cwd }) => {
+  return unstageAll(cwd);
+});
 ipcMain.handle(IPC.gitDiscard, async (_event, { cwd, filePath }) => {
   return discardFile(cwd, filePath);
 });
+ipcMain.handle(IPC.gitDiscardAll, async (_event, { cwd }) => {
+  return discardAll(cwd);
+});
 ipcMain.handle(IPC.gitCommit, async (_event, { cwd, message, amend }) => {
   return gitCommit(cwd, message, amend);
+});
+ipcMain.handle(IPC.gitDiff, async (_event, { cwd, options }) => {
+  return getGitDiff(cwd, options);
+});
+ipcMain.handle(IPC.gitGenerateCommitMessage, async (_event, { cwd, model }) => {
+  if (!piResult.ok) throw new Error("Pi CLI not available to generate commit message");
+  return generateCommitMessage(cwd, piResult.info, model);
 });
 
 // Files IPC Handlers
@@ -214,6 +277,9 @@ ipcMain.handle(IPC.filesList, async (_event, { dirPath }) => {
 ipcMain.handle(IPC.filesRead, async (_event, { filePath }) => {
   return readFileContent(filePath);
 });
+ipcMain.handle(IPC.filesReadMedia, async (_event, { filePath }: { filePath: string }) => {
+  return readMediaFile(filePath);
+});
 ipcMain.handle(IPC.filesRun, async (_event, { filePath, cwd }) => {
   return runWithInterpreter(filePath, cwd);
 });
@@ -221,6 +287,47 @@ ipcMain.handle(IPC.filesRun, async (_event, { filePath, cwd }) => {
 // Marketplace IPC Handlers
 ipcMain.handle(IPC.marketplaceSearch, async (_event, { query, kind }) => {
   return marketplaceService.search(query, kind as MarketplaceSourceKind);
+});
+
+// Window Controls Handlers
+ipcMain.handle(IPC.windowMinimize, async () => {
+  mainWindow?.minimize();
+});
+ipcMain.handle(IPC.windowMaximize, async () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+});
+ipcMain.handle(IPC.windowClose, async () => {
+  mainWindow?.close();
+});
+ipcMain.handle(IPC.windowIsMaximized, async () => {
+  return mainWindow?.isMaximized() ?? false;
+});
+
+// Auth Handlers
+ipcMain.handle(IPC.authGetAccounts, async () => {
+  return authService?.getAccounts() ?? [];
+});
+ipcMain.handle(IPC.authSaveApiKey, async (_event, { providerId, apiKey }) => {
+  authService?.saveApiKey(providerId, apiKey);
+});
+ipcMain.handle(IPC.authLogout, async (_event, { providerId }) => {
+  authService?.logout(providerId);
+});
+ipcMain.handle(IPC.authLoginOAuth, async (_event, { providerId }) => {
+  return authService?.loginOAuth(providerId) ?? { success: false, error: "Auth not initialized" };
+});
+
+// Updater Handlers
+ipcMain.handle(IPC.updaterCheck, async () => {
+  return updaterService.checkForUpdates();
+});
+ipcMain.handle(IPC.updaterApply, async (_event, { downloadUrl }) => {
+  return updaterService.applyUpdate(downloadUrl);
 });
 
 app.whenReady().then(() => {

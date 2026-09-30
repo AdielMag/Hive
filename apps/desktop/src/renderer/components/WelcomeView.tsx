@@ -22,10 +22,12 @@ export const WelcomeView: React.FC = () => {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: 32,
+        padding: "32px 24px",
         background: "radial-gradient(ellipse at 50% 30%, rgba(83, 155, 245, 0.08) 0%, transparent 70%)",
         userSelect: "none",
         overflowY: "auto",
+        boxSizing: "border-box",
+        width: "100%",
       }}
     >
       <div
@@ -36,6 +38,7 @@ export const WelcomeView: React.FC = () => {
           flexDirection: "column",
           alignItems: "center",
           gap: 28,
+          boxSizing: "border-box",
         }}
       >
         {/* Brand Aura */}
@@ -104,7 +107,15 @@ export const WelcomeView: React.FC = () => {
               Resume Recent Pi CLI Sessions
             </span>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 10,
+                width: "100%",
+                boxSizing: "border-box",
+              }}
+            >
               {recentSessions.map((s) => (
                 <div
                   key={s.id}
@@ -122,6 +133,9 @@ export const WelcomeView: React.FC = () => {
                     border: "1px solid var(--border-subtle)",
                     borderRadius: 6,
                     cursor: "pointer",
+                    minWidth: 0,
+                    overflow: "hidden",
+                    boxSizing: "border-box",
                     transition: "border-color 0.2s, background 0.2s",
                   }}
                   onMouseEnter={(e) => {
@@ -133,7 +147,7 @@ export const WelcomeView: React.FC = () => {
                     e.currentTarget.style.background = "var(--bg-card)";
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, minWidth: 0 }}>
                     <span
                       style={{
                         fontWeight: 600,
@@ -142,11 +156,12 @@ export const WelcomeView: React.FC = () => {
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
+                        minWidth: 0,
                       }}
                     >
                       {s.cwd.split(/[/\\]/).pop()}
                     </span>
-                    <ArrowRight size={12} color="var(--text-muted)" />
+                    <ArrowRight size={12} color="var(--text-muted)" style={{ flexShrink: 0 }} />
                   </div>
 
                   <span
@@ -156,6 +171,8 @@ export const WelcomeView: React.FC = () => {
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
+                      display: "block",
+                      minWidth: 0,
                     }}
                   >
                     {s.name || s.firstMessage || "Session"}
@@ -167,7 +184,16 @@ export const WelcomeView: React.FC = () => {
         )}
 
         {/* Feature Cards Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, width: "100%", marginTop: 6 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 12,
+            width: "100%",
+            marginTop: 6,
+            boxSizing: "border-box",
+          }}
+        >
           <div
             style={{
               padding: "12px 14px",
@@ -177,10 +203,13 @@ export const WelcomeView: React.FC = () => {
               display: "flex",
               alignItems: "flex-start",
               gap: 10,
+              minWidth: 0,
+              overflow: "hidden",
+              boxSizing: "border-box",
             }}
           >
             <LinkIcon size={16} color="var(--accent-base)" style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "var(--text-primary)" }}>Linked Projects</div>
               <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, lineHeight: 1.4 }}>
                 Reference sibling repositories or documentation with automatic system-prompt injection.
@@ -197,10 +226,13 @@ export const WelcomeView: React.FC = () => {
               display: "flex",
               alignItems: "flex-start",
               gap: 10,
+              minWidth: 0,
+              overflow: "hidden",
+              boxSizing: "border-box",
             }}
           >
             <Terminal size={16} color="var(--accent-base)" style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "var(--text-primary)" }}>Installed Pi Runtime</div>
               <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, lineHeight: 1.4 }}>
                 Pi version {bootstrap?.pi.ok ? bootstrap.pi.info.version : "0.87.1"}. Your extensions and models load

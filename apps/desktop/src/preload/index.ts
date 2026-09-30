@@ -122,17 +122,38 @@ const api: StudioApi = {
   stageFile(cwd: string, filePath: string) {
     return ipcRenderer.invoke(IPC.gitStage, { cwd, filePath });
   },
+  stageAll(cwd: string) {
+    return ipcRenderer.invoke(IPC.gitStageAll, { cwd });
+  },
   unstageFile(cwd: string, filePath: string) {
     return ipcRenderer.invoke(IPC.gitUnstage, { cwd, filePath });
   },
+  unstageAll(cwd: string) {
+    return ipcRenderer.invoke(IPC.gitUnstageAll, { cwd });
+  },
   discardFile(cwd: string, filePath: string) {
     return ipcRenderer.invoke(IPC.gitDiscard, { cwd, filePath });
+  },
+  discardAll(cwd: string) {
+    return ipcRenderer.invoke(IPC.gitDiscardAll, { cwd });
   },
   gitCommit(cwd: string, message: string, amend?: boolean) {
     return ipcRenderer.invoke(IPC.gitCommit, { cwd, message, amend });
   },
   getGitBranches(cwd: string) {
     return ipcRenderer.invoke(IPC.gitBranches, { cwd });
+  },
+  gitCheckout(cwd: string, branch: string) {
+    return ipcRenderer.invoke(IPC.gitCheckout, { cwd, branch });
+  },
+  gitCreateBranch(cwd: string, branch: string) {
+    return ipcRenderer.invoke(IPC.gitCreateBranch, { cwd, branch });
+  },
+  getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }) {
+    return ipcRenderer.invoke(IPC.gitDiff, { cwd, options });
+  },
+  generateCommitMessage(cwd: string, model?: string) {
+    return ipcRenderer.invoke(IPC.gitGenerateCommitMessage, { cwd, model });
   },
 
   // Files
@@ -142,6 +163,12 @@ const api: StudioApi = {
   readFile(filePath: string) {
     return ipcRenderer.invoke(IPC.filesRead, { filePath });
   },
+  readMediaFile(filePath: string) {
+    return ipcRenderer.invoke(IPC.filesReadMedia, { filePath });
+  },
+  pickFiles(options?: { allowImagesOnly?: boolean }) {
+    return ipcRenderer.invoke(IPC.pickFiles, options);
+  },
   runFile(filePath: string, cwd: string) {
     return ipcRenderer.invoke(IPC.filesRun, { filePath, cwd });
   },
@@ -149,6 +176,47 @@ const api: StudioApi = {
   // Marketplace
   searchMarketplace(query?: string, kind?: string) {
     return ipcRenderer.invoke(IPC.marketplaceSearch, { query, kind });
+  },
+
+  // Window Controls
+  minimizeWindow() {
+    return ipcRenderer.invoke(IPC.windowMinimize);
+  },
+  maximizeWindow() {
+    return ipcRenderer.invoke(IPC.windowMaximize);
+  },
+  closeWindow() {
+    return ipcRenderer.invoke(IPC.windowClose);
+  },
+  isWindowMaximized() {
+    return ipcRenderer.invoke(IPC.windowIsMaximized);
+  },
+  onWindowMaximizedChange(listener: (isMaximized: boolean) => void) {
+    const handler = (_event: Electron.IpcRendererEvent, isMaximized: boolean) => listener(isMaximized);
+    ipcRenderer.on(IPC.evtWindowMaximized, handler);
+    return () => ipcRenderer.removeListener(IPC.evtWindowMaximized, handler);
+  },
+
+  // Auth
+  getAuthAccounts() {
+    return ipcRenderer.invoke(IPC.authGetAccounts);
+  },
+  saveApiKey(providerId: string, apiKey: string) {
+    return ipcRenderer.invoke(IPC.authSaveApiKey, { providerId, apiKey });
+  },
+  logoutAccount(providerId: string) {
+    return ipcRenderer.invoke(IPC.authLogout, { providerId });
+  },
+  loginOAuth(providerId: string) {
+    return ipcRenderer.invoke(IPC.authLoginOAuth, { providerId });
+  },
+
+  // Updater
+  checkForUpdates() {
+    return ipcRenderer.invoke(IPC.updaterCheck);
+  },
+  applyUpdate(downloadUrl?: string) {
+    return ipcRenderer.invoke(IPC.updaterApply, { downloadUrl });
   },
 };
 

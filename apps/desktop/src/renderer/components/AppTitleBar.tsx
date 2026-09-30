@@ -1,14 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Sparkles, Palette, Folder, HelpCircle } from "lucide-react";
+import { Folder, Minus, Square, Copy, X, Download } from "lucide-react";
 import { useSessionStore } from "../store/session-store.ts";
 
 interface AppTitleBarProps {
-  onOpenTheme: () => void;
+  onOpenSettings: () => void;
 }
 
-export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenTheme }) => {
+export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenSettings }) => {
   const { activeProject, activeTabId, closeTab, addProject, newSessionTab } = useSessionStore();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<any>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -18,7 +20,24 @@ export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenTheme }) => {
       }
     };
     window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
+
+    // Initial maximized state & listener
+    if (window.studio?.isWindowMaximized) {
+      window.studio.isWindowMaximized().then(setIsMaximized).catch(() => {});
+    }
+    const unsubscribe = window.studio?.onWindowMaximizedChange?.((max) => {
+      setIsMaximized(max);
+    });
+
+    // Check for updates
+    window.studio?.checkForUpdates?.().then((info) => {
+      if (info?.hasUpdate) setUpdateInfo(info);
+    }).catch(() => {});
+
+    return () => {
+      window.removeEventListener("mousedown", handleOutsideClick);
+      unsubscribe?.();
+    };
   }, []);
 
   const handleOpenFolder = async () => {
@@ -53,17 +72,15 @@ export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenTheme }) => {
         height: 36,
         background: "var(--bg-app)",
         borderBottom: "1px solid var(--border-subtle)",
-        padding: "0 10px",
+        padding: "0 0 0 10px",
         userSelect: "none",
         fontSize: 12,
         color: "var(--text-secondary)",
-        // Window drag region
         WebkitAppRegion: "drag" as any,
       }}
     >
       {/* Left: In-app Menus */}
       <div style={{ display: "flex", alignItems: "center", gap: 4, WebkitAppRegion: "no-drag" as any }}>
-        {/* Menus */}
         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
           {/* File Menu */}
           <div style={{ position: "relative" }}>
@@ -87,6 +104,7 @@ export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenTheme }) => {
                   { label: "New Session", shortcut: "Ctrl+N", action: handleNewSession, disabled: !activeProject },
                   { label: "Open Project Folder...", shortcut: "Ctrl+O", action: handleOpenFolder },
                   { label: "Close Current Tab", shortcut: "Ctrl+W", action: handleCloseActiveTab, disabled: !activeTabId },
+                  { label: "Settings...", shortcut: "Ctrl+,", action: () => { setActiveMenu(null); onOpenSettings(); } },
                 ]}
               />
             )}
@@ -140,7 +158,7 @@ export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenTheme }) => {
             {activeMenu === "view" && (
               <MenuDropdown
                 items={[
-                  { label: "Theme & Arc Colors...", action: () => { setActiveMenu(null); onOpenTheme(); } },
+                  { label: "Settings & Appearance...", action: () => { setActiveMenu(null); onOpenSettings(); } },
                   { label: "Zoom In", shortcut: "Ctrl+Plus", action: () => {} },
                   { label: "Zoom Out", shortcut: "Ctrl+-", action: () => {} },
                 ]}
@@ -198,44 +216,114 @@ export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenTheme }) => {
         )}
       </div>
 
-      {/* Right: Theme button + padding for window controls */}
+      {/* Right: Custom In-App Caption Buttons (Minimize, Maximize, Close) + Update indicator */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          height: "100%",
           WebkitAppRegion: "no-drag" as any,
-          paddingRight: 140, // Space for Windows minimize/maximize/close buttons
         }}
       >
+        {/* Update Available Badge */}
+        {updateInfo?.hasUpdate && (
+          <button
+            onClick={async () => {
+              if (confirm(`Download and install Pi Studio v${updateInfo.latestVersion}?`)) {
+                await window.studio?.applyUpdate?.(updateInfo.downloadUrl);
+              }
+            }}
+            title={`New update v${updateInfo.latestVersion} available! Click to update now.`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "2px 8px",
+              borderRadius: 10,
+              background: "rgba(87, 171, 90, 0.2)",
+              border: "1px solid var(--success)",
+              color: "var(--success)",
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: "pointer",
+              marginRight: 6,
+            }}
+          >
+            <Download size={10} />
+            <span>Update v{updateInfo.latestVersion}</span>
+          </button>
+        )}
+
+        {/* Minimize */}
         <button
-          onClick={onOpenTheme}
-          title="Open Arc Theme & Color Palette"
+          onClick={() => window.studio?.minimizeWindow?.()}
+          title="Minimize"
           style={{
+            width: 44,
+            height: "100%",
+            background: "transparent",
+            border: "none",
+            color: "var(--text-secondary)",
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid var(--border-subtle)",
-            color: "var(--text-primary)",
-            borderRadius: 6,
-            padding: "4px 10px",
-            fontSize: 11,
-            fontWeight: 500,
+            justifyContent: "center",
             cursor: "pointer",
-            transition: "all 0.15s ease",
+            transition: "background 0.15s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <Minus size={14} />
+        </button>
+
+        {/* Maximize / Restore */}
+        <button
+          onClick={() => window.studio?.maximizeWindow?.()}
+          title={isMaximized ? "Restore" : "Maximize"}
+          style={{
+            width: 44,
+            height: "100%",
+            background: "transparent",
+            border: "none",
+            color: "var(--text-secondary)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            transition: "background 0.15s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          {isMaximized ? <Copy size={11} /> : <Square size={12} />}
+        </button>
+
+        {/* Close */}
+        <button
+          onClick={() => window.studio?.closeWindow?.()}
+          title="Close"
+          style={{
+            width: 44,
+            height: "100%",
+            background: "transparent",
+            border: "none",
+            color: "var(--text-secondary)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            transition: "background 0.15s ease, color 0.15s ease",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--accent-subtle)";
-            e.currentTarget.style.borderColor = "var(--accent-base)";
+            e.currentTarget.style.background = "#e5534b";
+            e.currentTarget.style.color = "#ffffff";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
-            e.currentTarget.style.borderColor = "var(--border-subtle)";
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "var(--text-secondary)";
           }}
         >
-          <Palette size={13} color="var(--accent-base)" />
-          <span>Theme</span>
+          <X size={14} />
         </button>
       </div>
     </div>

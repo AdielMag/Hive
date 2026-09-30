@@ -110,6 +110,50 @@ export function detectLanguage(filePath: string): string {
   }
 }
 
+export function detectMimeType(filePath: string): string {
+  const ext = extname(filePath).toLowerCase();
+  switch (ext) {
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".webp":
+      return "image/webp";
+    case ".gif":
+      return "image/gif";
+    case ".svg":
+      return "image/svg+xml";
+    case ".bmp":
+      return "image/bmp";
+    case ".pdf":
+      return "application/pdf";
+    case ".json":
+      return "application/json";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+export function readMediaFile(filePath: string): { data: string; mimeType: string; size: number; name: string } {
+  if (!existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+  const stat = statSync(filePath);
+  if (stat.size > 20 * 1024 * 1024) {
+    throw new Error(`File too large (${(stat.size / 1024 / 1024).toFixed(1)}MB) to attach`);
+  }
+  const buffer = readFileSync(filePath);
+  const data = buffer.toString("base64");
+  const fileName = filePath.split(/[/\\]/).pop() || "file";
+  return {
+    data,
+    mimeType: detectMimeType(filePath),
+    size: stat.size,
+    name: fileName,
+  };
+}
+
 export function readFileContent(filePath: string): FileContentResult {
   if (!existsSync(filePath)) {
     throw new Error(`File not found: ${filePath}`);

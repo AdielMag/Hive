@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  verify:
+    name: Verify & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit Tests
+        run: npm test
+
+      - name: Build Desktop App
+        run: npm run build

@@ -1,19 +1,57 @@
-import React, { useEffect, useState } from "react";
-import { GitBranch, Plus, Minus, RotateCcw, Check, RefreshCw, ArrowUp, ArrowDown } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  GitBranch,
+  Plus,
+  Minus,
+  RotateCcw,
+  Check,
+  RefreshCw,
+  ArrowUp,
+  ArrowDown,
+  Sparkles,
+  ChevronDown,
+  ChevronRight,
+  X,
+  FileCode,
+  Search,
+} from "lucide-react";
 import { useSessionStore } from "../store/session-store.ts";
 
 export const GitPanel: React.FC = () => {
-  const { activeProject } = useSessionStore();
+  const { activeProject, selectedModel, openDiffTab } = useSessionStore();
   const [status, setStatus] = useState<any>(null);
+  const [branches, setBranches] = useState<string[]>([]);
   const [commitMsg, setCommitMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [isCommitting, setIsCommitting] = useState(false);
+
+  // Branch switcher state
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
+  const [branchFilter, setBranchFilter] = useState("");
+  const branchDropdownRef = useRef<HTMLDivElement>(null);
+  const branchSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // Collapsible section states
+  const [stagedExpanded, setStagedExpanded] = useState(true);
+  const [changesExpanded, setChangesExpanded] = useState(true);
+
+  // Notification / error feedback
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const refreshGit = async () => {
     if (!activeProject?.path) return;
     setLoading(true);
+    setErrorMessage(null);
     try {
-      const s = await window.studio.getGitStatus(activeProject.path);
+      const [s, b] = await Promise.all([
+        window.studio.getGitStatus(activeProject.path),
+        window.studio.getGitBranches(activeProject.path).catch(() => []),
+      ]);
       setStatus(s);
+      setBranches(b);
+    } catch (err: any) {
+      setErrorMessage(err.message || String(err));
     } finally {
       setLoading(false);
     }
@@ -23,34 +61,159 @@ export const GitPanel: React.FC = () => {
     void refreshGit();
   }, [activeProject?.path]);
 
+  // Click outside to close branch dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (branchDropdownRef.current && !branchDropdownRef.current.contains(e.target as Node)) {
+        setBranchDropdownOpen(false);
+        setBranchFilter("");
+      }
+    };
+    if (branchDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      setTimeout(() => branchSearchInputRef.current?.focus(), 50);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [branchDropdownOpen]);
+
   const handleStage = async (file: string) => {
     if (!activeProject) return;
-    await window.studio.stageFile(activeProject.path, file);
-    await refreshGit();
+    try {
+      await window.studio.stageFile(activeProject.path, file);
+      await refreshGit();
+    } catch (err: any) {
+      setErrorMessage(`Stage failed: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleStageAll = async () => {
+    if (!activeProject) return;
+    try {
+      await window.studio.stageAll(activeProject.path);
+      await refreshGit();
+    } catch (err: any) {
+      setErrorMessage(`Stage all failed: ${err.message || String(err)}`);
+    }
   };
 
   const handleUnstage = async (file: string) => {
     if (!activeProject) return;
-    await window.studio.unstageFile(activeProject.path, file);
-    await refreshGit();
+    try {
+      await window.studio.unstageFile(activeProject.path, file);
+      await refreshGit();
+    } catch (err: any) {
+      setErrorMessage(`Unstage failed: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleUnstageAll = async () => {
+    if (!activeProject) return;
+    try {
+      await window.studio.unstageAll(activeProject.path);
+      await refreshGit();
+    } catch (err: any) {
+      setErrorMessage(`Unstage all failed: ${err.message || String(err)}`);
+    }
   };
 
   const handleDiscard = async (file: string) => {
     if (!activeProject) return;
     if (confirm(`Discard changes in ${file}?`)) {
-      await window.studio.discardFile(activeProject.path, file);
+      try {
+        await window.studio.discardFile(activeProject.path, file);
+        await refreshGit();
+      } catch (err: any) {
+        setErrorMessage(`Discard failed: ${err.message || String(err)}`);
+      }
+    }
+  };
+
+  const handleDiscardAll = async () => {
+    if (!activeProject) return;
+    if (confirm("Discard all unstaged changes? This cannot be undone.")) {
+      try {
+        await window.studio.discardAll(activeProject.path);
+        await refreshGit();
+      } catch (err: any) {
+        setErrorMessage(`Discard all failed: ${err.message || String(err)}`);
+      }
+    }
+  };
+
+  const handleCheckoutBranch = async (branch: string) => {
+    if (!activeProject || branch === status?.branch) {
+      setBranchDropdownOpen(false);
+      return;
+    }
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      await window.studio.gitCheckout(activeProject.path, branch);
+      setBranchDropdownOpen(false);
+      setBranchFilter("");
       await refreshGit();
+    } catch (err: any) {
+      setErrorMessage(`Checkout failed: ${err.message || String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateBranch = async (newBranch: string) => {
+    const trimmed = newBranch.trim();
+    if (!activeProject || !trimmed) return;
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      await window.studio.gitCreateBranch(activeProject.path, trimmed);
+      setBranchDropdownOpen(false);
+      setBranchFilter("");
+      await refreshGit();
+    } catch (err: any) {
+      setErrorMessage(`Create branch failed: ${err.message || String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewDiff = (filePath: string, staged: boolean) => {
+    if (!activeProject) return;
+    void openDiffTab(filePath, staged, activeProject.id);
+  };
+
+  const handleGenerateAiCommitMessage = async () => {
+    if (!activeProject || stagedCount === 0 || isGeneratingAi) return;
+    setIsGeneratingAi(true);
+    setErrorMessage(null);
+    try {
+      const generated = await window.studio.generateCommitMessage(
+        activeProject.path,
+        selectedModel?.id,
+      );
+      if (generated) {
+        setCommitMsg(generated);
+      }
+    } catch (err: any) {
+      setErrorMessage(`AI message generation failed: ${err.message || String(err)}`);
+    } finally {
+      setIsGeneratingAi(false);
     }
   };
 
   const handleCommit = async () => {
-    if (!activeProject || !commitMsg.trim()) return;
+    if (!activeProject || !commitMsg.trim() || stagedCount === 0 || isCommitting) return;
+    setIsCommitting(true);
+    setErrorMessage(null);
     try {
       await window.studio.gitCommit(activeProject.path, commitMsg.trim());
       setCommitMsg("");
       await refreshGit();
     } catch (err: any) {
-      alert(`Commit failed: ${err.message || String(err)}`);
+      setErrorMessage(`Commit failed: ${err.message || String(err)}`);
+    } finally {
+      setIsCommitting(false);
     }
   };
 
@@ -66,6 +229,92 @@ export const GitPanel: React.FC = () => {
     );
   }
 
+  const stagedCount = status?.staged?.length || 0;
+  const unstagedCount = (status?.unstaged?.length || 0) + (status?.untracked?.length || 0);
+  const filteredBranches = branches.filter((b) =>
+    b.toLowerCase().includes(branchFilter.trim().toLowerCase()),
+  );
+  const exactMatchExists = branches.some(
+    (b) => b.toLowerCase() === branchFilter.trim().toLowerCase(),
+  );
+
+  const getStatusBadge = (type: string) => {
+    let color = "var(--text-muted)";
+    let bg = "rgba(255, 255, 255, 0.05)";
+    let label = "M";
+
+    switch (type) {
+      case "added":
+        color = "#10b981";
+        bg = "rgba(16, 185, 129, 0.15)";
+        label = "A";
+        break;
+      case "modified":
+        color = "#3b82f6";
+        bg = "rgba(59, 130, 246, 0.15)";
+        label = "M";
+        break;
+      case "deleted":
+        color = "#ef4444";
+        bg = "rgba(239, 68, 68, 0.15)";
+        label = "D";
+        break;
+      case "untracked":
+        color = "#f59e0b";
+        bg = "rgba(245, 158, 11, 0.15)";
+        label = "U";
+        break;
+      case "renamed":
+        color = "#a855f7";
+        bg = "rgba(168, 85, 247, 0.15)";
+        label = "R";
+        break;
+    }
+
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 16,
+          height: 16,
+          borderRadius: 3,
+          fontSize: 10,
+          fontWeight: 700,
+          fontFamily: "var(--font-mono)",
+          color,
+          backgroundColor: bg,
+          flexShrink: 0,
+        }}
+      >
+        {label}
+      </span>
+    );
+  };
+
+  const renderPath = (filePath: string) => {
+    const parts = filePath.split(/[/\\]/);
+    const fileName = parts.pop() || filePath;
+    const dir = parts.length > 0 ? parts.join("/") + "/" : "";
+
+    return (
+      <span
+        style={{
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          fontSize: 11,
+          fontFamily: "var(--font-mono)",
+        }}
+        title={filePath}
+      >
+        {dir && <span style={{ color: "var(--text-muted)", opacity: 0.8 }}>{dir}</span>}
+        <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{fileName}</span>
+      </span>
+    );
+  };
+
   return (
     <div
       style={{
@@ -73,14 +322,16 @@ export const GitPanel: React.FC = () => {
         flexDirection: "column",
         height: "100%",
         padding: 12,
-        gap: 12,
+        gap: 10,
         fontSize: 12,
-        overflowY: "auto",
         userSelect: "none",
+        position: "relative",
+        boxSizing: "border-box",
       }}
     >
       {/* Branch & Sync Header */}
       <div
+        ref={branchDropdownRef}
         style={{
           display: "flex",
           alignItems: "center",
@@ -89,157 +340,728 @@ export const GitPanel: React.FC = () => {
           background: "var(--bg-card)",
           borderRadius: 6,
           border: "1px solid var(--border-subtle)",
+          position: "relative",
+          flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: "var(--text-primary)" }}>
-          <GitBranch size={14} color="var(--accent-base)" />
-          <span>{status?.branch || "HEAD"}</span>
-        </div>
+        {/* Branch Switcher Trigger Button */}
+        <button
+          onClick={() => setBranchDropdownOpen((prev) => !prev)}
+          title="Click to switch or create branch"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontWeight: 600,
+            color: "var(--text-primary)",
+            background: branchDropdownOpen ? "var(--bg-elevated)" : "transparent",
+            border: "none",
+            borderRadius: 4,
+            padding: "3px 6px",
+            cursor: "pointer",
+            maxWidth: "68%",
+          }}
+        >
+          <GitBranch size={13} color="var(--accent-base)" style={{ flexShrink: 0 }} />
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontSize: 12,
+            }}
+          >
+            {status?.branch || "HEAD"}
+          </span>
+          <ChevronDown
+            size={12}
+            color="var(--text-muted)"
+            style={{
+              transform: branchDropdownOpen ? "rotate(180deg)" : "none",
+              transition: "transform 0.15s ease",
+              flexShrink: 0,
+            }}
+          />
+        </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-muted)" }}>
+        {/* Sync Status & Refresh */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
           {status?.ahead > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: 2, color: "var(--accent-base)" }}>
+            <span
+              title={`${status.ahead} commit(s) ahead`}
+              style={{ display: "flex", alignItems: "center", gap: 2, color: "var(--accent-base)", fontWeight: 600 }}
+            >
               <ArrowUp size={11} /> {status.ahead}
             </span>
           )}
           {status?.behind > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: 2, color: "var(--warning)" }}>
+            <span
+              title={`${status.behind} commit(s) behind`}
+              style={{ display: "flex", alignItems: "center", gap: 2, color: "var(--warning)", fontWeight: 600 }}
+            >
               <ArrowDown size={11} /> {status.behind}
             </span>
           )}
           <button
             onClick={refreshGit}
             title="Refresh Git status"
-            style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex" }}
+            disabled={loading}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--text-muted)",
+              cursor: loading ? "default" : "pointer",
+              display: "flex",
+              padding: 2,
+            }}
           >
             <RefreshCw size={12} className={loading ? "spin" : ""} />
           </button>
         </div>
-      </div>
 
-      {/* Commit Box */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <input
-          type="text"
-          value={commitMsg}
-          onChange={(e) => setCommitMsg(e.target.value)}
-          placeholder="Commit message..."
-          style={{
-            padding: "6px 8px",
-            background: "var(--bg-input)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: 4,
-            fontSize: 12,
-            color: "var(--text-primary)",
-          }}
-        />
-        <button
-          onClick={handleCommit}
-          disabled={!commitMsg.trim() || status?.staged?.length === 0}
-          style={{
-            padding: "5px 10px",
-            background: commitMsg.trim() && status?.staged?.length > 0 ? "var(--accent-base)" : "var(--bg-card)",
-            color: commitMsg.trim() && status?.staged?.length > 0 ? "#fff" : "var(--text-muted)",
-            border: "none",
-            borderRadius: 4,
-            cursor: commitMsg.trim() && status?.staged?.length > 0 ? "pointer" : "default",
-            fontWeight: 500,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 4,
-          }}
-        >
-          <Check size={12} /> Commit ({status?.staged?.length ?? 0} staged)
-        </button>
-      </div>
-
-      {/* Staged Changes */}
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>
-          Staged Changes ({status?.staged?.length || 0})
-        </div>
-        {status?.staged?.length === 0 ? (
-          <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", padding: "2px 4px" }}>
-            No staged changes
-          </div>
-        ) : (
-          status?.staged?.map((f: any) => (
+        {/* Branch Dropdown Popover */}
+        {branchDropdownOpen && (
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              right: 0,
+              marginTop: 4,
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-prominent)",
+              borderRadius: 6,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+              zIndex: 100,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              maxHeight: 260,
+            }}
+          >
+            {/* Search / Filter Input */}
             <div
-              key={f.path}
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
-                padding: "3px 6px",
-                borderRadius: 4,
-                fontSize: 11,
-                fontFamily: "var(--font-mono)",
+                gap: 6,
+                padding: "6px 8px",
+                borderBottom: "1px solid var(--border-subtle)",
+                background: "var(--bg-card)",
               }}
             >
-              <span style={{ color: "var(--success)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.path}>
-                {f.path}
-              </span>
-              <button
-                onClick={() => handleUnstage(f.path)}
-                title="Unstage"
-                style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex" }}
-              >
-                <Minus size={12} />
-              </button>
+              <Search size={12} color="var(--text-muted)" />
+              <input
+                ref={branchSearchInputRef}
+                type="text"
+                value={branchFilter}
+                onChange={(e) => setBranchFilter(e.target.value)}
+                placeholder="Search or create branch..."
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "var(--text-primary)",
+                  fontSize: 11,
+                  width: "100%",
+                }}
+              />
+              {branchFilter && (
+                <button
+                  onClick={() => setBranchFilter("")}
+                  style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex", padding: 0 }}
+                >
+                  <X size={11} />
+                </button>
+              )}
             </div>
-          ))
+
+            {/* Branch List */}
+            <div style={{ overflowY: "auto", padding: "4px 0", flex: 1 }}>
+              {/* Option to create new branch if filter doesn't match existing */}
+              {branchFilter.trim() && !exactMatchExists && (
+                <div
+                  onClick={() => handleCreateBranch(branchFilter)}
+                  style={{
+                    padding: "6px 10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    cursor: "pointer",
+                    fontSize: 11,
+                    color: "var(--accent-base)",
+                    borderBottom: "1px solid var(--border-subtle)",
+                    background: "rgba(83, 155, 245, 0.08)",
+                  }}
+                >
+                  <Plus size={12} />
+                  <span>Create branch <strong>{branchFilter.trim()}</strong></span>
+                </div>
+              )}
+
+              {filteredBranches.length === 0 && !branchFilter.trim() ? (
+                <div style={{ padding: "8px 10px", color: "var(--text-muted)", fontSize: 11, fontStyle: "italic" }}>
+                  No branches found
+                </div>
+              ) : (
+                filteredBranches.map((b) => {
+                  const isCurrent = b === status?.branch;
+                  return (
+                    <div
+                      key={b}
+                      onClick={() => handleCheckoutBranch(b)}
+                      style={{
+                        padding: "5px 10px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        cursor: "pointer",
+                        fontSize: 11,
+                        background: isCurrent ? "rgba(83, 155, 245, 0.12)" : "transparent",
+                        color: isCurrent ? "var(--accent-base)" : "var(--text-primary)",
+                        fontWeight: isCurrent ? 600 : 400,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isCurrent) e.currentTarget.style.background = "var(--bg-card-hover)";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isCurrent) e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <GitBranch size={11} color={isCurrent ? "var(--accent-base)" : "var(--text-muted)"} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b}</span>
+                      </div>
+                      {isCurrent && <Check size={12} color="var(--accent-base)" />}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Changes / Unstaged */}
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>
-          Changes ({((status?.unstaged?.length || 0) + (status?.untracked?.length || 0))})
+      {/* Error Banner */}
+      {errorMessage && (
+        <div
+          style={{
+            padding: "6px 8px",
+            background: "rgba(229, 83, 75, 0.15)",
+            border: "1px solid rgba(229, 83, 75, 0.3)",
+            borderRadius: 4,
+            color: "var(--danger)",
+            fontSize: 11,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{errorMessage}</span>
+          <button
+            onClick={() => setErrorMessage(null)}
+            style={{ background: "transparent", border: "none", color: "var(--danger)", cursor: "pointer", display: "flex", padding: 0 }}
+          >
+            <X size={12} />
+          </button>
         </div>
+      )}
 
-        {[...(status?.unstaged || []), ...(status?.untracked || [])].map((f: any) => (
+      {/* Scrollable File Changes Section */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          flex: 1,
+          overflowY: "auto",
+          minHeight: 120,
+        }}
+      >
+        {/* Staged Changes Section */}
+        <div>
           <div
-            key={f.path}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "3px 6px",
-              borderRadius: 4,
-              fontSize: 11,
-              fontFamily: "var(--font-mono)",
+              marginBottom: 4,
             }}
           >
-            <span
+            <div
+              onClick={() => setStagedExpanded((prev) => !prev)}
               style={{
-                color: f.status === "untracked" ? "var(--warning)" : "var(--text-secondary)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                cursor: "pointer",
+                fontSize: 10,
+                fontWeight: 700,
+                color: "var(--text-secondary)",
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
               }}
-              title={f.path}
             >
-              {f.path}
-            </span>
-            <div style={{ display: "flex", gap: 4 }}>
-              <button
-                onClick={() => handleDiscard(f.path)}
-                title="Discard changes"
-                style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex" }}
+              <ChevronRight
+                size={11}
+                style={{
+                  transform: stagedExpanded ? "rotate(90deg)" : "none",
+                  transition: "transform 0.15s ease",
+                }}
+              />
+              <span>Staged Changes</span>
+              <span
+                style={{
+                  padding: "1px 5px",
+                  borderRadius: 8,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  backgroundColor: stagedCount > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                  color: stagedCount > 0 ? "var(--success)" : "var(--text-muted)",
+                }}
               >
-                <RotateCcw size={11} />
-              </button>
-              <button
-                onClick={() => handleStage(f.path)}
-                title="Stage"
-                style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex" }}
-              >
-                <Plus size={12} />
-              </button>
+                {stagedCount}
+              </span>
             </div>
+
+            {stagedCount > 0 && (
+              <button
+                onClick={handleUnstageAll}
+                title="Unstage all changes"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  padding: 2,
+                  borderRadius: 3,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+              >
+                <Minus size={13} />
+              </button>
+            )}
           </div>
-        ))}
+
+          {stagedExpanded && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {stagedCount === 0 ? (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                    fontStyle: "italic",
+                    padding: "6px 8px",
+                    borderRadius: 4,
+                    border: "1px dashed var(--border-subtle)",
+                    textAlign: "center",
+                  }}
+                >
+                  No staged changes
+                </div>
+              ) : (
+                status?.staged?.map((f: any) => {
+                  return (
+                    <div
+                      key={f.path}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "3px 6px",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        gap: 6,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--bg-card-hover)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      <div
+                        onClick={() => handleViewDiff(f.path, true)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          overflow: "hidden",
+                          flex: 1,
+                        }}
+                      >
+                        {getStatusBadge(f.status)}
+                        {renderPath(f.path)}
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleViewDiff(f.path, true)}
+                          title="Open staged diff tab"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--text-muted)",
+                            cursor: "pointer",
+                            display: "flex",
+                            padding: 2,
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-base)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                        >
+                          <FileCode size={11} />
+                        </button>
+                        <button
+                          onClick={() => handleUnstage(f.path)}
+                          title="Unstage file"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--text-muted)",
+                            cursor: "pointer",
+                            display: "flex",
+                            padding: 2,
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                        >
+                          <Minus size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Changes (Unstaged & Untracked) Section */}
+        <div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 4,
+            }}
+          >
+            <div
+              onClick={() => setChangesExpanded((prev) => !prev)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                cursor: "pointer",
+                fontSize: 10,
+                fontWeight: 700,
+                color: "var(--text-secondary)",
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              <ChevronRight
+                size={11}
+                style={{
+                  transform: changesExpanded ? "rotate(90deg)" : "none",
+                  transition: "transform 0.15s ease",
+                }}
+              />
+              <span>Changes</span>
+              <span
+                style={{
+                  padding: "1px 5px",
+                  borderRadius: 8,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  backgroundColor: unstagedCount > 0 ? "rgba(59, 130, 246, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                  color: unstagedCount > 0 ? "var(--accent-base)" : "var(--text-muted)",
+                }}
+              >
+                {unstagedCount}
+              </span>
+            </div>
+
+            {unstagedCount > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <button
+                  onClick={handleDiscardAll}
+                  title="Discard all unstaged changes"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    padding: 2,
+                    borderRadius: 3,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                >
+                  <RotateCcw size={11} />
+                </button>
+                <button
+                  onClick={handleStageAll}
+                  title="Stage all changes"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    padding: 2,
+                    borderRadius: 3,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-base)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                >
+                  <Plus size={13} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {changesExpanded && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {unstagedCount === 0 ? (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                    fontStyle: "italic",
+                    padding: "6px 8px",
+                    borderRadius: 4,
+                    border: "1px dashed var(--border-subtle)",
+                    textAlign: "center",
+                  }}
+                >
+                  No unstaged changes
+                </div>
+              ) : (
+                [...(status?.unstaged || []), ...(status?.untracked || [])].map((f: any) => {
+                  return (
+                    <div
+                      key={f.path}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "3px 6px",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        gap: 6,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--bg-card-hover)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      <div
+                        onClick={() => handleViewDiff(f.path, false)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          overflow: "hidden",
+                          flex: 1,
+                        }}
+                      >
+                        {getStatusBadge(f.status)}
+                        {renderPath(f.path)}
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleViewDiff(f.path, false)}
+                          title="Open diff tab"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--text-muted)",
+                            cursor: "pointer",
+                            display: "flex",
+                            padding: 2,
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-base)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                        >
+                          <FileCode size={11} />
+                        </button>
+                        <button
+                          onClick={() => handleDiscard(f.path)}
+                          title="Discard changes"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--text-muted)",
+                            cursor: "pointer",
+                            display: "flex",
+                            padding: 2,
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                        >
+                          <RotateCcw size={11} />
+                        </button>
+                        <button
+                          onClick={() => handleStage(f.path)}
+                          title="Stage file"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--text-muted)",
+                            cursor: "pointer",
+                            display: "flex",
+                            padding: 2,
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-base)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Commit Box — Pinned At Bottom */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          marginTop: "auto",
+          paddingTop: 8,
+          borderTop: "1px solid var(--border-subtle)",
+          flexShrink: 0,
+        }}
+      >
+        <textarea
+          rows={3}
+          value={commitMsg}
+          onChange={(e) => setCommitMsg(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+              e.preventDefault();
+              void handleCommit();
+            }
+          }}
+          placeholder="Commit message (Ctrl+Enter to commit)..."
+          style={{
+            padding: "6px 8px",
+            background: "var(--bg-input)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 6,
+            fontSize: 11,
+            color: "var(--text-primary)",
+            resize: "vertical",
+            minHeight: 52,
+            maxHeight: 140,
+            outline: "none",
+            fontFamily: "var(--font-sans)",
+            lineHeight: 1.4,
+          }}
+        />
+
+        {/* Action Row: AI Generate & Commit Button */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+          {/* AI Commit Message Button — strictly requires staged files */}
+          <button
+            onClick={handleGenerateAiCommitMessage}
+            disabled={stagedCount === 0 || isGeneratingAi}
+            title={
+              stagedCount === 0
+                ? "Stage files first to generate commit message with AI"
+                : "Generate conventional commit message with AI"
+            }
+            style={{
+              padding: "5px 9px",
+              background: stagedCount > 0 ? "rgba(83, 155, 245, 0.12)" : "var(--bg-card)",
+              color: stagedCount > 0 ? "var(--accent-base)" : "var(--text-muted)",
+              border: `1px solid ${stagedCount > 0 ? "rgba(83, 155, 245, 0.3)" : "var(--border-subtle)"}`,
+              borderRadius: 4,
+              cursor: stagedCount > 0 && !isGeneratingAi ? "pointer" : "not-allowed",
+              fontWeight: 500,
+              fontSize: 11,
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              opacity: stagedCount > 0 ? 1 : 0.5,
+              transition: "all 0.15s ease",
+            }}
+          >
+            {isGeneratingAi ? (
+              <>
+                <RefreshCw size={12} className="spin" />
+                <span>Generating...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={12} />
+                <span>AI Message</span>
+              </>
+            )}
+          </button>
+
+          {/* Commit Button */}
+          <button
+            onClick={handleCommit}
+            disabled={!commitMsg.trim() || stagedCount === 0 || isCommitting}
+            title={
+              stagedCount === 0
+                ? "No files staged to commit"
+                : !commitMsg.trim()
+                ? "Enter a commit message or generate with AI"
+                : "Commit staged changes (Ctrl+Enter)"
+            }
+            style={{
+              padding: "5px 12px",
+              background:
+                commitMsg.trim() && stagedCount > 0 && !isCommitting
+                  ? "var(--accent-base)"
+                  : "var(--bg-card)",
+              color: commitMsg.trim() && stagedCount > 0 ? "#fff" : "var(--text-muted)",
+              border: "none",
+              borderRadius: 4,
+              cursor:
+                commitMsg.trim() && stagedCount > 0 && !isCommitting ? "pointer" : "default",
+              fontWeight: 600,
+              fontSize: 11,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              opacity: commitMsg.trim() && stagedCount > 0 ? 1 : 0.6,
+              transition: "all 0.15s ease",
+            }}
+          >
+            {isCommitting ? (
+              <>
+                <RefreshCw size={12} className="spin" />
+                <span>Committing...</span>
+              </>
+            ) : (
+              <>
+                <Check size={12} />
+                <span>Commit ({stagedCount})</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

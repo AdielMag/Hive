@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import {
+  type AttachedItem,
   type Bootstrap,
   type Model,
   type ProjectEntry,
@@ -50,17 +51,25 @@ export interface SessionStoreState {
   extensionStatus: Record<string, string>;
   pendingUiDialog: RpcExtensionUIRequest | null;
   promptText: string;
+  attachments: AttachedItem[];
+  isLoadingModels: boolean;
   isInitializing: boolean;
   error: string | null;
 
   // Actions
   init: () => Promise<void>;
+  ensureActiveSession: (targetTabId?: string) => Promise<string | null>;
+  addAttachments: (items: AttachedItem[]) => void;
+  removeAttachment: (id: string) => void;
+  clearAttachments: () => void;
   refreshCatalog: () => Promise<void>;
   addProject: (dirPath: string, name?: string, color?: string) => Promise<ProjectEntry>;
   updateProject: (id: string, updates: Partial<ProjectEntry>) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
   openSessionTab: (sessionPath: string, projectId: string, title?: string) => Promise<void>;
   newSessionTab: (projectId: string) => Promise<void>;
+  openFileTab: (filePath: string, projectId: string, title?: string) => Promise<void>;
+  openDiffTab: (filePath: string, staged: boolean, projectId: string) => Promise<void>;
   switchTab: (tabId: string) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
   setPromptText: (text: string) => void;
@@ -92,6 +101,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   extensionStatus: {},
   pendingUiDialog: null,
   promptText: "",
+  attachments: [],
+  isLoadingModels: false,
   isInitializing: true,
   error: null,
 
@@ -181,6 +192,104 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
   },
 
+  ensureActiveSession: async (targetTabId?: string) => {
+    const { tabs, activeTabId, projects } = get();
+    const tabId = targetTabId || activeTabId;
+    if (!tabId) return null;
+    const tab = tabs.find((t) => t.id === tabId);
+    if (!tab || (tab.kind && tab.kind !== "session")) return null;
+
+    // If tab already has an activeKey, ensure models and state are loaded
+    if (tab.activeKey) {
+      if (get().activeKey !== tab.activeKey) {
+        set({ activeKey: tab.activeKey });
+      }
+      if (get().models.length === 0 || !get().selectedModel) {
+        set({ isLoadingModels: true });
+        try {
+          const [stateRes, modelsRes, levelsRes] = await Promise.all([
+            window.studio.rpc(tab.activeKey, { type: "get_state" }),
+            window.studio.rpc(tab.activeKey, { type: "get_available_models" }),
+            window.studio.rpc(tab.activeKey, { type: "get_available_thinking_levels" }),
+          ]);
+          if (stateRes.ok) {
+            const state = stateRes.data as { model?: Model<any>; thinkingLevel?: string };
+            if (state.model) set({ selectedModel: state.model });
+            if (state.thinkingLevel) set({ selectedThinkingLevel: state.thinkingLevel });
+          }
+          if (modelsRes.ok) {
+            const models = (modelsRes.data as { models: Array<Model<any>> }).models;
+            set({ models });
+            if (!get().selectedModel && models.length > 0) set({ selectedModel: models[0] ?? null });
+          }
+          if (levelsRes.ok) {
+            set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
+          }
+        } catch (err) {
+          console.error("Failed to query models for active session", err);
+        } finally {
+          set({ isLoadingModels: false });
+        }
+      }
+      return tab.activeKey;
+    }
+
+    // Need to start session for this tab
+    const project = projects.find((p) => p.id === tab.projectId);
+    if (!project?.path) return null;
+
+    set({ isLoadingModels: true });
+    try {
+      const res = await window.studio.startSession({
+        projectPath: project.path,
+        sessionPath: tab.sessionPath,
+      });
+
+      set((s) => ({
+        activeKey: res.key,
+        tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, activeKey: res.key, isCold: false } : t)),
+      }));
+
+      const [stateRes, modelsRes, levelsRes] = await Promise.all([
+        window.studio.rpc(res.key, { type: "get_state" }),
+        window.studio.rpc(res.key, { type: "get_available_models" }),
+        window.studio.rpc(res.key, { type: "get_available_thinking_levels" }),
+      ]);
+
+      if (stateRes.ok) {
+        const state = stateRes.data as { model?: Model<any>; thinkingLevel?: string };
+        if (state.model) set({ selectedModel: state.model });
+        if (state.thinkingLevel) set({ selectedThinkingLevel: state.thinkingLevel });
+      }
+      if (modelsRes.ok) {
+        const models = (modelsRes.data as { models: Array<Model<any>> }).models;
+        set({ models });
+        if (!get().selectedModel && models.length > 0) set({ selectedModel: models[0] ?? null });
+      }
+      if (levelsRes.ok) {
+        set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
+      }
+      return res.key;
+    } catch (err) {
+      console.error("Failed to start live session", err);
+      return null;
+    } finally {
+      set({ isLoadingModels: false });
+    }
+  },
+
+  addAttachments: (items: AttachedItem[]) => {
+    set((s) => ({ attachments: [...s.attachments, ...items] }));
+  },
+
+  removeAttachment: (id: string) => {
+    set((s) => ({ attachments: s.attachments.filter((a) => a.id !== id) }));
+  },
+
+  clearAttachments: () => {
+    set({ attachments: [] });
+  },
+
   refreshCatalog: async () => {
     try {
       const [projects, allSessions] = await Promise.all([
@@ -221,6 +330,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     const tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const newTab: TabItem = {
       id: tabId,
+      kind: "session",
       sessionPath,
       projectId,
       title: title || sessionPath.split(/[/\\]/).pop()?.replace(/\.jsonl$/, "") || "Session",
@@ -249,6 +359,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     } catch (err) {
       console.error("Failed to read cold session", err);
     }
+
+    void get().ensureActiveSession(tabId);
   },
 
   newSessionTab: async (projectId: string) => {
@@ -259,6 +371,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     const tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const newTab: TabItem = {
       id: tabId,
+      kind: "session",
       projectId,
       title: "New Session",
       pinned: false,
@@ -275,6 +388,101 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       extensionStatus: {},
       pendingUiDialog: null,
       stats: null,
+    });
+
+    void get().ensureActiveSession(tabId);
+  },
+
+  openFileTab: async (filePath: string, projectId: string, title?: string) => {
+    const { tabs, projects } = get();
+    const tabId = `file:${filePath}`;
+    const existing = tabs.find((t) => t.id === tabId);
+    const project = projects.find((p) => p.id === projectId) ?? null;
+
+    let content = "";
+    let language = "text";
+    try {
+      const data = await window.studio.readFile(filePath);
+      content = data.content;
+      language = data.language;
+    } catch (err: any) {
+      content = `Failed to load file: ${err.message || String(err)}`;
+    }
+
+    if (existing) {
+      set((s) => ({
+        tabs: s.tabs.map((t) =>
+          t.id === tabId ? { ...t, fileContent: content, fileLanguage: language } : t,
+        ),
+        activeTabId: tabId,
+        activeProject: project,
+      }));
+      return;
+    }
+
+    const fileName = filePath.split(/[/\\]/).pop() || "File";
+    const newTab: TabItem = {
+      id: tabId,
+      kind: "file",
+      projectId,
+      title: title || fileName,
+      filePath,
+      fileContent: content,
+      fileLanguage: language,
+      pinned: false,
+      isCold: false,
+    };
+
+    set({
+      tabs: [...tabs, newTab],
+      activeTabId: tabId,
+      activeProject: project,
+    });
+  },
+
+  openDiffTab: async (filePath: string, staged: boolean, projectId: string) => {
+    const { tabs, projects } = get();
+    const tabId = `diff:${staged ? "staged" : "working"}:${filePath}`;
+    const existing = tabs.find((t) => t.id === tabId);
+    const project = projects.find((p) => p.id === projectId) ?? null;
+
+    let diffContent = "";
+    if (project?.path) {
+      try {
+        diffContent = await window.studio.getGitDiff(project.path, { staged, filePath });
+      } catch (err: any) {
+        diffContent = `Failed to load diff: ${err.message || String(err)}`;
+      }
+    }
+
+    if (existing) {
+      set((s) => ({
+        tabs: s.tabs.map((t) =>
+          t.id === tabId ? { ...t, diffContent: diffContent || "No differences detected." } : t,
+        ),
+        activeTabId: tabId,
+        activeProject: project,
+      }));
+      return;
+    }
+
+    const fileName = filePath.split(/[/\\]/).pop() || filePath;
+    const newTab: TabItem = {
+      id: tabId,
+      kind: "diff",
+      projectId,
+      title: `${staged ? "[Staged] " : ""}${fileName}`,
+      filePath,
+      diffStaged: staged,
+      diffContent: diffContent || "No differences detected.",
+      pinned: false,
+      isCold: false,
+    };
+
+    set({
+      tabs: [...tabs, newTab],
+      activeTabId: tabId,
+      activeProject: project,
     });
   },
 
@@ -304,6 +512,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         console.error("Failed to read session file", err);
       }
     }
+
+    if (tab.kind === "session" || !tab.kind) {
+      void get().ensureActiveSession(tabId);
+    }
   },
 
   closeTab: async (tabId: string) => {
@@ -326,57 +538,56 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   setPromptText: (text: string) => set({ promptText: text }),
 
   sendPrompt: async (streamingBehavior) => {
-    let { activeKey, promptText, transcript, activeProject, activeTabId, tabs } = get();
-    if (!promptText.trim()) return;
+    let { activeKey, promptText, transcript, attachments } = get();
+    if (!promptText.trim() && attachments.length === 0) return;
 
     // Promote cold tab to live process if needed
     if (!activeKey) {
-      if (!activeProject) return;
-      const activeTab = tabs.find((t) => t.id === activeTabId);
-      const res = await window.studio.startSession({
-        projectPath: activeProject.path,
-        sessionPath: activeTab?.sessionPath,
-      });
-      activeKey = res.key;
+      activeKey = await get().ensureActiveSession();
+      if (!activeKey) return;
+    }
 
-      // Update tab state
-      set((s) => ({
-        activeKey: res.key,
-        tabs: s.tabs.map((t) => (t.id === activeTabId ? { ...t, activeKey: res.key, isCold: false } : t)),
-      }));
+    const images: Array<{ type: "image"; data: string; mimeType: string }> = [];
+    const fileBlocks: string[] = [];
 
-      // Fetch models, state, thinking levels
-      const stateRes = await window.studio.rpc(activeKey, { type: "get_state" });
-      if (stateRes.ok) {
-        const state = stateRes.data as { model?: Model<any>; thinkingLevel?: string };
-        if (state.model) set({ selectedModel: state.model });
-        if (state.thinkingLevel) set({ selectedThinkingLevel: state.thinkingLevel });
-      }
-
-      const modelsRes = await window.studio.rpc(activeKey, { type: "get_available_models" });
-      if (modelsRes.ok) {
-        const models = (modelsRes.data as { models: Array<Model<any>> }).models;
-        set({ models });
-        if (!get().selectedModel && models.length > 0) set({ selectedModel: models[0] ?? null });
-      }
-
-      const levelsRes = await window.studio.rpc(activeKey, { type: "get_available_thinking_levels" });
-      if (levelsRes.ok) {
-        set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
+    for (const item of attachments) {
+      if (item.kind === "image" && item.dataBase64) {
+        images.push({
+          type: "image",
+          data: item.dataBase64,
+          mimeType: item.mimeType,
+        });
+      } else if (item.textContent) {
+        fileBlocks.push(
+          `--- Attached File: ${item.name}${item.path ? ` (${item.path})` : ""} ---\n${item.textContent}\n--- End of File ---`
+        );
       }
     }
 
-    const message = promptText;
-    set({ promptText: "" });
+    let message = promptText;
+    if (fileBlocks.length > 0) {
+      message = (message ? message + "\n\n" : "") + fileBlocks.join("\n\n");
+    }
+
+    set({ promptText: "", attachments: [] });
 
     if (transcript.running && streamingBehavior === "steer") {
-      await window.studio.rpc(activeKey, { type: "steer", message });
+      await window.studio.rpc(activeKey, {
+        type: "steer",
+        message,
+        ...(images.length > 0 ? { images } : {}),
+      });
     } else if (transcript.running && streamingBehavior === "followUp") {
-      await window.studio.rpc(activeKey, { type: "follow_up", message });
+      await window.studio.rpc(activeKey, {
+        type: "follow_up",
+        message,
+        ...(images.length > 0 ? { images } : {}),
+      });
     } else {
       await window.studio.rpc(activeKey, {
         type: "prompt",
         message,
+        ...(images.length > 0 ? { images } : {}),
         ...(transcript.running ? { streamingBehavior: "steer" } : {}),
       });
     }
@@ -395,7 +606,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   setModel: async (provider: string, modelId: string) => {
-    const { activeKey } = get();
+    let { activeKey } = get();
+    if (!activeKey) {
+      activeKey = await get().ensureActiveSession();
+    }
     if (!activeKey) return;
     const res = await window.studio.rpc(activeKey, { type: "set_model", provider, modelId });
     if (res.ok) {
@@ -408,7 +622,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   setThinkingLevel: async (level: string) => {
-    const { activeKey } = get();
+    let { activeKey } = get();
+    if (!activeKey) {
+      activeKey = await get().ensureActiveSession();
+    }
     if (!activeKey) return;
     const res = await window.studio.rpc(activeKey, { type: "set_thinking_level", level: level as any });
     if (res.ok) {

@@ -134,16 +134,47 @@ export const IPC = {
   // Git
   gitStatus: "git:status",
   gitStage: "git:stage",
+  gitStageAll: "git:stage-all",
   gitUnstage: "git:unstage",
+  gitUnstageAll: "git:unstage-all",
   gitDiscard: "git:discard",
+  gitDiscardAll: "git:discard-all",
   gitCommit: "git:commit",
   gitBranches: "git:branches",
+  gitCheckout: "git:checkout",
+  gitCreateBranch: "git:create-branch",
+  gitDiff: "git:diff",
+  gitGenerateCommitMessage: "git:generate-commit-message",
   // Files
   filesList: "files:list",
   filesRead: "files:read",
+  filesReadMedia: "files:read-media",
   filesRun: "files:run",
+  pickFiles: "studio:pick-files",
   // Marketplace
   marketplaceSearch: "marketplace:search",
+  // Window controls
+  windowMinimize: "window:minimize",
+  windowMaximize: "window:maximize",
+  windowClose: "window:close",
+  windowIsMaximized: "window:is-maximized",
+  evtWindowMaximized: "window:maximized-change",
+  // Auth
+  authGetAccounts: "auth:get-accounts",
+  authSaveApiKey: "auth:save-api-key",
+  authLogout: "auth:logout",
+  authLoginOAuth: "auth:login-oauth",
+  // Updater
+  updaterCheck: "updater:check",
+  updaterApply: "updater:apply",
+  // Terminal
+  terminalCreate: "terminal:create",
+  terminalWrite: "terminal:write",
+  terminalResize: "terminal:resize",
+  terminalKill: "terminal:kill",
+  terminalList: "terminal:list",
+  evtTerminalData: "terminal:data",
+  evtTerminalExit: "terminal:exit",
 } as const;
 
 /** API exposed on `window.studio` by the preload script. */
@@ -187,16 +218,51 @@ export interface StudioApi {
   // Git operations
   getGitStatus(cwd: string): Promise<any>;
   stageFile(cwd: string, filePath: string): Promise<void>;
+  stageAll(cwd: string): Promise<void>;
   unstageFile(cwd: string, filePath: string): Promise<void>;
+  unstageAll(cwd: string): Promise<void>;
   discardFile(cwd: string, filePath: string): Promise<void>;
+  discardAll(cwd: string): Promise<void>;
   gitCommit(cwd: string, message: string, amend?: boolean): Promise<string>;
   getGitBranches(cwd: string): Promise<string[]>;
+  gitCheckout(cwd: string, branch: string): Promise<string>;
+  gitCreateBranch(cwd: string, branch: string): Promise<string>;
+  getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }): Promise<string>;
+  generateCommitMessage(cwd: string, model?: string): Promise<string>;
 
   // File operations
   listFiles(dirPath: string): Promise<any[]>;
   readFile(filePath: string): Promise<any>;
+  readMediaFile(filePath: string): Promise<{ data: string; mimeType: string; size: number; name: string }>;
+  pickFiles(options?: { allowImagesOnly?: boolean }): Promise<string[]>;
   runFile(filePath: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 
   // Marketplace operations
   searchMarketplace(query?: string, kind?: string): Promise<any[]>;
+
+  // Window Controls
+  minimizeWindow(): Promise<void>;
+  maximizeWindow(): Promise<void>;
+  closeWindow(): Promise<void>;
+  isWindowMaximized(): Promise<boolean>;
+  onWindowMaximizedChange(listener: (isMaximized: boolean) => void): () => void;
+
+  // Auth & Accounts
+  getAuthAccounts(): Promise<any[]>;
+  saveApiKey(providerId: string, apiKey: string): Promise<void>;
+  logoutAccount(providerId: string): Promise<void>;
+  loginOAuth(providerId: string): Promise<{ success: boolean; error?: string }>;
+
+  // Updater
+  checkForUpdates(): Promise<any>;
+  applyUpdate(downloadUrl?: string): Promise<{ success: boolean; message: string }>;
+
+  // Terminal
+  terminalCreate(options?: { cwd?: string; shell?: string; cols?: number; rows?: number }): Promise<{ id: string; shell: string; cwd: string }>;
+  terminalWrite(id: string, data: string): Promise<void>;
+  terminalResize(id: string, cols: number, rows: number): Promise<void>;
+  terminalKill(id: string): Promise<void>;
+  terminalList(): Promise<{ id: string; shell: string; cwd: string }[]>;
+  onTerminalData(listener: (event: { id: string; data: string }) => void): () => void;
+  onTerminalExit(listener: (event: { id: string; exitCode: number }) => void): () => void;
 }

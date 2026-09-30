@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test & Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit Tests
+        run: npm test
+
+  build-and-release:
+    name: Build & Package (${{ matrix.os }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build packages & desktop app
+        run: npm run build
+
+      - name: Package Desktop Artifacts
+        working-directory: apps/desktop
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --publish never
+
+      - name: Extract Version
+        id: get_version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=v$VERSION" >> $GITHUB_ENV
+
+      - name: Upload Release Binaries
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: Pi Studio ${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            apps/desktop/dist-release/*.exe
+            apps/desktop/dist-release/*.dmg
+            apps/desktop/dist-release/*.zip
+            apps/desktop/dist-release/*.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

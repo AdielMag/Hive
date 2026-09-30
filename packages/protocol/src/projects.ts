@@ -27,6 +27,18 @@ export interface ProjectsFile {
   projects: ProjectEntry[];
 }
 
+export interface AttachedItem {
+  id: string;
+  name: string;
+  path?: string;
+  kind: "image" | "file";
+  mimeType: string;
+  size?: number;
+  dataBase64?: string; // base64 string for images (without data:... prefix)
+  textContent?: string; // string content for text/code files
+  previewUrl?: string; // data URL or thumbnail for rendering in UI
+}
+
 export interface SessionCatalogItem {
   path: string;
   id: string;
@@ -42,12 +54,22 @@ export interface SessionCatalogItem {
 
 export interface TabItem {
   id: string; // tab identifier (usually sessionPath or temp id)
+  kind?: "session" | "file" | "diff";
   sessionPath?: string;
   projectId: string;
   title: string;
   pinned: boolean;
-  isCold: boolean; // if rendered from file or has active live process
+  isCold?: boolean; // if rendered from file or has active live process
   activeKey?: string; // key of live session if started
+
+  // File tab fields
+  filePath?: string;
+  fileContent?: string;
+  fileLanguage?: string;
+
+  // Diff tab fields
+  diffStaged?: boolean;
+  diffContent?: string;
 }
 
 export interface UiStateFile {

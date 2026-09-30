@@ -1,5 +1,6 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
+import type { PiInstallInfo } from "@pi-studio/protocol";
 
 const execFileAsync = promisify(execFile);
 
@@ -131,12 +132,33 @@ export async function unstageFile(cwd: string, filePath: string): Promise<void> 
   await runGit(["restore", "--staged", "--", filePath], cwd);
 }
 
+export async function unstageAll(cwd: string): Promise<void> {
+  try {
+    await runGit(["restore", "--staged", "."], cwd);
+  } catch {
+    await runGit(["reset", "HEAD", "--", "."], cwd);
+  }
+}
+
 export async function discardFile(cwd: string, filePath: string): Promise<void> {
   try {
     await runGit(["restore", "--", filePath], cwd);
   } catch {
     // If untracked, remove file
     await runGit(["clean", "-f", "--", filePath], cwd);
+  }
+}
+
+export async function discardAll(cwd: string): Promise<void> {
+  try {
+    await runGit(["restore", "."], cwd);
+  } catch {
+    await runGit(["checkout", "--", "."], cwd);
+  }
+  try {
+    await runGit(["clean", "-fd"], cwd);
+  } catch {
+    // Ignore clean failures
   }
 }
 
@@ -148,4 +170,110 @@ export async function gitCommit(cwd: string, message: string, amend = false): Pr
 
 export async function gitCheckout(cwd: string, branch: string): Promise<string> {
   return runGit(["checkout", branch], cwd);
+}
+
+export async function gitCreateBranch(cwd: string, branch: string): Promise<string> {
+  return runGit(["checkout", "-b", branch], cwd);
+}
+
+export async function getGitDiff(
+  cwd: string,
+  options?: { staged?: boolean; filePath?: string },
+): Promise<string> {
+  const args = ["diff"];
+  if (options?.staged) {
+    args.push("--staged");
+  }
+  if (options?.filePath) {
+    args.push("--", options.filePath);
+  }
+  try {
+    return await runGit(args, cwd);
+  } catch {
+    return "";
+  }
+}
+
+export async function generateCommitMessage(
+  cwd: string,
+  piInfo: PiInstallInfo,
+  model?: string,
+): Promise<string> {
+  const stagedDiff = await getGitDiff(cwd, { staged: true });
+  if (!stagedDiff.trim()) {
+    throw new Error("No staged changes found. Please stage files first.");
+  }
+
+  // Cap diff size at 80KB to keep within prompt bounds
+  const MAX_DIFF_BYTES = 80 * 1024;
+  let diffContent = stagedDiff;
+  if (diffContent.length > MAX_DIFF_BYTES) {
+    diffContent = diffContent.slice(0, MAX_DIFF_BYTES) + "\n\n[...diff truncated for length...]";
+  }
+
+  const prompt = `Generate a concise, high quality conventional git commit message (e.g. feat(...): ..., fix(...): ...) summarizing the following staged changes.
+Follow these strict rules:
+1. Provide a concise summary on the first line (maximum 72 characters).
+2. If necessary, provide a brief bulleted description after a blank line.
+3. Output ONLY the commit message text.
+4. Do NOT output markdown code blocks (no \`\`\`), no backticks, no quotes around the whole message, and no pleasantries or explanatory chatter.
+
+Staged diff:
+${diffContent}`;
+
+  const args = [
+    piInfo.cliPath,
+    "-p",
+    "--no-session",
+    "--no-tools",
+    "--no-context-files",
+  ];
+  if (model) {
+    args.push("--model", model);
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn(piInfo.nodePath, args, {
+      cwd,
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+
+    child.on("error", (err) => {
+      reject(new Error(`Failed to spawn Pi CLI: ${err.message}`));
+    });
+
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `Pi CLI exited with code ${code}`));
+        return;
+      }
+
+      let msg = stdout.trim();
+      // Strip markdown code fences if model wrapped the message in \`\`\`text ... \`\`\`
+      if (msg.startsWith("```")) {
+        msg = msg.replace(/^```[a-zA-Z]*\r?\n/, "").replace(/\r?\n```$/, "").trim();
+      }
+      // Strip outer quotes if any
+      if ((msg.startsWith('"') && msg.endsWith('"')) || (msg.startsWith("'") && msg.endsWith("'"))) {
+        msg = msg.slice(1, -1).trim();
+      }
+
+      resolve(msg);
+    });
+
+    child.stdin.write(prompt);
+    child.stdin.end();
+  });
 }

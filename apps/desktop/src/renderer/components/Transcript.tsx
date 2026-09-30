@@ -57,9 +57,31 @@ const TimelineRow: React.FC<{ item: TimelineItem; toolResults: Record<string, To
               color: "var(--text-primary)",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
             }}
           >
-            {item.text}
+            {item.images && item.images.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {item.images.map((img, idx) => (
+                  <img
+                    key={idx}
+                    src={`data:${img.mimeType};base64,${img.data}`}
+                    alt="attachment"
+                    style={{
+                      maxHeight: 240,
+                      maxWidth: "100%",
+                      borderRadius: 6,
+                      border: "1px solid var(--border-subtle)",
+                      objectFit: "contain",
+                      background: "rgba(0, 0, 0, 0.2)",
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+            {item.text && <div>{item.text}</div>}
           </div>
         </div>
       );
