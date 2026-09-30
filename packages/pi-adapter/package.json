@@ -1,0 +1,14 @@
+{
+  "name": "@pi-studio/pi-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The only place Studio couples to Pi: RPC process, framing, locator, transcript reconstruction",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node/index.ts"
+  },
+  "dependencies": {
+    "@pi-studio/protocol": "0.1.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@pi-studio/test-provider",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic offline Pi provider + test commands for Studio E2E and contract tests",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

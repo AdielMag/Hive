@@ -1,0 +1,30 @@
+{
+  "name": "pi-studio",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Desktop GUI for agentic coding on top of the Pi CLI",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "dev": "npm --prefix apps/desktop run dev",
+    "build": "npm --prefix apps/desktop run build",
+    "typecheck": "tsc -p packages/protocol && tsc -p packages/pi-adapter && tsc -p packages/test-provider && npm run typecheck -w @pi-studio/desktop",
+    "test": "vitest run --project unit",
+    "test:contract": "vitest run --project contract",
+    "e2e": "npm run e2e -w @pi-studio/desktop"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-agent-core": "0.87.1",
+    "@earendil-works/pi-ai": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@types/node": "^22.19.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  }
+}

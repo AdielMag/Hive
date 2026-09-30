@@ -1,0 +1,12 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+test-results/
+playwright-report/
+.pi-versions/
+.plan-feedback.json
+.plan-feedback.md
+.plan-previewer-*.json
+.plan-questions.json

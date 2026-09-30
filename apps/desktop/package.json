@@ -1,0 +1,33 @@
+{
+  "name": "@pi-studio/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pi Studio Desktop App",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pi-studio/pi-adapter": "0.1.0",
+    "@pi-studio/protocol": "0.1.0",
+    "culori": "^4.0.2",
+    "flexlayout-react": "^0.11.1",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^35.0.0",
+    "electron-vite": "^5.0.0",
+    "typescript": "6.0.3",
+    "vite": "^7.3.0"
+  }
+}
