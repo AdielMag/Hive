@@ -1,0 +1,372 @@
+import React, { useState } from "react";
+import {
+  Folder,
+  Plus,
+  ChevronDown,
+  ChevronRight,
+  MessageSquare,
+  Trash2,
+  Link as LinkIcon,
+  Palette,
+} from "lucide-react";
+import { useSessionStore } from "../store/session-store.ts";
+import { DEFAULT_PROJECT_HUES } from "@pi-studio/protocol";
+
+export const Sidebar: React.FC = () => {
+  const {
+    projects,
+    allSessions,
+    addProject,
+    updateProject,
+    openSessionTab,
+    newSessionTab,
+    deleteSessionFile,
+  } = useSessionStore();
+
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+  const [colorPickerPrj, setColorPickerPrj] = useState<string | null>(null);
+
+  const toggleExpand = (id: string) => {
+    setExpandedProjects((s) => ({ ...s, [id]: !(s[id] ?? true) }));
+  };
+
+  const handlePickFolder = async () => {
+    const folder = await window.studio.pickFolder();
+    if (folder) {
+      const p = await addProject(folder);
+      await newSessionTab(p.id);
+    }
+  };
+
+  const handleAddLink = async (projectId: string) => {
+    const folder = await window.studio.pickFolder();
+    if (!folder) return;
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return;
+    const existing = project.links || [];
+    if (existing.some((l) => l.path === folder)) return;
+
+    const newLinks = [
+      ...existing,
+      {
+        path: folder,
+        alias: folder.split(/[/\\]/).pop() || folder,
+        access: "read-only" as const,
+      },
+    ];
+    await updateProject(projectId, { links: newLinks });
+  };
+
+  // Group sessions by projectId
+  const sessionsByProject: Record<string, typeof allSessions> = {};
+  const unsortedSessions: typeof allSessions = [];
+
+  for (const s of allSessions) {
+    if (s.projectId) {
+      if (!sessionsByProject[s.projectId]) sessionsByProject[s.projectId] = [];
+      sessionsByProject[s.projectId]!.push(s);
+    } else {
+      unsortedSessions.push(s);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        background: "var(--bg-sidebar)",
+        fontSize: 12,
+        userSelect: "none",
+        overflowY: "auto",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "10px 14px",
+          borderBottom: "1px solid var(--border-subtle)",
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.05em" }}>
+          PROJECTS
+        </span>
+        <button
+          onClick={handlePickFolder}
+          title="Open project folder"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            background: "var(--accent-subtle)",
+            border: "1px solid var(--accent-base)",
+            color: "var(--accent-hover)",
+            borderRadius: 4,
+            padding: "2px 8px",
+            fontSize: 11,
+            cursor: "pointer",
+            fontWeight: 500,
+          }}
+        >
+          <Plus size={12} /> Add
+        </button>
+      </div>
+
+      {/* Project list */}
+      <div style={{ display: "flex", flexDirection: "column", padding: "6px 0" }}>
+        {projects.map((project) => {
+          const isExpanded = expandedProjects[project.id] ?? true;
+          const sessions = sessionsByProject[project.id] || [];
+
+          return (
+            <div key={project.id} style={{ display: "flex", flexDirection: "column" }}>
+              {/* Project Row */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "6px 12px",
+                  gap: 6,
+                  cursor: "pointer",
+                  borderRadius: 4,
+                  margin: "1px 6px",
+                  background: "transparent",
+                }}
+                className="project-row"
+              >
+                <span onClick={() => toggleExpand(project.id)} style={{ display: "flex" }}>
+                  {isExpanded ? <ChevronDown size={14} color="var(--text-muted)" /> : <ChevronRight size={14} color="var(--text-muted)" />}
+                </span>
+
+                <div
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    backgroundColor: project.color,
+                    flexShrink: 0,
+                  }}
+                  onClick={() => setColorPickerPrj(colorPickerPrj === project.id ? null : project.id)}
+                  title="Change project color"
+                />
+
+                <span
+                  style={{ flex: 1, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  onClick={() => toggleExpand(project.id)}
+                  title={project.path}
+                >
+                  {project.name}
+                </span>
+
+                {/* Color swatches popup */}
+                {colorPickerPrj === project.id && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 40,
+                      zIndex: 1000,
+                      background: "var(--bg-elevated)",
+                      border: "1px solid var(--border-prominent)",
+                      borderRadius: 6,
+                      padding: 6,
+                      display: "flex",
+                      gap: 4,
+                      boxShadow: "0 8px 16px rgba(0,0,0,0.4)",
+                    }}
+                  >
+                    {DEFAULT_PROJECT_HUES.map((c) => (
+                      <div
+                        key={c}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await updateProject(project.id, { color: c });
+                          setColorPickerPrj(null);
+                        }}
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: "50%",
+                          background: c,
+                          cursor: "pointer",
+                          border: project.color === c ? "2px solid #fff" : "none",
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => newSessionTab(project.id)}
+                  title="New Session"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    padding: 2,
+                    display: "flex",
+                  }}
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+
+              {/* Sessions list */}
+              {isExpanded && (
+                <div style={{ display: "flex", flexDirection: "column", paddingLeft: 22, paddingRight: 6 }}>
+                  {sessions.length === 0 && (
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "4px 8px" }}>
+                      No sessions yet
+                    </div>
+                  )}
+
+                  {sessions.map((sess) => (
+                    <div
+                      key={sess.id}
+                      onClick={() => openSessionTab(sess.path, project.id, sess.name || sess.firstMessage)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "5px 8px",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        margin: "1px 0",
+                      }}
+                      className="session-row"
+                    >
+                      <MessageSquare size={12} color="var(--text-muted)" />
+                      <span
+                        style={{
+                          flex: 1,
+                          fontSize: 11,
+                          color: "var(--text-secondary)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={sess.name || sess.firstMessage || "Session"}
+                      >
+                        {sess.name || sess.firstMessage || "Empty session"}
+                      </span>
+
+                      {sess.messageCount > 0 && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: "1px 5px",
+                            borderRadius: 10,
+                            background: "rgba(255,255,255,0.06)",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          {sess.messageCount}
+                        </span>
+                      )}
+
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (confirm("Move this session to trash?")) {
+                            await deleteSessionFile(sess.path);
+                          }
+                        }}
+                        title="Delete session"
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--text-muted)",
+                          cursor: "pointer",
+                          padding: 2,
+                          display: "flex",
+                        }}
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Linked projects subsection */}
+                  <div style={{ marginTop: 4, marginBottom: 6, paddingLeft: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--text-muted)", fontSize: 10 }}>
+                      <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                        <LinkIcon size={10} /> LINKED ({project.links?.length || 0})
+                      </span>
+                      <button
+                        onClick={() => handleAddLink(project.id)}
+                        style={{ background: "transparent", border: "none", color: "var(--accent-hover)", cursor: "pointer", fontSize: 10 }}
+                      >
+                        + Link
+                      </button>
+                    </div>
+                    {project.links?.map((lnk) => (
+                      <div
+                        key={lnk.path}
+                        style={{
+                          fontSize: 10,
+                          color: "var(--text-secondary)",
+                          padding: "2px 4px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          fontFamily: "var(--font-mono)",
+                        }}
+                      >
+                        <span title={lnk.path}>../{lnk.alias || lnk.path.split(/[/\\]/).pop()}</span>
+                        <span style={{ color: "var(--text-muted)" }}>{lnk.access}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Unsorted / Discovered from Pi CLI */}
+        {unsortedSessions.length > 0 && (
+          <div style={{ marginTop: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 8 }}>
+            <div style={{ padding: "4px 14px", fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
+              OTHER PI SESSIONS ({unsortedSessions.length})
+            </div>
+            {unsortedSessions.slice(0, 10).map((s) => (
+              <div
+                key={s.id}
+                style={{
+                  padding: "4px 14px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontSize: 11,
+                  color: "var(--text-muted)",
+                }}
+              >
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={s.cwd}>
+                  {s.cwd.split(/[/\\]/).pop()}
+                </span>
+                <button
+                  onClick={() => addProject(s.cwd)}
+                  style={{
+                    background: "var(--accent-subtle)",
+                    border: "none",
+                    color: "var(--accent-base)",
+                    fontSize: 10,
+                    borderRadius: 3,
+                    padding: "1px 5px",
+                    cursor: "pointer",
+                  }}
+                >
+                  + Add
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

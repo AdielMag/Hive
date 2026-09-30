@@ -4,6 +4,7 @@ import "flexlayout-react/style/dark.css";
 import { Folder, GitBranch, Files, Terminal as TerminalIcon, PieChart } from "lucide-react";
 import { Transcript } from "./Transcript.tsx";
 import { Composer } from "./Composer.tsx";
+import { Sidebar } from "./Sidebar.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 
 const DEFAULT_LAYOUT: IJsonModel = {
@@ -109,49 +110,7 @@ export const DockShell: React.FC = () => {
         );
 
       case "projects":
-        return (
-          <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase" }}>
-                Projects
-              </span>
-              <button
-                onClick={handlePickFolder}
-                style={{
-                  background: "var(--accent-subtle)",
-                  border: "1px solid var(--accent-base)",
-                  color: "var(--accent-hover)",
-                  borderRadius: 4,
-                  padding: "2px 8px",
-                  fontSize: 11,
-                  cursor: "pointer",
-                }}
-              >
-                + Open folder
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 10px",
-                background: "var(--bg-card)",
-                borderRadius: 6,
-                border: "1px solid var(--border-subtle)",
-              }}
-            >
-              <Folder size={14} color="var(--project-color)" />
-              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{projectName || "No Project"}</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {projectPath}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
+        return <Sidebar />;
 
       case "files":
         return (

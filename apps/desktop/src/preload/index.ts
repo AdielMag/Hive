@@ -77,6 +77,43 @@ const api: StudioApi = {
     ipcRenderer.on(IPC.evtBridge, handler);
     return () => ipcRenderer.removeListener(IPC.evtBridge, handler);
   },
+
+  // Projects & Catalog
+  getProjects() {
+    return ipcRenderer.invoke(IPC.projectsList);
+  },
+
+  addProject(path: string, name?: string, color?: string) {
+    return ipcRenderer.invoke(IPC.projectsAdd, { path, name, color });
+  },
+
+  updateProject(id: string, updates: any) {
+    return ipcRenderer.invoke(IPC.projectsUpdate, { id, updates });
+  },
+
+  removeProject(id: string) {
+    return ipcRenderer.invoke(IPC.projectsRemove, { id });
+  },
+
+  listAllSessions() {
+    return ipcRenderer.invoke(IPC.sessionsListAll);
+  },
+
+  readSessionFile(sessionPath: string) {
+    return ipcRenderer.invoke(IPC.sessionsReadFile, { path: sessionPath });
+  },
+
+  deleteSessionFile(sessionPath: string) {
+    return ipcRenderer.invoke(IPC.sessionsDelete, { path: sessionPath });
+  },
+
+  checkTrust(path: string) {
+    return ipcRenderer.invoke(IPC.trustCheck, { path });
+  },
+
+  setTrust(path: string, trusted: boolean) {
+    return ipcRenderer.invoke(IPC.trustSet, { path, trusted });
+  },
 };
 
 contextBridge.exposeInMainWorld("studio", api);

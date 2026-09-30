@@ -8,8 +8,10 @@ import type {
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
   RpcResponse,
+  SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
+import type { ProjectDefaults, ProjectEntry, SessionCatalogItem } from "./projects.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
@@ -119,6 +121,16 @@ export const IPC = {
   evtStatus: "session:status",
   evtUiRequest: "session:ui-request",
   evtBridge: "session:bridge",
+  // Projects & Catalog
+  projectsList: "projects:list",
+  projectsAdd: "projects:add",
+  projectsUpdate: "projects:update",
+  projectsRemove: "projects:remove",
+  sessionsListAll: "sessions:list-all",
+  sessionsReadFile: "sessions:read-file",
+  sessionsDelete: "sessions:delete",
+  trustCheck: "trust:check",
+  trustSet: "trust:set",
 } as const;
 
 /** API exposed on `window.studio` by the preload script. */
@@ -137,4 +149,25 @@ export interface StudioApi {
   onSessionStatus(listener: (update: SessionStatusUpdate) => void): () => void;
   onUiRequest(listener: (message: UiRequestMessage) => void): () => void;
   onBridgeMessage(listener: (message: BridgeMessage) => void): () => void;
+
+  // Projects & Catalog APIs
+  getProjects(): Promise<ProjectEntry[]>;
+  addProject(path: string, name?: string, color?: string): Promise<ProjectEntry>;
+  updateProject(
+    id: string,
+    updates: {
+      name?: string;
+      color?: string;
+      links?: LinkedProject[];
+      defaults?: ProjectDefaults;
+      pinned?: boolean;
+      hidden?: boolean;
+    },
+  ): Promise<ProjectEntry>;
+  removeProject(id: string): Promise<boolean>;
+  listAllSessions(): Promise<SessionCatalogItem[]>;
+  readSessionFile(sessionPath: string): Promise<{ entries: SessionEntry[]; leafId: string | null }>;
+  deleteSessionFile(sessionPath: string): Promise<boolean>;
+  checkTrust(path: string): Promise<{ hasTrustResources: boolean; trusted: boolean }>;
+  setTrust(path: string, trusted: boolean): Promise<void>;
 }

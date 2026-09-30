@@ -12,9 +12,13 @@ import {
   type StudioRpcCommand,
 } from "@pi-studio/protocol";
 import { MainSessionManager } from "./session-manager.ts";
+import { GuiStore } from "./store/index.ts";
+import { SessionCatalogService } from "./catalog.ts";
 
 let mainWindow: BrowserWindow | null = null;
 let sessionManager: MainSessionManager | null = null;
+let guiStore: GuiStore | null = null;
+let catalogService: SessionCatalogService | null = null;
 
 const piResult = locatePi();
 const testMode = process.env.PI_STUDIO_TEST_MODE === "1";
@@ -43,6 +47,8 @@ function createWindow(): void {
   });
 
   if (piResult.ok) {
+    guiStore = new GuiStore(app.getPath("userData"));
+    catalogService = new SessionCatalogService(piResult.info.packageRoot, guiStore);
     sessionManager = new MainSessionManager(piResult.info, () => mainWindow, testProviderPath);
   }
 
@@ -107,6 +113,50 @@ ipcMain.handle(IPC.bridgeAction, async (_event, key: string, action: BridgeActio
 
 ipcMain.handle(IPC.setLinkedProjects, async (_event, key: string, links: LinkedProject[]) => {
   return sessionManager?.setLinkedProjects(key, links);
+});
+
+// Projects & Catalog Handlers
+ipcMain.handle(IPC.projectsList, async () => {
+  return guiStore?.getProjects() ?? [];
+});
+
+ipcMain.handle(IPC.projectsAdd, async (_event, { path: dirPath, name, color }) => {
+  if (!guiStore) throw new Error("Store not initialized");
+  return guiStore.addProject(dirPath, name, color);
+});
+
+ipcMain.handle(IPC.projectsUpdate, async (_event, { id, updates }) => {
+  if (!guiStore) throw new Error("Store not initialized");
+  return guiStore.updateProject(id, updates);
+});
+
+ipcMain.handle(IPC.projectsRemove, async (_event, { id }) => {
+  if (!guiStore) return false;
+  return guiStore.removeProject(id);
+});
+
+ipcMain.handle(IPC.sessionsListAll, async () => {
+  if (!catalogService) return [];
+  return catalogService.listAll();
+});
+
+ipcMain.handle(IPC.sessionsReadFile, async (_event, { path: sessionPath }) => {
+  if (!catalogService) throw new Error("Catalog service not available");
+  return catalogService.readSessionFile(sessionPath);
+});
+
+ipcMain.handle(IPC.sessionsDelete, async (_event, { path: sessionPath }) => {
+  if (!catalogService) return false;
+  return catalogService.deleteSession(sessionPath);
+});
+
+ipcMain.handle(IPC.trustCheck, async (_event, { path: dirPath }) => {
+  if (!catalogService) return { hasTrustResources: false, trusted: true };
+  return catalogService.checkTrust(dirPath);
+});
+
+ipcMain.handle(IPC.trustSet, async (_event, { path: dirPath, trusted }) => {
+  if (catalogService) await catalogService.setTrust(dirPath, trusted);
 });
 
 app.whenReady().then(() => {

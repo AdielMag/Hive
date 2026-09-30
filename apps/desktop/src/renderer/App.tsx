@@ -7,11 +7,17 @@ import { StatusBar } from "./components/StatusBar.tsx";
 import { ExtensionDialogModal } from "./components/ExtensionDialogModal.tsx";
 
 export const App: React.FC = () => {
-  const { init, isInitializing, bootstrap, error } = useSessionStore();
+  const { init, isInitializing, bootstrap, error, activeProject } = useSessionStore();
 
   useEffect(() => {
     void init();
   }, [init]);
+
+  useEffect(() => {
+    if (activeProject?.color) {
+      document.documentElement.style.setProperty("--project-color", activeProject.color);
+    }
+  }, [activeProject?.color]);
 
   if (isInitializing) {
     return (
