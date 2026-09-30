@@ -14,6 +14,7 @@
   "dependencies": {
     "@pi-studio/pi-adapter": "0.1.0",
     "@pi-studio/protocol": "0.1.0",
+    "@pi-studio/theme-engine": "0.1.0",
     "culori": "^4.0.2",
     "flexlayout-react": "^0.11.1",
     "lucide-react": "^1.49.0",

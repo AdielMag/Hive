@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { useSessionStore } from "../store/session-store.ts";
 import { parseAnsi } from "@pi-studio/pi-adapter";
+import { Palette } from "lucide-react";
+import { ThemePickerModal } from "./ThemePickerModal.tsx";
 
 export const StatusBar: React.FC = () => {
   const { bootstrap, extensionStatus, transcript, stats } = useSessionStore();
+  const [themeOpen, setThemeOpen] = useState(false);
   const piVersion = bootstrap?.pi.ok ? bootstrap.pi.info.version : "not found";
 
   return (
@@ -54,6 +57,27 @@ export const StatusBar: React.FC = () => {
           ${stats.cost.toFixed(3)}
         </span>
       )}
+
+      <button
+        onClick={() => setThemeOpen(true)}
+        title="Arc Theme & Colors"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          background: "transparent",
+          border: "none",
+          color: "var(--text-secondary)",
+          cursor: "pointer",
+          fontSize: 11,
+          padding: 2,
+        }}
+      >
+        <Palette size={12} color="var(--accent-base)" />
+        <span>Theme</span>
+      </button>
+
+      <ThemePickerModal isOpen={themeOpen} onClose={() => setThemeOpen(false)} />
     </div>
   );
 };
