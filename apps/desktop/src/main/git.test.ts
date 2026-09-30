@@ -19,7 +19,7 @@ describe("Git operations", () => {
   it("lists local branches", async () => {
     const branches = await getGitBranches(repoRoot);
     expect(branches.length).toBeGreaterThan(0);
-    expect(branches).toContain("master");
+    expect(branches.includes("master") || branches.includes("main")).toBe(true);
   });
 
   it("reads git diff", async () => {

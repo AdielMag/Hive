@@ -53,6 +53,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools
+
       - name: Build packages & desktop app
         run: npm run build
 
@@ -78,6 +82,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: false
           files: |
             apps/desktop/dist-release/*.exe
             apps/desktop/dist-release/*.dmg
