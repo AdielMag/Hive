@@ -24,6 +24,8 @@ export const Sidebar: React.FC = () => {
   } = useSessionStore();
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+  const [showAllSessions, setShowAllSessions] = useState<Record<string, boolean>>({});
+  const [showAllUnsorted, setShowAllUnsorted] = useState(false);
   const [colorPickerPrj, setColorPickerPrj] = useState<string | null>(null);
 
   const toggleExpand = (id: string) => {
@@ -224,71 +226,101 @@ export const Sidebar: React.FC = () => {
                     </div>
                   )}
 
-                  {sessions.map((sess) => (
-                    <div
-                      key={sess.id}
-                      onClick={() => openSessionTab(sess.path, project.id, sess.name || sess.firstMessage)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "5px 8px",
-                        borderRadius: 4,
-                        cursor: "pointer",
-                        margin: "1px 0",
-                      }}
-                      className="session-row"
-                    >
-                      <MessageSquare size={12} color="var(--text-muted)" />
-                      <span
-                        style={{
-                          flex: 1,
-                          fontSize: 11,
-                          color: "var(--text-secondary)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                        title={sess.name || sess.firstMessage || "Session"}
-                      >
-                        {sess.name || sess.firstMessage || "Empty session"}
-                      </span>
+                  {(() => {
+                    const isAll = showAllSessions[project.id] ?? false;
+                    const visibleSessions = isAll ? sessions : sessions.slice(0, 5);
+                    const remaining = sessions.length - 5;
 
-                      {sess.messageCount > 0 && (
-                        <span
-                          style={{
-                            fontSize: 10,
-                            padding: "1px 5px",
-                            borderRadius: 10,
-                            background: "rgba(255,255,255,0.06)",
-                            color: "var(--text-muted)",
-                          }}
-                        >
-                          {sess.messageCount}
-                        </span>
-                      )}
+                    return (
+                      <>
+                        {visibleSessions.map((sess) => (
+                          <div
+                            key={sess.id}
+                            onClick={() => openSessionTab(sess.path, project.id, sess.name || sess.firstMessage)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "5px 8px",
+                              borderRadius: 4,
+                              cursor: "pointer",
+                              margin: "1px 0",
+                            }}
+                            className="session-row"
+                          >
+                            <MessageSquare size={12} color="var(--text-muted)" />
+                            <span
+                              style={{
+                                flex: 1,
+                                fontSize: 11,
+                                color: "var(--text-secondary)",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                              title={sess.name || sess.firstMessage || "Session"}
+                            >
+                              {sess.name || sess.firstMessage || "Empty session"}
+                            </span>
 
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (confirm("Move this session to trash?")) {
-                            await deleteSessionFile(sess.path);
-                          }
-                        }}
-                        title="Delete session"
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          color: "var(--text-muted)",
-                          cursor: "pointer",
-                          padding: 2,
-                          display: "flex",
-                        }}
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  ))}
+                            {sess.messageCount > 0 && (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  padding: "1px 5px",
+                                  borderRadius: 10,
+                                  background: "rgba(255,255,255,0.06)",
+                                  color: "var(--text-muted)",
+                                }}
+                              >
+                                {sess.messageCount}
+                              </span>
+                            )}
+
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm("Move this session to trash?")) {
+                                  await deleteSessionFile(sess.path);
+                                }
+                              }}
+                              title="Delete session"
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                color: "var(--text-muted)",
+                                cursor: "pointer",
+                                padding: 2,
+                                display: "flex",
+                              }}
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        ))}
+
+                        {remaining > 0 && (
+                          <button
+                            onClick={() =>
+                              setShowAllSessions((s) => ({ ...s, [project.id]: !isAll }))
+                            }
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "var(--accent-hover)",
+                              fontSize: 10,
+                              cursor: "pointer",
+                              textAlign: "left",
+                              padding: "4px 8px",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {isAll ? "Show less" : `+ Show all (${remaining} more)`}
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* Linked projects subsection */}
                   <div style={{ marginTop: 4, marginBottom: 6, paddingLeft: 4 }}>
@@ -333,7 +365,7 @@ export const Sidebar: React.FC = () => {
             <div style={{ padding: "4px 14px", fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
               OTHER PI SESSIONS ({unsortedSessions.length})
             </div>
-            {unsortedSessions.slice(0, 10).map((s) => (
+            {(showAllUnsorted ? unsortedSessions : unsortedSessions.slice(0, 5)).map((s) => (
               <div
                 key={s.id}
                 style={{
@@ -364,6 +396,24 @@ export const Sidebar: React.FC = () => {
                 </button>
               </div>
             ))}
+
+            {unsortedSessions.length > 5 && (
+              <button
+                onClick={() => setShowAllUnsorted(!showAllUnsorted)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--accent-hover)",
+                  fontSize: 10,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  padding: "6px 14px",
+                  fontWeight: 500,
+                }}
+              >
+                {showAllUnsorted ? "Show less" : `+ Show all (${unsortedSessions.length - 5} more)`}
+              </button>
+            )}
           </div>
         )}
       </div>

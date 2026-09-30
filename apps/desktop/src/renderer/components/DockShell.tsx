@@ -8,6 +8,7 @@ import { Sidebar } from "./Sidebar.tsx";
 import { GitPanel } from "./GitPanel.tsx";
 import { FilesPanel } from "./FilesPanel.tsx";
 import { MarketplacePanel } from "./MarketplacePanel.tsx";
+import { WelcomeView } from "./WelcomeView.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 
 const DEFAULT_LAYOUT: IJsonModel = {
@@ -15,63 +16,57 @@ const DEFAULT_LAYOUT: IJsonModel = {
     tabEnableClose: false,
     tabSetEnableClose: false,
     tabSetEnableDrop: true,
-    borderBarSize: 32,
+    borderBarSize: 42,
     borderEnableAutoHide: false,
   },
   borders: [
     {
       type: "border",
       location: "left",
-      size: 240,
+      size: 260,
       children: [
         {
           type: "tab",
           id: "projects",
           name: "Projects",
           component: "projects",
-          icon: "icon-projects",
         },
         {
           type: "tab",
           id: "files",
           name: "Files",
           component: "files",
-          icon: "icon-files",
         },
         {
           type: "tab",
           id: "git",
           name: "Git",
           component: "git",
-          icon: "icon-git",
         },
       ],
     },
     {
       type: "border",
       location: "right",
-      size: 280,
+      size: 300,
       children: [
         {
           type: "tab",
           id: "marketplace",
           name: "Marketplace",
           component: "marketplace",
-          icon: "icon-marketplace",
         },
         {
           type: "tab",
           id: "context",
           name: "Context",
           component: "context",
-          icon: "icon-context",
         },
         {
           type: "tab",
           id: "terminal",
           name: "Terminal",
           component: "terminal",
-          icon: "icon-terminal",
         },
       ],
     },
@@ -99,19 +94,15 @@ const DEFAULT_LAYOUT: IJsonModel = {
 
 export const DockShell: React.FC = () => {
   const model = useMemo(() => Model.fromJson(DEFAULT_LAYOUT), []);
-  const { projectName, projectPath, startSession } = useSessionStore();
-
-  const handlePickFolder = async () => {
-    const folder = await window.studio.pickFolder();
-    if (folder) {
-      await startSession(folder);
-    }
-  };
+  const { activeProject, tabs } = useSessionStore();
 
   const factory = (node: TabNode) => {
     const component = node.getComponent();
     switch (component) {
       case "chat":
+        if (!activeProject || tabs.length === 0) {
+          return <WelcomeView />;
+        }
         return (
           <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%" }}>
             <Transcript />
@@ -135,7 +126,7 @@ export const DockShell: React.FC = () => {
         return (
           <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
             <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>Context Breakdown</div>
-            <div>Detailed token category inspector arriving in Slice 6.</div>
+            <div>Detailed token category inspector is also available by clicking the Context Ring below.</div>
           </div>
         );
 
@@ -143,7 +134,7 @@ export const DockShell: React.FC = () => {
         return (
           <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
             <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>Integrated Terminal</div>
-            <div>Interactive node-pty terminal arriving in Slice 4.</div>
+            <div>Run files with the interpreter runner in the Files tab or launch terminal tasks.</div>
           </div>
         );
 
@@ -152,15 +143,44 @@ export const DockShell: React.FC = () => {
     }
   };
 
+  // Renders ONLY the icon when on the border bars! No text!
   const titleFactory = (node: TabNode) => {
     const id = node.getId();
-    if (id === "projects") return <span style={{ display: "flex", gap: 4 }}><Folder size={14} /> Projects</span>;
-    if (id === "files") return <span style={{ display: "flex", gap: 4 }}><Files size={14} /> Files</span>;
-    if (id === "git") return <span style={{ display: "flex", gap: 4 }}><GitBranch size={14} /> Git</span>;
-    if (id === "marketplace") return <span style={{ display: "flex", gap: 4 }}><ShoppingBag size={14} /> Market</span>;
-    if (id === "context") return <span style={{ display: "flex", gap: 4 }}><PieChart size={14} /> Context</span>;
-    if (id === "terminal") return <span style={{ display: "flex", gap: 4 }}><TerminalIcon size={14} /> Terminal</span>;
-    return undefined;
+    const isBorder = node.getParent()?.getType() === "border";
+
+    let icon: React.ReactNode = null;
+    if (id === "projects") icon = <Folder size={18} />;
+    else if (id === "files") icon = <Files size={18} />;
+    else if (id === "git") icon = <GitBranch size={18} />;
+    else if (id === "marketplace") icon = <ShoppingBag size={18} />;
+    else if (id === "context") icon = <PieChart size={18} />;
+    else if (id === "terminal") icon = <TerminalIcon size={18} />;
+
+    if (isBorder) {
+      // ONLY THE ICON! Tooltip shows the name on hover.
+      return (
+        <span
+          title={node.getName()}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 32,
+            height: 32,
+          }}
+        >
+          {icon}
+        </span>
+      );
+    }
+
+    // Inside a tabset: show icon + name
+    return (
+      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {icon}
+        <span>{node.getName()}</span>
+      </span>
+    );
   };
 
   return (

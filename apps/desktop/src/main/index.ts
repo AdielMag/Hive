@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { Menu, app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { locatePi } from "@pi-studio/pi-adapter/node";
@@ -40,14 +40,18 @@ const testProviderPath = testMode
 function createWindow(): void {
   const preloadPath = join(__dirname, "../preload/index.js");
 
+  Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
     minWidth: 900,
     minHeight: 600,
     show: false,
-    backgroundColor: "#16181d",
+    backgroundColor: "#090a0d",
     title: "Pi Studio",
+    titleBarStyle: "hidden",
+    titleBarOverlay: process.platform === "win32" ? { color: "#0d0f14", symbolColor: "#9aa4b2", height: 36 } : false,
     webPreferences: {
       preload: preloadPath,
       sandbox: false,
@@ -85,7 +89,7 @@ ipcMain.handle(IPC.bootstrap, async (): Promise<Bootstrap> => {
     pi: piResult,
     appVersion: app.getVersion(),
     platform: process.platform,
-    initialProjectPath: process.env.PI_STUDIO_PROJECT ?? process.cwd(),
+    initialProjectPath: process.env.PI_STUDIO_PROJECT ?? null,
     testMode,
   };
 });

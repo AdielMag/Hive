@@ -1,13 +1,16 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { AlertTriangle, Terminal } from "lucide-react";
 import { useSessionStore } from "./store/session-store.ts";
+import { AppTitleBar } from "./components/AppTitleBar.tsx";
 import { TabStrip } from "./components/TabStrip.tsx";
 import { DockShell } from "./components/DockShell.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { ExtensionDialogModal } from "./components/ExtensionDialogModal.tsx";
+import { ArcThemePicker } from "./components/ArcThemePicker.tsx";
 
 export const App: React.FC = () => {
   const { init, isInitializing, bootstrap, error, activeProject } = useSessionStore();
+  const [arcThemeOpen, setArcThemeOpen] = useState(false);
 
   useEffect(() => {
     void init();
@@ -101,7 +104,29 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100vw", overflow: "hidden" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        width: "100vw",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      {/* SVG Grain Overlay */}
+      <div
+        className="grain-overlay"
+        style={{
+          position: "fixed",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 9998,
+          opacity: "var(--grain-opacity, 0.08)",
+        }}
+      />
+
+      <AppTitleBar onOpenTheme={() => setArcThemeOpen(true)} />
       <TabStrip />
       {error ? (
         <div
@@ -119,6 +144,7 @@ export const App: React.FC = () => {
       <DockShell />
       <StatusBar />
       <ExtensionDialogModal />
+      <ArcThemePicker isOpen={arcThemeOpen} onClose={() => setArcThemeOpen(false)} />
     </div>
   );
 };

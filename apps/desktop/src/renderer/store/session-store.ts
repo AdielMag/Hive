@@ -168,12 +168,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       // Initial projects and catalog load
       await get().refreshCatalog();
 
-      // If no project exists yet and initialProjectPath was supplied, add it
+      // Only auto-open if an explicit project was passed via env PI_STUDIO_PROJECT
       if (get().projects.length === 0 && bootstrap.initialProjectPath) {
         const p = await get().addProject(bootstrap.initialProjectPath);
         await get().newSessionTab(p.id);
-      } else if (get().projects.length > 0) {
-        // Open first project's new session or recent session
+      } else if (get().projects.length > 0 && get().tabs.length === 0) {
         const firstPrj = get().projects[0]!;
         await get().newSessionTab(firstPrj.id);
       }
