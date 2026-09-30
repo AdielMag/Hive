@@ -60,13 +60,9 @@ describe("Pi RPC contract (vs real installed Pi)", () => {
     expect(levels.levels).toContain("high");
 
     // 4. Prompt and stream completion
-    const promptRes = await rpc.send({ type: "prompt", message: "Hello contract test" });
-    expect(promptRes.success).toBe(true);
-
-    // 4b. Prompt with attached image
-    const promptImgRes = await rpc.send({
+    const promptRes = await rpc.send({
       type: "prompt",
-      message: "Here is an attached image",
+      message: "Hello contract test with image",
       images: [
         {
           type: "image",
@@ -75,7 +71,7 @@ describe("Pi RPC contract (vs real installed Pi)", () => {
         },
       ],
     });
-    expect(promptImgRes.success).toBe(true);
+    expect(promptRes.success).toBe(true);
 
     await Promise.race([
       settledPromise,

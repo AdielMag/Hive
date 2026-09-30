@@ -20,6 +20,7 @@
   "build": {
     "appId": "dev.pi.studio",
     "productName": "Pi Studio",
+    "executableName": "pi-studio",
     "electronVersion": "35.7.5",
     "publish": {
       "provider": "github",
