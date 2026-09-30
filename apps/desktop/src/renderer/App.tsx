@@ -1,15 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle, Terminal } from "lucide-react";
 import { useSessionStore } from "./store/session-store.ts";
-import { AppTitleBar } from "./components/AppTitleBar.tsx";
-import { DockShell } from "./components/DockShell.tsx";
-import { StatusBar } from "./components/StatusBar.tsx";
-import { ExtensionDialogModal } from "./components/ExtensionDialogModal.tsx";
-import { ArcThemePicker } from "./components/ArcThemePicker.tsx";
+import { WorkbenchLayout } from "./components/WorkbenchLayout.tsx";
 
 export const App: React.FC = () => {
-  const { init, isInitializing, bootstrap, error, activeProject } = useSessionStore();
-  const [arcThemeOpen, setArcThemeOpen] = useState(false);
+  const { init, isInitializing, bootstrap, activeProject } = useSessionStore();
 
   useEffect(() => {
     void init();
@@ -102,47 +97,5 @@ export const App: React.FC = () => {
     );
   }
 
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        width: "100vw",
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      {/* SVG Grain Overlay */}
-      <div
-        className="grain-overlay"
-        style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          zIndex: 9998,
-          opacity: "var(--grain-opacity, 0.08)",
-        }}
-      />
-
-      <AppTitleBar onOpenTheme={() => setArcThemeOpen(true)} />
-      {error ? (
-        <div
-          style={{
-            background: "rgba(229, 83, 75, 0.1)",
-            borderBottom: "1px solid var(--danger)",
-            color: "var(--danger)",
-            padding: "6px 12px",
-            fontSize: 12,
-          }}
-        >
-          {error}
-        </div>
-      ) : null}
-      <DockShell />
-      <StatusBar />
-      <ExtensionDialogModal />
-      <ArcThemePicker isOpen={arcThemeOpen} onClose={() => setArcThemeOpen(false)} />
-    </div>
-  );
+  return <WorkbenchLayout />;
 };

@@ -61,35 +61,8 @@ export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenTheme }) => {
         WebkitAppRegion: "drag" as any,
       }}
     >
-      {/* Left: Brand Icon + In-app Menus */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, WebkitAppRegion: "no-drag" as any }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontWeight: 700,
-            fontSize: 12,
-            color: "var(--text-primary)",
-            paddingRight: 6,
-          }}
-        >
-          <div
-            style={{
-              width: 18,
-              height: 18,
-              borderRadius: 4,
-              background: "linear-gradient(135deg, var(--accent-base), #986ee2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Sparkles size={11} color="#fff" />
-          </div>
-          <span>Pi Studio</span>
-        </div>
-
+      {/* Left: In-app Menus */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, WebkitAppRegion: "no-drag" as any }}>
         {/* Menus */}
         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
           {/* File Menu */}
@@ -237,22 +210,32 @@ export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenTheme }) => {
       >
         <button
           onClick={onOpenTheme}
-          title="Open Arc Color Engine"
+          title="Open Arc Theme & Color Palette"
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 4,
-            background: "transparent",
+            gap: 6,
+            background: "rgba(255, 255, 255, 0.05)",
             border: "1px solid var(--border-subtle)",
-            color: "var(--text-secondary)",
-            borderRadius: 4,
-            padding: "3px 8px",
+            color: "var(--text-primary)",
+            borderRadius: 6,
+            padding: "4px 10px",
             fontSize: 11,
+            fontWeight: 500,
             cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--accent-subtle)";
+            e.currentTarget.style.borderColor = "var(--accent-base)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
+            e.currentTarget.style.borderColor = "var(--border-subtle)";
           }}
         >
-          <Palette size={12} color="var(--accent-base)" />
-          <span>Colors</span>
+          <Palette size={13} color="var(--accent-base)" />
+          <span>Theme</span>
         </button>
       </div>
     </div>

@@ -81,6 +81,19 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
+
+  if (process.env.PI_STUDIO_CAPTURE === "1") {
+    mainWindow.webContents.on("did-finish-load", async () => {
+      await new Promise((r) => setTimeout(r, 2500));
+      const img = await mainWindow?.webContents.capturePage();
+      if (img) {
+        const { writeFileSync } = await import("node:fs");
+        writeFileSync(resolve(__dirname, "../../current-ui.png"), img.toPNG());
+        console.log("Captured real screenshot to current-ui.png");
+      }
+      app.quit();
+    });
+  }
 }
 
 // Register IPC handlers
