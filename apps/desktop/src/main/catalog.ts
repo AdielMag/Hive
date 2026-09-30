@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { shell } from "electron";
 import type { SessionCatalogItem } from "@pi-studio/protocol";
@@ -7,12 +8,13 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { GuiStore } from "./store/index.ts";
 
 export interface PiSdkModule {
+  getAgentDir?: () => string;
   SessionManager: {
     listAll(sessionDir?: string): Promise<any[]>;
   };
   parseSessionEntries(text: string): SessionEntry[];
   hasTrustRequiringProjectResources?(cwd: string): boolean;
-  ProjectTrustStore?: new () => {
+  ProjectTrustStore?: new (agentDir: string) => {
     get(cwd: string): boolean | undefined;
     set(cwd: string, decision: boolean): void;
   };
@@ -37,7 +39,8 @@ export class SessionCatalogService {
     const mod = (await import(pathToFileURL(entryPath).href)) as PiSdkModule;
     this.sdk = mod;
     if (mod.ProjectTrustStore) {
-      this.trustStore = new mod.ProjectTrustStore();
+      const agentDir = typeof mod.getAgentDir === "function" ? mod.getAgentDir() : join(homedir(), ".pi", "agent");
+      this.trustStore = new mod.ProjectTrustStore(agentDir);
     }
     return mod;
   }
