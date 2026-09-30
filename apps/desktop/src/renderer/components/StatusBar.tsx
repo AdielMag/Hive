@@ -1,12 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { useSessionStore } from "../store/session-store.ts";
 import { parseAnsi } from "@pi-studio/pi-adapter";
-import { Palette } from "lucide-react";
-import { ThemePickerModal } from "./ThemePickerModal.tsx";
 
 export const StatusBar: React.FC = () => {
   const { bootstrap, extensionStatus, transcript, stats } = useSessionStore();
-  const [themeOpen, setThemeOpen] = useState(false);
   const piVersion = bootstrap?.pi.ok ? bootstrap.pi.info.version : "not found";
 
   return (
@@ -22,6 +19,7 @@ export const StatusBar: React.FC = () => {
         fontSize: 11,
         color: "var(--text-muted)",
         userSelect: "none",
+        zIndex: 50,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -31,11 +29,11 @@ export const StatusBar: React.FC = () => {
         )}
       </div>
 
-      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 14, overflow: "hidden" }}>
         {Object.entries(extensionStatus).map(([key, text]) => {
           const segments = parseAnsi(text);
           return (
-            <span key={key} style={{ display: "inline-flex", gap: 2 }}>
+            <span key={key} style={{ display: "inline-flex", gap: 2, whiteSpace: "nowrap" }}>
               {segments.map((seg, idx) => (
                 <span
                   key={idx}
@@ -53,31 +51,10 @@ export const StatusBar: React.FC = () => {
       </div>
 
       {stats && stats.cost > 0 && (
-        <span style={{ color: "var(--text-secondary)" }}>
+        <span style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
           ${stats.cost.toFixed(3)}
         </span>
       )}
-
-      <button
-        onClick={() => setThemeOpen(true)}
-        title="Arc Theme & Colors"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          background: "transparent",
-          border: "none",
-          color: "var(--text-secondary)",
-          cursor: "pointer",
-          fontSize: 11,
-          padding: 2,
-        }}
-      >
-        <Palette size={12} color="var(--accent-base)" />
-        <span>Theme</span>
-      </button>
-
-      <ThemePickerModal isOpen={themeOpen} onClose={() => setThemeOpen(false)} />
     </div>
   );
 };

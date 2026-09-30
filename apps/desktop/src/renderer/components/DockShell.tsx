@@ -9,6 +9,7 @@ import { GitPanel } from "./GitPanel.tsx";
 import { FilesPanel } from "./FilesPanel.tsx";
 import { MarketplacePanel } from "./MarketplacePanel.tsx";
 import { WelcomeView } from "./WelcomeView.tsx";
+import { TabStrip } from "./TabStrip.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 
 const DEFAULT_LAYOUT: IJsonModel = {
@@ -101,10 +102,16 @@ export const DockShell: React.FC = () => {
     switch (component) {
       case "chat":
         if (!activeProject || tabs.length === 0) {
-          return <WelcomeView />;
+          return (
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", overflow: "hidden" }}>
+              <TabStrip />
+              <WelcomeView />
+            </div>
+          );
         }
         return (
-          <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%" }}>
+          <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", overflow: "hidden" }}>
+            <TabStrip />
             <Transcript />
             <Composer />
           </div>

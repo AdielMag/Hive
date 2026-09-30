@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { AlertTriangle, Terminal } from "lucide-react";
 import { useSessionStore } from "./store/session-store.ts";
 import { AppTitleBar } from "./components/AppTitleBar.tsx";
-import { TabStrip } from "./components/TabStrip.tsx";
 import { DockShell } from "./components/DockShell.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
 import { ExtensionDialogModal } from "./components/ExtensionDialogModal.tsx";
@@ -127,7 +126,6 @@ export const App: React.FC = () => {
       />
 
       <AppTitleBar onOpenTheme={() => setArcThemeOpen(true)} />
-      <TabStrip />
       {error ? (
         <div
           style={{

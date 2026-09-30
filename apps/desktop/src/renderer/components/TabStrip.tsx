@@ -12,7 +12,6 @@ export const TabStrip: React.FC = () => {
     newSessionTab,
     activeProject,
     transcript,
-    activeKey,
   } = useSessionStore();
 
   return (
