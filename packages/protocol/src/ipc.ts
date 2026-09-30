@@ -131,6 +131,19 @@ export const IPC = {
   sessionsDelete: "sessions:delete",
   trustCheck: "trust:check",
   trustSet: "trust:set",
+  // Git
+  gitStatus: "git:status",
+  gitStage: "git:stage",
+  gitUnstage: "git:unstage",
+  gitDiscard: "git:discard",
+  gitCommit: "git:commit",
+  gitBranches: "git:branches",
+  // Files
+  filesList: "files:list",
+  filesRead: "files:read",
+  filesRun: "files:run",
+  // Marketplace
+  marketplaceSearch: "marketplace:search",
 } as const;
 
 /** API exposed on `window.studio` by the preload script. */
@@ -170,4 +183,20 @@ export interface StudioApi {
   deleteSessionFile(sessionPath: string): Promise<boolean>;
   checkTrust(path: string): Promise<{ hasTrustResources: boolean; trusted: boolean }>;
   setTrust(path: string, trusted: boolean): Promise<void>;
+
+  // Git operations
+  getGitStatus(cwd: string): Promise<any>;
+  stageFile(cwd: string, filePath: string): Promise<void>;
+  unstageFile(cwd: string, filePath: string): Promise<void>;
+  discardFile(cwd: string, filePath: string): Promise<void>;
+  gitCommit(cwd: string, message: string, amend?: boolean): Promise<string>;
+  getGitBranches(cwd: string): Promise<string[]>;
+
+  // File operations
+  listFiles(dirPath: string): Promise<any[]>;
+  readFile(filePath: string): Promise<any>;
+  runFile(filePath: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+
+  // Marketplace operations
+  searchMarketplace(query?: string, kind?: string): Promise<any[]>;
 }

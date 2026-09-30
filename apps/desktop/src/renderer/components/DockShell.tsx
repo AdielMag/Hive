@@ -1,10 +1,13 @@
 import React, { useMemo } from "react";
 import { Layout, Model, type TabNode, type IJsonModel } from "flexlayout-react";
 import "flexlayout-react/style/dark.css";
-import { Folder, GitBranch, Files, Terminal as TerminalIcon, PieChart } from "lucide-react";
+import { Folder, GitBranch, Files, Terminal as TerminalIcon, PieChart, ShoppingBag } from "lucide-react";
 import { Transcript } from "./Transcript.tsx";
 import { Composer } from "./Composer.tsx";
 import { Sidebar } from "./Sidebar.tsx";
+import { GitPanel } from "./GitPanel.tsx";
+import { FilesPanel } from "./FilesPanel.tsx";
+import { MarketplacePanel } from "./MarketplacePanel.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 
 const DEFAULT_LAYOUT: IJsonModel = {
@@ -49,6 +52,13 @@ const DEFAULT_LAYOUT: IJsonModel = {
       location: "right",
       size: 280,
       children: [
+        {
+          type: "tab",
+          id: "marketplace",
+          name: "Marketplace",
+          component: "marketplace",
+          icon: "icon-marketplace",
+        },
         {
           type: "tab",
           id: "context",
@@ -113,20 +123,13 @@ export const DockShell: React.FC = () => {
         return <Sidebar />;
 
       case "files":
-        return (
-          <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
-            <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>File Explorer</div>
-            <div>Full file tree & viewers arriving in Slice 4.</div>
-          </div>
-        );
+        return <FilesPanel />;
 
       case "git":
-        return (
-          <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
-            <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>Git Status</div>
-            <div>Staged / unstaged changes & turn checkpoints arriving in Slice 5.</div>
-          </div>
-        );
+        return <GitPanel />;
+
+      case "marketplace":
+        return <MarketplacePanel />;
 
       case "context":
         return (
@@ -154,6 +157,7 @@ export const DockShell: React.FC = () => {
     if (id === "projects") return <span style={{ display: "flex", gap: 4 }}><Folder size={14} /> Projects</span>;
     if (id === "files") return <span style={{ display: "flex", gap: 4 }}><Files size={14} /> Files</span>;
     if (id === "git") return <span style={{ display: "flex", gap: 4 }}><GitBranch size={14} /> Git</span>;
+    if (id === "marketplace") return <span style={{ display: "flex", gap: 4 }}><ShoppingBag size={14} /> Market</span>;
     if (id === "context") return <span style={{ display: "flex", gap: 4 }}><PieChart size={14} /> Context</span>;
     if (id === "terminal") return <span style={{ display: "flex", gap: 4 }}><TerminalIcon size={14} /> Terminal</span>;
     return undefined;

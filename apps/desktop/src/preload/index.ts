@@ -114,6 +114,42 @@ const api: StudioApi = {
   setTrust(path: string, trusted: boolean) {
     return ipcRenderer.invoke(IPC.trustSet, { path, trusted });
   },
+
+  // Git
+  getGitStatus(cwd: string) {
+    return ipcRenderer.invoke(IPC.gitStatus, { cwd });
+  },
+  stageFile(cwd: string, filePath: string) {
+    return ipcRenderer.invoke(IPC.gitStage, { cwd, filePath });
+  },
+  unstageFile(cwd: string, filePath: string) {
+    return ipcRenderer.invoke(IPC.gitUnstage, { cwd, filePath });
+  },
+  discardFile(cwd: string, filePath: string) {
+    return ipcRenderer.invoke(IPC.gitDiscard, { cwd, filePath });
+  },
+  gitCommit(cwd: string, message: string, amend?: boolean) {
+    return ipcRenderer.invoke(IPC.gitCommit, { cwd, message, amend });
+  },
+  getGitBranches(cwd: string) {
+    return ipcRenderer.invoke(IPC.gitBranches, { cwd });
+  },
+
+  // Files
+  listFiles(dirPath: string) {
+    return ipcRenderer.invoke(IPC.filesList, { dirPath });
+  },
+  readFile(filePath: string) {
+    return ipcRenderer.invoke(IPC.filesRead, { filePath });
+  },
+  runFile(filePath: string, cwd: string) {
+    return ipcRenderer.invoke(IPC.filesRun, { filePath, cwd });
+  },
+
+  // Marketplace
+  searchMarketplace(query?: string, kind?: string) {
+    return ipcRenderer.invoke(IPC.marketplaceSearch, { query, kind });
+  },
 };
 
 contextBridge.exposeInMainWorld("studio", api);

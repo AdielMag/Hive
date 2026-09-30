@@ -14,11 +14,22 @@ import {
 import { MainSessionManager } from "./session-manager.ts";
 import { GuiStore } from "./store/index.ts";
 import { SessionCatalogService } from "./catalog.ts";
+import {
+  getGitStatus,
+  getGitBranches,
+  stageFile,
+  unstageFile,
+  discardFile,
+  gitCommit,
+} from "./git.ts";
+import { listDirectory, readFileContent, runWithInterpreter } from "./files.ts";
+import { MarketplaceService, type MarketplaceSourceKind } from "./marketplace.ts";
 
 let mainWindow: BrowserWindow | null = null;
 let sessionManager: MainSessionManager | null = null;
 let guiStore: GuiStore | null = null;
 let catalogService: SessionCatalogService | null = null;
+const marketplaceService = new MarketplaceService();
 
 const piResult = locatePi();
 const testMode = process.env.PI_STUDIO_TEST_MODE === "1";
@@ -157,6 +168,42 @@ ipcMain.handle(IPC.trustCheck, async (_event, { path: dirPath }) => {
 
 ipcMain.handle(IPC.trustSet, async (_event, { path: dirPath, trusted }) => {
   if (catalogService) await catalogService.setTrust(dirPath, trusted);
+});
+
+// Git IPC Handlers
+ipcMain.handle(IPC.gitStatus, async (_event, { cwd }) => {
+  return getGitStatus(cwd);
+});
+ipcMain.handle(IPC.gitBranches, async (_event, { cwd }) => {
+  return getGitBranches(cwd);
+});
+ipcMain.handle(IPC.gitStage, async (_event, { cwd, filePath }) => {
+  return stageFile(cwd, filePath);
+});
+ipcMain.handle(IPC.gitUnstage, async (_event, { cwd, filePath }) => {
+  return unstageFile(cwd, filePath);
+});
+ipcMain.handle(IPC.gitDiscard, async (_event, { cwd, filePath }) => {
+  return discardFile(cwd, filePath);
+});
+ipcMain.handle(IPC.gitCommit, async (_event, { cwd, message, amend }) => {
+  return gitCommit(cwd, message, amend);
+});
+
+// Files IPC Handlers
+ipcMain.handle(IPC.filesList, async (_event, { dirPath }) => {
+  return listDirectory(dirPath);
+});
+ipcMain.handle(IPC.filesRead, async (_event, { filePath }) => {
+  return readFileContent(filePath);
+});
+ipcMain.handle(IPC.filesRun, async (_event, { filePath, cwd }) => {
+  return runWithInterpreter(filePath, cwd);
+});
+
+// Marketplace IPC Handlers
+ipcMain.handle(IPC.marketplaceSearch, async (_event, { query, kind }) => {
+  return marketplaceService.search(query, kind as MarketplaceSourceKind);
 });
 
 app.whenReady().then(() => {
