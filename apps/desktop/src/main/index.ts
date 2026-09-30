@@ -29,7 +29,7 @@ import {
   getGitDiff,
   generateCommitMessage,
 } from "./git.ts";
-import { listDirectory, readFileContent, readMediaFile, runWithInterpreter } from "./files.ts";
+import { readdirSync, statSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { MarketplaceService, type MarketplaceSourceKind } from "./marketplace.ts";
 import { AuthService } from "./auth.ts";
 import { AppUpdaterService } from "./updater.ts";
@@ -48,8 +48,12 @@ const testProviderPath = testMode
   ? resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../packages/test-provider/index.ts")
   : undefined;
 
+import { listDirectory, readFileContent, readMediaFile, runWithInterpreter } from "./files.ts";
+
 function createWindow(): void {
-  const preloadPath = join(__dirname, "../preload/index.js");
+  const preloadCjs = join(__dirname, "../preload/index.cjs");
+  const preloadJs = join(__dirname, "../preload/index.js");
+  const preloadPath = existsSync(preloadCjs) ? preloadCjs : preloadJs;
 
   Menu.setApplicationMenu(null);
 
@@ -102,11 +106,12 @@ function createWindow(): void {
 
   if (process.env.PI_STUDIO_CAPTURE === "1") {
     mainWindow.webContents.on("did-finish-load", async () => {
-      await new Promise((r) => setTimeout(r, 2500));
+      mainWindow?.show();
+      await new Promise((r) => setTimeout(r, 6500));
       const img = await mainWindow?.webContents.capturePage();
       if (img) {
-        const { writeFileSync } = await import("node:fs");
         writeFileSync(resolve(__dirname, "../../current-ui.png"), img.toPNG());
+        writeFileSync(resolve(__dirname, "../../../current-ui.png"), img.toPNG());
         console.log("Captured real screenshot to current-ui.png");
       }
       app.quit();

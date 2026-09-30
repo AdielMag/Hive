@@ -5,6 +5,10 @@
   "type": "module",
   "description": "Pi Studio Desktop App",
   "author": "Pi Studio Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AdielMag/pi-studio.git"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -17,6 +21,11 @@
     "appId": "dev.pi.studio",
     "productName": "Pi Studio",
     "electronVersion": "35.7.5",
+    "publish": {
+      "provider": "github",
+      "owner": "AdielMag",
+      "repo": "pi-studio"
+    },
     "directories": {
       "output": "dist-release"
     },

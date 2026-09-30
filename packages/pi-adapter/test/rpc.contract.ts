@@ -63,6 +63,20 @@ describe("Pi RPC contract (vs real installed Pi)", () => {
     const promptRes = await rpc.send({ type: "prompt", message: "Hello contract test" });
     expect(promptRes.success).toBe(true);
 
+    // 4b. Prompt with attached image
+    const promptImgRes = await rpc.send({
+      type: "prompt",
+      message: "Here is an attached image",
+      images: [
+        {
+          type: "image",
+          data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          mimeType: "image/png",
+        },
+      ],
+    });
+    expect(promptImgRes.success).toBe(true);
+
     await Promise.race([
       settledPromise,
       new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout waiting for agent_settled")), 15_000)),
