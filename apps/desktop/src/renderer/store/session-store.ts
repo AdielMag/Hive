@@ -88,6 +88,7 @@ export interface SessionStoreState {
 }
 
 let initStarted = false;
+const startingSessions = new Map<string, Promise<string | null>>();
 
 /** Pull model / thinking / session-file state from a live session into the store. */
 async function hydrateSession(key: string, tabId: string): Promise<void> {
@@ -102,7 +103,21 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
     ]);
     if (stateRes.ok) {
       const state = stateRes.data as { model?: Model<any>; thinkingLevel?: string; sessionFile?: string };
-      if (state.model) set({ selectedModel: state.model });
+      const tab = get().tabs.find((t) => t.id === tabId);
+      const chosenModel = tab?.model ?? get().selectedModel;
+
+      // If user had already selected a model before session hydrated, preserve it and sync to session
+      if (chosenModel && state.model && (chosenModel.provider !== state.model.provider || chosenModel.id !== state.model.id)) {
+        const setRes = await window.studio.rpc(key, { type: "set_model", provider: chosenModel.provider, modelId: chosenModel.id });
+        if (setRes.ok) {
+          set({ selectedModel: setRes.data as Model<any> });
+        } else if (state.model) {
+          set({ selectedModel: state.model });
+        }
+      } else if (state.model) {
+        set({ selectedModel: state.model });
+      }
+
       if (state.thinkingLevel) set({ selectedThinkingLevel: state.thinkingLevel });
       // New sessions learn their file path here, so switching tabs can reload their history.
       if (state.sessionFile) {
@@ -118,7 +133,9 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
       });
       if (!get().selectedModel && models.length > 0) {
         const enabled = get().enabledModelKeys;
-        const match = enabled.length ? models.find((m) => enabled.includes(`${m.provider}/${m.id}`) || enabled.includes(m.id)) : null;
+        const match = enabled.length
+          ? models.find((m) => enabled.includes(`${m.provider}/${m.id}`) || (!m.id.includes("/") && enabled.includes(m.id)))
+          : null;
         set({ selectedModel: match ?? models[0] ?? null });
       }
     }
@@ -249,7 +266,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
   },
 
-  ensureActiveSession: async (targetTabId?: string) => {
+  ensureActiveSession: async (targetTabId?: string): Promise<string | null> => {
     const { tabs, activeTabId, projects } = get();
     const tabId = targetTabId || activeTabId;
     if (!tabId) return null;
@@ -262,26 +279,36 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       return tab.activeKey;
     }
 
+    if (startingSessions.has(tabId)) {
+      return startingSessions.get(tabId)!;
+    }
+
     const project = projects.find((p) => p.id === tab.projectId);
     if (!project?.path) return null;
 
-    set({ isLoadingModels: true });
-    try {
-      const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath });
-      set((s) => ({
-        // Only steal focus if the user is still on this tab.
-        ...(s.activeTabId === tabId ? { activeKey: res.key } : {}),
-        tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, activeKey: res.key, isCold: false } : t)),
-      }));
-      await hydrateSession(res.key, tabId);
-      return res.key;
-    } catch (err) {
-      console.error("Failed to start live session", err);
-      set({ error: `Couldn't start Pi: ${err instanceof Error ? err.message : String(err)}` });
-      return null;
-    } finally {
-      set({ isLoadingModels: false });
-    }
+    const startPromise = (async () => {
+      set({ isLoadingModels: true });
+      try {
+        const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath });
+        set((s) => ({
+          // Only steal focus if the user is still on this tab.
+          ...(s.activeTabId === tabId ? { activeKey: res.key } : {}),
+          tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, activeKey: res.key, isCold: false } : t)),
+        }));
+        await hydrateSession(res.key, tabId);
+        return res.key;
+      } catch (err) {
+        console.error("Failed to start live session", err);
+        set({ error: `Couldn't start Pi: ${err instanceof Error ? err.message : String(err)}` });
+        return null;
+      } finally {
+        set({ isLoadingModels: false });
+        startingSessions.delete(tabId);
+      }
+    })();
+
+    startingSessions.set(tabId, startPromise);
+    return startPromise;
   },
 
   loadModelsCatalog: async () => {
@@ -299,7 +326,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           set({ models: catalogModels });
           if (!get().selectedModel) {
             const match = enabledKeys.length > 0
-              ? catalogModels.find((m) => enabledKeys.includes(`${m.provider}/${m.id}`) || enabledKeys.includes(m.id))
+              ? catalogModels.find((m) => enabledKeys.includes(`${m.provider}/${m.id}`) || (!m.id.includes("/") && enabledKeys.includes(m.id)))
               : null;
             set({ selectedModel: match ?? catalogModels[0] ?? null });
           }
@@ -559,6 +586,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       activeTabId: tabId,
       activeProject: project,
       activeKey: tab.activeKey ?? null,
+      selectedModel: tab.model ?? get().selectedModel,
       transcript: createTranscript(),
       extensionWidgets: {},
       extensionStatus: {},
@@ -669,18 +697,56 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   setModel: async (provider: string, modelId: string) => {
+    // 1. Immediately find the target model in available models or catalog
+    const allKnown = [...get().models, ...get().allCatalogModels];
+    const target =
+      allKnown.find((m) => m.provider === provider && m.id === modelId) ??
+      ({ id: modelId, provider, name: modelId, reasoning: false, input: ["text"] } as Model<any>);
+
+    const previousModel = get().selectedModel;
+    const previousLevels = get().thinkingLevels;
+
+    // Optimistically update selectedModel immediately so UI changes without delay
+    set({ selectedModel: target, error: null });
+
+    // Associate with the active tab so each tab remembers its chosen model
+    const { activeTabId } = get();
+    if (activeTabId) {
+      set((s) => ({
+        tabs: s.tabs.map((t) => (t.id === activeTabId ? { ...t, model: target } : t)),
+      }));
+    }
+
+    // 2. Sync with live session if active or activatable
     let { activeKey } = get();
     if (!activeKey) {
       activeKey = await get().ensureActiveSession();
     }
     if (!activeKey) return;
-    const res = await window.studio.rpc(activeKey, { type: "set_model", provider, modelId });
-    if (res.ok) {
-      set({ selectedModel: res.data as Model<any> });
-      const levelsRes = await window.studio.rpc(activeKey, { type: "get_available_thinking_levels" });
-      if (levelsRes.ok) {
-        set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
+
+    try {
+      const res = await window.studio.rpc(activeKey, { type: "set_model", provider, modelId });
+      if (res.ok) {
+        set({ selectedModel: res.data as Model<any>, error: null });
+        const levelsRes = await window.studio.rpc(activeKey, { type: "get_available_thinking_levels" });
+        if (levelsRes.ok) {
+          set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
+        }
+      } else {
+        console.error("set_model RPC returned error:", res.error);
+        set({
+          selectedModel: previousModel,
+          thinkingLevels: previousLevels,
+          error: `Could not switch to ${target.name || modelId}: ${res.error}`,
+        });
       }
+    } catch (err) {
+      console.error("set_model RPC failed:", err);
+      set({
+        selectedModel: previousModel,
+        thinkingLevels: previousLevels,
+        error: `Failed to set model: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
   },
 

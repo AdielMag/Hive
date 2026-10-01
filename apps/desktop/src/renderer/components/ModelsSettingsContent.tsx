@@ -52,8 +52,8 @@ export const ModelsSettingsContent: React.FC = () => {
   // Check if a model is enabled
   const isModelEnabled = (m: { provider: string; id: string }): boolean => {
     const key1 = `${m.provider}/${m.id}`;
-    const key2 = m.id;
-    return enabledModelKeys.includes(key1) || enabledModelKeys.includes(key2);
+    if (enabledModelKeys.includes(key1)) return true;
+    return enabledModelKeys.some((k) => !k.includes("/") && k === m.id);
   };
 
   // Toggle a single model
@@ -63,7 +63,7 @@ export const ModelsSettingsContent: React.FC = () => {
 
     let nextKeys: string[];
     if (isCurrentlyEnabled) {
-      nextKeys = enabledModelKeys.filter((k) => k !== key && k !== m.id);
+      nextKeys = enabledModelKeys.filter((k) => k !== key && (!k.includes("/") ? k !== m.id : false));
     } else {
       nextKeys = [...enabledModelKeys, key];
     }

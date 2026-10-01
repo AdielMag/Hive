@@ -70,7 +70,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
     }
     const enabledSet = new Set(enabledModelKeys);
     const filtered = baseModels.filter((m) => {
-      return enabledSet.has(`${m.provider}/${m.id}`) || enabledSet.has(m.id);
+      const fullKey = `${m.provider}/${m.id}`;
+      if (enabledSet.has(fullKey)) return true;
+      return enabledModelKeys.some((k) => !k.includes("/") && k === m.id);
     });
     return filtered.length > 0 ? filtered : baseModels;
   }, [baseModels, enabledModelKeys]);
@@ -604,7 +606,11 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                         return (
                           <div
                             key={`${m.provider}/${m.id}`}
-                            onClick={() => {
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
                               void setModel(m.provider, m.id);
                               setModelPickerOpen(false);
                               setModelFilter("");

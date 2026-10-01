@@ -61,6 +61,7 @@ export interface TabItem {
   pinned: boolean;
   isCold?: boolean; // if rendered from file or has active live process
   activeKey?: string; // key of live session if started
+  model?: any; // selected model for this tab
 
   // File tab fields
   filePath?: string;
