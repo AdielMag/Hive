@@ -94,6 +94,34 @@ export interface SessionStoreState {
 let initStarted = false;
 const startingSessions = new Map<string, Promise<string | null>>();
 
+/** Main process reports this when the Pi process behind a key has exited / crashed. */
+const isStaleSessionError = (error: unknown): boolean =>
+  typeof error === "string" && /^Session ".*" is not active$/.test(error);
+
+/** Forget a dead session key so the next action respawns Pi for that tab (resuming its session file). */
+function dropSessionKey(key: string): void {
+  useSessionStore.setState((s) => ({
+    tabs: s.tabs.map((t) => (t.activeKey === key ? { ...t, activeKey: undefined, isCold: true } : t)),
+    ...(s.activeKey === key ? { activeKey: null } : {}),
+  }));
+}
+
+/**
+ * Send an RPC to the active tab's live session, spawning it if needed. If the process died underneath
+ * us (stale key), drop the key, respawn once and retry.
+ */
+async function rpcLive(command: Parameters<StudioApi["rpc"]>[1]): Promise<Awaited<ReturnType<StudioApi["rpc"]>> | null> {
+  const get = useSessionStore.getState;
+  let key = get().activeKey ?? (await get().ensureActiveSession());
+  if (!key) return null;
+  const res = await window.studio.rpc(key, command);
+  if (res.ok || !isStaleSessionError(res.error)) return res;
+  dropSessionKey(key);
+  key = await get().ensureActiveSession();
+  if (!key) return res;
+  return window.studio.rpc(key, command);
+}
+
 /** Pull model / thinking / session-file state from a live session into the store. */
 async function hydrateSession(key: string, tabId: string): Promise<void> {
   const set = useSessionStore.setState;
@@ -221,6 +249,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       window.studio.onSessionStatus((status) => {
         if (status.key === get().activeKey) {
           set({ status });
+        }
+        // The Pi process is gone; main has already forgotten this key. Don't keep sending RPCs to it.
+        if (status.phase === "exited" || status.phase === "crashed") {
+          dropSessionKey(status.key);
         }
       });
 
@@ -742,15 +774,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       }));
     }
 
-    // 2. Sync with live session if active or activatable
-    let { activeKey } = get();
-    if (!activeKey) {
-      activeKey = await get().ensureActiveSession();
-    }
-    if (!activeKey) return;
-
+    // 2. Sync with live session if active or activatable (respawns once if the process died)
     try {
-      const res = await window.studio.rpc(activeKey, { type: "set_model", provider, modelId });
+      const res = await rpcLive({ type: "set_model", provider, modelId });
+      const activeKey = get().activeKey;
+      if (!res || !activeKey) return;
       if (res.ok) {
         set({ selectedModel: res.data as Model<any>, error: null });
         const levelsRes = await window.studio.rpc(activeKey, { type: "get_available_thinking_levels" });
@@ -796,15 +824,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       }));
     }
 
-    let { activeKey } = get();
-    if (!activeKey) {
-      activeKey = await get().ensureActiveSession();
-    }
-    if (!activeKey) return;
-
     try {
-      const res = await window.studio.rpc(activeKey, { type: "set_thinking_level", level: level as any });
-      if (!res.ok) {
+      const res = await rpcLive({ type: "set_thinking_level", level: level as any });
+      if (!res) return;
+      if (res.ok) {
+        // A respawn re-hydrates from the session file and may have reset the level; reassert the choice.
+        set({ selectedThinkingLevel: level });
+      } else {
         console.warn("set_thinking_level RPC returned error:", res.error);
         set({
           selectedThinkingLevel: previous,
