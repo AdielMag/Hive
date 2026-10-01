@@ -6,7 +6,7 @@ export default defineConfig({
       {
         test: {
           name: "unit",
-          include: ["packages/*/test/**/*.test.ts", "apps/desktop/src/**/*.test.ts"],
+          include: ["packages/*/test/**/*.test.ts", "apps/desktop/src/**/*.test.ts", "scripts/**/*.test.ts"],
           environment: "node",
         },
       },

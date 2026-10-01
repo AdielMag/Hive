@@ -11,3 +11,8 @@ playwright-report/
 .plan-feedback.md
 .plan-previewer-*.json
 .plan-questions.json
+RELEASE_NOTES.md
+/shot*.png
+/tmp.png
+/capture.png
+apps/desktop/run*.log

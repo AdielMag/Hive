@@ -1,92 +1,140 @@
 name: Release
 
+# Every merge (push) to main ships a new version:
+#   verify -> compute next semver from conventional commits + update CHANGELOG.md -> tag
+#   -> build installers on Windows / macOS / Linux -> publish a GitHub Release with the changelog.
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22
+
 jobs:
-  test:
-    name: Test & Verify
+  verify:
+    name: Verify
+    # The release job's own version-bump commit must not trigger another release.
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+  version:
+    name: Version & changelog
+    needs: verify
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.prepare.outputs.released }}
+      version: ${{ steps.prepare.outputs.version }}
+      tag: ${{ steps.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags for commit analysis
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Compute next version and update CHANGELOG.md
+        id: prepare
+        run: node scripts/release/prepare.mjs
 
-      - name: Unit Tests
-        run: npm test
+      - name: Commit, tag and push
+        if: steps.prepare.outputs.released == 'true'
+        env:
+          TAG: ${{ steps.prepare.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json apps/desktop/package.json CHANGELOG.md
+          git commit -m "chore(release): ${TAG} [skip ci]"
+          git tag -a "${TAG}" -m "Pi Studio ${TAG}"
+          # If main is protected the commit push may be rejected; the tag (pointing at the release
+          # commit) is what the build uses, so push it regardless.
+          git push origin HEAD:main || echo "::warning::Could not push the release commit to main (branch protection?). Tag will still be published."
+          git push origin "${TAG}"
 
-  build-and-release:
-    name: Build & Package (${{ matrix.os }})
-    needs: test
-    runs-on: ${{ matrix.os }}
+      - name: Upload release notes
+        if: steps.prepare.outputs.released == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+  build:
+    name: Package (${{ matrix.os }})
+    needs: version
+    if: needs.version.outputs.released == 'true'
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
-
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: 22
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Install Linux build tools
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Linux packaging tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libarchive-tools
-
-      - name: Build packages & desktop app
-        run: npm run build
-
-      - name: Package Desktop Artifacts
+      - run: npm ci --legacy-peer-deps
+      - run: npm run build
+      - name: Package installers
         working-directory: apps/desktop
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false" # unsigned builds; no certificates in CI
         run: npx electron-builder --publish never
-
-      - name: Extract Version
-        id: get_version
-        shell: bash
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "VERSION=v$VERSION" >> $GITHUB_ENV
-
-      - name: Upload Release Binaries
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ env.VERSION }}
-          name: Pi Studio ${{ env.VERSION }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          fail_on_unmatched_files: false
-          files: |
+          name: dist-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
             apps/desktop/dist-release/*.exe
             apps/desktop/dist-release/*.dmg
             apps/desktop/dist-release/*.zip
             apps/desktop/dist-release/*.AppImage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            apps/desktop/dist-release/latest*.yml
+
+  publish:
+    name: Publish GitHub release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Pi Studio ${{ needs.version.outputs.tag }}
+          body_path: artifacts/release-notes/RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          files: |
+            artifacts/dist-*/*.exe
+            artifacts/dist-*/*.dmg
+            artifacts/dist-*/*.zip
+            artifacts/dist-*/*.AppImage

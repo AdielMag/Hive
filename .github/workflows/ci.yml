@@ -2,31 +2,34 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
-      - master
+    branches: [main]
+  push:
+    branches-ignore: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
-    name: Verify & Build
-    runs-on: ubuntu-latest
+    name: Typecheck, test & build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Unit Tests
-        run: npm test
-
-      - name: Build Desktop App
-        run: npm run build
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Preview next release
+        if: runner.os == 'Linux'
+        run: node scripts/release/prepare.mjs --dry-run
