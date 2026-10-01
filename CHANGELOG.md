@@ -2,6 +2,12 @@
 
 All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
 
+## v0.4.1 — 2026-10-01 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.4.0...v0.4.1)
+
+### 🐛 Fixes
+
+- **renderer:** recover from dead Pi sessions instead of failing model/thinking changes ([`3475c74`](https://github.com/AdielMag/pi-studio/commit/3475c74d16a3c68369a82259637d2317c9c48bb1))
+
 ## v0.4.0 — 2026-10-01 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.3.0...v0.4.0)
 
 ### ✨ Features
