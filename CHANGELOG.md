@@ -2,6 +2,16 @@
 
 All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
 
+## v0.3.0 — 2026-10-01 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.2.0...v0.3.0)
+
+### ✨ Features
+
+- **locator:** enhance Pi CLI path locator and environment detection ([`55c4c24`](https://github.com/AdielMag/pi-studio/commit/55c4c240f68949c09fcf0ad801a3d004751fd74f))
+
+### 🐛 Fixes
+
+- **renderer:** resolve model dropdown selection not changing active model ([`bb8b6d1`](https://github.com/AdielMag/pi-studio/commit/bb8b6d16e53e21f51f36144ab67f6d0373f6e476))
+
 ## v0.2.0 — 2026-10-01 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.1.0...v0.2.0)
 
 ### ✨ Features
