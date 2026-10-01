@@ -2,6 +2,12 @@
 
 All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
 
+## v0.4.2 — 2026-10-01 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.4.1...v0.4.2)
+
+### 🐛 Fixes
+
+- **packaging:** bundle the Pi bridge so packaged sessions don't crash on start ([`ea4d697`](https://github.com/AdielMag/pi-studio/commit/ea4d6973a4415a3ee05e98303339ee602df326b8))
+
 ## v0.4.1 — 2026-10-01 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.4.0...v0.4.1)
 
 ### 🐛 Fixes
