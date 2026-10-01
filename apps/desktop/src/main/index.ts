@@ -18,6 +18,12 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => {
+    // Re-launching after installing Pi should just work, even though this instance is still running.
+    if (ctx && !ctx.pi.ok && ctx.piInstall.relocate().ok) {
+      app.relaunch();
+      app.exit(0);
+      return;
+    }
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();

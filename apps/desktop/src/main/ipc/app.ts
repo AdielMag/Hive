@@ -1,5 +1,5 @@
 import { app, dialog, shell } from "electron";
-import { IPC, type Bootstrap } from "@pi-studio/protocol";
+import { IPC, type Bootstrap, type PiLocateResult } from "@pi-studio/protocol";
 import type { AppContext } from "../context.ts";
 import { isSafeExternalUrl } from "../window.ts";
 import { handle } from "./util.ts";
@@ -15,6 +15,34 @@ export function registerAppIpc(ctx: AppContext): void {
     initialProjectPath: process.env.PI_STUDIO_PROJECT ?? null,
     testMode: ctx.testMode,
   }));
+
+  // Pi was missing at startup: services are built from the install, so once found we restart cleanly.
+  const restartIfFound = (result: PiLocateResult): PiLocateResult => {
+    if (result.ok && !ctx.pi.ok) {
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 900);
+    }
+    return result;
+  };
+
+  handle(IPC.piRelocate, () => restartIfFound(ctx.piInstall.relocate()));
+
+  handle(IPC.piChoose, async () => {
+    const win = ctx.getWindow();
+    const options: Electron.OpenDialogOptions = {
+      title: "Locate Pi — pick the pi command, cli.js, or the folder Pi is installed in",
+      properties: ["openFile", "openDirectory", "showHiddenFiles"],
+    };
+    // Windows/Linux dialogs can't pick files and folders at once; files cover pi.cmd / cli.js, and
+    // packageRootFrom() walks up from them.
+    if (process.platform !== "darwin") options.properties = ["openFile", "showHiddenFiles"];
+    const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    const picked = r.canceled ? undefined : r.filePaths[0];
+    if (!picked) return null;
+    return restartIfFound(ctx.piInstall.tryPath(picked));
+  });
 
   handle(IPC.pickFolder, async () => {
     const win = ctx.getWindow();

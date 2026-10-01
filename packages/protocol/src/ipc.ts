@@ -113,6 +113,8 @@ export type BridgeActionResult = { ok: true; data?: unknown } | { ok: false; err
 /** Channel names. Keep in one place so preload and main cannot drift. */
 export const IPC = {
   bootstrap: "studio:bootstrap",
+  piRelocate: "studio:pi-relocate",
+  piChoose: "studio:pi-choose",
   pickFolder: "studio:pick-folder",
   startSession: "session:start",
   stopSession: "session:stop",
@@ -212,6 +214,10 @@ export interface ModelsCatalogResponse {
 /** API exposed on `window.studio` by the preload script. */
 export interface StudioApi {
   bootstrap(): Promise<Bootstrap>;
+  /** Search for Pi again (fresh PATH). On success the app restarts itself to start using it. */
+  relocatePi(): Promise<PiLocateResult>;
+  /** Let the user pick Pi's location. Null if cancelled; on success the app restarts. */
+  choosePiLocation(): Promise<PiLocateResult | null>;
   pickFolder(): Promise<string | null>;
   startSession(request: StartSessionRequest): Promise<StartSessionResult>;
   stopSession(key: string): Promise<void>;

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 import {
   IPC,
   type Bootstrap,
+  type PiLocateResult,
   type BridgeActionRequest,
   type BridgeActionResult,
   type BridgeMessage,
@@ -20,6 +21,14 @@ import {
 const api: StudioApi = {
   bootstrap(): Promise<Bootstrap> {
     return ipcRenderer.invoke(IPC.bootstrap);
+  },
+
+  relocatePi(): Promise<PiLocateResult> {
+    return ipcRenderer.invoke(IPC.piRelocate);
+  },
+
+  choosePiLocation(): Promise<PiLocateResult | null> {
+    return ipcRenderer.invoke(IPC.piChoose);
   },
 
   pickFolder(): Promise<string | null> {

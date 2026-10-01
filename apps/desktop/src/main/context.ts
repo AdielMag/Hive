@@ -6,7 +6,6 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, type BrowserWindow } from "electron";
 import type { PiLocateResult } from "@pi-studio/protocol";
-import { locatePi } from "@pi-studio/pi-adapter/node";
 import { GuiStore } from "./store/index.ts";
 import { SessionCatalogService } from "./services/catalog.ts";
 import { MainSessionManager } from "./services/session-manager.ts";
@@ -16,10 +15,12 @@ import { AppUpdaterService } from "./services/updater.ts";
 import { ModelsService } from "./services/models.ts";
 import { QuotaService } from "./services/quota/index.ts";
 import { UsageService } from "./services/usage.ts";
+import { PiInstallService } from "./services/pi-install.ts";
 import { terminalManager, type TerminalManager } from "./services/terminal.ts";
 
 export interface AppContext {
   pi: PiLocateResult;
+  piInstall: PiInstallService;
   testMode: boolean;
   getWindow(): BrowserWindow | null;
   guiStore: GuiStore;
@@ -35,17 +36,19 @@ export interface AppContext {
 }
 
 export function createAppContext(getWindow: () => BrowserWindow | null): AppContext {
-  const pi = locatePi();
+  const userData = app.getPath("userData");
+  const piInstall = new PiInstallService(userData);
+  const pi = piInstall.locate();
   const testMode = process.env.PI_STUDIO_TEST_MODE === "1";
   const testProviderPath = testMode
     ? resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../packages/test-provider/index.ts")
     : undefined;
-  const userData = app.getPath("userData");
   const guiStore = new GuiStore(userData);
   const info = pi.ok ? pi.info : null;
 
   return {
     pi,
+    piInstall,
     testMode,
     getWindow,
     guiStore,
