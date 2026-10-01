@@ -1,50 +1,77 @@
+/* Base tokens. Real values are written to :root by the appearance store before first paint;
+   these defaults only matter if that fails. */
 :root {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
+  --font-sans: "Inter Variable", "Inter", "Segoe UI Variable Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
 
-  /* Base Arc-inspired Dark Palette (Pro Deep Obsidian) */
-  --bg-app: #090a0d;
-  --bg-sidebar: #0e1015;
-  --bg-card: #15181f;
-  --bg-card-hover: #1d212a;
-  --bg-input: #0d0f14;
-  --bg-elevated: #1a1e27;
-
-  --border-subtle: rgba(255, 255, 255, 0.07);
+  --bg-app: #17181d;
+  --bg-sidebar: #1a1b21;
+  --bg-card: #1d1f25;
+  --bg-card-hover: #24262d;
+  --bg-input: #131419;
+  --bg-elevated: #22242b;
+  --border-subtle: rgba(255, 255, 255, 0.075);
   --border-prominent: rgba(255, 255, 255, 0.14);
-
-  --text-primary: #f0f3f6;
-  --text-secondary: #9aa4b2;
-  --text-muted: #57606e;
-
-  --accent-base: #539bf5;
-  --accent-hover: #6cb6ff;
-  --accent-subtle: rgba(83, 155, 245, 0.15);
+  --text-primary: #eceef2;
+  --text-secondary: #a8adb8;
+  --text-muted: #7c818c;
+  --accent-base: #8ea6ff;
+  --accent-hover: #a8bbff;
+  --accent-subtle: rgba(142, 166, 255, 0.16);
+  --accent-rgb: 142, 166, 255;
+  --accent-contrast: #0b0c10;
+  --fg-rgb: 255, 255, 255;
+  --frame-gradient: linear-gradient(155deg, #2b2f4a, #1d1f33);
+  --frame-base: #24263b;
+  --frame-text: #f3f4f7;
+  --frame-text-muted: rgba(255, 255, 255, 0.62);
+  --frame-hover: rgba(255, 255, 255, 0.09);
+  --frame-active: rgba(255, 255, 255, 0.14);
+  --grain-opacity: 0.08;
+  --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 30px rgba(0, 0, 0, 0.35);
+  --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.55);
 
   --success: #57ab5a;
-  --warning: #c69026;
+  --warning: #d29922;
   --danger: #e5534b;
   --info: #39c5cf;
-
-  --project-color: #539bf5;
-  --grain-opacity: 0.08;
+  --project-color: var(--accent-base);
+  color-scheme: dark;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   font-family: var(--font-sans);
-  background-color: var(--bg-app);
+  font-feature-settings: "cv11", "ss01", "ss03";
+  background: var(--frame-base);
   color: var(--text-primary);
   overflow: hidden;
   user-select: none;
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Editable controls are always selectable even though chrome isn't. */
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
 }
 
 input,
@@ -56,106 +83,67 @@ select {
   color: inherit;
 }
 
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 1px;
+}
+button:focus:not(:focus-visible) {
+  outline: none;
+}
+
 code,
-pre {
+pre,
+kbd {
   font-family: var(--font-mono);
 }
 
-/* Organic Grain texture overlay */
-.grain-overlay {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
+::selection {
+  background: rgba(var(--accent-rgb), 0.35);
 }
 
-/* Custom scrollbars */
+/* Film grain (also used by the appearance preview). */
+.grain-overlay,
+.grain-overlay-bg {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 220px 220px;
+}
+.appearance__preset-swatch.grain-overlay-bg {
+  background-blend-mode: overlay;
+}
+
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
+  background: rgba(var(--fg-rgb), 0.12);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background-color: rgba(var(--fg-rgb), 0.24);
 }
-
-/* FlexLayout styling overrides */
-.flexlayout__layout {
-  background: var(--bg-app);
-}
-.flexlayout__tabset-header {
-  background: var(--bg-sidebar);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.flexlayout__tabset {
-  background: var(--bg-sidebar);
-}
-.flexlayout__tab {
-  background: var(--bg-app);
-  color: var(--text-primary);
-}
-.flexlayout__tab_button {
+::-webkit-scrollbar-corner {
   background: transparent;
-  color: var(--text-secondary);
-  border: none;
-}
-.flexlayout__tab_button--selected {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  font-weight: 500;
 }
 
-/* FlexLayout Border Bars: pristine icon strips */
-.flexlayout__border {
-  background: var(--bg-sidebar);
-  border-color: var(--border-subtle);
-}
-.flexlayout__border_button {
-  background: transparent;
-  color: var(--text-muted);
-  border: none;
-  border-radius: 6px;
-  margin: 4px;
-  padding: 0;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  width: 34px !important;
-  height: 34px !important;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.flexlayout__border_button:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
-}
-.flexlayout__border_button--selected {
-  background: var(--accent-subtle) !important;
-  color: var(--accent-base) !important;
-  box-shadow: inset 0 0 0 1px var(--border-prominent);
-}
-/* Ensure NO text is rendered in border icon buttons */
-.flexlayout__border_button_trailing {
-  display: none !important;
-}
-.flexlayout__border_button_leading {
-  display: none !important;
-}
-
-/* Hover effects for sidebar items */
 .project-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--fg-rgb), 0.05);
 }
 .session-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--fg-rgb), 0.05);
   color: var(--text-primary) !important;
 }
 
-/* Animation utilities */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -165,5 +153,14 @@ pre {
   }
 }
 .spin {
-  animation: spin 1s linear infinite;
+  animation: spin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

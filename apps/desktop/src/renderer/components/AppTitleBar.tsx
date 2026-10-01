@@ -1,387 +1,170 @@
-import React, { useState, useRef, useEffect } from "react";
-import { FolderKanban, Minus, Square, Copy, X, Download } from "lucide-react";
+/** Frameless window title bar: app menus, active project, update badge and caption buttons. */
+import React, { useEffect, useRef, useState } from "react";
+import { Copy, Download, FolderKanban, Minus, Square, X } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
+import { useUi } from "../store/ui-store.ts";
+import { openProjectFolder } from "../hooks/useGlobalShortcuts.ts";
 
-interface AppTitleBarProps {
-  onOpenSettings: (tab?: string) => void;
+interface MenuItem {
+  label: string;
+  shortcut?: string;
+  action?: () => void;
+  disabled?: boolean;
+  separator?: boolean;
 }
 
-export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenSettings }) => {
-  const { activeProject, activeTabId, closeTab, addProject, newSessionTab } = useSessionStore();
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState<any>(null);
+interface UpdateInfo {
+  hasUpdate: boolean;
+  latestVersion?: string;
+  downloadUrl?: string;
+}
+
+export const AppTitleBar: React.FC = () => {
+  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab } = useSessionStore(
+    useShallow((s) => ({
+      activeProject: s.activeProject,
+      activeTabId: s.activeTabId,
+      closeTab: s.closeTab,
+      newSessionTab: s.newSessionTab,
+      openUsageTab: s.openUsageTab,
+    })),
+  );
+  const ui = useUi(useShallow((s) => ({ openSettings: s.openSettings, toggleLeft: s.toggleLeft, toggleRight: s.toggleRight })));
+  const [menu, setMenu] = useState<string | null>(null);
+  const [maximized, setMaximized] = useState(false);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        setActiveMenu(null);
-      }
+    const outside = (e: MouseEvent) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) setMenu(null);
     };
-    window.addEventListener("mousedown", handleOutsideClick);
-
-    // Initial maximized state & listener
-    if (window.studio?.isWindowMaximized) {
-      window.studio.isWindowMaximized().then(setIsMaximized).catch(() => {});
-    }
-    const unsubscribe = window.studio?.onWindowMaximizedChange?.((max) => {
-      setIsMaximized(max);
-    });
-
-    // Check for updates
-    window.studio?.checkForUpdates?.().then((info) => {
-      if (info?.hasUpdate) setUpdateInfo(info);
-    }).catch(() => {});
-
+    window.addEventListener("mousedown", outside);
+    void window.studio.isWindowMaximized().then(setMaximized).catch(() => {});
+    const off = window.studio.onWindowMaximizedChange(setMaximized);
+    // Check for updates shortly after launch, off the critical path.
+    const t = setTimeout(() => {
+      void window.studio
+        .checkForUpdates()
+        .then((info: UpdateInfo) => info?.hasUpdate && setUpdate(info))
+        .catch(() => {});
+    }, 4000);
     return () => {
-      window.removeEventListener("mousedown", handleOutsideClick);
-      unsubscribe?.();
+      window.removeEventListener("mousedown", outside);
+      off();
+      clearTimeout(t);
     };
   }, []);
 
-  const handleOpenFolder = async () => {
-    setActiveMenu(null);
-    const folder = await window.studio.pickFolder();
-    if (folder) {
-      const p = await addProject(folder);
-      await newSessionTab(p.id);
-    }
+  const run = (fn: () => void) => () => {
+    setMenu(null);
+    fn();
   };
 
-  const handleNewSession = async () => {
-    setActiveMenu(null);
-    if (activeProject) {
-      await newSessionTab(activeProject.id);
-    }
-  };
-
-  const handleCloseActiveTab = async () => {
-    setActiveMenu(null);
-    if (activeTabId) {
-      await closeTab(activeTabId);
-    }
+  const menus: Record<string, MenuItem[]> = {
+    File: [
+      { label: "New Session", shortcut: "Ctrl+N", disabled: !activeProject, action: () => activeProject && void newSessionTab(activeProject.id) },
+      { label: "Open Project Folder…", shortcut: "Ctrl+O", action: () => void openProjectFolder() },
+      { label: "Close Tab", shortcut: "Ctrl+W", disabled: !activeTabId, action: () => activeTabId && void closeTab(activeTabId) },
+      { separator: true, label: "" },
+      { label: "Settings…", shortcut: "Ctrl+,", action: () => ui.openSettings() },
+      { separator: true, label: "" },
+      { label: "Exit", action: () => void window.studio.closeWindow() },
+    ],
+    Edit: [
+      { label: "Undo", shortcut: "Ctrl+Z", action: () => document.execCommand("undo") },
+      { label: "Redo", shortcut: "Ctrl+Y", action: () => document.execCommand("redo") },
+      { separator: true, label: "" },
+      { label: "Cut", shortcut: "Ctrl+X", action: () => document.execCommand("cut") },
+      { label: "Copy", shortcut: "Ctrl+C", action: () => document.execCommand("copy") },
+      { label: "Paste", shortcut: "Ctrl+V", action: () => document.execCommand("paste") },
+    ],
+    View: [
+      { label: "Projects", shortcut: "Ctrl+B", action: () => ui.toggleLeft("projects") },
+      { label: "Files", shortcut: "Ctrl+Shift+E", action: () => ui.toggleLeft("files") },
+      { label: "Source Control", shortcut: "Ctrl+Shift+G", action: () => ui.toggleLeft("git") },
+      { separator: true, label: "" },
+      { label: "Subscription Limits", shortcut: "Ctrl+Shift+L", action: () => ui.toggleRight("limits") },
+      { label: "Usage Analytics", shortcut: "Ctrl+Shift+U", action: () => openUsageTab() },
+      { label: "Terminal", shortcut: "Ctrl+`", action: () => ui.toggleRight("terminal") },
+      { separator: true, label: "" },
+      { label: "Appearance…", action: () => ui.openSettings("appearance") },
+      { label: "Zoom In", shortcut: "Ctrl+=", action: () => window.studio.zoom("in") },
+      { label: "Zoom Out", shortcut: "Ctrl+-", action: () => window.studio.zoom("out") },
+      { label: "Reset Zoom", shortcut: "Ctrl+0", action: () => window.studio.zoom("reset") },
+    ],
+    Help: [
+      { label: "Pi Documentation", action: () => void window.studio.openExternal("https://pi.dev") },
+      { label: "Pi Studio on GitHub", action: () => void window.studio.openExternal("https://github.com/AdielMag/pi-studio") },
+      { label: "Release Notes", action: () => void window.studio.openExternal("https://github.com/AdielMag/pi-studio/releases") },
+      { separator: true, label: "" },
+      { label: "About Pi Studio", action: () => ui.openSettings("about") },
+    ],
   };
 
   return (
-    <div
-      ref={barRef}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        height: 36,
-        background: "var(--bg-app)",
-        borderBottom: "1px solid var(--border-subtle)",
-        padding: "0 0 0 10px",
-        userSelect: "none",
-        fontSize: 12,
-        color: "var(--text-secondary)",
-        WebkitAppRegion: "drag" as any,
-      }}
-    >
-      {/* Left: In-app Menus */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4, WebkitAppRegion: "no-drag" as any }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          {/* File Menu */}
-          <div style={{ position: "relative" }}>
+    <div ref={barRef} className="titlebar">
+      <div className="titlebar__menus no-drag">
+        {Object.entries(menus).map(([name, items]) => (
+          <div key={name} className="titlebar__menu">
             <button
-              onClick={() => setActiveMenu(activeMenu === "file" ? null : "file")}
-              style={{
-                background: activeMenu === "file" ? "var(--bg-card)" : "transparent",
-                border: "none",
-                color: activeMenu === "file" ? "var(--text-primary)" : "var(--text-secondary)",
-                borderRadius: 4,
-                padding: "3px 8px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
+              className={`titlebar__menu-btn${menu === name ? " is-open" : ""}`}
+              onClick={() => setMenu(menu === name ? null : name)}
+              onMouseEnter={() => menu && menu !== name && setMenu(name)}
             >
-              File
+              {name}
             </button>
-            {activeMenu === "file" && (
-              <MenuDropdown
-                items={[
-                  { label: "New Session", shortcut: "Ctrl+N", action: handleNewSession, disabled: !activeProject },
-                  { label: "Open Project Folder...", shortcut: "Ctrl+O", action: handleOpenFolder },
-                  { label: "Close Current Tab", shortcut: "Ctrl+W", action: handleCloseActiveTab, disabled: !activeTabId },
-                  { label: "Settings...", shortcut: "Ctrl+,", action: () => { setActiveMenu(null); onOpenSettings(); } },
-                ]}
-              />
+            {menu === name && (
+              <div className="menu-pop" role="menu">
+                {items.map((it, i) =>
+                  it.separator ? (
+                    <div key={i} className="menu-pop__sep" />
+                  ) : (
+                    <button key={i} role="menuitem" className="menu-pop__item" disabled={it.disabled} onClick={run(() => it.action?.())}>
+                      <span>{it.label}</span>
+                      {it.shortcut && <span className="menu-pop__kbd">{it.shortcut}</span>}
+                    </button>
+                  ),
+                )}
+              </div>
             )}
           </div>
-
-          {/* Edit Menu */}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setActiveMenu(activeMenu === "edit" ? null : "edit")}
-              style={{
-                background: activeMenu === "edit" ? "var(--bg-card)" : "transparent",
-                border: "none",
-                color: activeMenu === "edit" ? "var(--text-primary)" : "var(--text-secondary)",
-                borderRadius: 4,
-                padding: "3px 8px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              Edit
-            </button>
-            {activeMenu === "edit" && (
-              <MenuDropdown
-                items={[
-                  { label: "Undo", shortcut: "Ctrl+Z", action: () => document.execCommand("undo") },
-                  { label: "Redo", shortcut: "Ctrl+Y", action: () => document.execCommand("redo") },
-                  { label: "Cut", shortcut: "Ctrl+X", action: () => document.execCommand("cut") },
-                  { label: "Copy", shortcut: "Ctrl+C", action: () => document.execCommand("copy") },
-                  { label: "Paste", shortcut: "Ctrl+V", action: () => document.execCommand("paste") },
-                ]}
-              />
-            )}
-          </div>
-
-          {/* View Menu */}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setActiveMenu(activeMenu === "view" ? null : "view")}
-              style={{
-                background: activeMenu === "view" ? "var(--bg-card)" : "transparent",
-                border: "none",
-                color: activeMenu === "view" ? "var(--text-primary)" : "var(--text-secondary)",
-                borderRadius: 4,
-                padding: "3px 8px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              View
-            </button>
-            {activeMenu === "view" && (
-              <MenuDropdown
-                items={[
-                  { label: "Settings & Appearance...", action: () => { setActiveMenu(null); onOpenSettings(); } },
-                  { label: "Zoom In", shortcut: "Ctrl+Plus", action: () => {} },
-                  { label: "Zoom Out", shortcut: "Ctrl+-", action: () => {} },
-                ]}
-              />
-            )}
-          </div>
-
-          {/* Help Menu */}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setActiveMenu(activeMenu === "help" ? null : "help")}
-              style={{
-                background: activeMenu === "help" ? "var(--bg-card)" : "transparent",
-                border: "none",
-                color: activeMenu === "help" ? "var(--text-primary)" : "var(--text-secondary)",
-                borderRadius: 4,
-                padding: "3px 8px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              Help
-            </button>
-            {activeMenu === "help" && (
-              <MenuDropdown
-                items={[
-                  { label: "Pi CLI Documentation", action: () => window.open("https://pi.dev", "_blank") },
-                  { label: "About Pi Studio", action: () => alert("Pi Studio v0.1.0\nDesktop Workbench for Pi Coding Agent") },
-                ]}
-              />
-            )}
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Center: Title / Breadcrumb */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          fontSize: 12,
-          fontWeight: 500,
-          color: "var(--text-muted)",
-        }}
-      >
+      <div className="titlebar__center">
         {activeProject ? (
-          <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-secondary)" }}>
-            <FolderKanban size={12} color="var(--project-color)" />
-            <span>{activeProject.name}</span>
+          <span className="titlebar__project">
+            <span className="titlebar__dot" style={{ background: activeProject.color }} />
+            <FolderKanban size={12} />
+            {activeProject.name}
           </span>
         ) : (
-          <span>No project opened</span>
+          <span className="titlebar__project is-muted">Pi Studio</span>
         )}
       </div>
 
-      {/* Right: Custom In-App Caption Buttons (Minimize, Maximize, Close) + Update indicator */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          height: "100%",
-          WebkitAppRegion: "no-drag" as any,
-        }}
-      >
-        {/* Update Available Badge */}
-        {updateInfo?.hasUpdate && (
+      <div className="titlebar__right no-drag">
+        {update?.hasUpdate && (
           <button
-            onClick={async () => {
-              if (confirm(`Download and install Pi Studio v${updateInfo.latestVersion}?`)) {
-                await window.studio?.applyUpdate?.(updateInfo.downloadUrl);
-              }
-            }}
-            title={`New update v${updateInfo.latestVersion} available! Click to update now.`}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "2px 8px",
-              borderRadius: 10,
-              background: "rgba(87, 171, 90, 0.2)",
-              border: "1px solid var(--success)",
-              color: "var(--success)",
-              fontSize: 10,
-              fontWeight: 600,
-              cursor: "pointer",
-              marginRight: 6,
-            }}
+            className="titlebar__update"
+            onClick={() => void window.studio.applyUpdate(update.downloadUrl)}
+            title={`Pi Studio v${update.latestVersion} is available — click to install`}
           >
-            <Download size={10} />
-            <span>Update v{updateInfo.latestVersion}</span>
+            <Download size={11} /> Update v{update.latestVersion}
           </button>
         )}
-
-        {/* Minimize */}
-        <button
-          onClick={() => window.studio?.minimizeWindow?.()}
-          title="Minimize"
-          style={{
-            width: 44,
-            height: "100%",
-            background: "transparent",
-            border: "none",
-            color: "var(--text-secondary)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "background 0.15s ease",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
+        <button className="caption-btn" onClick={() => void window.studio.minimizeWindow()} title="Minimize" aria-label="Minimize">
           <Minus size={14} />
         </button>
-
-        {/* Maximize / Restore */}
-        <button
-          onClick={() => window.studio?.maximizeWindow?.()}
-          title={isMaximized ? "Restore" : "Maximize"}
-          style={{
-            width: 44,
-            height: "100%",
-            background: "transparent",
-            border: "none",
-            color: "var(--text-secondary)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "background 0.15s ease",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
-          {isMaximized ? <Copy size={11} /> : <Square size={12} />}
+        <button className="caption-btn" onClick={() => void window.studio.maximizeWindow()} title={maximized ? "Restore" : "Maximize"} aria-label={maximized ? "Restore" : "Maximize"}>
+          {maximized ? <Copy size={11} /> : <Square size={11} />}
         </button>
-
-        {/* Close */}
-        <button
-          onClick={() => window.studio?.closeWindow?.()}
-          title="Close"
-          style={{
-            width: 44,
-            height: "100%",
-            background: "transparent",
-            border: "none",
-            color: "var(--text-secondary)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "background 0.15s ease, color 0.15s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#e5534b";
-            e.currentTarget.style.color = "#ffffff";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--text-secondary)";
-          }}
-        >
-          <X size={14} />
+        <button className="caption-btn caption-btn--close" onClick={() => void window.studio.closeWindow()} title="Close" aria-label="Close">
+          <X size={15} />
         </button>
       </div>
-    </div>
-  );
-};
-
-interface MenuDropdownProps {
-  items: Array<{
-    label: string;
-    shortcut?: string;
-    action?: () => void;
-    disabled?: boolean;
-  }>;
-}
-
-const MenuDropdown: React.FC<MenuDropdownProps> = ({ items }) => {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: 26,
-        left: 0,
-        zIndex: 10000,
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--border-prominent)",
-        borderRadius: 6,
-        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
-        minWidth: 180,
-        padding: "4px 0",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {items.map((item, idx) => (
-        <div
-          key={idx}
-          onClick={item.disabled ? undefined : item.action}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "6px 12px",
-            fontSize: 11,
-            color: item.disabled ? "var(--text-muted)" : "var(--text-primary)",
-            cursor: item.disabled ? "default" : "pointer",
-            opacity: item.disabled ? 0.5 : 1,
-          }}
-          onMouseEnter={(e) => {
-            if (!item.disabled) e.currentTarget.style.background = "var(--accent-subtle)";
-          }}
-          onMouseLeave={(e) => {
-            if (!item.disabled) e.currentTarget.style.background = "transparent";
-          }}
-        >
-          <span>{item.label}</span>
-          {item.shortcut && <span style={{ color: "var(--text-muted)", fontSize: 10 }}>{item.shortcut}</span>}
-        </div>
-      ))}
     </div>
   );
 };

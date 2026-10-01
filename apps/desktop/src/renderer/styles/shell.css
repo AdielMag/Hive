@@ -1,0 +1,625 @@
+/* ================= Arc-style window shell ================= */
+.shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--frame-gradient);
+  color: var(--frame-text);
+  isolation: isolate;
+}
+.shell__grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  mix-blend-mode: overlay;
+  z-index: 0;
+}
+.titlebar,
+.shell__body,
+.statusbar {
+  position: relative;
+  z-index: 1;
+}
+.shell__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* ---- Title bar ---- */
+.titlebar {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  flex-shrink: 0;
+  padding-left: 8px;
+  -webkit-app-region: drag;
+  font-size: 12px;
+  z-index: 50 !important;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+.titlebar__menus {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+.titlebar__menu {
+  position: relative;
+}
+.titlebar__menu-btn {
+  height: 26px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--frame-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.titlebar__menu-btn:hover,
+.titlebar__menu-btn.is-open {
+  color: var(--frame-text);
+  background: var(--frame-hover);
+}
+.titlebar__center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  pointer-events: none;
+}
+.titlebar__project {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  color: var(--frame-text);
+  opacity: 0.92;
+}
+.titlebar__project.is-muted {
+  color: var(--frame-text-muted);
+  font-weight: 500;
+}
+.titlebar__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+}
+.titlebar__right {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.titlebar__update {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  margin-right: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(87, 171, 90, 0.6);
+  background: rgba(87, 171, 90, 0.18);
+  color: #7ee08a;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.caption-btn {
+  width: 46px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--frame-text-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.caption-btn:hover {
+  background: var(--frame-hover);
+  color: var(--frame-text);
+}
+.caption-btn--close:hover {
+  background: #e5484d;
+  color: #fff;
+}
+
+/* ---- Menus / popovers ---- */
+.menu-pop {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  z-index: 1000;
+  min-width: 230px;
+  padding: 5px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-prominent);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  animation: pop-in 0.12s ease;
+  color: var(--text-primary);
+}
+.menu-pop__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-pop__item:hover:not(:disabled) {
+  background: var(--accent-subtle);
+}
+.menu-pop__item:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+.menu-pop__kbd {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+.menu-pop__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-subtle);
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- Activity rails ---- */
+.rail {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 8px;
+}
+.rail__brand {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-base), color-mix(in oklch, var(--accent-base), #ff5fa2 45%));
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  margin-bottom: 10px;
+}
+.rail__spacer {
+  flex: 1;
+}
+.rail__btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--frame-text-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.rail__btn:hover {
+  color: var(--frame-text);
+  background: var(--frame-hover);
+}
+.rail__btn.is-active {
+  color: var(--frame-text);
+  background: var(--frame-active);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* ---- Side panels (sit on the frame) ---- */
+.panel {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  min-height: 0;
+  /* Panels render transparent so the frame gradient shows through, like Arc's sidebar. */
+  --bg-sidebar: transparent;
+  --text-primary: var(--frame-text);
+  --text-secondary: color-mix(in srgb, var(--frame-text) 74%, transparent);
+  --text-muted: color-mix(in srgb, var(--frame-text) 52%, transparent);
+  color: var(--frame-text);
+}
+.panel--left {
+  padding-right: 6px;
+}
+.panel--right {
+  padding-left: 6px;
+}
+.panel__inner {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel__inner > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.resizer {
+  position: absolute;
+  z-index: 5;
+  transition: background 0.15s ease;
+}
+.resizer--col {
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+.resizer--left {
+  right: 0;
+}
+.resizer--right {
+  left: 0;
+}
+.resizer--row {
+  position: relative;
+  height: 6px;
+  margin: -3px 0;
+  cursor: row-resize;
+  flex-shrink: 0;
+}
+.resizer:hover {
+  background: rgba(var(--accent-rgb), 0.35);
+}
+.drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+}
+.drag-overlay--col {
+  cursor: col-resize;
+}
+.drag-overlay--row {
+  cursor: row-resize;
+}
+
+/* ---- Content card ---- */
+.card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 6px;
+  border-radius: 12px;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.card__content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.card__content > * {
+  flex: 1;
+  min-height: 0;
+}
+.card__error {
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--danger);
+  background: rgba(229, 83, 75, 0.1);
+  border-bottom: 1px solid rgba(229, 83, 75, 0.35);
+}
+.session-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---- Tab strip ---- */
+.tabstrip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabstrip::-webkit-scrollbar {
+  display: none;
+}
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  min-width: 110px;
+  max-width: 220px;
+  padding: 0 6px 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.tab:hover {
+  background: rgba(var(--fg-rgb), 0.04);
+  color: var(--text-primary);
+}
+.tab.is-active {
+  background: rgba(var(--fg-rgb), 0.07);
+  color: var(--text-primary);
+  font-weight: 550;
+}
+.tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -5px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--tab-color);
+}
+.tab__icon {
+  display: inline-flex;
+  color: var(--tab-color);
+  flex-shrink: 0;
+}
+.tab__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab__close {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  flex-shrink: 0;
+}
+.tab:hover .tab__close,
+.tab.is-active .tab__close {
+  opacity: 1;
+}
+.tab__close:hover {
+  background: rgba(var(--fg-rgb), 0.1);
+  color: var(--text-primary);
+}
+.tab__busy {
+  color: var(--accent-base);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.tabstrip__new {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 4px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.tabstrip__new:hover {
+  background: rgba(var(--fg-rgb), 0.07);
+  color: var(--text-primary);
+}
+
+/* ---- Status bar ---- */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 26px;
+  flex-shrink: 0;
+  padding: 0 10px 2px 14px;
+  font-size: 11px;
+  color: var(--frame-text-muted);
+}
+.statusbar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.statusbar__running {
+  color: var(--frame-text);
+}
+.statusbar__ext {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 14px;
+  overflow: hidden;
+}
+.statusbar__btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.statusbar__btn:hover {
+  background: var(--frame-hover);
+  color: var(--frame-text);
+}
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3fb27f;
+  box-shadow: 0 0 0 0 rgba(63, 178, 127, 0.6);
+  animation: pulse 1.6s ease-out infinite;
+}
+@keyframes pulse {
+  to {
+    box-shadow: 0 0 0 7px rgba(63, 178, 127, 0);
+  }
+}
+
+/* ---- Modal ---- */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  background: var(--scrim);
+  backdrop-filter: blur(6px);
+  animation: fade 0.15s ease;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- Boot / fatal screens ---- */
+.boot {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--frame-gradient);
+  color: var(--frame-text);
+  padding: 32px;
+}
+.boot__logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-base), color-mix(in oklch, var(--accent-base), #ff5fa2 45%));
+  box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.35);
+  animation: pulse-soft 1.6s ease-in-out infinite;
+}
+@keyframes pulse-soft {
+  50% {
+    transform: scale(0.94);
+    opacity: 0.85;
+  }
+}
+.boot__title {
+  font-size: 16px;
+  font-weight: 650;
+  margin-top: 6px;
+}
+.boot__sub {
+  font-size: 12px;
+  color: var(--frame-text-muted);
+}
+.boot__card {
+  max-width: 540px;
+  width: 100%;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-pop);
+}
+.boot__card-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 650;
+}
+.boot__text {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.boot__text code {
+  font-size: 11.5px;
+  color: var(--accent-hover);
+}
+.boot__cmd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 9px;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  font-size: 12px;
+}
+.boot__details {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.boot__details summary {
+  cursor: pointer;
+}
+.boot__details ul {
+  margin: 6px 0 0 18px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+/* macOS: native traffic lights live in the title bar; hide our caption buttons and make room. */
+:root[data-platform="darwin"] .caption-btn {
+  display: none;
+}
+:root[data-platform="darwin"] .titlebar {
+  padding-left: 78px;
+}
+:root[data-platform="darwin"] .titlebar__right {
+  padding-right: 10px;
+}

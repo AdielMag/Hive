@@ -1,493 +1,218 @@
-import React, { useState, useEffect } from "react";
+/**
+ * Arc-style workbench: the window frame (title bar, activity rails, side panels, status bar) is painted
+ * with the theme gradient + grain; the editor area floats on top as a rounded content card.
+ */
+import React, { Suspense, lazy, useCallback, useRef, useState } from "react";
 import {
-  FolderKanban,
+  BarChart3,
   Files,
+  FolderKanban,
+  Gauge,
   GitBranch,
-  ShoppingBag,
   PieChart,
-  Terminal as TerminalIcon,
-  Sparkles,
   Settings,
+  ShoppingBag,
+  Sparkles,
+  Terminal as TerminalIcon,
 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "./Sidebar.tsx";
 import { FilesPanel } from "./FilesPanel.tsx";
-import { GitPanel } from "./GitPanel.tsx";
-import { MarketplacePanel } from "./MarketplacePanel.tsx";
 import { WelcomeView } from "./WelcomeView.tsx";
 import { TabStrip } from "./TabStrip.tsx";
 import { Transcript } from "./Transcript.tsx";
 import { Composer } from "./Composer.tsx";
-import { FileViewerTab } from "./FileViewerTab.tsx";
-import { DiffViewerTab } from "./DiffViewerTab.tsx";
 import { ContextBreakdownPanel } from "./ContextBreakdownPanel.tsx";
-import { TerminalPanel } from "./TerminalPanel.tsx";
 import { AppTitleBar } from "./AppTitleBar.tsx";
 import { StatusBar } from "./StatusBar.tsx";
-import { SettingsModal, type SettingsTabId } from "./SettingsModal.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
+import { ErrorBoundary } from "./ErrorBoundary.tsx";
+import { QuotaPanel } from "../features/insights/QuotaPanel.tsx";
 import { useSessionStore } from "../store/session-store.ts";
+import { useUi, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
+import { useGlobalShortcuts } from "../hooks/useGlobalShortcuts.ts";
 
-export type LeftPanelTab = "projects" | "files" | "git" | null;
-export type RightPanelTab = "marketplace" | "context" | "terminal" | null;
+// Heavy views load on demand to keep startup fast (xterm, charts, settings, file/diff viewers).
+const named = <T extends string>(loader: () => Promise<Record<T, React.ComponentType<any>>>, key: T) =>
+  lazy(() => loader().then((m) => ({ default: m[key] })));
+const MarketplacePanel = named(() => import("./MarketplacePanel.tsx"), "MarketplacePanel");
+const FileViewerTab = named(() => import("./FileViewerTab.tsx"), "FileViewerTab");
+const DiffViewerTab = named(() => import("./DiffViewerTab.tsx"), "DiffViewerTab");
+const TerminalPanel = named(() => import("./TerminalPanel.tsx"), "TerminalPanel");
+const SettingsModal = named(() => import("./SettingsModal.tsx"), "SettingsModal");
+const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
+const UsageView = named(() => import("../features/insights/UsageView.tsx"), "UsageView");
+
+const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
 
 export const WorkbenchLayout: React.FC = () => {
-  const { activeProject, tabs, activeTabId, error } = useSessionStore();
+  useGlobalShortcuts();
+  const { activeProject, tabs, activeTabId, error, openUsageTab } = useSessionStore(
+    useShallow((s) => ({ activeProject: s.activeProject, tabs: s.tabs, activeTabId: s.activeTabId, error: s.error, openUsageTab: s.openUsageTab })),
+  );
+  const ui = useUi(
+    useShallow((s) => ({
+      left: s.left,
+      right: s.right,
+      leftWidth: s.leftWidth,
+      rightWidth: s.rightWidth,
+      settingsOpen: s.settingsOpen,
+      settingsTab: s.settingsTab,
+      toggleLeft: s.toggleLeft,
+      toggleRight: s.toggleRight,
+      setSize: s.setSize,
+      openSettings: s.openSettings,
+      closeSettings: s.closeSettings,
+    })),
+  );
   const activeTab = tabs.find((t) => t.id === activeTabId);
-
-  const [activeLeft, setActiveLeft] = useState<LeftPanelTab>("projects");
-  const [activeRight, setActiveRight] = useState<RightPanelTab>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTabId>("appearance");
-
-  useEffect(() => {
-    const handleOpenTerminal = () => setActiveRight("terminal");
-    const handleOpenContext = () => setActiveRight("context");
-    const handleOpenSettingsEvt = (e: any) => {
-      if (e.detail?.tab) setSettingsTab(e.detail.tab);
-      setSettingsOpen(true);
-    };
-    window.addEventListener("studio:open-terminal", handleOpenTerminal);
-    window.addEventListener("studio:open-context", handleOpenContext);
-    window.addEventListener("studio:open-settings", handleOpenSettingsEvt);
-    return () => {
-      window.removeEventListener("studio:open-terminal", handleOpenTerminal);
-      window.removeEventListener("studio:open-context", handleOpenContext);
-      window.removeEventListener("studio:open-settings", handleOpenSettingsEvt);
-    };
-  }, []);
-
-  // Resizable panel dimensions with localStorage persistence
-  const [leftWidth, setLeftWidth] = useState<number>(() => {
-    const saved = localStorage.getItem("pi_studio_left_width");
-    return saved ? Math.max(160, Math.min(650, parseInt(saved, 10))) : 260;
-  });
-  const [rightWidth, setRightWidth] = useState<number>(() => {
-    const saved = localStorage.getItem("pi_studio_right_width");
-    return saved ? Math.max(200, Math.min(850, parseInt(saved, 10))) : 360;
-  });
-  const [composerHeight, setComposerHeight] = useState<number>(() => {
-    const saved = localStorage.getItem("pi_studio_composer_height");
-    return saved ? Math.max(100, Math.min(500, parseInt(saved, 10))) : 160;
-  });
-
-  const [isDraggingLeft, setIsDraggingLeft] = useState(false);
-  const [isDraggingRight, setIsDraggingRight] = useState(false);
-  const [isDraggingComposer, setIsDraggingComposer] = useState(false);
-
-  const toggleLeft = (tab: LeftPanelTab) => {
-    setActiveLeft((prev) => (prev === tab ? null : tab));
-  };
-
-  const toggleRight = (tab: RightPanelTab) => {
-    setActiveRight((prev) => (prev === tab ? null : tab));
-  };
-
-  const handleLeftResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDraggingLeft(true);
-    const onMouseMove = (ev: MouseEvent) => {
-      // Activity bar width = 44px
-      const newWidth = Math.max(160, Math.min(650, ev.clientX - 44));
-      setLeftWidth(newWidth);
-      localStorage.setItem("pi_studio_left_width", String(newWidth));
-    };
-    const onMouseUp = () => {
-      setIsDraggingLeft(false);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  };
-
-  const handleRightResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDraggingRight(true);
-    const onMouseMove = (ev: MouseEvent) => {
-      // Right activity bar = 44px
-      const newWidth = Math.max(200, Math.min(850, window.innerWidth - 44 - ev.clientX));
-      setRightWidth(newWidth);
-      localStorage.setItem("pi_studio_right_width", String(newWidth));
-    };
-    const onMouseUp = () => {
-      setIsDraggingRight(false);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  };
-
-  const handleComposerResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDraggingComposer(true);
-    const onMouseMove = (ev: MouseEvent) => {
-      // Status bar height = 24px
-      const newHeight = Math.max(100, Math.min(500, window.innerHeight - 24 - ev.clientY));
-      setComposerHeight(newHeight);
-      localStorage.setItem("pi_studio_composer_height", String(newHeight));
-    };
-    const onMouseUp = () => {
-      setIsDraggingComposer(false);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  };
-
-  const hasActiveSession = Boolean(activeProject && tabs.length > 0);
+  const hasSession = Boolean(activeProject && tabs.some((t) => !t.kind || t.kind === "session"));
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        width: "100vw",
-        overflow: "hidden",
-        backgroundColor: "var(--bg-app)",
-        color: "var(--text-primary)",
-        position: "relative",
-      }}
-    >
-      {/* Drag Overlay to prevent pointer events trapping during resize */}
-      {(isDraggingLeft || isDraggingRight || isDraggingComposer) && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 99999,
-            cursor: isDraggingComposer ? "row-resize" : "col-resize",
-            userSelect: "none",
-          }}
-        />
-      )}
+    <div className="shell">
+      <div className="shell__grain grain-overlay-bg" />
+      <AppTitleBar />
 
-      {/* SVG Grain Overlay */}
-      <div
-        className="grain-overlay"
-        style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          zIndex: 9998,
-          opacity: "var(--grain-opacity, 0.08)",
-        }}
-      />
-
-      {/* Main Horizontal Area (flanked by Left and Right Activity Bars) */}
-      <div style={{ display: "flex", flex: 1, minHeight: 0, position: "relative" }}>
-        {/* ==================== LEFT ACTIVITY BAR ==================== */}
-        <div
-          style={{
-            width: 44,
-            background: "var(--bg-sidebar)",
-            borderRight: "1px solid var(--border-subtle)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            padding: "8px 0",
-            gap: 6,
-            zIndex: 40,
-            userSelect: "none",
-          }}
-        >
-          {/* Top Brand Glyph */}
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 7,
-              background: "linear-gradient(135deg, var(--accent-base), #986ee2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 10,
-              boxShadow: "0 2px 8px var(--accent-subtle)",
-            }}
-            title="Pi Studio"
-          >
-            <Sparkles size={14} color="#fff" />
+      <div className="shell__body">
+        {/* Left rail */}
+        <nav className="rail">
+          <div className="rail__brand" title="Pi Studio">
+            <Sparkles size={14} />
           </div>
+          <RailButton icon={<FolderKanban size={18} />} title="Projects & Sessions (Ctrl+B)" active={ui.left === "projects"} onClick={() => ui.toggleLeft("projects")} />
+          <RailButton icon={<Files size={18} />} title="Files (Ctrl+Shift+E)" active={ui.left === "files"} onClick={() => ui.toggleLeft("files")} />
+          <RailButton icon={<GitBranch size={18} />} title="Source Control (Ctrl+Shift+G)" active={ui.left === "git"} onClick={() => ui.toggleLeft("git")} />
+          <div className="rail__spacer" />
+          <RailButton icon={<BarChart3 size={18} />} title="Usage analytics (Ctrl+Shift+U)" active={activeTab?.kind === "usage"} onClick={openUsageTab} />
+          <RailButton icon={<Settings size={18} />} title="Settings (Ctrl+,)" active={ui.settingsOpen} onClick={() => ui.openSettings()} />
+        </nav>
 
-          {/* Activity Bar Icon Buttons: PURE ICONS ONLY, NO TEXT */}
-          <IconButton
-            icon={<FolderKanban size={18} />}
-            title="Projects & Sessions (Ctrl+B)"
-            active={activeLeft === "projects"}
-            onClick={() => toggleLeft("projects")}
-          />
-          <IconButton
-            icon={<Files size={18} />}
-            title="File Explorer"
-            active={activeLeft === "files"}
-            onClick={() => toggleLeft("files")}
-          />
-          <IconButton
-            icon={<GitBranch size={18} />}
-            title="Source Control (Git)"
-            active={activeLeft === "git"}
-            onClick={() => toggleLeft("git")}
-          />
-
-          <div style={{ flex: 1 }} />
-
-          <IconButton
-            icon={<Settings size={18} />}
-            title="Settings (Appearance, Models, Accounts, Updates)"
-            active={settingsOpen}
-            onClick={() => {
-              setSettingsTab("appearance");
-              setSettingsOpen(true);
-            }}
-          />
-        </div>
-
-        {/* ==================== LEFT DRAWER PANEL ==================== */}
-        {activeLeft && (
-          <>
-            <div
-              style={{
-                width: leftWidth,
-                background: "var(--bg-sidebar)",
-                borderRight: "1px solid var(--border-subtle)",
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                overflow: "hidden",
-                zIndex: 30,
-              }}
-            >
-              {activeLeft === "projects" && <Sidebar />}
-              {activeLeft === "files" && <FilesPanel />}
-              {activeLeft === "git" && <GitPanel />}
-            </div>
-            {/* Left Vertical Resize Handle */}
-            <div
-              onMouseDown={handleLeftResizeStart}
-              title="Drag to resize panel width"
-              style={{
-                width: 6,
-                marginLeft: -3,
-                marginRight: -3,
-                cursor: "col-resize",
-                zIndex: 35,
-                position: "relative",
-                background: isDraggingLeft ? "var(--accent-base)" : "transparent",
-                transition: "background 0.15s ease",
-              }}
-            />
-          </>
+        {ui.left && (
+          <SidePanel side="left" width={ui.leftWidth} onResize={(w) => ui.setSize({ leftWidth: w })}>
+            <ErrorBoundary label="Side panel">
+              <Suspense fallback={<Loading />}>
+                <LeftPanelContent panel={ui.left} />
+              </Suspense>
+            </ErrorBoundary>
+          </SidePanel>
         )}
 
-        {/* ==================== CENTER WORKBENCH ==================== */}
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            minWidth: 0,
-            height: "100%",
-            overflow: "hidden",
-            background: "var(--bg-app)",
-          }}
-        >
-          {/* Custom In-App Titlebar: sits cleanly across the center column */}
-          <AppTitleBar
-            onOpenSettings={(tab) => {
-              if (tab) setSettingsTab(tab as SettingsTabId);
-              setSettingsOpen(true);
-            }}
-          />
-
-          {/* Session TabStrip: sits cleanly between the sidebars */}
+        {/* Content card */}
+        <main className="card">
           <TabStrip />
-
-          {/* Error Banner if any */}
-          {error && (
-            <div
-              style={{
-                background: "rgba(229, 83, 75, 0.12)",
-                borderBottom: "1px solid var(--danger)",
-                color: "var(--danger)",
-                padding: "6px 14px",
-                fontSize: 12,
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          {/* Center Main Content */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
-            {activeTab?.kind === "file" ? (
-              <FileViewerTab tab={activeTab} />
-            ) : activeTab?.kind === "diff" ? (
-              <DiffViewerTab tab={activeTab} />
-            ) : hasActiveSession ? (
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
-                <Transcript />
-                {/* Horizontal Resize Handle for Composer */}
-                <div
-                  onMouseDown={handleComposerResizeStart}
-                  title="Drag to resize composer height"
-                  style={{
-                    height: 6,
-                    marginTop: -3,
-                    marginBottom: -3,
-                    cursor: "row-resize",
-                    zIndex: 25,
-                    position: "relative",
-                    background: isDraggingComposer ? "var(--accent-base)" : "transparent",
-                    transition: "background 0.15s ease",
-                  }}
-                />
-                <Composer height={composerHeight} />
-              </div>
-            ) : (
-              <WelcomeView />
-            )}
+          {error && <div className="card__error">{error}</div>}
+          <div className="card__content">
+            <ErrorBoundary label="Editor" resetKey={activeTabId ?? ""}>
+              <Suspense fallback={<Loading />}>
+              {activeTab?.kind === "usage" ? (
+                <UsageView />
+              ) : activeTab?.kind === "file" ? (
+                <FileViewerTab tab={activeTab} />
+              ) : activeTab?.kind === "diff" ? (
+                <DiffViewerTab tab={activeTab} />
+              ) : hasSession ? (
+                <SessionView />
+              ) : (
+                <WelcomeView />
+              )}
+              </Suspense>
+            </ErrorBoundary>
           </div>
-        </div>
+        </main>
 
-        {/* ==================== RIGHT DRAWER PANEL ==================== */}
-        {activeRight && (
-          <>
-            {/* Right Vertical Resize Handle */}
-            <div
-              onMouseDown={handleRightResizeStart}
-              title="Drag to resize panel width"
-              style={{
-                width: 6,
-                marginLeft: -3,
-                marginRight: -3,
-                cursor: "col-resize",
-                zIndex: 35,
-                position: "relative",
-                background: isDraggingRight ? "var(--accent-base)" : "transparent",
-                transition: "background 0.15s ease",
-              }}
-            />
-            <div
-              style={{
-                width: rightWidth,
-                background: "var(--bg-sidebar)",
-                borderLeft: "1px solid var(--border-subtle)",
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                overflow: "hidden",
-                zIndex: 30,
-              }}
-            >
-              {activeRight === "marketplace" && <MarketplacePanel />}
-              {activeRight === "context" && <ContextBreakdownPanel />}
-              {activeRight === "terminal" && <TerminalPanel />}
-            </div>
-          </>
+        {ui.right && (
+          <SidePanel side="right" width={ui.rightWidth} onResize={(w) => ui.setSize({ rightWidth: w })}>
+            <ErrorBoundary label="Side panel">
+              <Suspense fallback={<Loading />}>
+                <RightPanelContent panel={ui.right} />
+              </Suspense>
+            </ErrorBoundary>
+          </SidePanel>
         )}
 
-        {/* ==================== RIGHT ACTIVITY BAR ==================== */}
-        <div
-          style={{
-            width: 44,
-            background: "var(--bg-sidebar)",
-            borderLeft: "1px solid var(--border-subtle)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            padding: "8px 0",
-            gap: 6,
-            zIndex: 40,
-            userSelect: "none",
-          }}
-        >
-          <IconButton
-            icon={<ShoppingBag size={18} />}
-            title="Marketplace (Extensions & MCP)"
-            active={activeRight === "marketplace"}
-            onClick={() => toggleRight("marketplace")}
-          />
-          <IconButton
-            icon={<PieChart size={18} />}
-            title="Context Breakdown"
-            active={activeRight === "context"}
-            onClick={() => toggleRight("context")}
-          />
-          <IconButton
-            icon={<TerminalIcon size={18} />}
-            title="Terminal"
-            active={activeRight === "terminal"}
-            onClick={() => toggleRight("terminal")}
-          />
-        </div>
+        {/* Right rail */}
+        <nav className="rail rail--right">
+          <RailButton icon={<Gauge size={18} />} title="Subscription limits (Ctrl+Shift+L)" active={ui.right === "limits"} onClick={() => ui.toggleRight("limits")} />
+          <RailButton icon={<PieChart size={18} />} title="Context breakdown" active={ui.right === "context"} onClick={() => ui.toggleRight("context")} />
+          <RailButton icon={<TerminalIcon size={18} />} title="Terminal (Ctrl+`)" active={ui.right === "terminal"} onClick={() => ui.toggleRight("terminal")} />
+          <RailButton icon={<ShoppingBag size={18} />} title="Marketplace" active={ui.right === "marketplace"} onClick={() => ui.toggleRight("marketplace")} />
+        </nav>
       </div>
 
-      {/* ==================== BOTTOM STATUS BAR ==================== */}
       <StatusBar />
-
-      {/* Modals */}
       <ExtensionDialogModal />
-      <SettingsModal isOpen={settingsOpen} initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />
+      {ui.settingsOpen && (
+        <Suspense fallback={null}>
+          <SettingsModal isOpen initialTab={ui.settingsTab} onClose={ui.closeSettings} />
+        </Suspense>
+      )}
     </div>
   );
 };
 
-interface IconButtonProps {
-  icon: React.ReactNode;
-  title: string;
-  active: boolean;
-  onClick: () => void;
-}
+const LeftPanelContent: React.FC<{ panel: LeftPanel }> = ({ panel }) =>
+  panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : <GitPanel />;
 
-const IconButton: React.FC<IconButtonProps> = ({ icon, title, active, onClick }) => {
+const RightPanelContent: React.FC<{ panel: RightPanel }> = ({ panel }) =>
+  panel === "limits" ? <QuotaPanel /> : panel === "context" ? <ContextBreakdownPanel /> : panel === "terminal" ? <TerminalPanel /> : <MarketplacePanel />;
+
+const SessionView: React.FC = () => {
+  const composerHeight = useUi((s) => s.composerHeight);
+  const setSize = useUi((s) => s.setSize);
+  const startDrag = useDrag("row", (dy, start) => setSize({ composerHeight: start - dy }), () => composerHeight);
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{
-        width: 34,
-        height: 34,
-        borderRadius: 8,
-        border: "none",
-        background: active ? "var(--accent-subtle)" : "transparent",
-        color: active ? "var(--accent-hover)" : "var(--text-muted)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        position: "relative",
-        transition: "all 0.15s ease",
-      }}
-      onMouseEnter={(e) => {
-        if (!active) {
-          e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
-          e.currentTarget.style.color = "var(--text-primary)";
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!active) {
-          e.currentTarget.style.background = "transparent";
-          e.currentTarget.style.color = "var(--text-muted)";
-        }
-      }}
-    >
-      {/* Active pill indicator bar on side */}
-      {active && (
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 6,
-            bottom: 6,
-            width: 3,
-            borderRadius: "0 2px 2px 0",
-            background: "var(--accent-base)",
-          }}
-        />
-      )}
-      {icon}
-    </button>
+    <div className="session-view">
+      <Transcript />
+      <div className="resizer resizer--row" onMouseDown={startDrag} title="Drag to resize" />
+      <Composer height={composerHeight} />
+    </div>
   );
 };
+
+const SidePanel: React.FC<{ side: "left" | "right"; width: number; onResize(w: number): void; children: React.ReactNode }> = ({ side, width, onResize, children }) => {
+  const start = useDrag("col", (dx, w0) => onResize(side === "left" ? w0 + dx : w0 - dx), () => width);
+  return (
+    <aside className={`panel panel--${side}`} style={{ width }}>
+      <div className="panel__inner">{children}</div>
+      <div className={`resizer resizer--col resizer--${side}`} onMouseDown={start} />
+    </aside>
+  );
+};
+
+/** Pointer drag helper that shields iframes/xterm from stealing events with a full-screen overlay. */
+function useDrag(axis: "row" | "col", onMove: (delta: number, start: number) => void, getStart: () => number) {
+  const moveRef = useRef(onMove);
+  moveRef.current = onMove;
+  const [, setDragging] = useState(false);
+  return useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const origin = axis === "col" ? e.clientX : e.clientY;
+      const start = getStart();
+      const overlay = document.createElement("div");
+      overlay.className = `drag-overlay drag-overlay--${axis}`;
+      document.body.appendChild(overlay);
+      setDragging(true);
+      let raf = 0;
+      const move = (ev: MouseEvent) => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => moveRef.current((axis === "col" ? ev.clientX : ev.clientY) - origin, start));
+      };
+      const up = () => {
+        overlay.remove();
+        setDragging(false);
+        window.removeEventListener("mousemove", move);
+        window.removeEventListener("mouseup", up);
+      };
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", up);
+    },
+    [axis, getStart],
+  );
+}
+
+const RailButton: React.FC<{ icon: React.ReactNode; title: string; active: boolean; onClick(): void }> = ({ icon, title, active, onClick }) => (
+  <button className={`rail__btn${active ? " is-active" : ""}`} onClick={onClick} title={title} aria-label={title} aria-pressed={active}>
+    {icon}
+  </button>
+);
