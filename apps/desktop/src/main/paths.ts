@@ -12,9 +12,14 @@ import { fileURLToPath } from "node:url";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
-/** Map a path inside app.asar to its unpacked twin (no-op in dev). */
+/** Pure path rewrite: `.../app.asar/x` -> `.../app.asar.unpacked/x` (either separator). */
+export function toUnpackedPath(p: string): string {
+  return p.replace(/app\.asar(?=[\\/])/, "app.asar.unpacked");
+}
+
+/** Map a path inside app.asar to its unpacked twin when that twin exists (no-op in dev). */
 export function unpacked(p: string): string {
-  const swapped = p.replace(/app\.asar(?=[\\/])/, "app.asar.unpacked");
+  const swapped = toUnpackedPath(p);
   return swapped !== p && existsSync(swapped) ? swapped : p;
 }
 
