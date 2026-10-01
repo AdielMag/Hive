@@ -2,6 +2,16 @@
 
 All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
 
+## v0.4.0 — 2026-10-01 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.3.0...v0.4.0)
+
+### ✨ Features
+
+- **ui:** add copyable error banner, dynamic thinking levels, mode picker, branches window, and AI usage insights ([`37780d7`](https://github.com/AdielMag/pi-studio/commit/37780d71310bddfce4ca50f4ecb800f50476a163))
+
+### 🐛 Fixes
+
+- **typecheck:** resolve unused variables and test types for strict typecheck ([`487e14c`](https://github.com/AdielMag/pi-studio/commit/487e14c2f6d45008da2efae55cf6f8a19028f88b))
+
 ## v0.3.0 — 2026-10-01 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.2.0...v0.3.0)
 
 ### ✨ Features
