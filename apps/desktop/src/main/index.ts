@@ -30,9 +30,11 @@ import {
   generateCommitMessage,
 } from "./git.ts";
 import { readdirSync, statSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { terminalManager } from "./terminal.ts";
 import { MarketplaceService, type MarketplaceSourceKind } from "./marketplace.ts";
 import { AuthService } from "./auth.ts";
 import { AppUpdaterService } from "./updater.ts";
+import { ModelsService } from "./models.ts";
 
 let mainWindow: BrowserWindow | null = null;
 let sessionManager: MainSessionManager | null = null;
@@ -41,6 +43,7 @@ let catalogService: SessionCatalogService | null = null;
 let authService: AuthService | null = null;
 const marketplaceService = new MarketplaceService();
 const updaterService = new AppUpdaterService();
+const modelsService = new ModelsService();
 
 const piResult = locatePi();
 const testMode = process.env.PI_STUDIO_TEST_MODE === "1";
@@ -96,6 +99,10 @@ function createWindow(): void {
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
     return { action: "deny" };
+  });
+
+  mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    console.log(`[Renderer ${level}] ${message} (${sourceId}:${line})`);
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -335,6 +342,39 @@ ipcMain.handle(IPC.updaterApply, async (_event, { downloadUrl }) => {
   return updaterService.applyUpdate(downloadUrl);
 });
 
+// Terminal Handlers
+ipcMain.handle(IPC.terminalCreate, async (_event, options) => {
+  return terminalManager.createTerminal(
+    options,
+    (id, data) => {
+      mainWindow?.webContents.send(IPC.evtTerminalData, { id, data });
+    },
+    (id, exitCode) => {
+      mainWindow?.webContents.send(IPC.evtTerminalExit, { id, exitCode });
+    },
+  );
+});
+ipcMain.handle(IPC.terminalWrite, async (_event, { id, data }) => {
+  terminalManager.write(id, data);
+});
+ipcMain.handle(IPC.terminalResize, async (_event, { id, cols, rows }) => {
+  terminalManager.resize(id, cols, rows);
+});
+ipcMain.handle(IPC.terminalKill, async (_event, { id }) => {
+  terminalManager.kill(id);
+});
+ipcMain.handle(IPC.terminalList, async () => {
+  return terminalManager.list();
+});
+
+// Models IPC Handlers
+ipcMain.handle(IPC.modelsGetCatalog, async () => {
+  return modelsService.getModelsCatalog();
+});
+ipcMain.handle(IPC.modelsSaveEnabled, async (_event, { enabledModels }: { enabledModels: string[] }) => {
+  return modelsService.saveEnabledModels(enabledModels);
+});
+
 app.whenReady().then(() => {
   createWindow();
 
@@ -348,6 +388,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", async (event) => {
+  terminalManager.disposeAll();
   if (sessionManager) {
     event.preventDefault();
     await sessionManager.stopAll();

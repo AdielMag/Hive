@@ -11,18 +11,23 @@ import {
   RefreshCw,
   LogOut,
   Sparkles,
+  Cpu,
 } from "lucide-react";
 import { ArcThemePickerContent } from "./ArcThemePickerContent.tsx";
+import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
+import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useSessionStore } from "../store/session-store.ts";
+
+export type SettingsTabId = "appearance" | "models" | "accounts" | "updates" | "about";
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: "appearance" | "accounts" | "updates" | "about";
+  initialTab?: SettingsTabId;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialTab = "appearance" }) => {
-  const [activeTab, setActiveTab] = useState<"appearance" | "accounts" | "updates" | "about">(initialTab);
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
@@ -58,10 +63,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
 
   useEffect(() => {
     if (isOpen) {
+      if (initialTab) setActiveTab(initialTab);
       void loadAccounts();
       void handleCheckUpdate();
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
 
   if (!isOpen) return null;
 
@@ -160,6 +166,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             onClick={() => setActiveTab("appearance")}
           />
           <NavButton
+            icon={<Cpu size={15} />}
+            label="Models"
+            active={activeTab === "models"}
+            onClick={() => setActiveTab("models")}
+          />
+          <NavButton
             icon={<Key size={15} />}
             label="AI Providers"
             active={activeTab === "accounts"}
@@ -194,6 +206,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
           >
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
               {activeTab === "appearance" && "Appearance & Arc Theme"}
+              {activeTab === "models" && "Model Selection & Availability"}
               {activeTab === "accounts" && "AI Providers & Connected Accounts"}
               {activeTab === "updates" && "Application Updates"}
               {activeTab === "about" && "About Pi Studio"}
@@ -233,7 +246,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             {/* TAB 1: APPEARANCE (ARC THEME ENGINE) */}
             {activeTab === "appearance" && <ArcThemePickerContent />}
 
-            {/* TAB 2: AI PROVIDERS & ACCOUNTS */}
+            {/* TAB 2: MODELS SELECTION */}
+            {activeTab === "models" && <ModelsSettingsContent />}
+
+            {/* TAB 3: AI PROVIDERS & ACCOUNTS */}
             {activeTab === "accounts" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {loadingAccounts && (
@@ -265,11 +281,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            fontWeight: 700,
-                            color: "var(--accent-base)",
+                            padding: 6,
+                            boxSizing: "border-box",
+                            flexShrink: 0,
                           }}
                         >
-                          {acc.name[0]}
+                          <ProviderIcon provider={acc.providerId} size={18} />
                         </div>
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)" }}>

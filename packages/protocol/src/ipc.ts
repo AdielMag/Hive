@@ -175,7 +175,31 @@ export const IPC = {
   terminalList: "terminal:list",
   evtTerminalData: "terminal:data",
   evtTerminalExit: "terminal:exit",
+  // Models
+  modelsGetCatalog: "models:get-catalog",
+  modelsSaveEnabled: "models:save-enabled",
 } as const;
+
+export interface ModelCatalogItem {
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+  input?: string[];
+  cost?: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+  };
+}
+
+export interface ModelsCatalogResponse {
+  models: ModelCatalogItem[];
+  enabledModels: string[];
+}
 
 /** API exposed on `window.studio` by the preload script. */
 export interface StudioApi {
@@ -265,4 +289,8 @@ export interface StudioApi {
   terminalList(): Promise<{ id: string; shell: string; cwd: string }[]>;
   onTerminalData(listener: (event: { id: string; data: string }) => void): () => void;
   onTerminalExit(listener: (event: { id: string; exitCode: number }) => void): () => void;
+
+  // Models
+  getModelsCatalog(): Promise<ModelsCatalogResponse>;
+  saveEnabledModels(enabledModels: string[]): Promise<{ success: boolean }>;
 }

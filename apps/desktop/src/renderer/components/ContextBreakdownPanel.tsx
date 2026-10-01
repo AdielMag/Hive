@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { PieChart, Minimize2, Loader2, Sparkles, CheckCircle2, AlertTriangle, Layers, Info } from "lucide-react";
 import { useSessionStore } from "../store/session-store.ts";
 import { estimateContextBreakdown } from "@pi-studio/pi-adapter";
+import { ProviderIcon } from "./ProviderIcon.tsx";
 
 const CATEGORY_COLORS: Record<string, string> = {
   system: "#a855f7", // purple
@@ -170,7 +171,8 @@ export const ContextBreakdownPanel: React.FC = () => {
               }}
             >
               <span>Model Window</span>
-              <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
+                <ProviderIcon provider={selectedModel.provider} size={12} />
                 {selectedModel.name || selectedModel.id}
               </span>
             </div>

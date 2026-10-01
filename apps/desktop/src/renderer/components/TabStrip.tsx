@@ -1,5 +1,5 @@
 import React from "react";
-import { Folder, X, Plus, Loader2, FileCode, GitCompare } from "lucide-react";
+import { FolderKanban, X, Plus, Loader2, FileCode, GitCompare } from "lucide-react";
 import { useSessionStore } from "../store/session-store.ts";
 
 export const TabStrip: React.FC = () => {
@@ -63,7 +63,7 @@ export const TabStrip: React.FC = () => {
             ) : tab.kind === "diff" ? (
               <GitCompare size={13} color={tab.diffStaged ? "#10b981" : "#539bf5"} style={{ flexShrink: 0 }} />
             ) : (
-              <Folder size={13} color={color} style={{ flexShrink: 0 }} />
+              <FolderKanban size={13} color={color} style={{ flexShrink: 0 }} />
             )}
             <span
               style={{

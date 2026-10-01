@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   Send,
   Square,
@@ -9,10 +9,16 @@ import {
   Brain,
   Loader2,
   Image as ImageIcon,
+  ChevronDown,
+  Check,
+  Search,
+  Cpu,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useSessionStore } from "../store/session-store.ts";
 import { ContextRing } from "./ContextRing.tsx";
 import { ContextBreakdownModal } from "./ContextBreakdownModal.tsx";
+import { ProviderIcon } from "./ProviderIcon.tsx";
 import type { AttachedItem } from "@pi-studio/protocol";
 
 interface ComposerProps {
@@ -27,6 +33,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
     abort,
     transcript,
     models,
+    allCatalogModels,
+    enabledModelKeys,
     selectedModel,
     setModel,
     thinkingLevels,
@@ -42,6 +50,63 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
   } = useSessionStore();
 
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [modelFilter, setModelFilter] = useState("");
+  const modelPickerRef = useRef<HTMLDivElement>(null);
+  const modelSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // Click outside to close model picker dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+        setModelPickerOpen(false);
+        setModelFilter("");
+      }
+    };
+    if (modelPickerOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      setTimeout(() => modelSearchInputRef.current?.focus(), 50);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [modelPickerOpen]);
+
+  // Combine models from active session and catalog so all known models can be shown if active
+  const baseModels = useMemo(() => {
+    const map = new Map<string, typeof models[0]>();
+    for (const m of allCatalogModels) {
+      map.set(`${m.provider}/${m.id}`, m);
+    }
+    for (const m of models) {
+      map.set(`${m.provider}/${m.id}`, m);
+    }
+    return Array.from(map.values());
+  }, [allCatalogModels, models]);
+
+  // Filter to only enabled models (if enabledModelKeys is specified)
+  const visibleModels = useMemo(() => {
+    if (!enabledModelKeys || enabledModelKeys.length === 0) {
+      return baseModels;
+    }
+    const enabledSet = new Set(enabledModelKeys);
+    const filtered = baseModels.filter((m) => {
+      return enabledSet.has(`${m.provider}/${m.id}`) || enabledSet.has(m.id);
+    });
+    return filtered.length > 0 ? filtered : baseModels;
+  }, [baseModels, enabledModelKeys]);
+
+  // User search filter
+  const filteredModels = useMemo(() => {
+    const q = modelFilter.trim().toLowerCase();
+    if (!q) return visibleModels;
+    return visibleModels.filter(
+      (m) =>
+        (m.name || "").toLowerCase().includes(q) ||
+        (m.id || "").toLowerCase().includes(q) ||
+        (m.provider || "").toLowerCase().includes(q),
+    );
+  }, [visibleModels, modelFilter]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isRunning = transcript.running;
@@ -443,17 +508,17 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               <span>Attach</span>
             </button>
 
-            {/* Model select */}
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <select
-                value={selectedModel ? `${selectedModel.provider}/${selectedModel.id}` : ""}
-                onChange={(e) => {
-                  const [provider, modelId] = e.target.value.split("/");
-                  if (provider && modelId) void setModel(provider, modelId);
-                }}
-                disabled={isLoadingModels && models.length === 0}
+            {/* Model select with custom dropdown and provider icon */}
+            <div ref={modelPickerRef} style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setModelPickerOpen((prev) => !prev)}
+                disabled={isLoadingModels && visibleModels.length === 0}
                 style={{
-                  background: "var(--bg-card)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: modelPickerOpen ? "var(--bg-elevated)" : "var(--bg-card)",
                   border: "1px solid var(--border-subtle)",
                   borderRadius: 4,
                   padding: "3px 8px",
@@ -463,17 +528,182 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                   maxWidth: 240,
                 }}
               >
-                {models.length === 0 ? (
-                  <option value="">{isLoadingModels ? "Loading models..." : "No models found"}</option>
+                {selectedModel ? (
+                  <ProviderIcon provider={selectedModel.provider} size={13} />
                 ) : (
-                  models.map((m) => (
-                    <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
-                      {m.name || m.id} ({m.provider})
-                    </option>
-                  ))
+                  <Cpu size={13} color="var(--text-muted)" />
                 )}
-              </select>
-              {isLoadingModels && <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />}
+                <span
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    maxWidth: 160,
+                  }}
+                >
+                  {selectedModel ? selectedModel.name || selectedModel.id : "Select Model"}
+                </span>
+                <ChevronDown
+                  size={11}
+                  color="var(--text-muted)"
+                  style={{
+                    transform: modelPickerOpen ? "rotate(180deg)" : "none",
+                    transition: "transform 0.15s ease",
+                  }}
+                />
+              </button>
+
+              {/* Dropdown Menu */}
+              {modelPickerOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "100%",
+                    left: 0,
+                    marginBottom: 6,
+                    width: 280,
+                    maxHeight: 280,
+                    background: "var(--bg-elevated)",
+                    border: "1px solid var(--border-prominent)",
+                    borderRadius: 6,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                    zIndex: 1000,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* Search box */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "6px 8px",
+                      borderBottom: "1px solid var(--border-subtle)",
+                      background: "var(--bg-card)",
+                    }}
+                  >
+                    <Search size={12} color="var(--text-muted)" />
+                    <input
+                      ref={modelSearchInputRef}
+                      type="text"
+                      value={modelFilter}
+                      onChange={(e) => setModelFilter(e.target.value)}
+                      placeholder="Search models..."
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        outline: "none",
+                        color: "var(--text-primary)",
+                        fontSize: 11,
+                        width: "100%",
+                      }}
+                    />
+                    {modelFilter && (
+                      <button
+                        onClick={() => setModelFilter("")}
+                        style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0 }}
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Models list */}
+                  <div style={{ overflowY: "auto", padding: "4px 0", flex: 1 }}>
+                    {filteredModels.length === 0 ? (
+                      <div style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: 11, fontStyle: "italic" }}>
+                        No matching models
+                      </div>
+                    ) : (
+                      filteredModels.map((m) => {
+                        const isSelected = selectedModel?.provider === m.provider && selectedModel?.id === m.id;
+                        return (
+                          <div
+                            key={`${m.provider}/${m.id}`}
+                            onClick={() => {
+                              void setModel(m.provider, m.id);
+                              setModelPickerOpen(false);
+                              setModelFilter("");
+                            }}
+                            style={{
+                              padding: "6px 10px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              cursor: "pointer",
+                              fontSize: 11,
+                              background: isSelected ? "rgba(83, 155, 245, 0.12)" : "transparent",
+                              color: isSelected ? "var(--accent-base)" : "var(--text-primary)",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSelected) e.currentTarget.style.background = "var(--bg-card-hover)";
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected) e.currentTarget.style.background = "transparent";
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden", flex: 1 }}>
+                              <ProviderIcon provider={m.provider} size={14} />
+                              <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                                <span style={{ fontWeight: isSelected ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {m.name || m.id}
+                                </span>
+                                <span style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "capitalize" }}>
+                                  {m.provider}
+                                </span>
+                              </div>
+                            </div>
+                            {isSelected && <Check size={12} color="var(--accent-base)" style={{ flexShrink: 0 }} />}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Dropdown footer with Manage Models shortcut */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "6px 10px",
+                      borderTop: "1px solid var(--border-subtle)",
+                      background: "var(--bg-card)",
+                      fontSize: 10,
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    <span>
+                      {visibleModels.length} of {baseModels.length} models active
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModelPickerOpen(false);
+                        window.dispatchEvent(new CustomEvent("studio:open-settings", { detail: { tab: "models" } }));
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 3,
+                        background: "transparent",
+                        border: "none",
+                        color: "var(--accent-base)",
+                        fontSize: 10,
+                        cursor: "pointer",
+                        padding: 0,
+                        fontWeight: 500,
+                      }}
+                    >
+                      <SlidersHorizontal size={10} />
+                      <span>Manage...</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Thinking select */}

@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  Folder,
+  FolderKanban,
   Files,
   GitBranch,
   ShoppingBag,
@@ -19,9 +19,11 @@ import { Transcript } from "./Transcript.tsx";
 import { Composer } from "./Composer.tsx";
 import { FileViewerTab } from "./FileViewerTab.tsx";
 import { DiffViewerTab } from "./DiffViewerTab.tsx";
+import { ContextBreakdownPanel } from "./ContextBreakdownPanel.tsx";
+import { TerminalPanel } from "./TerminalPanel.tsx";
 import { AppTitleBar } from "./AppTitleBar.tsx";
 import { StatusBar } from "./StatusBar.tsx";
-import { SettingsModal } from "./SettingsModal.tsx";
+import { SettingsModal, type SettingsTabId } from "./SettingsModal.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 
@@ -35,6 +37,24 @@ export const WorkbenchLayout: React.FC = () => {
   const [activeLeft, setActiveLeft] = useState<LeftPanelTab>("projects");
   const [activeRight, setActiveRight] = useState<RightPanelTab>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTabId>("appearance");
+
+  useEffect(() => {
+    const handleOpenTerminal = () => setActiveRight("terminal");
+    const handleOpenContext = () => setActiveRight("context");
+    const handleOpenSettingsEvt = (e: any) => {
+      if (e.detail?.tab) setSettingsTab(e.detail.tab);
+      setSettingsOpen(true);
+    };
+    window.addEventListener("studio:open-terminal", handleOpenTerminal);
+    window.addEventListener("studio:open-context", handleOpenContext);
+    window.addEventListener("studio:open-settings", handleOpenSettingsEvt);
+    return () => {
+      window.removeEventListener("studio:open-terminal", handleOpenTerminal);
+      window.removeEventListener("studio:open-context", handleOpenContext);
+      window.removeEventListener("studio:open-settings", handleOpenSettingsEvt);
+    };
+  }, []);
 
   // Resizable panel dimensions with localStorage persistence
   const [leftWidth, setLeftWidth] = useState<number>(() => {
@@ -43,7 +63,7 @@ export const WorkbenchLayout: React.FC = () => {
   });
   const [rightWidth, setRightWidth] = useState<number>(() => {
     const saved = localStorage.getItem("pi_studio_right_width");
-    return saved ? Math.max(200, Math.min(650, parseInt(saved, 10))) : 300;
+    return saved ? Math.max(200, Math.min(850, parseInt(saved, 10))) : 360;
   });
   const [composerHeight, setComposerHeight] = useState<number>(() => {
     const saved = localStorage.getItem("pi_studio_composer_height");
@@ -85,7 +105,7 @@ export const WorkbenchLayout: React.FC = () => {
     setIsDraggingRight(true);
     const onMouseMove = (ev: MouseEvent) => {
       // Right activity bar = 44px
-      const newWidth = Math.max(200, Math.min(650, window.innerWidth - 44 - ev.clientX));
+      const newWidth = Math.max(200, Math.min(850, window.innerWidth - 44 - ev.clientX));
       setRightWidth(newWidth);
       localStorage.setItem("pi_studio_right_width", String(newWidth));
     };
@@ -193,7 +213,7 @@ export const WorkbenchLayout: React.FC = () => {
 
           {/* Activity Bar Icon Buttons: PURE ICONS ONLY, NO TEXT */}
           <IconButton
-            icon={<Folder size={18} />}
+            icon={<FolderKanban size={18} />}
             title="Projects & Sessions (Ctrl+B)"
             active={activeLeft === "projects"}
             onClick={() => toggleLeft("projects")}
@@ -215,9 +235,12 @@ export const WorkbenchLayout: React.FC = () => {
 
           <IconButton
             icon={<Settings size={18} />}
-            title="Settings (Appearance, Accounts, Updates)"
+            title="Settings (Appearance, Models, Accounts, Updates)"
             active={settingsOpen}
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => {
+              setSettingsTab("appearance");
+              setSettingsOpen(true);
+            }}
           />
         </div>
 
@@ -271,7 +294,12 @@ export const WorkbenchLayout: React.FC = () => {
           }}
         >
           {/* Custom In-App Titlebar: sits cleanly across the center column */}
-          <AppTitleBar onOpenSettings={() => setSettingsOpen(true)} />
+          <AppTitleBar
+            onOpenSettings={(tab) => {
+              if (tab) setSettingsTab(tab as SettingsTabId);
+              setSettingsOpen(true);
+            }}
+          />
 
           {/* Session TabStrip: sits cleanly between the sidebars */}
           <TabStrip />
@@ -354,18 +382,8 @@ export const WorkbenchLayout: React.FC = () => {
               }}
             >
               {activeRight === "marketplace" && <MarketplacePanel />}
-              {activeRight === "context" && (
-                <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
-                  <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>Context Breakdown</div>
-                  <div>Detailed token category inspector is also available by clicking the Context Ring below.</div>
-                </div>
-              )}
-              {activeRight === "terminal" && (
-                <div style={{ padding: 14, color: "var(--text-muted)", fontSize: 12 }}>
-                  <div style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8 }}>Integrated Terminal</div>
-                  <div>Run files with the interpreter runner in the Files tab or launch terminal tasks.</div>
-                </div>
-              )}
+              {activeRight === "context" && <ContextBreakdownPanel />}
+              {activeRight === "terminal" && <TerminalPanel />}
             </div>
           </>
         )}
@@ -411,7 +429,7 @@ export const WorkbenchLayout: React.FC = () => {
 
       {/* Modals */}
       <ExtensionDialogModal />
-      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal isOpen={settingsOpen} initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 };

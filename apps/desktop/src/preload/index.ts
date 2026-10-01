@@ -218,6 +218,41 @@ const api: StudioApi = {
   applyUpdate(downloadUrl?: string) {
     return ipcRenderer.invoke(IPC.updaterApply, { downloadUrl });
   },
+
+  // Terminal
+  terminalCreate(options?: { cwd?: string; shell?: string; cols?: number; rows?: number }) {
+    return ipcRenderer.invoke(IPC.terminalCreate, options);
+  },
+  terminalWrite(id: string, data: string) {
+    return ipcRenderer.invoke(IPC.terminalWrite, { id, data });
+  },
+  terminalResize(id: string, cols: number, rows: number) {
+    return ipcRenderer.invoke(IPC.terminalResize, { id, cols, rows });
+  },
+  terminalKill(id: string) {
+    return ipcRenderer.invoke(IPC.terminalKill, { id });
+  },
+  terminalList() {
+    return ipcRenderer.invoke(IPC.terminalList);
+  },
+  onTerminalData(listener: (event: { id: string; data: string }) => void) {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { id: string; data: string }) => listener(payload);
+    ipcRenderer.on(IPC.evtTerminalData, handler);
+    return () => ipcRenderer.removeListener(IPC.evtTerminalData, handler);
+  },
+  onTerminalExit(listener: (event: { id: string; exitCode: number }) => void) {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { id: string; exitCode: number }) => listener(payload);
+    ipcRenderer.on(IPC.evtTerminalExit, handler);
+    return () => ipcRenderer.removeListener(IPC.evtTerminalExit, handler);
+  },
+
+  // Models
+  getModelsCatalog() {
+    return ipcRenderer.invoke(IPC.modelsGetCatalog);
+  },
+  saveEnabledModels(enabledModels: string[]) {
+    return ipcRenderer.invoke(IPC.modelsSaveEnabled, { enabledModels });
+  },
 };
 
 contextBridge.exposeInMainWorld("studio", api);

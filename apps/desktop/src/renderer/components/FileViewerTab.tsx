@@ -314,22 +314,27 @@ const RenderedMarkdown: React.FC<{ content: string }> = ({ content }) => {
         return;
       }
 
+      if (line.trim() === "---" || line.trim() === "***" || line.trim() === "___") {
+        nodes.push(<hr key={idx} style={{ border: 0, borderTop: "1px solid var(--border-subtle)", margin: "16px 0" }} />);
+        return;
+      }
+
       if (line.startsWith("# ")) {
         nodes.push(
           <h1 key={idx} style={{ fontSize: 20, fontWeight: 700, margin: "18px 0 8px", color: "var(--text-primary)", borderBottom: "1px solid var(--border-subtle)", paddingBottom: 6 }}>
-            {line.slice(2)}
+            {parseInlineMarkdown(line.slice(2))}
           </h1>,
         );
       } else if (line.startsWith("## ")) {
         nodes.push(
           <h2 key={idx} style={{ fontSize: 16, fontWeight: 600, margin: "14px 0 6px", color: "var(--text-primary)" }}>
-            {line.slice(3)}
+            {parseInlineMarkdown(line.slice(3))}
           </h2>,
         );
       } else if (line.startsWith("### ")) {
         nodes.push(
           <h3 key={idx} style={{ fontSize: 14, fontWeight: 600, margin: "12px 0 4px", color: "var(--accent-base)" }}>
-            {line.slice(4)}
+            {parseInlineMarkdown(line.slice(4))}
           </h3>,
         );
       } else if (line.startsWith("> ")) {
@@ -344,7 +349,7 @@ const RenderedMarkdown: React.FC<{ content: string }> = ({ content }) => {
               fontStyle: "italic",
             }}
           >
-            {line.slice(2)}
+            {parseInlineMarkdown(line.slice(2))}
           </blockquote>,
         );
       } else if (line.startsWith("- [x] ") || line.startsWith("- [ ] ")) {
@@ -353,14 +358,14 @@ const RenderedMarkdown: React.FC<{ content: string }> = ({ content }) => {
           <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6, margin: "3px 0", paddingLeft: 8 }}>
             <input type="checkbox" checked={checked} readOnly style={{ accentColor: "var(--accent-base)" }} />
             <span style={{ textDecoration: checked ? "line-through" : "none", color: checked ? "var(--text-muted)" : "var(--text-primary)" }}>
-              {line.slice(6)}
+              {parseInlineMarkdown(line.slice(6))}
             </span>
           </div>,
         );
       } else if (line.startsWith("- ") || line.startsWith("* ")) {
         nodes.push(
           <li key={idx} style={{ marginLeft: 20, margin: "2px 0", color: "var(--text-primary)" }}>
-            {line.slice(2)}
+            {parseInlineMarkdown(line.slice(2))}
           </li>,
         );
       } else if (line.trim() === "") {
@@ -368,7 +373,7 @@ const RenderedMarkdown: React.FC<{ content: string }> = ({ content }) => {
       } else {
         nodes.push(
           <p key={idx} style={{ margin: "4px 0", lineHeight: 1.6, color: "var(--text-primary)" }}>
-            {line}
+            {parseInlineMarkdown(line)}
           </p>,
         );
       }
@@ -560,4 +565,41 @@ function formatCodeLine(line: string, _lang: string): React.ReactNode {
     return <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>{line}</span>;
   }
   return line;
+}
+
+/** Parse inline markdown formatting and raw HTML */
+function parseInlineMarkdown(text: string): React.ReactNode {
+  if (text.trim().startsWith("<") && text.trim().endsWith(">")) {
+    return <span dangerouslySetInnerHTML={{ __html: text }} />;
+  }
+
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|<[^>]+>)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith("**") && token.endsWith("**")) {
+      parts.push(<strong key={match.index} style={{ fontWeight: 600, color: "var(--text-primary)" }}>{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      parts.push(<em key={match.index} style={{ fontStyle: "italic" }}>{token.slice(1, -1)}</em>);
+    } else if (token.startsWith("`") && token.endsWith("`")) {
+      parts.push(
+        <code key={match.index} style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent-base)" }}>
+          {token.slice(1, -1)}
+        </code>
+      );
+    } else if (token.startsWith("<") && token.endsWith(">")) {
+      parts.push(<span key={match.index} dangerouslySetInnerHTML={{ __html: token }} />);
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts.length > 0 ? parts : text;
 }

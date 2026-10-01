@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Layout, Model, type TabNode, type IJsonModel } from "flexlayout-react";
 import "flexlayout-react/style/dark.css";
-import { Folder, GitBranch, Files, Terminal as TerminalIcon, PieChart, ShoppingBag } from "lucide-react";
+import { FolderKanban, GitBranch, Files, Terminal as TerminalIcon, PieChart, ShoppingBag } from "lucide-react";
 import { Transcript } from "./Transcript.tsx";
 import { Composer } from "./Composer.tsx";
 import { Sidebar } from "./Sidebar.tsx";
@@ -156,7 +156,7 @@ export const DockShell: React.FC = () => {
     const isBorder = node.getParent()?.getType() === "border";
 
     let icon: React.ReactNode = null;
-    if (id === "projects") icon = <Folder size={18} />;
+    if (id === "projects") icon = <FolderKanban size={18} />;
     else if (id === "files") icon = <Files size={18} />;
     else if (id === "git") icon = <GitBranch size={18} />;
     else if (id === "marketplace") icon = <ShoppingBag size={18} />;

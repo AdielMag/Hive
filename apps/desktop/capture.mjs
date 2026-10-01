@@ -13,7 +13,7 @@ app.whenReady().then(async () => {
     show: false,
     backgroundColor: "#090a0d",
     webPreferences: {
-      preload: resolve(__dirname, "out/preload/index.js"),
+      preload: resolve(__dirname, "out/preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
     },

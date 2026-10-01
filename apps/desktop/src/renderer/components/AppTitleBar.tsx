@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Folder, Minus, Square, Copy, X, Download } from "lucide-react";
+import { FolderKanban, Minus, Square, Copy, X, Download } from "lucide-react";
 import { useSessionStore } from "../store/session-store.ts";
 
 interface AppTitleBarProps {
-  onOpenSettings: () => void;
+  onOpenSettings: (tab?: string) => void;
 }
 
 export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenSettings }) => {
@@ -208,7 +208,7 @@ export const AppTitleBar: React.FC<AppTitleBarProps> = ({ onOpenSettings }) => {
       >
         {activeProject ? (
           <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-secondary)" }}>
-            <Folder size={12} color="var(--project-color)" />
+            <FolderKanban size={12} color="var(--project-color)" />
             <span>{activeProject.name}</span>
           </span>
         ) : (

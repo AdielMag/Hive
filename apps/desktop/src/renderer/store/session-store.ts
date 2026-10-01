@@ -43,6 +43,8 @@ export interface SessionStoreState {
   status: SessionStatusUpdate | null;
   transcript: TranscriptState;
   models: Array<Model<any>>;
+  allCatalogModels: Array<Model<any>>;
+  enabledModelKeys: string[];
   selectedModel: Model<any> | null;
   thinkingLevels: string[];
   selectedThinkingLevel: string;
@@ -58,6 +60,8 @@ export interface SessionStoreState {
 
   // Actions
   init: () => Promise<void>;
+  loadModelsCatalog: () => Promise<void>;
+  saveEnabledModels: (keys: string[]) => Promise<void>;
   ensureActiveSession: (targetTabId?: string) => Promise<string | null>;
   addAttachments: (items: AttachedItem[]) => void;
   removeAttachment: (id: string) => void;
@@ -93,6 +97,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   status: null,
   transcript: createTranscript(),
   models: [],
+  allCatalogModels: [],
+  enabledModelKeys: [],
   selectedModel: null,
   thinkingLevels: [],
   selectedThinkingLevel: "medium",
@@ -177,7 +183,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       });
 
       // Initial projects and catalog load
-      await get().refreshCatalog();
+      await Promise.all([get().refreshCatalog(), get().loadModelsCatalog()]);
 
       // Only auto-open if an explicit project was passed via env PI_STUDIO_PROJECT
       if (get().projects.length === 0 && bootstrap.initialProjectPath) {
@@ -220,7 +226,18 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           if (modelsRes.ok) {
             const models = (modelsRes.data as { models: Array<Model<any>> }).models;
             set({ models });
-            if (!get().selectedModel && models.length > 0) set({ selectedModel: models[0] ?? null });
+            set((s) => {
+              const existing = new Set(s.allCatalogModels.map((m) => `${m.provider}/${m.id}`));
+              const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
+              return additions.length > 0 ? { allCatalogModels: [...s.allCatalogModels, ...additions] } : {};
+            });
+            if (!get().selectedModel && models.length > 0) {
+              const enabled = get().enabledModelKeys;
+              const match = enabled.length > 0
+                ? models.find((m) => enabled.includes(`${m.provider}/${m.id}`) || enabled.includes(m.id))
+                : null;
+              set({ selectedModel: match ?? models[0] ?? null });
+            }
           }
           if (levelsRes.ok) {
             set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
@@ -264,7 +281,18 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       if (modelsRes.ok) {
         const models = (modelsRes.data as { models: Array<Model<any>> }).models;
         set({ models });
-        if (!get().selectedModel && models.length > 0) set({ selectedModel: models[0] ?? null });
+        set((s) => {
+          const existing = new Set(s.allCatalogModels.map((m) => `${m.provider}/${m.id}`));
+          const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
+          return additions.length > 0 ? { allCatalogModels: [...s.allCatalogModels, ...additions] } : {};
+        });
+        if (!get().selectedModel && models.length > 0) {
+          const enabled = get().enabledModelKeys;
+          const match = enabled.length > 0
+            ? models.find((m) => enabled.includes(`${m.provider}/${m.id}`) || enabled.includes(m.id))
+            : null;
+          set({ selectedModel: match ?? models[0] ?? null });
+        }
       }
       if (levelsRes.ok) {
         set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
@@ -275,6 +303,41 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       return null;
     } finally {
       set({ isLoadingModels: false });
+    }
+  },
+
+  loadModelsCatalog: async () => {
+    try {
+      const catalog = await window.studio.getModelsCatalog();
+      if (catalog) {
+        const catalogModels = catalog.models as Array<Model<any>>;
+        const enabledKeys = catalog.enabledModels || [];
+        set({
+          allCatalogModels: catalogModels,
+          enabledModelKeys: enabledKeys,
+        });
+        // If models list is currently empty, seed from catalog
+        if (get().models.length === 0 && catalogModels.length > 0) {
+          set({ models: catalogModels });
+          if (!get().selectedModel) {
+            const match = enabledKeys.length > 0
+              ? catalogModels.find((m) => enabledKeys.includes(`${m.provider}/${m.id}`) || enabledKeys.includes(m.id))
+              : null;
+            set({ selectedModel: match ?? catalogModels[0] ?? null });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load models catalog", err);
+    }
+  },
+
+  saveEnabledModels: async (keys: string[]) => {
+    try {
+      await window.studio.saveEnabledModels(keys);
+      set({ enabledModelKeys: keys });
+    } catch (err) {
+      console.error("Failed to save enabled models", err);
     }
   },
 
@@ -645,3 +708,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     await get().refreshCatalog();
   },
 }));
+
+if (typeof window !== "undefined") {
+  (window as any).useSessionStore = useSessionStore;
+}

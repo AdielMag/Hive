@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Folder, FileText, ChevronRight, ChevronDown, RefreshCw } from "lucide-react";
+import { Folder, FileText, ChevronRight, ChevronDown, RefreshCw, Play } from "lucide-react";
 import { useSessionStore } from "../store/session-store.ts";
 
 export const FilesPanel: React.FC = () => {
@@ -113,29 +113,79 @@ const FileTreeNode: React.FC<{
     );
   }
 
+  const [hovered, setHovered] = useState(false);
+
+  const ext = node.name.slice(node.name.lastIndexOf(".")).toLowerCase();
+  const isRunnable = [".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".sh", ".bash", ".ps1"].includes(ext);
+
+  const handleRunInTerminal = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    let cmd = "";
+    if (ext === ".py") cmd = `python "${node.path}"`;
+    else if ([".js", ".mjs", ".cjs"].includes(ext)) cmd = `node "${node.path}"`;
+    else if ([".ts", ".tsx"].includes(ext)) cmd = `npx tsx "${node.path}"`;
+    else if ([".sh", ".bash"].includes(ext)) cmd = `bash "${node.path}"`;
+    else if (ext === ".ps1") cmd = `powershell -NoProfile -File "${node.path}"`;
+    if (!cmd) return;
+
+    window.dispatchEvent(new CustomEvent("studio:open-terminal"));
+    const terms = await window.studio.terminalList();
+    let termId = terms[0]?.id;
+    if (!termId) {
+      const created = await window.studio.terminalCreate({ cwd: node.path.substring(0, node.path.lastIndexOf(/[/\\]/)) });
+      termId = created.id;
+    }
+    await window.studio.terminalWrite(termId, cmd + "\r");
+  };
+
   return (
     <div
       onClick={() => onOpen(node)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "3px 4px 3px 18px",
-        borderRadius: 4,
-        cursor: "pointer",
-        color: "var(--text-secondary)",
-      }}
       onMouseEnter={(e) => {
+        setHovered(true);
         e.currentTarget.style.background = "var(--bg-card-hover)";
         e.currentTarget.style.color = "var(--text-primary)";
       }}
       onMouseLeave={(e) => {
+        setHovered(false);
         e.currentTarget.style.background = "transparent";
         e.currentTarget.style.color = "var(--text-secondary)";
       }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "3px 6px 3px 18px",
+        borderRadius: 4,
+        cursor: "pointer",
+        color: "var(--text-secondary)",
+      }}
     >
-      <FileText size={13} color="var(--text-muted)" />
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.name}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+        <FileText size={13} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.name}</span>
+      </div>
+
+      {isRunnable && hovered && (
+        <button
+          onClick={handleRunInTerminal}
+          title={`Run ${node.name} in Terminal`}
+          style={{
+            background: "rgba(56, 189, 248, 0.15)",
+            border: "1px solid rgba(56, 189, 248, 0.3)",
+            borderRadius: 3,
+            padding: "2px 4px",
+            color: "var(--accent-hover)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            fontSize: 10,
+          }}
+        >
+          <Play size={10} fill="currentColor" />
+        </button>
+      )}
     </div>
   );
 };
