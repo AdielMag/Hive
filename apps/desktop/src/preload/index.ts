@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 import {
   IPC,
   type Bootstrap,
@@ -252,6 +252,23 @@ const api: StudioApi = {
   },
   saveEnabledModels(enabledModels: string[]) {
     return ipcRenderer.invoke(IPC.modelsSaveEnabled, { enabledModels });
+  },
+
+  // Insights
+  getQuota(force?: boolean) {
+    return ipcRenderer.invoke(IPC.quotaGet, { force });
+  },
+  getUsage(force?: boolean) {
+    return ipcRenderer.invoke(IPC.usageGet, { force });
+  },
+
+  // Shell
+  openExternal(url: string) {
+    return ipcRenderer.invoke(IPC.openExternal, url);
+  },
+  zoom(direction: "in" | "out" | "reset") {
+    const level = direction === "reset" ? 0 : webFrame.getZoomLevel() + (direction === "in" ? 0.5 : -0.5);
+    webFrame.setZoomLevel(Math.max(-3, Math.min(4, level)));
   },
 };
 

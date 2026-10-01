@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { shell } from "electron";
 import type { SessionCatalogItem } from "@pi-studio/protocol";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { GuiStore } from "./store/index.ts";
+import type { GuiStore } from "../store/index.ts";
 
 export interface PiSdkModule {
   getAgentDir?: () => string;

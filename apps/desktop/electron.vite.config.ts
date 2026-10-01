@@ -31,8 +31,17 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(__dirname, "src/renderer"),
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        // The dev server injects inline scripts (React Fast Refresh); relax CSP only while serving.
+        name: "pi-studio:dev-csp",
+        apply: "serve",
+        transformIndexHtml: (html: string) => html.replace("script-src 'self'", "script-src 'self' 'unsafe-inline' 'unsafe-eval'"),
+      },
+    ],
     build: {
+      chunkSizeWarningLimit: 1500,
       rollupOptions: {
         input: {
           index: resolve(__dirname, "src/renderer/index.html"),

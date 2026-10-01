@@ -1,5 +1,5 @@
 import { connect, type Socket } from "node:net";
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { VERSION } from "@earendil-works/pi-coding-agent";
 import {
   BRIDGE_CAPABILITIES,
@@ -20,7 +20,6 @@ export default function studioBridge(pi: ExtensionAPI): void {
   if (!address) return; // not running under Studio; behave as no-op
 
   let socket: Socket | null = null;
-  let currentCtx: ExtensionContext | null = null;
   let linkedProjects: LinkedProject[] = [];
   let readBuffer = "";
 
@@ -42,7 +41,6 @@ export default function studioBridge(pi: ExtensionAPI): void {
   };
 
   pi.on("session_start", async (_event, ctx) => {
-    currentCtx = ctx;
     if (socket) return;
 
     const s = connect(address);
@@ -239,6 +237,5 @@ export default function studioBridge(pi: ExtensionAPI): void {
   pi.on("session_shutdown", async () => {
     socket?.end();
     socket = null;
-    currentCtx = null;
   });
 }

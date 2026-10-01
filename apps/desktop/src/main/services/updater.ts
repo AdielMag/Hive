@@ -51,7 +51,9 @@ export class AppUpdaterService {
 
       let downloadUrl = data.html_url;
       if (process.platform === "win32") {
-        const exeAsset = data.assets?.find((a) => a.name.endsWith(".exe"));
+        // Prefer the NSIS installer over the portable build.
+        const exeAsset =
+          data.assets?.find((a) => /setup.*\.exe$/i.test(a.name)) ?? data.assets?.find((a) => a.name.endsWith(".exe") && !/portable/i.test(a.name));
         if (exeAsset) downloadUrl = exeAsset.browser_download_url;
       } else if (process.platform === "darwin") {
         const dmgAsset = data.assets?.find((a) => a.name.endsWith(".dmg") || a.name.endsWith(".zip"));
@@ -105,7 +107,7 @@ export class AppUpdaterService {
         }
         fileStream.end();
 
-        await new Promise((r) => fileStream.on("finish", r));
+        await new Promise<void>((r) => fileStream.on("finish", () => r()));
 
         // Launch installer and quit current app
         spawn(installerPath, [], { detached: true, stdio: "ignore" }).unref();

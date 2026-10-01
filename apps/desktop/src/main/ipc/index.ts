@@ -1,0 +1,13 @@
+import type { AppContext } from "../context.ts";
+import { registerAccountIpc } from "./accounts.ts";
+import { registerAppIpc } from "./app.ts";
+import { registerSessionIpc } from "./sessions.ts";
+import { registerWorkspaceIpc } from "./workspace.ts";
+
+/** Registers every IPC domain. Each module owns one slice of the `IPC` channel map. */
+export function registerIpc(ctx: AppContext): void {
+  registerAppIpc(ctx);
+  registerSessionIpc(ctx);
+  registerWorkspaceIpc(ctx);
+  registerAccountIpc(ctx);
+}

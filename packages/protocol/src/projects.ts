@@ -54,7 +54,7 @@ export interface SessionCatalogItem {
 
 export interface TabItem {
   id: string; // tab identifier (usually sessionPath or temp id)
-  kind?: "session" | "file" | "diff";
+  kind?: "session" | "file" | "diff" | "usage";
   sessionPath?: string;
   projectId: string;
   title: string;

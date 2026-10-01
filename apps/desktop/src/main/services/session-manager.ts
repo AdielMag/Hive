@@ -1,5 +1,3 @@
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { type BrowserWindow } from "electron";
 import { PiRpcConnection } from "@pi-studio/pi-adapter/node";
 import {
@@ -18,7 +16,8 @@ import {
   type StartSessionResult,
   type StudioRpcCommand,
 } from "@pi-studio/protocol";
-import { createBridgeServer, type BridgeSessionHandle } from "./bridge-server/index.ts";
+import { resourcePath } from "../paths.ts";
+import { createBridgeServer, type BridgeSessionHandle } from "../bridge-server/index.ts";
 
 interface ActiveSession {
   key: string;
@@ -40,9 +39,7 @@ export class MainSessionManager {
     private readonly getWindow: () => BrowserWindow | null,
     private readonly testProviderPath?: string,
   ) {
-    const __dirname = fileURLToPath(new URL(".", import.meta.url));
-    // When running in dev or built, resources/bridge/studio-bridge.ts is in resources
-    this.bridgeExtensionPath = resolve(__dirname, "../../resources/bridge/studio-bridge.ts");
+    this.bridgeExtensionPath = resourcePath("bridge", "studio-bridge.ts");
   }
 
   async startSession(request: StartSessionRequest): Promise<StartSessionResult> {

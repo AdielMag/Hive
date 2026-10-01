@@ -1,6 +1,13 @@
 import { platform } from "node:os";
 import { spawn, type ChildProcess } from "node:child_process";
-import which from "which";
+import { existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
+
+/** Minimal `which`: first PATH entry containing `exe`. */
+function onPath(exe: string): boolean {
+  const dirs = (process.env.PATH ?? process.env.Path ?? "").split(delimiter).filter(Boolean);
+  return dirs.some((d) => existsSync(join(d, exe)));
+}
 
 export interface TerminalSessionInfo {
   id: string;
@@ -22,10 +29,10 @@ export class TerminalManager {
   public getDefaultShell(): { shell: string; args: string[] } {
     const isWin = platform() === "win32";
     if (isWin) {
-      if (which.sync("pwsh.exe", { nothrow: true })) {
+      if (onPath("pwsh.exe")) {
         return { shell: "pwsh.exe", args: ["-NoLogo"] };
       }
-      if (which.sync("powershell.exe", { nothrow: true })) {
+      if (onPath("powershell.exe")) {
         return { shell: "powershell.exe", args: ["-NoLogo"] };
       }
       const cmd = process.env.COMSPEC || "cmd.exe";

@@ -33,6 +33,10 @@ export class GuiStore {
     this.loadAll();
   }
 
+  getUiState(): UiStateFile {
+    return this.uiState;
+  }
+
   // --- Projects ---
 
   getProjects(): ProjectEntry[] {
