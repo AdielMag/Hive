@@ -1,9 +1,10 @@
 import React from "react";
-import { FolderPlus, Terminal, Sparkles, Link as LinkIcon, Compass, ArrowRight } from "lucide-react";
+import { FolderPlus, Terminal, Sparkles, Link as LinkIcon, ArrowRight } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 
 export const WelcomeView: React.FC = () => {
-  const { addProject, allSessions, bootstrap } = useSessionStore();
+  const { addProject, allSessions, bootstrap } = useSessionStore(useShallow((s) => ({ addProject: s.addProject, allSessions: s.allSessions, bootstrap: s.bootstrap })));
 
   const handleOpenFolder = async () => {
     const folder = await window.studio.pickFolder();
@@ -23,7 +24,7 @@ export const WelcomeView: React.FC = () => {
         alignItems: "center",
         justifyContent: "center",
         padding: "32px 24px",
-        background: "radial-gradient(ellipse at 50% 30%, rgba(83, 155, 245, 0.08) 0%, transparent 70%)",
+        background: "radial-gradient(ellipse at 50% 30%, rgba(var(--accent-rgb), 0.08) 0%, transparent 70%)",
         userSelect: "none",
         overflowY: "auto",
         boxSizing: "border-box",
@@ -78,7 +79,7 @@ export const WelcomeView: React.FC = () => {
             borderRadius: 8,
             border: "none",
             background: "var(--accent-base)",
-            color: "#fff",
+            color: "var(--accent-contrast)",
             fontSize: 14,
             fontWeight: 600,
             cursor: "pointer",

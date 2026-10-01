@@ -74,6 +74,8 @@ export interface SessionStoreState {
   newSessionTab: (projectId: string) => Promise<void>;
   openFileTab: (filePath: string, projectId: string, title?: string) => Promise<void>;
   openDiffTab: (filePath: string, staged: boolean, projectId: string) => Promise<void>;
+  /** Open (or focus) the singleton Usage analytics tab. */
+  openUsageTab: () => void;
   switchTab: (tabId: string) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
   setPromptText: (text: string) => void;
@@ -84,6 +86,50 @@ export interface SessionStoreState {
   respondDialog: (response: RpcExtensionUIResponse) => Promise<void>;
   deleteSessionFile: (sessionPath: string) => Promise<void>;
 }
+
+let initStarted = false;
+
+/** Pull model / thinking / session-file state from a live session into the store. */
+async function hydrateSession(key: string, tabId: string): Promise<void> {
+  const set = useSessionStore.setState;
+  const get = useSessionStore.getState;
+  set({ isLoadingModels: true });
+  try {
+    const [stateRes, modelsRes, levelsRes] = await Promise.all([
+      window.studio.rpc(key, { type: "get_state" }),
+      window.studio.rpc(key, { type: "get_available_models" }),
+      window.studio.rpc(key, { type: "get_available_thinking_levels" }),
+    ]);
+    if (stateRes.ok) {
+      const state = stateRes.data as { model?: Model<any>; thinkingLevel?: string; sessionFile?: string };
+      if (state.model) set({ selectedModel: state.model });
+      if (state.thinkingLevel) set({ selectedThinkingLevel: state.thinkingLevel });
+      // New sessions learn their file path here, so switching tabs can reload their history.
+      if (state.sessionFile) {
+        set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId && !t.sessionPath ? { ...t, sessionPath: state.sessionFile } : t)) }));
+      }
+    }
+    if (modelsRes.ok) {
+      const models = (modelsRes.data as { models: Array<Model<any>> }).models;
+      set((s) => {
+        const existing = new Set(s.allCatalogModels.map((m) => `${m.provider}/${m.id}`));
+        const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
+        return { models, ...(additions.length ? { allCatalogModels: [...s.allCatalogModels, ...additions] } : {}) };
+      });
+      if (!get().selectedModel && models.length > 0) {
+        const enabled = get().enabledModelKeys;
+        const match = enabled.length ? models.find((m) => enabled.includes(`${m.provider}/${m.id}`) || enabled.includes(m.id)) : null;
+        set({ selectedModel: match ?? models[0] ?? null });
+      }
+    }
+    if (levelsRes.ok) set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
+  } catch (err) {
+    console.error("Failed to query session state", err);
+  } finally {
+    set({ isLoadingModels: false });
+  }
+}
+export const USAGE_TAB_ID = "studio:usage";
 
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   bootstrap: null,
@@ -113,8 +159,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   error: null,
 
   init: async () => {
+    // React StrictMode mounts effects twice in dev; registering IPC listeners twice would apply every
+    // streamed event twice (duplicated text). Guard so init runs exactly once per renderer.
+    if (initStarted) return;
+    initStarted = true;
     try {
       const bootstrap = await window.studio.bootstrap();
+      document.documentElement.dataset.platform = bootstrap.platform;
       set({ bootstrap, isInitializing: false });
 
       // Listen for session streaming events
@@ -205,101 +256,28 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab || (tab.kind && tab.kind !== "session")) return null;
 
-    // If tab already has an activeKey, ensure models and state are loaded
     if (tab.activeKey) {
-      if (get().activeKey !== tab.activeKey) {
-        set({ activeKey: tab.activeKey });
-      }
-      if (get().models.length === 0 || !get().selectedModel) {
-        set({ isLoadingModels: true });
-        try {
-          const [stateRes, modelsRes, levelsRes] = await Promise.all([
-            window.studio.rpc(tab.activeKey, { type: "get_state" }),
-            window.studio.rpc(tab.activeKey, { type: "get_available_models" }),
-            window.studio.rpc(tab.activeKey, { type: "get_available_thinking_levels" }),
-          ]);
-          if (stateRes.ok) {
-            const state = stateRes.data as { model?: Model<any>; thinkingLevel?: string };
-            if (state.model) set({ selectedModel: state.model });
-            if (state.thinkingLevel) set({ selectedThinkingLevel: state.thinkingLevel });
-          }
-          if (modelsRes.ok) {
-            const models = (modelsRes.data as { models: Array<Model<any>> }).models;
-            set({ models });
-            set((s) => {
-              const existing = new Set(s.allCatalogModels.map((m) => `${m.provider}/${m.id}`));
-              const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
-              return additions.length > 0 ? { allCatalogModels: [...s.allCatalogModels, ...additions] } : {};
-            });
-            if (!get().selectedModel && models.length > 0) {
-              const enabled = get().enabledModelKeys;
-              const match = enabled.length > 0
-                ? models.find((m) => enabled.includes(`${m.provider}/${m.id}`) || enabled.includes(m.id))
-                : null;
-              set({ selectedModel: match ?? models[0] ?? null });
-            }
-          }
-          if (levelsRes.ok) {
-            set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
-          }
-        } catch (err) {
-          console.error("Failed to query models for active session", err);
-        } finally {
-          set({ isLoadingModels: false });
-        }
-      }
+      if (get().activeKey !== tab.activeKey) set({ activeKey: tab.activeKey });
+      if (get().models.length === 0 || !get().selectedModel) await hydrateSession(tab.activeKey, tabId);
       return tab.activeKey;
     }
 
-    // Need to start session for this tab
     const project = projects.find((p) => p.id === tab.projectId);
     if (!project?.path) return null;
 
     set({ isLoadingModels: true });
     try {
-      const res = await window.studio.startSession({
-        projectPath: project.path,
-        sessionPath: tab.sessionPath,
-      });
-
+      const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath });
       set((s) => ({
-        activeKey: res.key,
+        // Only steal focus if the user is still on this tab.
+        ...(s.activeTabId === tabId ? { activeKey: res.key } : {}),
         tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, activeKey: res.key, isCold: false } : t)),
       }));
-
-      const [stateRes, modelsRes, levelsRes] = await Promise.all([
-        window.studio.rpc(res.key, { type: "get_state" }),
-        window.studio.rpc(res.key, { type: "get_available_models" }),
-        window.studio.rpc(res.key, { type: "get_available_thinking_levels" }),
-      ]);
-
-      if (stateRes.ok) {
-        const state = stateRes.data as { model?: Model<any>; thinkingLevel?: string };
-        if (state.model) set({ selectedModel: state.model });
-        if (state.thinkingLevel) set({ selectedThinkingLevel: state.thinkingLevel });
-      }
-      if (modelsRes.ok) {
-        const models = (modelsRes.data as { models: Array<Model<any>> }).models;
-        set({ models });
-        set((s) => {
-          const existing = new Set(s.allCatalogModels.map((m) => `${m.provider}/${m.id}`));
-          const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
-          return additions.length > 0 ? { allCatalogModels: [...s.allCatalogModels, ...additions] } : {};
-        });
-        if (!get().selectedModel && models.length > 0) {
-          const enabled = get().enabledModelKeys;
-          const match = enabled.length > 0
-            ? models.find((m) => enabled.includes(`${m.provider}/${m.id}`) || enabled.includes(m.id))
-            : null;
-          set({ selectedModel: match ?? models[0] ?? null });
-        }
-      }
-      if (levelsRes.ok) {
-        set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
-      }
+      await hydrateSession(res.key, tabId);
       return res.key;
     } catch (err) {
       console.error("Failed to start live session", err);
+      set({ error: `Couldn't start Pi: ${err instanceof Error ? err.message : String(err)}` });
       return null;
     } finally {
       set({ isLoadingModels: false });
@@ -549,9 +527,32 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     });
   },
 
+  openUsageTab: () => {
+    const { tabs } = get();
+    if (!tabs.some((t) => t.id === USAGE_TAB_ID)) {
+      const tab: TabItem = { id: USAGE_TAB_ID, kind: "usage", projectId: "", title: "Usage", pinned: false };
+      set({ tabs: [...tabs, tab] });
+    }
+    set({ activeTabId: USAGE_TAB_ID });
+  },
+
   switchTab: async (tabId: string) => {
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
+    if (tab.kind === "usage") {
+      set({ activeTabId: tabId });
+      return;
+    }
+    // File / diff tabs are views; they must not tear down the live session's transcript.
+    if (tab.kind === "file" || tab.kind === "diff") {
+      set({ activeTabId: tabId, activeProject: get().projects.find((p) => p.id === tab.projectId) ?? get().activeProject });
+      return;
+    }
+    // Leaving a non-session tab back to the same live session: nothing to reload.
+    if ((tab.kind === "session" || !tab.kind) && tab.activeKey && tab.activeKey === get().activeKey) {
+      set({ activeTabId: tabId });
+      return;
+    }
     const project = get().projects.find((p) => p.id === tab.projectId) ?? null;
 
     set({
@@ -584,9 +585,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   closeTab: async (tabId: string) => {
     const { tabs, activeTabId } = get();
     const tab = tabs.find((t) => t.id === tabId);
-    if (tab?.activeKey) {
-      await window.studio.stopSession(tab.activeKey);
-    }
+    // Stop in the background: closing a tab should feel instant.
+    if (tab?.activeKey) void window.studio.stopSession(tab.activeKey).catch(() => {});
     const remaining = tabs.filter((t) => t.id !== tabId);
     set({ tabs: remaining });
 
@@ -710,5 +710,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 }));
 
 if (typeof window !== "undefined") {
-  (window as any).useSessionStore = useSessionStore;
+  // Exposed for dev tooling / screenshot automation.
+  (window as unknown as { useSessionStore: typeof useSessionStore }).useSessionStore = useSessionStore;
 }

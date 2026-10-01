@@ -1,8 +1,9 @@
 import React, { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 
 export const ExtensionDialogModal: React.FC = () => {
-  const { pendingUiDialog, respondDialog } = useSessionStore();
+  const { pendingUiDialog, respondDialog } = useSessionStore(useShallow((s) => ({ pendingUiDialog: s.pendingUiDialog, respondDialog: s.respondDialog })));
   const [inputText, setInputText] = useState("");
 
   if (!pendingUiDialog) return null;
@@ -89,7 +90,7 @@ export const ExtensionDialogModal: React.FC = () => {
                 borderRadius: 4,
                 border: "none",
                 background: "var(--accent-base)",
-                color: "#fff",
+                color: "var(--accent-contrast)",
                 fontWeight: 500,
                 cursor: "pointer",
               }}
@@ -136,7 +137,7 @@ export const ExtensionDialogModal: React.FC = () => {
                   borderRadius: 4,
                   border: "none",
                   background: "var(--accent-base)",
-                  color: "#fff",
+                  color: "var(--accent-contrast)",
                   cursor: "pointer",
                 }}
               >
@@ -183,7 +184,7 @@ export const ExtensionDialogModal: React.FC = () => {
                   borderRadius: 4,
                   border: "none",
                   background: "var(--accent-base)",
-                  color: "#fff",
+                  color: "var(--accent-contrast)",
                   cursor: "pointer",
                 }}
               >

@@ -1,5 +1,6 @@
 import React from "react";
-import { X, PieChart, Minimize2, CheckCircle2 } from "lucide-react";
+import { X, PieChart, Minimize2 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { estimateContextBreakdown } from "@pi-studio/pi-adapter";
 
@@ -9,7 +10,7 @@ interface ContextBreakdownModalProps {
 }
 
 export const ContextBreakdownModal: React.FC<ContextBreakdownModalProps> = ({ isOpen, onClose }) => {
-  const { transcript, stats, selectedModel, activeKey } = useSessionStore();
+  const { transcript, stats, selectedModel, activeKey } = useSessionStore(useShallow((s) => ({ transcript: s.transcript, stats: s.stats, selectedModel: s.selectedModel, activeKey: s.activeKey })));
 
   if (!isOpen) return null;
 
@@ -82,7 +83,7 @@ export const ContextBreakdownModal: React.FC<ContextBreakdownModalProps> = ({ is
           <div
             style={{
               height: 10,
-              background: "rgba(255, 255, 255, 0.08)",
+              background: "rgba(var(--fg-rgb), 0.08)",
               borderRadius: 5,
               overflow: "hidden",
               position: "relative",
@@ -136,7 +137,7 @@ export const ContextBreakdownModal: React.FC<ContextBreakdownModalProps> = ({ is
                       {cat.tokens.toLocaleString()} ({cat.percentage.toFixed(0)}%)
                     </span>
                   </div>
-                  <div style={{ height: 4, background: "rgba(255, 255, 255, 0.05)", borderRadius: 2 }}>
+                  <div style={{ height: 4, background: "rgba(var(--fg-rgb), 0.05)", borderRadius: 2 }}>
                     <div
                       style={{
                         height: "100%",
@@ -207,7 +208,7 @@ export const ContextBreakdownModal: React.FC<ContextBreakdownModalProps> = ({ is
               borderRadius: 6,
               border: "none",
               background: "var(--accent-base)",
-              color: "#fff",
+              color: "var(--accent-contrast)",
               fontWeight: 500,
               fontSize: 12,
               cursor: "pointer",

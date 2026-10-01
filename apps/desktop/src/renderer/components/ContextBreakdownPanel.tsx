@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { PieChart, Minimize2, Loader2, Sparkles, CheckCircle2, AlertTriangle, Layers, Info } from "lucide-react";
+import { PieChart, Minimize2, Loader2, CheckCircle2 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { estimateContextBreakdown } from "@pi-studio/pi-adapter";
 import { ProviderIcon } from "./ProviderIcon.tsx";
@@ -14,7 +15,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const ContextBreakdownPanel: React.FC = () => {
-  const { transcript, stats, selectedModel, activeKey } = useSessionStore();
+  const { transcript, stats, selectedModel, activeKey } = useSessionStore(useShallow((s) => ({ transcript: s.transcript, stats: s.stats, selectedModel: s.selectedModel, activeKey: s.activeKey })));
   const [compacting, setCompacting] = useState(false);
   const [compactDone, setCompactDone] = useState(false);
 
@@ -76,7 +77,7 @@ export const ContextBreakdownPanel: React.FC = () => {
             fontSize: 10,
             padding: "2px 6px",
             borderRadius: 4,
-            background: breakdown.isExact ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 255, 255, 0.06)",
+            background: breakdown.isExact ? "rgba(16, 185, 129, 0.12)" : "rgba(var(--fg-rgb), 0.06)",
             color: breakdown.isExact ? "var(--success)" : "var(--text-muted)",
             fontWeight: 500,
           }}
@@ -124,7 +125,7 @@ export const ContextBreakdownPanel: React.FC = () => {
             style={{
               position: "relative",
               height: 8,
-              background: "rgba(255, 255, 255, 0.08)",
+              background: "rgba(var(--fg-rgb), 0.08)",
               borderRadius: 4,
               overflow: "hidden",
             }}
@@ -203,7 +204,7 @@ export const ContextBreakdownPanel: React.FC = () => {
                 textAlign: "center",
                 color: "var(--text-muted)",
                 fontSize: 12,
-                background: "rgba(255, 255, 255, 0.02)",
+                background: "rgba(var(--fg-rgb), 0.02)",
                 borderRadius: 6,
                 border: "1px dashed var(--border-subtle)",
               }}
@@ -218,7 +219,7 @@ export const ContextBreakdownPanel: React.FC = () => {
                   <div
                     key={cat.label}
                     style={{
-                      background: "rgba(255, 255, 255, 0.02)",
+                      background: "rgba(var(--fg-rgb), 0.02)",
                       border: "1px solid var(--border-subtle)",
                       borderRadius: 6,
                       padding: "8px 10px",
@@ -254,7 +255,7 @@ export const ContextBreakdownPanel: React.FC = () => {
                     <div
                       style={{
                         height: 4,
-                        background: "rgba(255, 255, 255, 0.05)",
+                        background: "rgba(var(--fg-rgb), 0.05)",
                         borderRadius: 2,
                         overflow: "hidden",
                       }}
@@ -295,7 +296,7 @@ export const ContextBreakdownPanel: React.FC = () => {
                 <div
                   key={idx}
                   style={{
-                    background: "rgba(255, 255, 255, 0.02)",
+                    background: "rgba(var(--fg-rgb), 0.02)",
                     border: "1px solid var(--border-subtle)",
                     borderRadius: 6,
                     padding: "6px 10px",
@@ -349,7 +350,7 @@ export const ContextBreakdownPanel: React.FC = () => {
               background: compactDone
                 ? "rgba(16, 185, 129, 0.12)"
                 : compacting
-                  ? "rgba(255, 255, 255, 0.05)"
+                  ? "rgba(var(--fg-rgb), 0.05)"
                   : "var(--bg-elevated)",
               color: compactDone ? "var(--success)" : "var(--text-primary)",
               fontSize: 12,

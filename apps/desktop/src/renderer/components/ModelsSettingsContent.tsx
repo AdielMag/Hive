@@ -5,11 +5,10 @@ import {
   Check,
   Brain,
   Eye,
-  SlidersHorizontal,
   CheckSquare,
   Square,
-  RotateCcw,
-} from "lucide-react";
+  } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 
@@ -21,7 +20,7 @@ function formatContext(tokens?: number): string {
 }
 
 export const ModelsSettingsContent: React.FC = () => {
-  const { allCatalogModels, models, enabledModelKeys, saveEnabledModels } = useSessionStore();
+  const { allCatalogModels, models, enabledModelKeys, saveEnabledModels } = useSessionStore(useShallow((s) => ({ allCatalogModels: s.allCatalogModels, models: s.models, enabledModelKeys: s.enabledModelKeys, saveEnabledModels: s.saveEnabledModels })));
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<string>("all");
@@ -176,7 +175,7 @@ export const ModelsSettingsContent: React.FC = () => {
           style={{
             padding: "4px 10px",
             borderRadius: 12,
-            background: activeModelsCount > 0 ? "rgba(56, 139, 253, 0.15)" : "rgba(255, 255, 255, 0.05)",
+            background: activeModelsCount > 0 ? "rgba(56, 139, 253, 0.15)" : "rgba(var(--fg-rgb), 0.05)",
             color: activeModelsCount > 0 ? "var(--accent-base)" : "var(--text-muted)",
             fontSize: 11,
             fontWeight: 600,
@@ -361,7 +360,7 @@ export const ModelsSettingsContent: React.FC = () => {
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "10px 14px",
-                    background: "rgba(255, 255, 255, 0.02)",
+                    background: "rgba(var(--fg-rgb), 0.02)",
                     borderBottom: "1px solid var(--border-subtle)",
                   }}
                 >
@@ -407,7 +406,7 @@ export const ModelsSettingsContent: React.FC = () => {
                           alignItems: "center",
                           justifyContent: "space-between",
                           padding: "9px 14px",
-                          borderBottom: "1px solid rgba(255, 255, 255, 0.03)",
+                          borderBottom: "1px solid rgba(var(--fg-rgb), 0.03)",
                           cursor: "pointer",
                           background: enabled ? "rgba(56, 139, 253, 0.04)" : "transparent",
                           transition: "background 0.15s ease",
@@ -415,7 +414,7 @@ export const ModelsSettingsContent: React.FC = () => {
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = enabled
                             ? "rgba(56, 139, 253, 0.08)"
-                            : "rgba(255, 255, 255, 0.03)";
+                            : "rgba(var(--fg-rgb), 0.03)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = enabled

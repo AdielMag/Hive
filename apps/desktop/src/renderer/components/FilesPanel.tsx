@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Folder, FileText, ChevronRight, ChevronDown, RefreshCw, Play } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
+import { useUi } from "../store/ui-store.ts";
 
 export const FilesPanel: React.FC = () => {
-  const { activeProject, openFileTab } = useSessionStore();
+  const { activeProject, openFileTab } = useSessionStore(useShallow((s) => ({ activeProject: s.activeProject, openFileTab: s.openFileTab })));
   const [files, setFiles] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -128,7 +130,7 @@ const FileTreeNode: React.FC<{
     else if (ext === ".ps1") cmd = `powershell -NoProfile -File "${node.path}"`;
     if (!cmd) return;
 
-    window.dispatchEvent(new CustomEvent("studio:open-terminal"));
+    useUi.getState().showRight("terminal");
     const terms = await window.studio.terminalList();
     let termId = terms[0]?.id;
     if (!termId) {

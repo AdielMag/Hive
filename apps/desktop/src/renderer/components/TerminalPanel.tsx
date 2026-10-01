@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Terminal as TerminalIcon, Plus, X, Trash2, RotateCw, Play, TerminalSquare } from "lucide-react";
+import { Terminal as TerminalIcon, Plus, X, Trash2, RotateCw, TerminalSquare } from "lucide-react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 
 interface TerminalTab {
@@ -11,8 +12,10 @@ interface TerminalTab {
   shell: string;
 }
 
+const TERMINAL_FONT = `"JetBrains Mono Variable", "JetBrains Mono", "Cascadia Mono", Consolas, monospace`;
+
 export const TerminalPanel: React.FC = () => {
-  const { activeProject } = useSessionStore();
+  const { activeProject } = useSessionStore(useShallow((s) => ({ activeProject: s.activeProject })));
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
@@ -94,12 +97,13 @@ export const TerminalPanel: React.FC = () => {
     const term = new Terminal({
       cursorBlink: true,
       cursorStyle: "bar",
-      fontSize: 12,
-      fontFamily: "var(--font-mono, Consolas, Monaco, 'Courier New', monospace)",
+      // xterm measures glyphs on a canvas, so it needs real family names (CSS vars don't resolve).
+      fontSize: 12.5,
+      fontFamily: TERMINAL_FONT,
       theme: {
-        background: "#0c0d10",
-        foreground: "#cbd5e1",
-        cursor: "#38bdf8",
+        background: "#1e1f22",
+        foreground: "#bdbdbd",
+        cursor: "#6c95eb",
         selectionBackground: "rgba(56, 189, 248, 0.25)",
         black: "#1e293b",
         red: "#f87171",
@@ -126,6 +130,15 @@ export const TerminalPanel: React.FC = () => {
     } catch (e) {
       // fit error
     }
+    // Re-measure once the bundled web font is ready (first open may race the font load).
+    void document.fonts.load(`12px "JetBrains Mono Variable"`).then(() => {
+      term.options.fontFamily = TERMINAL_FONT;
+      try {
+        fitAddon.fit();
+      } catch {
+        // detached
+      }
+    });
 
     term.onData((data) => {
       void window.studio.terminalWrite(tabId, data);
@@ -316,7 +329,7 @@ export const TerminalPanel: React.FC = () => {
             justifyContent: "center",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
+            e.currentTarget.style.background = "rgba(var(--fg-rgb), 0.06)";
             e.currentTarget.style.color = "var(--text-primary)";
           }}
           onMouseLeave={(e) => {
@@ -343,7 +356,7 @@ export const TerminalPanel: React.FC = () => {
             justifyContent: "center",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
+            e.currentTarget.style.background = "rgba(var(--fg-rgb), 0.06)";
             e.currentTarget.style.color = "var(--text-primary)";
           }}
           onMouseLeave={(e) => {
@@ -370,7 +383,7 @@ export const TerminalPanel: React.FC = () => {
             justifyContent: "center",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
+            e.currentTarget.style.background = "rgba(var(--fg-rgb), 0.06)";
             e.currentTarget.style.color = "var(--text-primary)";
           }}
           onMouseLeave={(e) => {
@@ -389,7 +402,7 @@ export const TerminalPanel: React.FC = () => {
           alignItems: "center",
           gap: 6,
           padding: "5px 10px",
-          background: "rgba(255, 255, 255, 0.02)",
+          background: "rgba(var(--fg-rgb), 0.02)",
           borderBottom: "1px solid var(--border-subtle)",
           flexShrink: 0,
           overflowX: "auto",
@@ -418,7 +431,7 @@ export const TerminalPanel: React.FC = () => {
           style={{
             fontSize: 10,
             fontFamily: "var(--font-mono)",
-            background: "rgba(255, 255, 255, 0.04)",
+            background: "rgba(var(--fg-rgb), 0.04)",
             color: "var(--text-secondary)",
             border: "1px solid var(--border-subtle)",
             borderRadius: 4,
@@ -433,7 +446,7 @@ export const TerminalPanel: React.FC = () => {
           style={{
             fontSize: 10,
             fontFamily: "var(--font-mono)",
-            background: "rgba(255, 255, 255, 0.04)",
+            background: "rgba(var(--fg-rgb), 0.04)",
             color: "var(--text-secondary)",
             border: "1px solid var(--border-subtle)",
             borderRadius: 4,
@@ -477,7 +490,7 @@ export const TerminalPanel: React.FC = () => {
                 borderRadius: 6,
                 border: "none",
                 background: "var(--accent-base)",
-                color: "#fff",
+                color: "var(--accent-contrast)",
                 fontSize: 12,
                 cursor: "pointer",
               }}

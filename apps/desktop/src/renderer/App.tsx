@@ -1,101 +1,80 @@
 import React, { useEffect, useState } from "react";
-import { AlertTriangle, Terminal } from "lucide-react";
+import { AlertTriangle, Check, Copy, RefreshCw, Sparkles } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "./store/session-store.ts";
 import { WorkbenchLayout } from "./components/WorkbenchLayout.tsx";
+import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
+import { copyText } from "./lib/clipboard.ts";
+
+const INSTALL_CMD = "npm install -g @earendil-works/pi-coding-agent";
 
 export const App: React.FC = () => {
-  const { init, isInitializing, bootstrap, activeProject } = useSessionStore();
+  const { init, isInitializing, bootstrap } = useSessionStore(
+    useShallow((s) => ({ init: s.init, isInitializing: s.isInitializing, bootstrap: s.bootstrap })),
+  );
 
   useEffect(() => {
     void init();
   }, [init]);
 
-  useEffect(() => {
-    if (activeProject?.color) {
-      document.documentElement.style.setProperty("--project-color", activeProject.color);
-    }
-  }, [activeProject?.color]);
-
   if (isInitializing) {
     return (
-      <div
-        style={{
-          display: "flex",
-          height: "100vh",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--text-muted)",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-secondary)" }}>Starting Pi Studio...</div>
-        <div style={{ fontSize: 12 }}>Connecting to local Pi runtime</div>
+      <div className="boot">
+        <div className="boot__logo">
+          <Sparkles size={18} />
+        </div>
+        <div className="boot__title">Pi Studio</div>
+        <div className="boot__sub">Connecting to your local Pi…</div>
       </div>
     );
   }
 
-  if (bootstrap?.pi && !bootstrap.pi.ok) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          height: "100vh",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 32,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 520,
-            background: "var(--bg-elevated)",
-            border: "1px solid var(--border-prominent)",
-            borderRadius: 8,
-            padding: 24,
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--danger)" }}>
-            <AlertTriangle size={20} />
-            <span style={{ fontSize: 16, fontWeight: 600 }}>Pi CLI Not Found</span>
-          </div>
+  if (bootstrap?.pi && !bootstrap.pi.ok) return <PiMissing searched={bootstrap.pi.searched} error={bootstrap.pi.error} />;
 
-          <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-            Pi Studio drives your installed Pi CLI, but it was not detected on this machine.
-          </div>
+  return (
+    <ErrorBoundary label="Pi Studio">
+      <WorkbenchLayout />
+    </ErrorBoundary>
+  );
+};
 
-          <div
-            style={{
-              background: "var(--bg-input)",
-              padding: 12,
-              borderRadius: 6,
-              fontFamily: "var(--font-mono)",
-              fontSize: 12,
-              color: "var(--text-primary)",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
+const PiMissing: React.FC<{ searched: string[]; error: string }> = ({ searched, error }) => {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="boot">
+      <div className="ui-card boot__card">
+        <div className="boot__card-title">
+          <AlertTriangle size={18} color="var(--warning)" /> Pi CLI not found
+        </div>
+        <p className="boot__text">Pi Studio drives your installed Pi coding agent. {error}</p>
+        <div className="boot__cmd">
+          <code className="selectable">{INSTALL_CMD}</code>
+          <button
+            className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
+            title="Copy"
+            onClick={async () => {
+              if (await copyText(INSTALL_CMD)) {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1200);
+              }
             }}
           >
-            <Terminal size={14} color="var(--accent-base)" />
-            <span>npm install -g @earendil-works/pi-coding-agent</span>
-          </div>
-
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            Paths searched:
-            <ul style={{ paddingLeft: 18, marginTop: 4 }}>
-              {bootstrap.pi.searched.map((s, idx) => (
-                <li key={idx}>{s}</li>
-              ))}
-            </ul>
-          </div>
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+          </button>
         </div>
+        <p className="boot__text">Or point Pi Studio at an install with the <code>PI_STUDIO_PI_CLI</code> environment variable.</p>
+        <details className="boot__details">
+          <summary>Searched {searched.length} locations</summary>
+          <ul className="selectable">
+            {searched.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </details>
+        <button className="ui-btn ui-btn--primary" onClick={() => location.reload()}>
+          <RefreshCw size={13} /> I installed it — retry
+        </button>
       </div>
-    );
-  }
-
-  return <WorkbenchLayout />;
+    </div>
+  );
 };

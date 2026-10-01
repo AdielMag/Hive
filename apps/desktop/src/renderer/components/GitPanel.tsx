@@ -15,10 +15,11 @@ import {
   FileCode,
   Search,
 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 
 export const GitPanel: React.FC = () => {
-  const { activeProject, selectedModel, openDiffTab } = useSessionStore();
+  const { activeProject, selectedModel, openDiffTab } = useSessionStore(useShallow((s) => ({ activeProject: s.activeProject, selectedModel: s.selectedModel, openDiffTab: s.openDiffTab })));
   const [status, setStatus] = useState<any>(null);
   const [branches, setBranches] = useState<string[]>([]);
   const [commitMsg, setCommitMsg] = useState("");
@@ -240,7 +241,7 @@ export const GitPanel: React.FC = () => {
 
   const getStatusBadge = (type: string) => {
     let color = "var(--text-muted)";
-    let bg = "rgba(255, 255, 255, 0.05)";
+    let bg = "rgba(var(--fg-rgb), 0.05)";
     let label = "M";
 
     switch (type) {
@@ -491,7 +492,7 @@ export const GitPanel: React.FC = () => {
                     fontSize: 11,
                     color: "var(--accent-base)",
                     borderBottom: "1px solid var(--border-subtle)",
-                    background: "rgba(83, 155, 245, 0.08)",
+                    background: "rgba(var(--accent-rgb), 0.08)",
                   }}
                 >
                   <Plus size={12} />
@@ -517,7 +518,7 @@ export const GitPanel: React.FC = () => {
                         justifyContent: "space-between",
                         cursor: "pointer",
                         fontSize: 11,
-                        background: isCurrent ? "rgba(83, 155, 245, 0.12)" : "transparent",
+                        background: isCurrent ? "rgba(var(--accent-rgb), 0.12)" : "transparent",
                         color: isCurrent ? "var(--accent-base)" : "var(--text-primary)",
                         fontWeight: isCurrent ? 600 : 400,
                       }}
@@ -617,7 +618,7 @@ export const GitPanel: React.FC = () => {
                   borderRadius: 8,
                   fontSize: 10,
                   fontWeight: 600,
-                  backgroundColor: stagedCount > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                  backgroundColor: stagedCount > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(var(--fg-rgb), 0.05)",
                   color: stagedCount > 0 ? "var(--success)" : "var(--text-muted)",
                 }}
               >
@@ -778,7 +779,7 @@ export const GitPanel: React.FC = () => {
                   borderRadius: 8,
                   fontSize: 10,
                   fontWeight: 600,
-                  backgroundColor: unstagedCount > 0 ? "rgba(59, 130, 246, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                  backgroundColor: unstagedCount > 0 ? "rgba(59, 130, 246, 0.15)" : "rgba(var(--fg-rgb), 0.05)",
                   color: unstagedCount > 0 ? "var(--accent-base)" : "var(--text-muted)",
                 }}
               >
@@ -990,9 +991,9 @@ export const GitPanel: React.FC = () => {
             }
             style={{
               padding: "5px 9px",
-              background: stagedCount > 0 ? "rgba(83, 155, 245, 0.12)" : "var(--bg-card)",
+              background: stagedCount > 0 ? "rgba(var(--accent-rgb), 0.12)" : "var(--bg-card)",
               color: stagedCount > 0 ? "var(--accent-base)" : "var(--text-muted)",
-              border: `1px solid ${stagedCount > 0 ? "rgba(83, 155, 245, 0.3)" : "var(--border-subtle)"}`,
+              border: `1px solid ${stagedCount > 0 ? "rgba(var(--accent-rgb), 0.3)" : "var(--border-subtle)"}`,
               borderRadius: 4,
               cursor: stagedCount > 0 && !isGeneratingAi ? "pointer" : "not-allowed",
               fontWeight: 500,

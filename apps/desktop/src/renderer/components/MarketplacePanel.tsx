@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { ShoppingBag, Search, ExternalLink, Download, Check, Sparkles, Terminal } from "lucide-react";
+import { ShoppingBag, Search, Download, Check } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 
 export const MarketplacePanel: React.FC = () => {
-  const { setPromptText } = useSessionStore();
+  const { setPromptText } = useSessionStore(useShallow((s) => ({ setPromptText: s.setPromptText })));
   const [activeKind, setActiveKind] = useState<"pi-npm" | "claude" | "mcp">("pi-npm");
   const [query, setQuery] = useState("");
   const [packages, setPackages] = useState<any[]>([]);
@@ -171,7 +172,7 @@ export const MarketplacePanel: React.FC = () => {
                     textTransform: "uppercase",
                     padding: "1px 5px",
                     borderRadius: 3,
-                    background: "rgba(255,255,255,0.06)",
+                    background: "rgba(var(--fg-rgb), 0.06)",
                     color: "var(--accent-hover)",
                     fontWeight: 600,
                   }}

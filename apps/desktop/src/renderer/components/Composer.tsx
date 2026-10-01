@@ -7,15 +7,15 @@ import {
   FileText,
   X,
   Brain,
-  Loader2,
-  Image as ImageIcon,
-  ChevronDown,
+  Image as ChevronDown,
   Check,
   Search,
   Cpu,
   SlidersHorizontal,
 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
+import { useUi } from "../store/ui-store.ts";
 import { ContextRing } from "./ContextRing.tsx";
 import { ContextBreakdownModal } from "./ContextBreakdownModal.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
@@ -26,28 +26,7 @@ interface ComposerProps {
 }
 
 export const Composer: React.FC<ComposerProps> = ({ height }) => {
-  const {
-    promptText,
-    setPromptText,
-    sendPrompt,
-    abort,
-    transcript,
-    models,
-    allCatalogModels,
-    enabledModelKeys,
-    selectedModel,
-    setModel,
-    thinkingLevels,
-    selectedThinkingLevel,
-    setThinkingLevel,
-    isLoadingModels,
-    attachments,
-    addAttachments,
-    removeAttachment,
-    clearAttachments,
-    stats,
-    extensionWidgets,
-  } = useSessionStore();
+  const { promptText, setPromptText, sendPrompt, abort, running, lastUsage, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, thinkingLevels, selectedThinkingLevel, setThinkingLevel, isLoadingModels, attachments, addAttachments, removeAttachment, stats, extensionWidgets } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, lastUsage: s.transcript.lastUsage, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, thinkingLevels: s.thinkingLevels, selectedThinkingLevel: s.selectedThinkingLevel, setThinkingLevel: s.setThinkingLevel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, stats: s.stats, extensionWidgets: s.extensionWidgets })));
 
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -109,7 +88,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
   }, [visibleModels, modelFilter]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isRunning = transcript.running;
+  const isRunning = running;
 
   // Extension widgets placed above/below the editor
   const aboveWidgets = Object.entries(extensionWidgets).filter(([, w]) => w.placement === "aboveEditor");
@@ -309,7 +288,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       : [];
 
   // Context usage metrics
-  const contextTokens = stats?.contextUsage?.tokens ?? transcript.lastUsage?.totalTokens ?? 0;
+  const contextTokens = stats?.contextUsage?.tokens ?? lastUsage?.totalTokens ?? 0;
   const contextWindow = stats?.contextUsage?.contextWindow ?? selectedModel?.contextWindow ?? 200_000;
   const contextPercent = stats?.contextUsage?.percent ?? (contextWindow > 0 ? (contextTokens / contextWindow) * 100 : 0);
 
@@ -318,9 +297,11 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
   return (
     <div
       style={{
-        borderTop: "1px solid var(--border-subtle)",
         background: "var(--bg-app)",
-        padding: "10px 16px 12px 16px",
+        padding: "6px 18px 14px 18px",
+        maxWidth: 920,
+        width: "100%",
+        margin: "0 auto",
         display: "flex",
         flexDirection: "column",
         gap: 8,
@@ -335,7 +316,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
           key={key}
           style={{
             padding: "6px 10px",
-            background: "rgba(255, 255, 255, 0.02)",
+            background: "rgba(var(--fg-rgb), 0.02)",
             border: "1px dashed var(--border-subtle)",
             borderRadius: 6,
             fontSize: 11,
@@ -361,9 +342,10 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
           flex: 1,
           minHeight: 0,
           border: `1px solid ${isDraggingOver ? "var(--accent-base)" : "var(--border-prominent)"}`,
-          borderRadius: 8,
-          background: isDraggingOver ? "var(--accent-subtle)" : "var(--bg-input)",
-          padding: "8px 10px",
+          borderRadius: 14,
+          background: isDraggingOver ? "var(--accent-subtle)" : "var(--bg-card)",
+          boxShadow: "0 6px 24px rgba(0,0,0,0.18)",
+          padding: "10px 12px 8px",
           display: "flex",
           flexDirection: "column",
           gap: 6,
@@ -379,7 +361,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               flexWrap: "wrap",
               gap: 6,
               paddingBottom: 4,
-              borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+              borderBottom: "1px solid rgba(var(--fg-rgb), 0.06)",
               maxHeight: 110,
               overflowY: "auto",
             }}
@@ -466,10 +448,10 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             background: "transparent",
             outline: "none",
             resize: "none",
-            fontSize: 13,
-            lineHeight: 1.4,
+            fontSize: 13.5,
+            lineHeight: 1.5,
             color: "var(--text-primary)",
-            minHeight: 48,
+            minHeight: 44,
           }}
         />
 
@@ -480,18 +462,17 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             alignItems: "center",
             justifyContent: "space-between",
             paddingTop: 4,
-            borderTop: "1px solid rgba(255, 255, 255, 0.05)",
             gap: 8,
-            flexWrap: "wrap",
           }}
         >
           {/* Left: Model & Thinking & Attachment Button & Context Ring */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
             {/* Attach button */}
             <button
               onClick={handlePickFiles}
               title="Attach files or images"
               style={{
+                flexShrink: 0,
                 display: "flex",
                 alignItems: "center",
                 gap: 4,
@@ -509,7 +490,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             </button>
 
             {/* Model select with custom dropdown and provider icon */}
-            <div ref={modelPickerRef} style={{ position: "relative" }}>
+            <div ref={modelPickerRef} style={{ position: "relative", minWidth: 0, flexShrink: 1 }}>
               <button
                 type="button"
                 onClick={() => setModelPickerOpen((prev) => !prev)}
@@ -525,7 +506,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                   fontSize: 11,
                   color: "var(--text-primary)",
                   cursor: "pointer",
-                  maxWidth: 240,
+                  maxWidth: "100%",
+                  minWidth: 0,
                 }}
               >
                 {selectedModel ? (
@@ -635,7 +617,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                               gap: 8,
                               cursor: "pointer",
                               fontSize: 11,
-                              background: isSelected ? "rgba(83, 155, 245, 0.12)" : "transparent",
+                              background: isSelected ? "rgba(var(--accent-rgb), 0.12)" : "transparent",
                               color: isSelected ? "var(--accent-base)" : "var(--text-primary)",
                             }}
                             onMouseEnter={(e) => {
@@ -683,7 +665,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                       type="button"
                       onClick={() => {
                         setModelPickerOpen(false);
-                        window.dispatchEvent(new CustomEvent("studio:open-settings", { detail: { tab: "models" } }));
+                        useUi.getState().openSettings("models");
                       }}
                       style={{
                         display: "flex",
@@ -708,8 +690,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
 
             {/* Thinking select */}
             {activeThinkingLevels.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <Brain size={13} color="var(--accent-base)" title="Reasoning / Thinking Level" />
+              <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, flexShrink: 2 }}>
+                <span title="Reasoning / Thinking Level" style={{ display: "inline-flex" }}><Brain size={13} color="var(--accent-base)" /></span>
                 <select
                   value={selectedThinkingLevel}
                   onChange={(e) => void setThinkingLevel(e.target.value)}
@@ -721,6 +703,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                     fontSize: 11,
                     color: "var(--text-secondary)",
                     cursor: "pointer",
+                    minWidth: 0,
+                    maxWidth: 140,
                   }}
                 >
                   {activeThinkingLevels.map((lvl) => (
@@ -733,18 +717,20 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             )}
 
             {/* Context Ring */}
+            <span style={{ flexShrink: 0, display: "inline-flex" }}>
             <ContextRing
               tokens={contextTokens}
               total={contextWindow}
               percent={contextPercent}
               onClick={() => setBreakdownOpen(true)}
             />
+            </span>
           </div>
 
           <ContextBreakdownModal isOpen={breakdownOpen} onClose={() => setBreakdownOpen(false)} />
 
           {/* Right: Send or Abort button */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             {isRunning ? (
               <>
                 <button
@@ -794,11 +780,11 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                   display: "flex",
                   alignItems: "center",
                   gap: 4,
-                  padding: "5px 12px",
-                  borderRadius: 4,
+                  padding: "6px 14px",
+                  borderRadius: 8,
                   border: "none",
-                  background: canSend ? "var(--accent-base)" : "var(--bg-card)",
-                  color: canSend ? "#fff" : "var(--text-muted)",
+                  background: canSend ? "var(--accent-base)" : "rgba(var(--fg-rgb), 0.06)",
+                  color: canSend ? "var(--accent-contrast)" : "var(--text-muted)",
                   fontWeight: 500,
                   cursor: canSend ? "pointer" : "default",
                   fontSize: 12,
@@ -817,7 +803,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
           key={key}
           style={{
             padding: "6px 10px",
-            background: "rgba(255, 255, 255, 0.02)",
+            background: "rgba(var(--fg-rgb), 0.02)",
             border: "1px dashed var(--border-subtle)",
             borderRadius: 6,
             fontSize: 11,

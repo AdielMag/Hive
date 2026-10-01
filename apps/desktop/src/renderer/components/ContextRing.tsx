@@ -40,7 +40,7 @@ export const ContextRing: React.FC<ContextRingProps> = ({
         cursor: onClick ? "pointer" : "default",
         padding: "2px 6px",
         borderRadius: 4,
-        background: "rgba(255, 255, 255, 0.04)",
+        background: "rgba(var(--fg-rgb), 0.04)",
       }}
     >
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
@@ -48,7 +48,7 @@ export const ContextRing: React.FC<ContextRingProps> = ({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255, 255, 255, 0.12)"
+          stroke="rgba(var(--fg-rgb), 0.12)"
           strokeWidth={strokeWidth}
           fill="transparent"
         />

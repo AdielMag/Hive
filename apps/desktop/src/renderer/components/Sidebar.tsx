@@ -1,27 +1,18 @@
 import React, { useState } from "react";
 import {
-  FolderKanban,
   Plus,
   ChevronDown,
   ChevronRight,
   MessageSquare,
   Trash2,
   Link as LinkIcon,
-  Palette,
-} from "lucide-react";
+  } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { DEFAULT_PROJECT_HUES } from "@pi-studio/protocol";
 
 export const Sidebar: React.FC = () => {
-  const {
-    projects,
-    allSessions,
-    addProject,
-    updateProject,
-    openSessionTab,
-    newSessionTab,
-    deleteSessionFile,
-  } = useSessionStore();
+  const { projects, allSessions, addProject, updateProject, openSessionTab, newSessionTab, deleteSessionFile } = useSessionStore(useShallow((s) => ({ projects: s.projects, allSessions: s.allSessions, addProject: s.addProject, updateProject: s.updateProject, openSessionTab: s.openSessionTab, newSessionTab: s.newSessionTab, deleteSessionFile: s.deleteSessionFile })));
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [showAllSessions, setShowAllSessions] = useState<Record<string, boolean>>({});
@@ -269,7 +260,7 @@ export const Sidebar: React.FC = () => {
                                   fontSize: 10,
                                   padding: "1px 5px",
                                   borderRadius: 10,
-                                  background: "rgba(255,255,255,0.06)",
+                                  background: "rgba(var(--fg-rgb), 0.06)",
                                   color: "var(--text-muted)",
                                 }}
                               >

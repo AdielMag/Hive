@@ -1,5 +1,5 @@
 import React from "react";
-import { Sparkles, Cpu } from "lucide-react";
+import { Cpu } from "lucide-react";
 
 export interface ProviderIconProps {
   provider: string;
