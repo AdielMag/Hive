@@ -1,6 +1,5 @@
 import React, { useMemo } from "react";
 import {
-  FileCode,
   Plus,
   Minus,
   Sparkles,
@@ -8,10 +7,13 @@ import {
   GitCompare,
 } from "lucide-react";
 import type { TabItem } from "@pi-studio/protocol";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
+import { DiffView } from "./code/DiffView.tsx";
+import { languageFromPath } from "../lib/highlight/languages.ts";
 
 export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
-  const { setPromptText, closeTab, newSessionTab, activeProject } = useSessionStore();
+  const { setPromptText, closeTab, newSessionTab, activeProject } = useSessionStore(useShallow((s) => ({ setPromptText: s.setPromptText, closeTab: s.closeTab, newSessionTab: s.newSessionTab, activeProject: s.activeProject })));
 
   const fileName = tab.title || tab.filePath?.split(/[/\\]/).pop() || "Diff";
   const content = tab.diffContent || "";
@@ -119,7 +121,7 @@ export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
                   fontSize: 9,
                   fontWeight: 700,
                   textTransform: "uppercase",
-                  background: isStaged ? "rgba(16, 185, 129, 0.15)" : "rgba(83, 155, 245, 0.15)",
+                  background: isStaged ? "rgba(16, 185, 129, 0.15)" : "rgba(var(--accent-rgb), 0.15)",
                   color: isStaged ? "var(--success)" : "var(--accent-base)",
                   flexShrink: 0,
                 }}
@@ -189,8 +191,8 @@ export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
               alignItems: "center",
               gap: 5,
               padding: "4px 9px",
-              background: "rgba(83, 155, 245, 0.12)",
-              border: "1px solid rgba(83, 155, 245, 0.3)",
+              background: "rgba(var(--accent-rgb), 0.12)",
+              border: "1px solid rgba(var(--accent-rgb), 0.3)",
               borderRadius: 4,
               color: "var(--accent-base)",
               fontSize: 11,
@@ -224,77 +226,11 @@ export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
       </div>
 
       {/* Diff Content View */}
-      <div
-        style={{
-          flex: 1,
-          overflow: "auto",
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          lineHeight: 1.5,
-          padding: "10px 0",
-          backgroundColor: "var(--bg-app)",
-        }}
-      >
-        {lines.length === 0 || !content.trim() ? (
-          <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)", fontStyle: "italic" }}>
-            No differences detected.
-          </div>
+      <div className="viewer__body">
+        {lines.length === 0 || !content.trim() || content === "No differences detected." ? (
+          <div className="ui-empty">No differences detected.</div>
         ) : (
-          lines.map((line, idx) => {
-            let color = "var(--text-primary)";
-            let bg = "transparent";
-            let prefix = " ";
-
-            if (line.startsWith("+") && !line.startsWith("+++")) {
-              color = "#34d399";
-              bg = "rgba(16, 185, 129, 0.12)";
-              prefix = "+";
-            } else if (line.startsWith("-") && !line.startsWith("---")) {
-              color = "#f87171";
-              bg = "rgba(239, 68, 68, 0.12)";
-              prefix = "-";
-            } else if (line.startsWith("@@")) {
-              color = "var(--accent-base)";
-              bg = "rgba(83, 155, 245, 0.08)";
-            }
-
-            return (
-              <div
-                key={idx}
-                style={{
-                  display: "flex",
-                  backgroundColor: bg,
-                  padding: "0 16px",
-                  minWidth: "fit-content",
-                }}
-              >
-                <div
-                  style={{
-                    width: 44,
-                    textAlign: "right",
-                    paddingRight: 16,
-                    color: "var(--text-muted)",
-                    userSelect: "none",
-                    borderRight: "1px solid var(--border-subtle)",
-                    flexShrink: 0,
-                    opacity: 0.6,
-                  }}
-                >
-                  {idx + 1}
-                </div>
-                <div
-                  style={{
-                    paddingLeft: 12,
-                    color,
-                    whiteSpace: "pre",
-                    flex: 1,
-                  }}
-                >
-                  {line}
-                </div>
-              </div>
-            );
-          })
+          <DiffView diff={content} lang={languageFromPath(tab.filePath)} />
         )}
       </div>
     </div>
