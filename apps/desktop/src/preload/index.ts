@@ -158,6 +158,12 @@ const api: StudioApi = {
   gitCreateBranch(cwd: string, branch: string) {
     return ipcRenderer.invoke(IPC.gitCreateBranch, { cwd, branch });
   },
+  gitDeleteBranch(cwd: string, branch: string, force?: boolean) {
+    return ipcRenderer.invoke(IPC.gitDeleteBranch, { cwd, branch, force });
+  },
+  getGitLog(cwd: string, maxCount?: number) {
+    return ipcRenderer.invoke(IPC.gitLog, { cwd, maxCount });
+  },
   getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }) {
     return ipcRenderer.invoke(IPC.gitDiff, { cwd, options });
   },
@@ -261,6 +267,12 @@ const api: StudioApi = {
   },
   saveEnabledModels(enabledModels: string[]) {
     return ipcRenderer.invoke(IPC.modelsSaveEnabled, { enabledModels });
+  },
+  getCompactionSettings() {
+    return ipcRenderer.invoke(IPC.settingsGetCompaction);
+  },
+  saveCompactionSettings(settings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number }) {
+    return ipcRenderer.invoke(IPC.settingsSaveCompaction, settings);
   },
 
   // Insights

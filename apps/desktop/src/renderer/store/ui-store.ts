@@ -5,7 +5,7 @@
 import { create } from "zustand";
 import type { SettingsTabId } from "../components/SettingsModal.tsx";
 
-export type LeftPanel = "projects" | "files" | "git";
+export type LeftPanel = "projects" | "files" | "git" | "branches";
 export type RightPanel = "limits" | "context" | "terminal" | "marketplace";
 
 interface Persisted {

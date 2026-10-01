@@ -176,6 +176,30 @@ export async function gitCreateBranch(cwd: string, branch: string): Promise<stri
   return runGit(["checkout", "-b", branch], cwd);
 }
 
+export async function gitDeleteBranch(cwd: string, branch: string, force = false): Promise<string> {
+  return runGit(["branch", force ? "-D" : "-d", branch], cwd);
+}
+
+export interface GitCommitLog {
+  hash: string;
+  author: string;
+  relativeDate: string;
+  message: string;
+}
+
+export async function getGitLog(cwd: string, maxCount = 30): Promise<GitCommitLog[]> {
+  try {
+    const raw = await runGit(["log", "-n", String(maxCount), "--pretty=format:%h%x09%an%x09%ad%x09%s", "--date=relative"], cwd);
+    if (!raw.trim()) return [];
+    return raw.split("\n").filter(Boolean).map((line) => {
+      const [hash = "", author = "", relativeDate = "", message = ""] = line.split("\t");
+      return { hash, author, relativeDate, message };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function getGitDiff(
   cwd: string,
   options?: { staged?: boolean; filePath?: string },

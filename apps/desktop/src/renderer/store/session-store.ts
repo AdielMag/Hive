@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import {
+  type AgentMode,
   type AttachedItem,
   type Bootstrap,
   type Model,
@@ -48,6 +49,7 @@ export interface SessionStoreState {
   selectedModel: Model<any> | null;
   thinkingLevels: string[];
   selectedThinkingLevel: string;
+  selectedMode: AgentMode;
   stats: SessionStats | null;
   extensionWidgets: Record<string, ExtensionWidgetState>;
   extensionStatus: Record<string, string>;
@@ -83,6 +85,8 @@ export interface SessionStoreState {
   abort: () => Promise<void>;
   setModel: (provider: string, modelId: string) => Promise<void>;
   setThinkingLevel: (level: string) => Promise<void>;
+  setMode: (mode: AgentMode) => void;
+  clearError: () => void;
   respondDialog: (response: RpcExtensionUIResponse) => Promise<void>;
   deleteSessionFile: (sessionPath: string) => Promise<void>;
 }
@@ -118,7 +122,12 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
         set({ selectedModel: state.model });
       }
 
-      if (state.thinkingLevel) set({ selectedThinkingLevel: state.thinkingLevel });
+      if (state.thinkingLevel) {
+        set({ selectedThinkingLevel: state.thinkingLevel });
+        set((s) => ({
+          tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, thinkingLevel: state.thinkingLevel } : t)),
+        }));
+      }
       // New sessions learn their file path here, so switching tabs can reload their history.
       if (state.sessionFile) {
         set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId && !t.sessionPath ? { ...t, sessionPath: state.sessionFile } : t)) }));
@@ -165,6 +174,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   selectedModel: null,
   thinkingLevels: [],
   selectedThinkingLevel: "medium",
+  selectedMode: "auto-edit",
   stats: null,
   extensionWidgets: {},
   extensionStatus: {},
@@ -174,6 +184,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   isLoadingModels: false,
   isInitializing: true,
   error: null,
+  clearError: () => set({ error: null }),
 
   init: async () => {
     // React StrictMode mounts effects twice in dev; registering IPC listeners twice would apply every
@@ -444,6 +455,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       title: "New Session",
       pinned: false,
       isCold: true,
+      thinkingLevel: get().selectedThinkingLevel,
+      mode: get().selectedMode,
     };
 
     set({
@@ -587,6 +600,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       activeProject: project,
       activeKey: tab.activeKey ?? null,
       selectedModel: tab.model ?? get().selectedModel,
+      selectedThinkingLevel: tab.thinkingLevel ?? get().selectedThinkingLevel,
+      selectedMode: tab.mode ?? get().selectedMode,
       transcript: createTranscript(),
       extensionWidgets: {},
       extensionStatus: {},
@@ -660,6 +675,16 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       message = (message ? message + "\n\n" : "") + fileBlocks.join("\n\n");
     }
 
+    // Prefix mode steering if in non-default mode
+    const { selectedMode } = get();
+    if (selectedMode === "plan") {
+      message = `[Mode: Plan - Analyze, research, and outline an architectural plan. Do not execute file edits unless explicitly directed to do so.]\n\n${message}`;
+    } else if (selectedMode === "manual") {
+      message = `[Mode: Manual - Propose changes and request user confirmation before modifying files.]\n\n${message}`;
+    } else if (selectedMode === "debug") {
+      message = `[Mode: Debug - Prioritize root cause diagnosis, examining error traces, logs, and reproduction steps.]\n\n${message}`;
+    }
+
     set({ promptText: "", attachments: [] });
 
     if (transcript.running && streamingBehavior === "steer") {
@@ -730,7 +755,16 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         set({ selectedModel: res.data as Model<any>, error: null });
         const levelsRes = await window.studio.rpc(activeKey, { type: "get_available_thinking_levels" });
         if (levelsRes.ok) {
-          set({ thinkingLevels: (levelsRes.data as { levels: string[] }).levels });
+          const levels = (levelsRes.data as { levels: string[] }).levels || [];
+          set({ thinkingLevels: levels });
+          const currentLvl = get().selectedThinkingLevel;
+          if (levels.length > 0 && !levels.includes(currentLvl)) {
+            const nextLvl = levels.includes("medium")
+              ? "medium"
+              : levels.find((l) => l !== "off") || levels[0] || "off";
+            set({ selectedThinkingLevel: nextLvl });
+            void window.studio.rpc(activeKey, { type: "set_thinking_level", level: nextLvl as any }).catch(() => {});
+          }
         }
       } else {
         console.error("set_model RPC returned error:", res.error);
@@ -751,14 +785,48 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   setThinkingLevel: async (level: string) => {
+    const previous = get().selectedThinkingLevel;
+    // Optimistically update store immediately so UI updates with zero delay
+    set({ selectedThinkingLevel: level });
+
+    const { activeTabId } = get();
+    if (activeTabId) {
+      set((s) => ({
+        tabs: s.tabs.map((t) => (t.id === activeTabId ? { ...t, thinkingLevel: level } : t)),
+      }));
+    }
+
     let { activeKey } = get();
     if (!activeKey) {
       activeKey = await get().ensureActiveSession();
     }
     if (!activeKey) return;
-    const res = await window.studio.rpc(activeKey, { type: "set_thinking_level", level: level as any });
-    if (res.ok) {
-      set({ selectedThinkingLevel: level });
+
+    try {
+      const res = await window.studio.rpc(activeKey, { type: "set_thinking_level", level: level as any });
+      if (!res.ok) {
+        console.warn("set_thinking_level RPC returned error:", res.error);
+        set({
+          selectedThinkingLevel: previous,
+          error: `Could not set thinking level to "${level}": ${res.error}`,
+        });
+      }
+    } catch (err) {
+      console.error("set_thinking_level RPC failed:", err);
+      set({
+        selectedThinkingLevel: previous,
+        error: `Failed to set thinking level: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  },
+
+  setMode: (mode: AgentMode) => {
+    set({ selectedMode: mode });
+    const { activeTabId } = get();
+    if (activeTabId) {
+      set((s) => ({
+        tabs: s.tabs.map((t) => (t.id === activeTabId ? { ...t, mode } : t)),
+      }));
     }
   },
 

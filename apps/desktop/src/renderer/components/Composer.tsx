@@ -19,6 +19,8 @@ import { useUi } from "../store/ui-store.ts";
 import { ContextRing } from "./ContextRing.tsx";
 import { ContextBreakdownModal } from "./ContextBreakdownModal.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
+import { ThinkingPicker } from "./ThinkingPicker.tsx";
+import { ModePicker } from "./ModePicker.tsx";
 import type { AttachedItem } from "@pi-studio/protocol";
 
 interface ComposerProps {
@@ -467,8 +469,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             gap: 8,
           }}
         >
-          {/* Left: Model & Thinking & Attachment Button & Context Ring */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+          {/* Left: Mode, Model, Thinking, Attachment Button & Context Ring */}
+          <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, flex: 1 }}>
             {/* Attach button */}
             <button
               onClick={handlePickFiles}
@@ -490,6 +492,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               <Paperclip size={12} />
               <span>Attach</span>
             </button>
+
+            {/* Mode selector */}
+            <ModePicker />
 
             {/* Model select with custom dropdown and provider icon */}
             <div ref={modelPickerRef} style={{ position: "relative", minWidth: 0, flexShrink: 1 }}>
@@ -694,33 +699,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               )}
             </div>
 
-            {/* Thinking select */}
-            {activeThinkingLevels.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, flexShrink: 2 }}>
-                <span title="Reasoning / Thinking Level" style={{ display: "inline-flex" }}><Brain size={13} color="var(--accent-base)" /></span>
-                <select
-                  value={selectedThinkingLevel}
-                  onChange={(e) => void setThinkingLevel(e.target.value)}
-                  style={{
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: 4,
-                    padding: "3px 6px",
-                    fontSize: 11,
-                    color: "var(--text-secondary)",
-                    cursor: "pointer",
-                    minWidth: 0,
-                    maxWidth: 140,
-                  }}
-                >
-                  {activeThinkingLevels.map((lvl) => (
-                    <option key={lvl} value={lvl}>
-                      thinking: {lvl}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* Dynamic Thinking picker */}
+            <ThinkingPicker />
 
             {/* Context Ring */}
             <span style={{ flexShrink: 0, display: "inline-flex" }}>

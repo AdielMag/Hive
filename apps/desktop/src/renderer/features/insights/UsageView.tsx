@@ -3,13 +3,28 @@
  * days, with a stacked per-model chart and model / provider / project breakdowns.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, Coins, Database, FolderKanban, Layers, MessagesSquare, RefreshCw, Zap } from "lucide-react";
+import {
+  Activity,
+  BarChart2,
+  BarChart3,
+  Coins,
+  Database,
+  FolderKanban,
+  Layers,
+  MessagesSquare,
+  RefreshCw,
+  Sparkles,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
 import { lastNDays, localDay, summarizeUsage, type UsageGroupRow, type UsageTotals } from "@pi-studio/pi-adapter";
 import { ProviderIcon } from "../../components/ProviderIcon.tsx";
 import { formatCost, formatDayLabel, formatTokens } from "../../lib/format.ts";
 import { useInsights } from "./insights-store.ts";
-import { UsageChart } from "./UsageChart.tsx";
+import { UsageChart, type ChartType } from "./UsageChart.tsx";
 import { RANGE_DAYS, buildStackedSeries, prettyModel, type UsageMetric, type UsageRange } from "./usage-series.ts";
+import { AiUsageInsightsModal } from "./AiUsageInsights.tsx";
+import { analyzeUsageTelemetry, type AiUsageAnalysisResult } from "./insights-analyzer.ts";
 
 const RANGES: Array<[UsageRange, string]> = [
   ["today", "Today"],
@@ -25,12 +40,17 @@ export const UsageView: React.FC = () => {
   const refresh = useInsights((s) => s.refreshUsage);
   const [range, setRange] = useState<UsageRange>(() => (localStorage.getItem("pi-studio.usage.range") as UsageRange) || "7d");
   const [metric, setMetric] = useState<UsageMetric>("cost");
+  const [chartType, setChartType] = useState<ChartType>(() => (localStorage.getItem("pi-studio.usage.chartType") as ChartType) || "line");
   const [table, setTable] = useState<"model" | "provider" | "project">("model");
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<AiUsageAnalysisResult | null>(null);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
   useEffect(() => localStorage.setItem("pi-studio.usage.range", range), [range]);
+  useEffect(() => localStorage.setItem("pi-studio.usage.chartType", chartType), [chartType]);
 
   const days = useMemo(() => lastNDays(RANGE_DAYS[range]), [range, usage?.generatedAt]);
   const summary = useMemo(() => (usage ? summarizeUsage(usage.buckets, days, usage.sessionDays) : null), [usage, days]);
@@ -54,6 +74,25 @@ export const UsageView: React.FC = () => {
 
   const rows = summary ? (table === "model" ? summary.byModel : table === "provider" ? summary.byProvider : summary.byProject) : [];
 
+  const handleRunAiAnalysis = () => {
+    if (!usage || !summary) return;
+    setAiLoading(true);
+    setAiModalOpen(true);
+    setTimeout(() => {
+      const res = analyzeUsageTelemetry(
+        usage,
+        summary.totals,
+        summary.byModel,
+        summary.byProvider,
+        summary.byProject,
+        summary.activeDays,
+        RANGE_DAYS[range],
+      );
+      setAiAnalysis(res);
+      setAiLoading(false);
+    }, 450);
+  };
+
   return (
     <div className="usage">
       <div className="usage__header">
@@ -66,6 +105,28 @@ export const UsageView: React.FC = () => {
           </div>
         </div>
         <div className="usage__actions">
+          <button
+            type="button"
+            className="ui-btn"
+            onClick={handleRunAiAnalysis}
+            disabled={!summary}
+            title="Generate deep AI telemetry insights & cost analysis"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: "linear-gradient(135deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0.08))",
+              border: "1px solid rgba(var(--accent-rgb), 0.4)",
+              color: "var(--accent-base)",
+              fontWeight: 600,
+              fontSize: 11,
+              padding: "4px 10px",
+              cursor: summary ? "pointer" : "default",
+            }}
+          >
+            <Sparkles size={13} />
+            <span>Analyze with AI</span>
+          </button>
           <div className="ui-seg" role="group" aria-label="Range">
             {RANGES.map(([id, label]) => (
               <button key={id} aria-pressed={range === id} onClick={() => setRange(id)}>
@@ -102,13 +163,23 @@ export const UsageView: React.FC = () => {
           <div className="ui-card usage__card">
             <div className="usage__card-head">
               <span className="usage__card-title">{range === "today" ? "Today by hour" : `Daily ${metric === "cost" ? "spend" : "tokens"}`}</span>
-              <div className="ui-seg" role="group" aria-label="Metric">
-                <button aria-pressed={metric === "cost"} onClick={() => setMetric("cost")}>
-                  Cost
-                </button>
-                <button aria-pressed={metric === "tokens"} onClick={() => setMetric("tokens")}>
-                  Tokens
-                </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div className="ui-seg" role="group" aria-label="Chart style">
+                  <button aria-pressed={chartType === "bars"} onClick={() => setChartType("bars")} title="Stacked bars">
+                    <BarChart2 size={13} />
+                  </button>
+                  <button aria-pressed={chartType === "line"} onClick={() => setChartType("line")} title="Smooth spline curve & area">
+                    <TrendingUp size={13} />
+                  </button>
+                </div>
+                <div className="ui-seg" role="group" aria-label="Metric">
+                  <button aria-pressed={metric === "cost"} onClick={() => setMetric("cost")}>
+                    Cost
+                  </button>
+                  <button aria-pressed={metric === "tokens"} onClick={() => setMetric("tokens")}>
+                    Tokens
+                  </button>
+                </div>
               </div>
             </div>
             {chart && chart.max > 0 ? (
@@ -118,6 +189,7 @@ export const UsageView: React.FC = () => {
                   columns={chart.columns}
                   max={chart.max}
                   metric={metric}
+                  chartType={chartType}
                   labelEvery={range === "today" ? 3 : range === "7d" ? 1 : range === "30d" ? 5 : 15}
                   xLabel={(x) => (range === "today" ? `${x.padStart(2, "0")}:00` : range === "7d" ? formatDayLabel(x, "weekday") : formatDayLabel(x))}
                   xTitle={(x) => (range === "today" ? `${x.padStart(2, "0")}:00 – ${String(Number(x) + 1).padStart(2, "0")}:00` : formatDayLabel(x, "long"))}
@@ -182,6 +254,14 @@ export const UsageView: React.FC = () => {
             </div>
             <BreakdownTable rows={rows} total={summary.totals} kind={table} />
           </div>
+
+          <AiUsageInsightsModal
+            isOpen={aiModalOpen}
+            onClose={() => setAiModalOpen(false)}
+            analysis={aiAnalysis}
+            onReanalyze={handleRunAiAnalysis}
+            isLoading={aiLoading}
+          />
         </>
       )}
     </div>

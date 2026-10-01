@@ -148,8 +148,13 @@ export const IPC = {
   gitBranches: "git:branches",
   gitCheckout: "git:checkout",
   gitCreateBranch: "git:create-branch",
+  gitDeleteBranch: "git:delete-branch",
+  gitLog: "git:log",
   gitDiff: "git:diff",
   gitGenerateCommitMessage: "git:generate-commit-message",
+  // Settings & Compaction
+  settingsGetCompaction: "settings:get-compaction",
+  settingsSaveCompaction: "settings:save-compaction",
   // Files
   filesList: "files:list",
   filesRead: "files:read",
@@ -265,8 +270,12 @@ export interface StudioApi {
   getGitBranches(cwd: string): Promise<string[]>;
   gitCheckout(cwd: string, branch: string): Promise<string>;
   gitCreateBranch(cwd: string, branch: string): Promise<string>;
+  gitDeleteBranch(cwd: string, branch: string, force?: boolean): Promise<string>;
+  getGitLog(cwd: string, maxCount?: number): Promise<Array<{ hash: string; author: string; relativeDate: string; message: string }>>;
   getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }): Promise<string>;
   generateCommitMessage(cwd: string, model?: string): Promise<string>;
+  getCompactionSettings(): Promise<{ enabled: boolean; reserveTokens: number; keepRecentTokens: number }>;
+  saveCompactionSettings(settings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number }): Promise<{ success: boolean }>;
 
   // File operations
   listFiles(dirPath: string): Promise<any[]>;

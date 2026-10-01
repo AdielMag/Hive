@@ -1,12 +1,13 @@
 /** Settings dialog: Appearance, Models, AI providers, Updates, About. */
 import React, { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, LogOut, Palette, RefreshCw, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, LogOut, Minimize2, Palette, RefreshCw, X } from "lucide-react";
 import { ArcThemeEditor } from "../features/appearance/ArcThemeEditor.tsx";
 import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
+import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 
-export type SettingsTabId = "appearance" | "models" | "accounts" | "updates" | "about";
+export type SettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "updates" | "about";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ interface UpdateInfo {
 const TABS: Array<{ id: SettingsTabId; label: string; icon: React.ReactNode; title: string }> = [
   { id: "appearance", label: "Appearance", icon: <Palette size={15} />, title: "Appearance" },
   { id: "models", label: "Models", icon: <Cpu size={15} />, title: "Models" },
+  { id: "compaction", label: "Compaction", icon: <Minimize2 size={15} />, title: "Auto-Compaction & Context" },
   { id: "accounts", label: "AI Providers", icon: <Key size={15} />, title: "AI providers & accounts" },
   { id: "updates", label: "Updates", icon: <Download size={15} />, title: "Updates" },
   { id: "about", label: "About", icon: <Info size={15} />, title: "About Pi Studio" },
@@ -90,6 +92,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
           <div className="settings__body">
             {tab === "appearance" && <ArcThemeEditor />}
             {tab === "models" && <ModelsSettingsContent />}
+            {tab === "compaction" && <CompactionSettingsContent />}
             {tab === "accounts" && <AccountsTab />}
             {tab === "updates" && <UpdatesTab info={update} checking={checking} onCheck={checkUpdate} />}
             {tab === "about" && <AboutTab />}

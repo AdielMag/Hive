@@ -369,6 +369,21 @@ g.is-hover .usage-chart__hit {
 .usage-chart__bar {
   transition: opacity 0.12s ease;
 }
+.usage-chart__line {
+  transition: stroke-width 0.15s ease, stroke-opacity 0.15s ease;
+}
+.usage-chart__area {
+  transition: opacity 0.2s ease;
+}
+.usage-chart__crosshair {
+  stroke: var(--accent-base);
+  stroke-dasharray: 3 3;
+  stroke-width: 1.2;
+  opacity: 0.65;
+}
+.usage-chart__dot {
+  transition: r 0.12s ease, opacity 0.12s ease;
+}
 .usage-chart__svg:hover g:not(.is-hover) .usage-chart__bar {
   opacity: 0.55;
 }

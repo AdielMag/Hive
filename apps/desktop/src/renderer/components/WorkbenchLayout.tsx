@@ -9,6 +9,7 @@ import {
   FolderKanban,
   Gauge,
   GitBranch,
+  GitCommit,
   PieChart,
   Settings,
   ShoppingBag,
@@ -27,6 +28,7 @@ import { AppTitleBar } from "./AppTitleBar.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
+import { SessionErrorBanner } from "./SessionErrorBanner.tsx";
 import { QuotaPanel } from "../features/insights/QuotaPanel.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
@@ -41,6 +43,7 @@ const DiffViewerTab = named(() => import("./DiffViewerTab.tsx"), "DiffViewerTab"
 const TerminalPanel = named(() => import("./TerminalPanel.tsx"), "TerminalPanel");
 const SettingsModal = named(() => import("./SettingsModal.tsx"), "SettingsModal");
 const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
+const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel");
 const UsageView = named(() => import("../features/insights/UsageView.tsx"), "UsageView");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
@@ -81,7 +84,8 @@ export const WorkbenchLayout: React.FC = () => {
           </div>
           <RailButton icon={<FolderKanban size={18} />} title="Projects & Sessions (Ctrl+B)" active={ui.left === "projects"} onClick={() => ui.toggleLeft("projects")} />
           <RailButton icon={<Files size={18} />} title="Files (Ctrl+Shift+E)" active={ui.left === "files"} onClick={() => ui.toggleLeft("files")} />
-          <RailButton icon={<GitBranch size={18} />} title="Source Control (Ctrl+Shift+G)" active={ui.left === "git"} onClick={() => ui.toggleLeft("git")} />
+          <RailButton icon={<GitCommit size={18} />} title="Commits & Staging (Ctrl+Shift+G)" active={ui.left === "git"} onClick={() => ui.toggleLeft("git")} />
+          <RailButton icon={<GitBranch size={18} />} title="Branches & History" active={ui.left === "branches"} onClick={() => ui.toggleLeft("branches")} />
           <div className="rail__spacer" />
           <RailButton icon={<BarChart3 size={18} />} title="Usage analytics (Ctrl+Shift+U)" active={activeTab?.kind === "usage"} onClick={openUsageTab} />
           <RailButton icon={<Settings size={18} />} title="Settings (Ctrl+,)" active={ui.settingsOpen} onClick={() => ui.openSettings()} />
@@ -100,7 +104,7 @@ export const WorkbenchLayout: React.FC = () => {
         {/* Content card */}
         <main className="card">
           <TabStrip />
-          {error && <div className="card__error">{error}</div>}
+          {error && <SessionErrorBanner error={error} />}
           <div className="card__content">
             <ErrorBoundary label="Editor" resetKey={activeTabId ?? ""}>
               <Suspense fallback={<Loading />}>
@@ -151,7 +155,7 @@ export const WorkbenchLayout: React.FC = () => {
 };
 
 const LeftPanelContent: React.FC<{ panel: LeftPanel }> = ({ panel }) =>
-  panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : <GitPanel />;
+  panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : panel === "branches" ? <BranchesPanel /> : <GitPanel />;
 
 const RightPanelContent: React.FC<{ panel: RightPanel }> = ({ panel }) =>
   panel === "limits" ? <QuotaPanel /> : panel === "context" ? <ContextBreakdownPanel /> : panel === "terminal" ? <TerminalPanel /> : <MarketplacePanel />;

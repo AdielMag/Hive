@@ -22,6 +22,10 @@ export function registerAccountIpc(ctx: AppContext): void {
   handle(IPC.modelsSaveEnabled, ({ enabledModels }: { enabledModels: string[] }) =>
     ctx.models.saveEnabledModels(enabledModels),
   );
+  handle(IPC.settingsGetCompaction, () => ctx.models.getCompactionSettings());
+  handle(IPC.settingsSaveCompaction, (settings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number }) =>
+    ctx.models.saveCompactionSettings(settings),
+  );
 
   handle(IPC.quotaGet, (opts: Force) => ctx.quota.getSnapshot(opts?.force));
   handle(IPC.usageGet, (opts: Force) => ctx.usage.getReport(opts?.force));

@@ -52,6 +52,8 @@ export interface SessionCatalogItem {
   projectId?: string;
 }
 
+export type AgentMode = "plan" | "auto-edit" | "manual" | "debug";
+
 export interface TabItem {
   id: string; // tab identifier (usually sessionPath or temp id)
   kind?: "session" | "file" | "diff" | "usage";
@@ -62,6 +64,8 @@ export interface TabItem {
   isCold?: boolean; // if rendered from file or has active live process
   activeKey?: string; // key of live session if started
   model?: any; // selected model for this tab
+  thinkingLevel?: string;
+  mode?: AgentMode;
 
   // File tab fields
   filePath?: string;

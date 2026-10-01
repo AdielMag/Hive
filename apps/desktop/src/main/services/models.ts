@@ -117,6 +117,63 @@ export class ModelsService {
       throw err;
     }
   }
+
+  getCompactionSettings(): { enabled: boolean; reserveTokens: number; keepRecentTokens: number } {
+    const defaults = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 };
+    if (!existsSync(this.settingsPath)) return defaults;
+    try {
+      const settings = JSON.parse(readFileSync(this.settingsPath, "utf8"));
+      const compaction = settings.compaction;
+      if (typeof compaction === "object" && compaction !== null) {
+        return {
+          enabled: typeof compaction.enabled === "boolean" ? compaction.enabled : defaults.enabled,
+          reserveTokens: typeof compaction.reserveTokens === "number" ? compaction.reserveTokens : defaults.reserveTokens,
+          keepRecentTokens: typeof compaction.keepRecentTokens === "number" ? compaction.keepRecentTokens : defaults.keepRecentTokens,
+        };
+      }
+    } catch (err) {
+      console.error("Failed to read compaction settings from settings.json", err);
+    }
+    return defaults;
+  }
+
+  saveCompactionSettings(compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number }): { success: boolean } {
+    if (!existsSync(this.configDir)) {
+      mkdirSync(this.configDir, { recursive: true });
+    }
+
+    let settings: Record<string, any> = {};
+    if (existsSync(this.settingsPath)) {
+      try {
+        settings = JSON.parse(readFileSync(this.settingsPath, "utf8"));
+      } catch {
+        settings = {};
+      }
+    }
+
+    settings.compaction = {
+      ...(typeof settings.compaction === "object" && settings.compaction !== null ? settings.compaction : {}),
+      enabled: compaction.enabled,
+      reserveTokens: compaction.reserveTokens,
+      keepRecentTokens: compaction.keepRecentTokens,
+    };
+
+    const tmpPath = `${this.settingsPath}.tmp.${Date.now()}`;
+
+    try {
+      writeFileSync(tmpPath, JSON.stringify(settings, null, 2), "utf8");
+      renameSync(tmpPath, this.settingsPath);
+      return { success: true };
+    } catch (err) {
+      if (existsSync(tmpPath)) {
+        try {
+          unlinkSync(tmpPath);
+        } catch {}
+      }
+      console.error("Failed to save compaction settings to settings.json", err);
+      throw err;
+    }
+  }
 }
 
 const FALLBACK_MODELS: ModelCatalogItem[] = [

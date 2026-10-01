@@ -17,9 +17,11 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
+import { useUi } from "../store/ui-store.ts";
 
 export const GitPanel: React.FC = () => {
   const { activeProject, selectedModel, openDiffTab } = useSessionStore(useShallow((s) => ({ activeProject: s.activeProject, selectedModel: s.selectedModel, openDiffTab: s.openDiffTab })));
+  const showLeft = useUi((s) => s.showLeft);
   const [status, setStatus] = useState<any>(null);
   const [branches, setBranches] = useState<string[]>([]);
   const [commitMsg, setCommitMsg] = useState("");
@@ -387,6 +389,26 @@ export const GitPanel: React.FC = () => {
 
         {/* Sync Status & Refresh */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
+          <button
+            type="button"
+            onClick={() => showLeft("branches")}
+            title="Open dedicated Branches & History window"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              background: "transparent",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: 4,
+              color: "var(--text-secondary)",
+              padding: "1px 5px",
+              fontSize: 10,
+              cursor: "pointer",
+            }}
+          >
+            <GitBranch size={10} color="var(--accent-base)" />
+            <span>Branches</span>
+          </button>
           {status?.ahead > 0 && (
             <span
               title={`${status.ahead} commit(s) ahead`}

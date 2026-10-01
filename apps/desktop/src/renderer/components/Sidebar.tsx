@@ -6,7 +6,9 @@ import {
   MessageSquare,
   Trash2,
   Link as LinkIcon,
-  } from "lucide-react";
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { DEFAULT_PROJECT_HUES } from "@pi-studio/protocol";
@@ -17,7 +19,24 @@ export const Sidebar: React.FC = () => {
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [showAllSessions, setShowAllSessions] = useState<Record<string, boolean>>({});
   const [showAllUnsorted, setShowAllUnsorted] = useState(false);
+  const [hideOtherSessions, setHideOtherSessions] = useState(() => {
+    try {
+      return localStorage.getItem("pi-studio.sidebar.hide-other-sessions") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [colorPickerPrj, setColorPickerPrj] = useState<string | null>(null);
+
+  const toggleHideOtherSessions = () => {
+    setHideOtherSessions((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("pi-studio.sidebar.hide-other-sessions", String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedProjects((s) => ({ ...s, [id]: !(s[id] ?? true) }));
@@ -353,57 +372,98 @@ export const Sidebar: React.FC = () => {
         {/* Unsorted / Discovered from Pi CLI */}
         {unsortedSessions.length > 0 && (
           <div style={{ marginTop: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 8 }}>
-            <div style={{ padding: "4px 14px", fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>
-              OTHER PI SESSIONS ({unsortedSessions.length})
-            </div>
-            {(showAllUnsorted ? unsortedSessions : unsortedSessions.slice(0, 5)).map((s) => (
-              <div
-                key={s.id}
-                style={{
-                  padding: "4px 14px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  fontSize: 11,
-                  color: "var(--text-muted)",
-                }}
-              >
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={s.cwd}>
-                  {s.cwd.split(/[/\\]/).pop()}
-                </span>
-                <button
-                  onClick={() => addProject(s.cwd)}
-                  style={{
-                    background: "var(--accent-subtle)",
-                    border: "none",
-                    color: "var(--accent-base)",
-                    fontSize: 10,
-                    borderRadius: 3,
-                    padding: "1px 5px",
-                    cursor: "pointer",
-                  }}
-                >
-                  + Add
-                </button>
+            <div
+              onClick={toggleHideOtherSessions}
+              style={{
+                padding: "4px 14px",
+                fontSize: 10,
+                fontWeight: 700,
+                color: "var(--text-muted)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+              title="Click to toggle visibility of other Pi sessions"
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                {hideOtherSessions ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                <span>OTHER PI SESSIONS ({unsortedSessions.length})</span>
               </div>
-            ))}
-
-            {unsortedSessions.length > 5 && (
               <button
-                onClick={() => setShowAllUnsorted(!showAllUnsorted)}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleHideOtherSessions();
+                }}
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: "var(--accent-hover)",
-                  fontSize: 10,
+                  color: "var(--text-muted)",
                   cursor: "pointer",
-                  textAlign: "left",
-                  padding: "6px 14px",
-                  fontWeight: 500,
+                  display: "flex",
+                  alignItems: "center",
+                  padding: 2,
                 }}
+                title={hideOtherSessions ? "Show other sessions" : "Hide other sessions"}
               >
-                {showAllUnsorted ? "Show less" : `+ Show all (${unsortedSessions.length - 5} more)`}
+                {hideOtherSessions ? <EyeOff size={12} /> : <Eye size={12} />}
               </button>
+            </div>
+
+            {!hideOtherSessions && (
+              <>
+                {(showAllUnsorted ? unsortedSessions : unsortedSessions.slice(0, 5)).map((s) => (
+                  <div
+                    key={s.id}
+                    style={{
+                      padding: "4px 14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: 11,
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={s.cwd}>
+                      {s.cwd.split(/[/\\]/).pop()}
+                    </span>
+                    <button
+                      onClick={() => addProject(s.cwd)}
+                      style={{
+                        background: "var(--accent-subtle)",
+                        border: "none",
+                        color: "var(--accent-base)",
+                        fontSize: 10,
+                        borderRadius: 3,
+                        padding: "1px 5px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                ))}
+
+                {unsortedSessions.length > 5 && (
+                  <button
+                    onClick={() => setShowAllUnsorted(!showAllUnsorted)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--accent-hover)",
+                      fontSize: 10,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      padding: "6px 14px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {showAllUnsorted ? "Show less" : `+ Show all (${unsortedSessions.length - 5} more)`}
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
