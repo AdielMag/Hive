@@ -12,9 +12,9 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "electron-vite build && node scripts/build-bridge.mjs",
     "preview": "electron-vite preview",
-    "dist": "electron-vite build && electron-builder --publish never",
+    "dist": "npm run build && electron-builder --publish never",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "icon": "electron build/render-icon.mjs"
   },
@@ -61,7 +61,8 @@
     },
     "icon": "build/icon.png",
     "asarUnpack": [
-      "resources/**"
+      "resources/**",
+      "out/bridge/**"
     ],
     "artifactName": "Pi-Studio-${version}-${os}-${arch}.${ext}",
     "nsis": {
@@ -99,6 +100,7 @@
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "35.7.5",
     "electron-vite": "^5.0.0",
+    "esbuild": "^0.28.2",
     "typescript": "6.0.3",
     "vite": "^7.3.0"
   }

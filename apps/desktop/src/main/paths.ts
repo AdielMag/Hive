@@ -28,6 +28,16 @@ export function resourcePath(...segments: string[]): string {
   return unpacked(resolve(here, "../../resources", ...segments));
 }
 
+/**
+ * The bridge extension handed to Pi. Packaged builds use the self-contained bundle from
+ * scripts/build-bridge.mjs (the raw .ts imports workspace packages that don't exist outside the repo);
+ * dev runs the .ts source directly so edits apply without a rebuild.
+ */
+export function bridgeExtensionPath(): string {
+  if (/app\.asar(?=[\\/])/.test(here)) return unpacked(resolve(here, "../bridge/studio-bridge.js"));
+  return resourcePath("bridge", "studio-bridge.ts");
+}
+
 /** Pi's agent dir (~/.pi/agent, overridable like Pi itself via PI_CODING_AGENT_DIR). */
 export function piAgentDir(): string {
   return process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");

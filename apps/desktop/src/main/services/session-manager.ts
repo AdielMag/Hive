@@ -16,7 +16,7 @@ import {
   type StartSessionResult,
   type StudioRpcCommand,
 } from "@pi-studio/protocol";
-import { resourcePath } from "../paths.ts";
+import { bridgeExtensionPath } from "../paths.ts";
 import { createBridgeServer, type BridgeSessionHandle } from "../bridge-server/index.ts";
 
 interface ActiveSession {
@@ -39,7 +39,7 @@ export class MainSessionManager {
     private readonly getWindow: () => BrowserWindow | null,
     private readonly testProviderPath?: string,
   ) {
-    this.bridgeExtensionPath = resourcePath("bridge", "studio-bridge.ts");
+    this.bridgeExtensionPath = bridgeExtensionPath();
   }
 
   async startSession(request: StartSessionRequest): Promise<StartSessionResult> {
