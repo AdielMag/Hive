@@ -7,12 +7,9 @@ import {
   Search,
   Trash2,
   Check,
-  ArrowUpRight,
   Clock,
   User,
   AlertCircle,
-  ExternalLink,
-  ChevronRight,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";

@@ -8,7 +8,7 @@ describe("insights-analyzer", () => {
     generatedAt: Date.now(),
     scanMs: 12,
     sessionFiles: 5,
-    sessionDays: 3,
+    sessionDays: [["2026-10-01"]],
     buckets: [],
   };
 
@@ -27,6 +27,7 @@ describe("insights-analyzer", () => {
       key: "anthropic/claude-3-7-sonnet",
       cost: 2.8,
       turns: 30,
+      tokens: 120000,
       input: 80000,
       output: 16000,
       cacheRead: 20000,

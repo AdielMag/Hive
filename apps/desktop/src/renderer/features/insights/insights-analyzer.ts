@@ -30,13 +30,13 @@ export interface AiUsageAnalysisResult {
 }
 
 export function analyzeUsageTelemetry(
-  usage: UsageReport,
+  _usage: UsageReport,
   totals: UsageTotals,
   byModel: UsageGroupRow[],
-  byProvider: UsageGroupRow[],
-  byProject: UsageGroupRow[],
+  _byProvider: UsageGroupRow[],
+  _byProject: UsageGroupRow[],
   activeDays: number,
-  totalDays: number,
+  _totalDays: number,
 ): AiUsageAnalysisResult {
   const insights: AiInsightItem[] = [];
   const recommendations: AiRecommendation[] = [];

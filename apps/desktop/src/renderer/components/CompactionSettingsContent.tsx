@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Check, Info, Minimize2, RotateCcw, Save, Sparkles } from "lucide-react";
+import { Check, Info, RotateCcw, Save } from "lucide-react";
 
 interface CompactionSettings {
   enabled: boolean;
@@ -32,7 +32,7 @@ export const CompactionSettingsContent: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [sampleWindow, setSampleWindow] = useState(200000); // 200k tokens
+  const sampleWindow = 200000; // 200k tokens
 
   useEffect(() => {
     let active = true;

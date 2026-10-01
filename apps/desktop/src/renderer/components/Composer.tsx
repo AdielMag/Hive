@@ -6,7 +6,6 @@ import {
   Paperclip,
   FileText,
   X,
-  Brain,
   Image as ChevronDown,
   Check,
   Search,
@@ -28,7 +27,7 @@ interface ComposerProps {
 }
 
 export const Composer: React.FC<ComposerProps> = ({ height }) => {
-  const { promptText, setPromptText, sendPrompt, abort, running, lastUsage, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, thinkingLevels, selectedThinkingLevel, setThinkingLevel, isLoadingModels, attachments, addAttachments, removeAttachment, stats, extensionWidgets } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, lastUsage: s.transcript.lastUsage, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, thinkingLevels: s.thinkingLevels, selectedThinkingLevel: s.selectedThinkingLevel, setThinkingLevel: s.setThinkingLevel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, stats: s.stats, extensionWidgets: s.extensionWidgets })));
+  const { promptText, setPromptText, sendPrompt, abort, running, lastUsage, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, stats, extensionWidgets } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, lastUsage: s.transcript.lastUsage, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, stats: s.stats, extensionWidgets: s.extensionWidgets })));
 
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -282,14 +281,6 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       reader.readAsDataURL(file);
     });
   }
-
-  // Active thinking levels: use returned levels or fallback to ["low", "medium", "high"] if model reasoning
-  const activeThinkingLevels =
-    thinkingLevels.length > 0
-      ? thinkingLevels
-      : selectedModel?.reasoning
-      ? ["low", "medium", "high"]
-      : [];
 
   // Context usage metrics
   const contextTokens = stats?.contextUsage?.tokens ?? lastUsage?.totalTokens ?? 0;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   Sparkles,
   X,
@@ -7,9 +7,7 @@ import {
   AlertTriangle,
   Lightbulb,
   Zap,
-  ArrowRight,
   RefreshCw,
-  Cpu,
 } from "lucide-react";
 import type { AiUsageAnalysisResult } from "./insights-analyzer.ts";
 
