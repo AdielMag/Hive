@@ -2,6 +2,12 @@
 
 All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
 
+## v0.6.1 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.6.0...v0.6.1)
+
+### 🐛 Fixes
+
+- **context:** breakdown counts live messages + system prompt overhead; redesign panel ([`78fef49`](https://github.com/AdielMag/pi-studio/commit/78fef49eeb333264b7923955b567fc2602e3c9be))
+
 ## v0.6.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.5.0...v0.6.0)
 
 ### ✨ Features
