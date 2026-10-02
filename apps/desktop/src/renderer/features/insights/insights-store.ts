@@ -13,6 +13,9 @@ interface InsightsState {
   usage: UsageReport | null;
   usageLoading: boolean;
   usageError: string | null;
+  /** Session file path the Usage view is scoped to; null = all sessions. */
+  focusSession: string | null;
+  setFocusSession(path: string | null): void;
   refreshQuota(force?: boolean): Promise<void>;
   refreshUsage(force?: boolean): Promise<void>;
 }
@@ -26,6 +29,8 @@ export const useInsights = create<InsightsState>((set, get) => ({
   usage: null,
   usageLoading: false,
   usageError: null,
+  focusSession: null,
+  setFocusSession: (path) => set({ focusSession: path }),
 
   refreshQuota: async (force) => {
     if (get().quotaLoading) return;

@@ -19,6 +19,7 @@ import {
   createTranscript,
   type TranscriptState,
 } from "@hive/pi-adapter";
+import { useInsights } from "../features/insights/insights-store.ts";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 
@@ -862,6 +863,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   openUsageTab: () => {
+    // Every entry point opens the all-sessions view; callers wanting one session set the focus afterwards.
+    useInsights.getState().setFocusSession(null);
     const { tabs } = get();
     if (!tabs.some((t) => t.id === USAGE_TAB_ID)) {
       const tab: TabItem = { id: USAGE_TAB_ID, kind: "usage", projectId: "", title: "Usage", pinned: false };

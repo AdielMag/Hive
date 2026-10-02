@@ -690,3 +690,52 @@ g.is-hover .usage-chart__hit {
     grid-template-columns: 1fr;
   }
 }
+
+/* Per-session scoping */
+.usage__focus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 320px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-base);
+  font-size: 11px;
+  font-weight: 600;
+}
+.usage__focus-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage__focus button {
+  display: inline-flex;
+  padding: 3px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.usage__focus button:hover {
+  background: rgba(var(--accent-rgb), 0.25);
+}
+.usage-table tr.is-clickable {
+  cursor: pointer;
+}
+.usage-table tr.is-clickable:hover td {
+  background: rgba(255, 255, 255, 0.04);
+}
+.usage-table__sub {
+  margin-left: 8px;
+  color: var(--text-muted, #8b909a);
+  font-size: 11px;
+  font-style: normal;
+}
+.usage-table__more {
+  padding: 8px 10px;
+  color: var(--text-muted, #8b909a);
+  font-size: 11px;
+}

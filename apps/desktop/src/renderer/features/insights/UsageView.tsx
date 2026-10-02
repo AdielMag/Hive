@@ -15,11 +15,23 @@ import {
   RefreshCw,
   Sparkles,
   TrendingUp,
+  X,
   Zap,
 } from "lucide-react";
-import { lastNDays, localDay, summarizeUsage, type UsageGroupRow, type UsageTotals } from "@hive/pi-adapter";
+import {
+  daysBetween,
+  filterBucketsBySession,
+  lastNDays,
+  localDay,
+  normalizeSessionPath,
+  projectLabel,
+  summarizeUsage,
+  type UsageGroupRow,
+  type UsageTotals,
+} from "@hive/pi-adapter";
 import { ProviderIcon } from "../../components/ProviderIcon.tsx";
 import { formatCost, formatDayLabel, formatTokens } from "../../lib/format.ts";
+import { useSessionStore } from "../../store/session-store.ts";
 import { useInsights } from "./insights-store.ts";
 import { UsageChart, type ChartType } from "./UsageChart.tsx";
 import { RANGE_DAYS, buildStackedSeries, prettyModel, type UsageMetric, type UsageRange } from "./usage-series.ts";
@@ -34,46 +46,89 @@ const RANGES: Array<[UsageRange, string]> = [
   ["90d", "90 days"],
 ];
 
+type UsageTable = "model" | "provider" | "project" | "session";
+
 export const UsageView: React.FC = () => {
   const usage = useInsights((s) => s.usage);
   const loading = useInsights((s) => s.usageLoading);
   const error = useInsights((s) => s.usageError);
   const refresh = useInsights((s) => s.refreshUsage);
+  const focus = useInsights((s) => s.focusSession);
+  const setFocus = useInsights((s) => s.setFocusSession);
+  const allSessions = useSessionStore((s) => s.allSessions);
   const [range, setRange] = useState<UsageRange>(() => (getStoredItem("hive.usage.range") as UsageRange) || "7d");
   const [metric, setMetric] = useState<UsageMetric>("cost");
   const [chartType, setChartType] = useState<ChartType>(() => (getStoredItem("hive.usage.chartType") as ChartType) || "line");
-  const [table, setTable] = useState<"model" | "provider" | "project">("model");
+  const [table, setTable] = useState<UsageTable>("model");
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AiUsageAnalysisResult | null>(null);
 
+  // A scoped view is usually opened for a session that just ran, so bypass the report's short cache.
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void refresh(focus !== null);
+  }, [refresh, focus]);
   useEffect(() => setStoredItem("hive.usage.range", range), [range]);
   useEffect(() => setStoredItem("hive.usage.chartType", chartType), [chartType]);
 
-  const days = useMemo(() => lastNDays(RANGE_DAYS[range]), [range, usage?.generatedAt]);
-  const summary = useMemo(() => (usage ? summarizeUsage(usage.buckets, days, usage.sessionDays) : null), [usage, days]);
+  const scoped = focus !== null;
+  const focusBuckets = useMemo(() => (usage && focus ? filterBucketsBySession(usage.buckets, focus) : null), [usage, focus]);
+  const days = useMemo(() => {
+    if (focusBuckets) {
+      if (!focusBuckets.length) return lastNDays(1);
+      const ds = focusBuckets.map((b) => b.day).sort();
+      return daysBetween(ds[0]!, ds[ds.length - 1]!);
+    }
+    return lastNDays(RANGE_DAYS[range]);
+  }, [focusBuckets, range, usage?.generatedAt]);
+  const buckets = focusBuckets ?? usage?.buckets ?? [];
+  const summary = useMemo(() => {
+    if (!usage) return null;
+    const sessionDays = focusBuckets ? (focusBuckets.length ? [[...new Set(focusBuckets.map((b) => b.day))]] : []) : usage.sessionDays;
+    return summarizeUsage(buckets, days, sessionDays);
+  }, [usage, buckets, focusBuckets, days]);
   const prevSummary = useMemo(() => {
-    if (!usage || range === "today") return null;
+    if (!usage || scoped || range === "today") return null;
     const n = RANGE_DAYS[range];
     const prevDays = lastNDays(n * 2).slice(0, n);
     return summarizeUsage(usage.buckets, prevDays, usage.sessionDays);
-  }, [usage, range]);
+  }, [usage, range, scoped]);
+
+  // Single-day views (Today, or a session that only ran on one day) chart per hour instead of per day.
+  const hourly = scoped ? days.length === 1 : range === "today";
+  const nDays = scoped ? days.length : RANGE_DAYS[range];
 
   const chart = useMemo(() => {
     if (!usage) return null;
-    if (range === "today") {
-      const today = localDay(Date.now());
+    if (hourly) {
+      const day = scoped ? days[0]! : localDay(Date.now());
       const hours = Array.from({ length: 24 }, (_, h) => String(h));
-      const todays = usage.buckets.filter((b) => b.day === today);
-      return buildStackedSeries(todays, hours, (b) => String(b.hour), metric);
+      return buildStackedSeries(buckets.filter((b) => b.day === day), hours, (b) => String(b.hour), metric);
     }
-    return buildStackedSeries(usage.buckets, days, (b) => b.day, metric);
-  }, [usage, days, range, metric]);
+    return buildStackedSeries(buckets, days, (b) => b.day, metric);
+  }, [usage, buckets, days, hourly, scoped, metric]);
 
-  const rows = summary ? (table === "model" ? summary.byModel : table === "provider" ? summary.byProvider : summary.byProject) : [];
+  const sessionLabels = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const x of allSessions) m.set(normalizeSessionPath(x.path), (x.title || x.name || x.firstMessage || "").trim());
+    return m;
+  }, [allSessions]);
+  const labelFor = (path: string) => {
+    const known = sessionLabels.get(normalizeSessionPath(path));
+    if (known) return known.length > 80 ? `${known.slice(0, 80)}…` : known;
+    return (path.split(/[\\/]/).pop() ?? path).replace(/\.jsonl$/, "");
+  };
+
+  const kind: UsageTable = scoped && table === "session" ? "model" : table;
+  const rows = summary
+    ? kind === "model"
+      ? summary.byModel
+      : kind === "provider"
+        ? summary.byProvider
+        : kind === "project"
+          ? summary.byProject
+          : summary.bySession
+    : [];
 
   const handleRunAiAnalysis = () => {
     if (!usage || !summary) return;
@@ -87,7 +142,7 @@ export const UsageView: React.FC = () => {
         summary.byProvider,
         summary.byProject,
         summary.activeDays,
-        RANGE_DAYS[range],
+        nDays,
       );
       setAiAnalysis(res);
       setAiLoading(false);
@@ -102,7 +157,11 @@ export const UsageView: React.FC = () => {
             <BarChart3 size={18} /> Usage
           </div>
           <div className="usage__subtitle">
-            {usage ? `${usage.sessionFiles.toLocaleString()} session files · scanned in ${usage.scanMs} ms` : "Reading your Pi sessions…"}
+            {scoped
+              ? "Single session"
+              : usage
+                ? `${usage.sessionFiles.toLocaleString()} session files · scanned in ${usage.scanMs} ms`
+                : "Reading your Pi sessions…"}
           </div>
         </div>
         <div className="usage__actions">
@@ -110,8 +169,8 @@ export const UsageView: React.FC = () => {
             type="button"
             className="ui-btn"
             onClick={handleRunAiAnalysis}
-            disabled={!summary}
-            title="Generate deep AI telemetry insights & cost analysis"
+            disabled={!summary || scoped}
+            title={scoped ? "AI analysis covers all sessions" : "Generate deep AI telemetry insights & cost analysis"}
             style={{
               display: "flex",
               alignItems: "center",
@@ -128,13 +187,23 @@ export const UsageView: React.FC = () => {
             <Sparkles size={13} />
             <span>Analyze with AI</span>
           </button>
-          <div className="ui-seg" role="group" aria-label="Range">
-            {RANGES.map(([id, label]) => (
-              <button key={id} aria-pressed={range === id} onClick={() => setRange(id)}>
-                {label}
+          {focus ? (
+            <div className="usage__focus" title={focus}>
+              <MessagesSquare size={13} />
+              <span className="usage__focus-name">{labelFor(focus)}</span>
+              <button type="button" onClick={() => setFocus(null)} title="Back to all sessions" aria-label="Show all sessions">
+                <X size={12} />
               </button>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="ui-seg" role="group" aria-label="Range">
+              {RANGES.map(([id, label]) => (
+                <button key={id} aria-pressed={range === id} onClick={() => setRange(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <button className="ui-btn ui-btn--icon" onClick={() => void refresh(true)} disabled={loading} title="Rescan sessions">
             <RefreshCw size={14} className={loading ? "spin" : undefined} />
           </button>
@@ -153,17 +222,21 @@ export const UsageView: React.FC = () => {
       {summary && (
         <>
           <div className="usage__grid">
-            <Kpi icon={<Coins size={15} />} label="Spend" value={formatCost(summary.totals.cost)} delta={delta(summary.totals.cost, prevSummary?.totals.cost)} hint={range === "today" ? "API-equivalent cost" : `${formatCost(summary.totals.cost / Math.max(1, RANGE_DAYS[range]))} / day avg`} />
+            <Kpi icon={<Coins size={15} />} label="Spend" value={formatCost(summary.totals.cost)} delta={delta(summary.totals.cost, prevSummary?.totals.cost)} hint={nDays === 1 ? "API-equivalent cost" : `${formatCost(summary.totals.cost / Math.max(1, nDays))} / day avg`} />
             <Kpi icon={<Layers size={15} />} label="Tokens" value={formatTokens(summary.totals.tokens)} delta={delta(summary.totals.tokens, prevSummary?.totals.tokens)} hint={`${formatTokens(summary.totals.input + summary.totals.cacheRead + summary.totals.cacheWrite)} in · ${formatTokens(summary.totals.output)} out`} />
             <Kpi icon={<Zap size={15} />} label="Requests" value={summary.totals.turns.toLocaleString()} delta={delta(summary.totals.turns, prevSummary?.totals.turns)} hint={summary.totals.turns ? `${formatCost(summary.totals.cost / summary.totals.turns)} per request` : "—"} />
-            <Kpi icon={<MessagesSquare size={15} />} label="Sessions" value={summary.sessions.toLocaleString()} delta={delta(summary.sessions, prevSummary?.sessions)} hint={`${summary.activeDays} active ${summary.activeDays === 1 ? "day" : "days"}`} />
+            {scoped ? (
+              <Kpi icon={<MessagesSquare size={15} />} label="Active days" value={summary.activeDays.toLocaleString()} hint={days.length > 1 ? `${formatDayLabel(days[0]!)} – ${formatDayLabel(days[days.length - 1]!)}` : formatDayLabel(days[0]!, "long")} />
+            ) : (
+              <Kpi icon={<MessagesSquare size={15} />} label="Sessions" value={summary.sessions.toLocaleString()} delta={delta(summary.sessions, prevSummary?.sessions)} hint={`${summary.activeDays} active ${summary.activeDays === 1 ? "day" : "days"}`} />
+            )}
             <Kpi icon={<Database size={15} />} label="Cache hit rate" value={`${Math.round(summary.cacheHitRate * 100)}%`} hint={`${formatTokens(summary.totals.cacheRead)} tokens served from cache`} />
             <Kpi icon={<Activity size={15} />} label="Top model" value={summary.byModel[0] ? prettyModel(summary.byModel[0].key.split("/").slice(1).join("/")) : "—"} hint={summary.byModel[0] ? `${Math.round((summary.byModel[0].cost / Math.max(summary.totals.cost, 1e-9)) * 100)}% of spend` : "No activity"} small />
           </div>
 
           <div className="ui-card usage__card">
             <div className="usage__card-head">
-              <span className="usage__card-title">{range === "today" ? "Today by hour" : `Daily ${metric === "cost" ? "spend" : "tokens"}`}</span>
+              <span className="usage__card-title">{hourly ? (scoped ? "Session by hour" : "Today by hour") : `Daily ${metric === "cost" ? "spend" : "tokens"}`}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div className="ui-seg" role="group" aria-label="Chart style">
                   <button aria-pressed={chartType === "bars"} onClick={() => setChartType("bars")} title="Stacked bars">
@@ -191,9 +264,9 @@ export const UsageView: React.FC = () => {
                   max={chart.max}
                   metric={metric}
                   chartType={chartType}
-                  labelEvery={range === "today" ? 3 : range === "7d" ? 1 : range === "30d" ? 5 : 15}
-                  xLabel={(x) => (range === "today" ? `${x.padStart(2, "0")}:00` : range === "7d" ? formatDayLabel(x, "weekday") : formatDayLabel(x))}
-                  xTitle={(x) => (range === "today" ? `${x.padStart(2, "0")}:00 – ${String(Number(x) + 1).padStart(2, "0")}:00` : formatDayLabel(x, "long"))}
+                  labelEvery={hourly ? 3 : scoped ? Math.max(1, Math.ceil(days.length / 10)) : range === "7d" ? 1 : range === "30d" ? 5 : 15}
+                  xLabel={(x) => (hourly ? `${x.padStart(2, "0")}:00` : !scoped && range === "7d" ? formatDayLabel(x, "weekday") : formatDayLabel(x))}
+                  xTitle={(x) => (hourly ? `${x.padStart(2, "0")}:00 – ${String(Number(x) + 1).padStart(2, "0")}:00` : formatDayLabel(x, "long"))}
                 />
                 <div className="usage__legend">
                   {chart.series.map((s) => (
@@ -206,7 +279,7 @@ export const UsageView: React.FC = () => {
               </>
             ) : (
               <div className="ui-empty" style={{ height: 220 }}>
-                No usage in this range yet.
+                {scoped ? "No usage recorded for this session yet." : "No usage in this range yet."}
               </div>
             )}
           </div>
@@ -242,18 +315,23 @@ export const UsageView: React.FC = () => {
             <div className="usage__card-head">
               <span className="usage__card-title">Breakdown</span>
               <div className="ui-seg" role="group" aria-label="Group by">
-                <button aria-pressed={table === "model"} onClick={() => setTable("model")}>
+                {!scoped && (
+                  <button aria-pressed={table === "session"} onClick={() => setTable("session")}>
+                    <MessagesSquare size={12} /> Sessions
+                  </button>
+                )}
+                <button aria-pressed={kind === "model"} onClick={() => setTable("model")}>
                   Models
                 </button>
-                <button aria-pressed={table === "provider"} onClick={() => setTable("provider")}>
+                <button aria-pressed={kind === "provider"} onClick={() => setTable("provider")}>
                   Providers
                 </button>
-                <button aria-pressed={table === "project"} onClick={() => setTable("project")}>
+                <button aria-pressed={kind === "project"} onClick={() => setTable("project")}>
                   <FolderKanban size={12} /> Projects
                 </button>
               </div>
             </div>
-            <BreakdownTable rows={rows} total={summary.totals} kind={table} />
+            <BreakdownTable rows={rows} total={summary.totals} kind={kind} labelFor={labelFor} onPick={setFocus} />
           </div>
 
           <AiUsageInsightsModal
@@ -320,14 +398,23 @@ const TokenMix: React.FC<{ totals: UsageTotals }> = ({ totals }) => {
   );
 };
 
-const BreakdownTable: React.FC<{ rows: UsageGroupRow[]; total: UsageTotals; kind: "model" | "provider" | "project" }> = ({ rows, total, kind }) => {
+const SESSION_ROW_LIMIT = 100;
+
+const BreakdownTable: React.FC<{
+  rows: UsageGroupRow[];
+  total: UsageTotals;
+  kind: UsageTable;
+  labelFor: (path: string) => string;
+  onPick: (path: string) => void;
+}> = ({ rows, total, kind, labelFor, onPick }) => {
   if (!rows.length) return <div className="ui-empty">No activity in this range.</div>;
+  const shown = kind === "session" ? rows.slice(0, SESSION_ROW_LIMIT) : rows;
   return (
     <div className="usage-table-wrap">
       <table className="usage-table">
         <thead>
           <tr>
-            <th>{kind === "model" ? "Model" : kind === "provider" ? "Provider" : "Project"}</th>
+            <th>{kind === "model" ? "Model" : kind === "provider" ? "Provider" : kind === "project" ? "Project" : "Session"}</th>
             <th className="num">Requests</th>
             <th className="num">Input</th>
             <th className="num">Output</th>
@@ -337,15 +424,27 @@ const BreakdownTable: React.FC<{ rows: UsageGroupRow[]; total: UsageTotals; kind
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
+          {shown.map((r) => {
             const share = total.cost > 0 ? r.cost / total.cost : total.tokens > 0 ? r.tokens / total.tokens : 0;
-            const name = kind === "model" ? prettyModel(r.key.split("/").slice(1).join("/")) : r.key;
+            const name = kind === "model" ? prettyModel(r.key.split("/").slice(1).join("/")) : kind === "session" ? labelFor(r.key) : r.key;
             return (
-              <tr key={r.key}>
+              <tr
+                key={r.key}
+                className={kind === "session" ? "is-clickable" : undefined}
+                onClick={kind === "session" ? () => onPick(r.key) : undefined}
+                tabIndex={kind === "session" ? 0 : undefined}
+                onKeyDown={kind === "session" ? (e) => e.key === "Enter" && onPick(r.key) : undefined}
+                title={kind === "session" ? "Show usage for this session only" : undefined}
+              >
                 <td>
                   <div className="usage-table__name">
-                    {r.provider && kind !== "project" && <ProviderIcon provider={r.provider} size={14} />}
+                    {r.provider && kind !== "project" && kind !== "session" && <ProviderIcon provider={r.provider} size={14} />}
                     <span title={r.key}>{name}</span>
+                    {kind === "session" && (
+                      <em className="usage-table__sub">
+                        {projectLabel(r.cwd ?? "")} · {r.firstDay === r.lastDay ? formatDayLabel(r.lastDay ?? "") : `${formatDayLabel(r.firstDay ?? "")} – ${formatDayLabel(r.lastDay ?? "")}`}
+                      </em>
+                    )}
                   </div>
                 </td>
                 <td className="num">{r.turns.toLocaleString()}</td>
@@ -366,6 +465,9 @@ const BreakdownTable: React.FC<{ rows: UsageGroupRow[]; total: UsageTotals; kind
           })}
         </tbody>
       </table>
+      {kind === "session" && rows.length > SESSION_ROW_LIMIT && (
+        <div className="usage-table__more">Showing the top {SESSION_ROW_LIMIT} of {rows.length.toLocaleString()} sessions by cost.</div>
+      )}
     </div>
   );
 };

@@ -79,9 +79,9 @@ export class UsageService {
 
     const buckets: UsageBucket[] = [];
     const sessionDays: string[][] = [];
-    for (const entry of Object.values(next)) {
+    for (const [file, entry] of Object.entries(next)) {
       if (!entry.buckets.length) continue;
-      buckets.push(...entry.buckets);
+      for (const b of entry.buckets) buckets.push({ ...b, session: file });
       sessionDays.push(entry.days);
     }
     return { buckets, sessionDays, sessionFiles: files.length, generatedAt: Date.now(), scanMs: Date.now() - started };

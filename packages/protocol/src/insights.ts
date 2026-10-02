@@ -61,6 +61,8 @@ export interface UsageBucket {
   model: string;
   /** Working directory the session ran in. */
   cwd: string;
+  /** Path of the session file these turns came from (attached by main when assembling the report). */
+  session?: string;
   turns: number;
   input: number;
   output: number;

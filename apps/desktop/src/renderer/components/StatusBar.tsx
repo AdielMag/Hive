@@ -152,9 +152,10 @@ export const StatusBar: React.FC = () => {
         <button
           className="statusbar__btn mono"
           title="Cost of this session. Click for its usage breakdown"
+          disabled={!activeSessionPath}
           onClick={() => {
-            setFocusSession(activeSessionPath ?? null);
             openUsageTab();
+            setFocusSession(activeSessionPath ?? null);
           }}
         >
           {formatCost(cost)}
@@ -162,10 +163,7 @@ export const StatusBar: React.FC = () => {
       )}
       <button
         className="statusbar__btn"
-        onClick={() => {
-          setFocusSession(null);
-          openUsageTab();
-        }}
+        onClick={openUsageTab}
         title="Usage analytics (all sessions)"
       >
         <BarChart3 size={12} />

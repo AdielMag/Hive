@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { SessionUsageParser, lastNDays, localDay, parseUsageLine, projectLabel, summarizeUsage } from "../src/usage.ts";
+import {
+  SessionUsageParser,
+  daysBetween,
+  filterBucketsBySession,
+  lastNDays,
+  localDay,
+  parseUsageLine,
+  projectLabel,
+  summarizeUsage,
+} from "../src/usage.ts";
 import type { UsageBucket } from "@hive/protocol";
 
 const assistant = (ts: number, model: string, cost: number, provider = "anthropic") =>
@@ -91,5 +100,29 @@ describe("summarizeUsage", () => {
   it("labels projects by folder name", () => {
     expect(projectLabel("C:\\Users\\me\\blog")).toBe("blog");
     expect(projectLabel("")).toBe("Unknown");
+  });
+
+  it("groups and filters by session file", () => {
+    const mk = (session: string, day: string, cost: number): UsageBucket => ({
+      day, hour: 9, provider: "anthropic", model: "opus", cwd: "/x/proj", session,
+      turns: 1, input: 10, output: 20, cacheRead: 100, cacheWrite: 5, cost,
+    });
+    const a = "C:\\s\\a.jsonl";
+    const b = "C:\\s\\b.jsonl";
+    const buckets = [mk(a, "2026-05-01", 1), mk(a, "2026-05-03", 2), mk(b, "2026-05-03", 5)];
+    const s = summarizeUsage(buckets, ["2026-05-01", "2026-05-02", "2026-05-03"]);
+    expect(s.bySession.map((r) => [r.key, r.cost])).toEqual([[b, 5], [a, 3]]);
+    expect(s.bySession[1]).toMatchObject({ firstDay: "2026-05-01", lastDay: "2026-05-03", cwd: "/x/proj" });
+
+    // Path comparison ignores separator style and case (Windows paths vary between sources).
+    const only = filterBucketsBySession(buckets, "c:/S/A.jsonl");
+    expect(only).toHaveLength(2);
+    expect(summarizeUsage(only, daysBetween("2026-05-01", "2026-05-03")).totals.cost).toBe(3);
+    expect(filterBucketsBySession(buckets, "nope")).toEqual([]);
+  });
+
+  it("lists inclusive day spans", () => {
+    expect(daysBetween("2026-02-27", "2026-03-02")).toEqual(["2026-02-27", "2026-02-28", "2026-03-01", "2026-03-02"]);
+    expect(daysBetween("2026-05-01", "2026-05-01")).toEqual(["2026-05-01"]);
   });
 });

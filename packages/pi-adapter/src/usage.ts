@@ -132,6 +132,10 @@ export interface UsageTotals {
 export interface UsageGroupRow extends UsageTotals {
   key: string;
   provider?: string;
+  /** Session rows only: working directory, and the first / last local day with activity (in range). */
+  cwd?: string;
+  firstDay?: string;
+  lastDay?: string;
 }
 
 export interface UsageDayRow extends UsageTotals {
@@ -151,6 +155,8 @@ export interface UsageSummary {
   byModel: UsageGroupRow[];
   byProvider: UsageGroupRow[];
   byProject: UsageGroupRow[];
+  /** One row per session file (key = session path), most expensive first. */
+  bySession: UsageGroupRow[];
   /** Cache-read share of all prompt-side tokens, 0..1. */
   cacheHitRate: number;
   activeDays: number;
@@ -167,6 +173,31 @@ function addInto(t: UsageTotals, b: UsageBucket): void {
   t.cacheWrite += b.cacheWrite;
   t.cost += b.cost;
   t.tokens += b.input + b.output + b.cacheRead + b.cacheWrite;
+}
+
+/** Comparable form of a session file path (separator- and case-insensitive; Windows paths vary). */
+export function normalizeSessionPath(p: string): string {
+  return p.replace(/\\/g, "/").toLowerCase();
+}
+
+/** Buckets that belong to one session file. */
+export function filterBucketsBySession(buckets: UsageBucket[], sessionPath: string): UsageBucket[] {
+  const want = normalizeSessionPath(sessionPath);
+  return buckets.filter((b) => b.session !== undefined && normalizeSessionPath(b.session) === want);
+}
+
+/** Inclusive list of local days from `first` to `last` (YYYY-MM-DD). */
+export function daysBetween(first: string, last: string): string[] {
+  const out: string[] = [];
+  const [y, m, d] = first.split("-").map(Number) as [number, number, number];
+  const cur = new Date(y, m - 1, d, 12);
+  for (let i = 0; i < 4000; i++) {
+    const day = localDay(cur.getTime());
+    out.push(day);
+    if (day >= last) break;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
 }
 
 /** Inclusive list of local days ending today. `days` = 1 for today only. */
@@ -202,6 +233,7 @@ export function summarizeUsage(
   const byModel = new Map<string, UsageGroupRow>();
   const byProvider = new Map<string, UsageGroupRow>();
   const byProject = new Map<string, UsageGroupRow>();
+  const bySession = new Map<string, UsageGroupRow>();
 
   const group = (map: Map<string, UsageGroupRow>, key: string, b: UsageBucket, provider?: string) => {
     let row = map.get(key);
@@ -220,6 +252,13 @@ export function summarizeUsage(
     group(byModel, `${b.provider}/${b.model}`, b, b.provider);
     group(byProvider, b.provider, b, b.provider);
     group(byProject, projectLabel(b.cwd), b);
+    if (b.session) {
+      group(bySession, b.session, b);
+      const row = bySession.get(b.session)!;
+      row.cwd = b.cwd;
+      if (!row.firstDay || b.day < row.firstDay) row.firstDay = b.day;
+      if (!row.lastDay || b.day > row.lastDay) row.lastDay = b.day;
+    }
   }
 
   let sessions = 0;
@@ -247,6 +286,7 @@ export function summarizeUsage(
     byModel: sortRows(byModel),
     byProvider: sortRows(byProvider),
     byProject: sortRows(byProject),
+    bySession: sortRows(bySession),
     cacheHitRate: promptSide > 0 ? totals.cacheRead / promptSide : 0,
     activeDays: dayRows.filter((d) => d.turns > 0).length,
     sessions,
