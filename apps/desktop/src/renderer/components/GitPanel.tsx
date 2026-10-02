@@ -6,10 +6,9 @@ import {
   RotateCcw,
   Check,
   RefreshCw,
-  ArrowUp,
-  ArrowDown,
   Download,
   Upload,
+  CloudDownload,
   Sparkles,
   ChevronDown,
   ChevronRight,
@@ -429,22 +428,52 @@ export const GitPanel: React.FC = () => {
             <GitBranch size={10} color="var(--accent-base)" />
             <span>Branches</span>
           </button>
-          {status?.ahead > 0 && (
-            <span
-              title={`${status.ahead} commit(s) ahead`}
-              style={{ display: "flex", alignItems: "center", gap: 2, color: "var(--accent-base)", fontWeight: 600 }}
-            >
-              <ArrowUp size={11} /> {status.ahead}
-            </span>
-          )}
-          {status?.behind > 0 && (
-            <span
-              title={`${status.behind} commit(s) behind`}
-              style={{ display: "flex", alignItems: "center", gap: 2, color: "var(--warning)", fontWeight: 600 }}
-            >
-              <ArrowDown size={11} /> {status.behind}
-            </span>
-          )}
+          {/* Remote sync: Fetch / Pull / Push */}
+          {(
+            [
+              { op: "fetch", icon: CloudDownload, title: "Fetch from all remotes", badge: 0 },
+              {
+                op: "pull",
+                icon: Download,
+                title: status?.behind ? `Pull from upstream (${status.behind} behind)` : "Pull from upstream",
+                badge: status?.behind || 0,
+              },
+              {
+                op: "push",
+                icon: Upload,
+                title: status?.ahead ? `Push to upstream (${status.ahead} ahead)` : "Push to upstream",
+                badge: status?.ahead || 0,
+              },
+            ] as const
+          ).map(({ op, icon: Icon, title, badge }) => {
+            const busy = syncOp === op;
+            const disabled = !!syncOp || loading;
+            return (
+              <button
+                key={op}
+                type="button"
+                onClick={() => void handleSync(op)}
+                disabled={disabled}
+                title={title}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  background: "transparent",
+                  border: "none",
+                  color: badge > 0 ? (op === "push" ? "var(--accent-base)" : "var(--warning)") : "var(--text-muted)",
+                  cursor: disabled ? "default" : "pointer",
+                  opacity: disabled && !busy ? 0.5 : 1,
+                  padding: 2,
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              >
+                <Icon size={12} className={busy ? "spin" : ""} />
+                {badge > 0 && <span>{badge}</span>}
+              </button>
+            );
+          })}
           <button
             onClick={refreshGit}
             title="Refresh Git status"
@@ -1019,53 +1048,6 @@ export const GitPanel: React.FC = () => {
             lineHeight: 1.4,
           }}
         />
-
-        {/* Remote sync: Fetch / Pull / Push */}
-        <div style={{ display: "flex", gap: 6 }}>
-          {(
-            [
-              { op: "fetch", label: "Fetch", icon: RefreshCw, title: "Fetch from all remotes", badge: 0 },
-              { op: "pull", label: "Pull", icon: Download, title: "Pull from upstream", badge: status?.behind || 0 },
-              { op: "push", label: "Push", icon: Upload, title: "Push to upstream", badge: status?.ahead || 0 },
-            ] as const
-          ).map(({ op, label, icon: Icon, title, badge }) => {
-            const busy = syncOp === op;
-            const disabled = !!syncOp || loading;
-            return (
-              <button
-                key={op}
-                type="button"
-                onClick={() => void handleSync(op)}
-                disabled={disabled}
-                title={title}
-                style={{
-                  flex: 1,
-                  padding: "5px 6px",
-                  background: "var(--bg-card)",
-                  color: "var(--text-secondary)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: 4,
-                  cursor: disabled ? "default" : "pointer",
-                  opacity: disabled && !busy ? 0.5 : 1,
-                  fontWeight: 500,
-                  fontSize: 11,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 5,
-                }}
-              >
-                <Icon size={12} className={busy ? "spin" : ""} />
-                <span>{label}</span>
-                {badge > 0 && (
-                  <span style={{ color: op === "push" ? "var(--accent-base)" : "var(--warning)", fontWeight: 600 }}>
-                    {badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
 
         {/* Action Row: AI Generate & Commit Button */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
