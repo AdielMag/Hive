@@ -1,17 +1,21 @@
 import React, { useMemo } from "react";
-import {
-  AlertTriangle,
-  Bot,
-  Brain,
-  Cpu,
-  EyeOff,
-  Filter,
-  Search,
-  Sparkles,
-  X,
-} from "lucide-react";
-import type { LibraryScope } from "@pi-studio/protocol";
+import { AlertTriangle, Bot, EyeOff, Filter, Search, Sparkles, X } from "lucide-react";
+import type { LibraryEntry, LibraryScope } from "@pi-studio/protocol";
 import { useLibraryStore } from "./library-store.ts";
+
+const SCOPES: Array<{ id: LibraryScope; label: string }> = [
+  { id: "project", label: "Project" },
+  { id: "global", label: "Global" },
+  { id: "builtin", label: "Built-in" },
+];
+
+const scopeRank = (s: LibraryScope) => (s === "project" ? 0 : s === "global" ? 1 : 2);
+
+const prettyModel = (raw?: unknown): string | null => {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const parts = raw.split("/");
+  return parts.length > 1 ? parts.slice(1).join("/") : raw;
+};
 
 export const LibraryList: React.FC = () => {
   const {
@@ -24,149 +28,128 @@ export const LibraryList: React.FC = () => {
     setFilterKind,
     filterScope,
     setFilterScope,
+    showOverridden,
+    setShowOverridden,
   } = useLibraryStore();
 
   const entries = snapshot?.entries ?? [];
+  const overriddenCount = useMemo(() => entries.filter((e) => e.shadowed).length, [entries]);
+  // Overridden copies are noise for most users: hide them unless asked (or the selected one is overridden).
+  const base = useMemo(
+    () => (showOverridden ? entries : entries.filter((e) => !e.shadowed || e.id === selectedId)),
+    [entries, showOverridden, selectedId],
+  );
 
-  // Counts
   const counts = useMemo(() => {
-    let skills = 0;
-    let agents = 0;
-    let project = 0;
-    let global = 0;
-    let builtin = 0;
-    for (const e of entries) {
-      if (e.kind === "skill") skills++;
-      if (e.kind === "agent") agents++;
-      if (e.scope === "project") project++;
-      if (e.scope === "global") global++;
-      if (e.scope === "builtin") builtin++;
+    const c = { all: 0, skill: 0, agent: 0, project: 0, global: 0, builtin: 0 };
+    // Counts are "active" definitions (same as the header); overridden copies have their own count.
+    for (const e of base) {
+      if (e.shadowed) continue;
+      c.all++;
+      c[e.kind]++;
+      c[e.scope]++;
     }
-    return { all: entries.length, skills, agents, project, global, builtin };
-  }, [entries]);
+    return c;
+  }, [base]);
 
-  // Filtered and sorted
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return entries.filter((e) => {
-      // Kind filter
-      if (filterKind !== "all" && e.kind !== filterKind) return false;
-      // Scope filter
-      if (filterScope !== "all" && e.scope !== filterScope) return false;
-      // Search
-      if (q) {
-        const inName = e.name.toLowerCase().includes(q);
-        const inDisplay = e.displayName?.toLowerCase().includes(q) ?? false;
-        const inDesc = e.description?.toLowerCase().includes(q) ?? false;
-        const inTools = typeof e.frontmatter.tools === "string" && e.frontmatter.tools.toLowerCase().includes(q);
-        const inModel = typeof e.frontmatter.model === "string" && e.frontmatter.model.toLowerCase().includes(q);
-        const inBody = e.body.toLowerCase().includes(q);
-        if (!inName && !inDisplay && !inDesc && !inTools && !inModel && !inBody) return false;
-      }
-      return true;
-    }).sort((a, b) => {
-      // Non-shadowed before shadowed
-      if (a.shadowed !== b.shadowed) return a.shadowed ? 1 : -1;
-      // Project before global before builtin
-      const scopeRank = (s: LibraryScope) => (s === "project" ? 0 : s === "global" ? 1 : 2);
-      if (scopeRank(a.scope) !== scopeRank(b.scope)) return scopeRank(a.scope) - scopeRank(b.scope);
-      // Alphabetical by name
-      return a.name.localeCompare(b.name);
-    });
-  }, [entries, filterKind, filterScope, searchQuery]);
+    return base
+      .filter((e) => {
+        if (filterKind !== "all" && e.kind !== filterKind) return false;
+        if (filterScope !== "all" && e.scope !== filterScope) return false;
+        if (!q) return true;
+        return (
+          e.name.toLowerCase().includes(q) ||
+          (e.displayName?.toLowerCase().includes(q) ?? false) ||
+          (e.description?.toLowerCase().includes(q) ?? false) ||
+          (typeof e.frontmatter.tools === "string" && e.frontmatter.tools.toLowerCase().includes(q)) ||
+          (typeof e.frontmatter.model === "string" && e.frontmatter.model.toLowerCase().includes(q)) ||
+          e.body.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        if (a.shadowed !== b.shadowed) return a.shadowed ? 1 : -1;
+        if (scopeRank(a.scope) !== scopeRank(b.scope)) return scopeRank(a.scope) - scopeRank(b.scope);
+        return (a.displayName || a.name).localeCompare(b.displayName || b.name);
+      });
+  }, [base, filterKind, filterScope, searchQuery]);
 
-  const prettyModel = (raw?: unknown): string | null => {
-    if (typeof raw !== "string" || !raw.trim()) return null;
-    const parts = raw.split("/");
-    return parts.length > 1 ? parts.slice(1).join("/") : raw;
-  };
+  const groups = useMemo(() => {
+    if (filterKind !== "all") return [{ kind: filterKind, items: filtered }];
+    return (["agent", "skill"] as const)
+      .map((kind) => ({ kind, items: filtered.filter((e) => e.kind === kind) }))
+      .filter((g) => g.items.length > 0);
+  }, [filtered, filterKind]);
+
+  const visibleScopes = SCOPES.filter((s) => counts[s.id] > 0 || filterScope === s.id);
+  const isFiltered = Boolean(searchQuery) || filterKind !== "all" || filterScope !== "all";
 
   return (
     <aside className="lib-sidebar">
-      {/* Search Header */}
       <div className="lib-sidebar__search">
         <div className="lib-sidebar__search-box">
           <Search size={13} className="text-muted" />
-          <input
-            type="text"
-            placeholder="Search skills, agents, tools..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+          <input type="text" placeholder="Search name, description, model…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           {searchQuery && (
-            <button className="lib-sidebar__clear-btn" onClick={() => setSearchQuery("")} title="Clear search">
+            <button className="lib-sidebar__clear-btn" onClick={() => setSearchQuery("")} title="Clear search" aria-label="Clear search">
               <X size={12} />
             </button>
           )}
         </div>
       </div>
 
-      {/* Filter Tabs */}
       <div className="lib-sidebar__filters">
-        <div className="lib-sidebar__kind-seg ui-seg">
-          <button
-            type="button"
-            aria-pressed={filterKind === "all"}
-            onClick={() => setFilterKind("all")}
-          >
-            All <span className="lib-sidebar__badge">{counts.all}</span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={filterKind === "skill"}
-            onClick={() => setFilterKind("skill")}
-          >
-            Skills <span className="lib-sidebar__badge">{counts.skills}</span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={filterKind === "agent"}
-            onClick={() => setFilterKind("agent")}
-          >
-            Agents <span className="lib-sidebar__badge">{counts.agents}</span>
-          </button>
+        <div className="lib-sidebar__kind-seg ui-seg" role="group" aria-label="Kind">
+          {(
+            [
+              ["all", "All", counts.all],
+              ["agent", "Agents", counts.agent],
+              ["skill", "Skills", counts.skill],
+            ] as const
+          ).map(([id, label, n]) => (
+            <button key={id} type="button" aria-pressed={filterKind === id} onClick={() => setFilterKind(id)}>
+              {label} <span className="lib-sidebar__badge">{n}</span>
+            </button>
+          ))}
         </div>
 
-        {/* Scope pills */}
-        <div className="lib-sidebar__scope-pills">
-          <button
-            type="button"
-            className={`lib-scope-pill ${filterScope === "all" ? "is-active" : ""}`}
-            onClick={() => setFilterScope("all")}
-          >
-            All scopes
-          </button>
-          <button
-            type="button"
-            className={`lib-scope-pill lib-scope-pill--project ${filterScope === "project" ? "is-active" : ""}`}
-            onClick={() => setFilterScope("project")}
-          >
-            Project ({counts.project})
-          </button>
-          <button
-            type="button"
-            className={`lib-scope-pill lib-scope-pill--global ${filterScope === "global" ? "is-active" : ""}`}
-            onClick={() => setFilterScope("global")}
-          >
-            Global ({counts.global})
-          </button>
-          <button
-            type="button"
-            className={`lib-scope-pill lib-scope-pill--builtin ${filterScope === "builtin" ? "is-active" : ""}`}
-            onClick={() => setFilterScope("builtin")}
-          >
-            Built-in ({counts.builtin})
-          </button>
+        <div className="lib-sidebar__subfilters">
+          {visibleScopes.length > 1 || filterScope !== "all" ? (
+            <div className="lib-scope-tabs" role="group" aria-label="Scope (click again to clear)">
+              {visibleScopes.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`lib-scope-tabs--${s.id} ${filterScope === s.id ? "is-active" : ""}`}
+                  aria-pressed={filterScope === s.id}
+                  title={filterScope === s.id ? "Show all scopes" : `Only ${s.label.toLowerCase()} definitions`}
+                  onClick={() => setFilterScope(filterScope === s.id ? "all" : s.id)}
+                >
+                  {s.label} <span className="lib-scope-tabs__n">{counts[s.id]}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span />
+          )}
+          {overriddenCount > 0 && (
+            <label className="lib-overridden-toggle" title="Definitions hidden because a higher-priority copy with the same name exists">
+              <input type="checkbox" checked={showOverridden} onChange={(e) => setShowOverridden(e.target.checked)} />
+              <span>
+                Overridden <span className="lib-scope-tabs__n">{overriddenCount}</span>
+              </span>
+            </label>
+          )}
         </div>
       </div>
 
-      {/* List */}
       <div className="lib-sidebar__items">
         {filtered.length === 0 ? (
           <div className="lib-sidebar__empty text-muted">
             <Filter size={20} className="lib-sidebar__empty-icon" />
-            <p>No matching skills or agents found</p>
-            {(searchQuery || filterKind !== "all" || filterScope !== "all") && (
+            <p>No matching skills or agents</p>
+            {isFiltered && (
               <button
                 type="button"
                 className="ui-btn ui-btn--sm"
@@ -181,94 +164,65 @@ export const LibraryList: React.FC = () => {
             )}
           </div>
         ) : (
-          filtered.map((entry) => {
-            const isSelected = entry.id === selectedId;
-            const modelVal = prettyModel(entry.frontmatter.model);
-            const thinkingVal = typeof entry.frontmatter.thinking === "string" ? entry.frontmatter.thinking : null;
-            const isAgentDisabled = entry.frontmatter.enabled === false;
-            const customColor = entry.color;
-
-            return (
-              <div
-                key={entry.id}
-                className={`lib-item ${isSelected ? "is-selected" : ""} ${entry.shadowed ? "is-shadowed" : ""}`}
-                onClick={() => selectEntry(entry.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    selectEntry(entry.id);
-                  }
-                }}
-              >
-                <div className="lib-item__icon-wrapper">
-                  {entry.kind === "skill" ? (
-                    <div className="lib-item__kind-icon lib-item__kind-icon--skill">
-                      <Sparkles size={14} />
-                    </div>
-                  ) : (
-                    <div
-                      className="lib-item__kind-icon lib-item__kind-icon--agent"
-                      style={customColor ? { background: customColor, color: "#fff" } : undefined}
-                    >
-                      <Bot size={14} />
-                    </div>
-                  )}
+          groups.map((g) => (
+            <div key={g.kind} className="lib-group">
+              {filterKind === "all" && (
+                <div className="lib-group__header">
+                  {g.kind === "agent" ? <Bot size={11} /> : <Sparkles size={11} />}
+                  {g.kind === "agent" ? "Agents" : "Skills"}
+                  <span className="lib-group__count">{g.items.length}</span>
                 </div>
-
-                <div className="lib-item__content">
-                  <div className="lib-item__top">
-                    <span className="lib-item__title">
-                      {entry.displayName || entry.name}
-                    </span>
-                    <span className={`lib-item__scope lib-item__scope--${entry.scope}`}>
-                      {entry.scope === "builtin" ? "builtin" : entry.scope}
-                    </span>
-                  </div>
-
-                  {entry.displayName && entry.displayName !== entry.name && (
-                    <div className="lib-item__slug text-muted">@{entry.name}</div>
-                  )}
-
-                  {entry.description && (
-                    <div className="lib-item__desc text-muted">{entry.description}</div>
-                  )}
-
-                  {/* Chips for model, thinking, warnings */}
-                  <div className="lib-item__footer">
-                    {entry.kind === "agent" && modelVal && (
-                      <span className="lib-chip lib-chip--model" title={`Model: ${String(entry.frontmatter.model)}`}>
-                        <Cpu size={10} /> {modelVal}
-                      </span>
-                    )}
-                    {entry.kind === "agent" && thinkingVal && (
-                      <span className="lib-chip lib-chip--thinking" title={`Thinking: ${thinkingVal}`}>
-                        <Brain size={10} /> {thinkingVal}
-                      </span>
-                    )}
-                    {isAgentDisabled && (
-                      <span className="lib-chip lib-chip--disabled" title="Agent is disabled in frontmatter">
-                        <EyeOff size={10} /> disabled
-                      </span>
-                    )}
-                    {entry.shadowed && (
-                      <span className="lib-chip lib-chip--shadowed" title={`Overridden by ${entry.overriddenBy || "project"}`}>
-                        overridden
-                      </span>
-                    )}
-                    {entry.parseError && (
-                      <span className="lib-chip lib-chip--error" title={entry.parseError}>
-                        <AlertTriangle size={10} /> error
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })
+              )}
+              {g.items.map((entry) => (
+                <LibraryRow key={entry.id} entry={entry} selected={entry.id === selectedId} onSelect={() => selectEntry(entry.id)} />
+              ))}
+            </div>
+          ))
         )}
       </div>
     </aside>
+  );
+};
+
+const LibraryRow: React.FC<{ entry: LibraryEntry; selected: boolean; onSelect(): void }> = ({ entry, selected, onSelect }) => {
+  const model = entry.kind === "agent" ? prettyModel(entry.frontmatter.model) : null;
+  const thinking = entry.kind === "agent" && typeof entry.frontmatter.thinking === "string" ? entry.frontmatter.thinking : null;
+  const disabled = entry.frontmatter.enabled === false;
+  const meta = [model, thinking].filter(Boolean).join(" · ");
+
+  return (
+    <div
+      className={`lib-item${selected ? " is-selected" : ""}${entry.shadowed ? " is-shadowed" : ""}${disabled ? " is-disabled" : ""}`}
+      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      aria-current={selected || undefined}
+      title={entry.description || entry.name}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+    >
+      <div
+        className={`lib-item__kind-icon lib-item__kind-icon--${entry.kind}`}
+        style={entry.kind === "agent" && entry.color ? { background: entry.color, color: "#fff" } : undefined}
+      >
+        {entry.kind === "skill" ? <Sparkles size={12} /> : <Bot size={12} />}
+      </div>
+
+      <div className="lib-item__content">
+        <div className="lib-item__top">
+          <span className="lib-item__title">{entry.displayName || entry.name}</span>
+          {entry.parseError && <AlertTriangle size={11} className="lib-item__flag is-error" aria-label="Parse error" />}
+          {disabled && <EyeOff size={11} className="lib-item__flag" aria-label="Disabled" />}
+          {entry.scope !== "global" && <span className={`lib-item__scope lib-item__scope--${entry.scope}`}>{entry.scope === "builtin" ? "built-in" : entry.scope}</span>}
+          {entry.shadowed && <span className="lib-item__scope lib-item__scope--shadowed">overridden</span>}
+        </div>
+        {entry.description && <div className="lib-item__desc">{entry.description}</div>}
+        {meta && <div className="lib-item__meta">{meta}</div>}
+      </div>
+    </div>
   );
 };

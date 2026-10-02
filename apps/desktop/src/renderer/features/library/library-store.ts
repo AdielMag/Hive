@@ -18,6 +18,8 @@ export interface LibraryState {
   searchQuery: string;
   filterKind: FilterKind;
   filterScope: FilterScope;
+  /** Show definitions shadowed by a higher-priority copy (hidden by default to cut duplicates). */
+  showOverridden: boolean;
   viewMode: "sections" | "raw";
   savingField: string | null;
   feedback: { key: string; type: "success" | "error"; message: string } | null;
@@ -27,6 +29,7 @@ export interface LibraryState {
   setSearchQuery: (q: string) => void;
   setFilterKind: (k: FilterKind) => void;
   setFilterScope: (s: FilterScope) => void;
+  setShowOverridden: (v: boolean) => void;
   setViewMode: (mode: "sections" | "raw") => void;
   updateField: (entry: LibraryEntry, key: string, value: LibraryFieldValue, cwd?: string) => Promise<boolean>;
   clearFeedback: () => void;
@@ -42,6 +45,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   searchQuery: "",
   filterKind: "all",
   filterScope: "all",
+  showOverridden: false,
   viewMode: "sections",
   savingField: null,
   feedback: null,
@@ -72,6 +76,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   setSearchQuery: (q) => set({ searchQuery: q }),
   setFilterKind: (k) => set({ filterKind: k }),
   setFilterScope: (s) => set({ filterScope: s }),
+  setShowOverridden: (v) => set({ showOverridden: v }),
   setViewMode: (mode) => set({ viewMode: mode }),
 
   clearFeedback: () => {

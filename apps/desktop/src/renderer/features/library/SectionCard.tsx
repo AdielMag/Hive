@@ -54,6 +54,7 @@ export const SectionCard: React.FC<Props> = ({ section, defaultExpanded = true }
           className="lib-section-card__action-btn ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon"
           onClick={handleCopy}
           title="Copy section markdown"
+          aria-label="Copy section markdown"
         >
           {copied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
         </button>
