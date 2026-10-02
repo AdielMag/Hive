@@ -24,6 +24,8 @@ export const StatusBar: React.FC = () => {
   const quotaLoading = useInsights((s) => s.quotaLoading);
   const refreshQuota = useInsights((s) => s.refreshQuota);
   const openUsageTab = useSessionStore((s) => s.openUsageTab);
+  const activeSessionPath = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId)?.sessionPath);
+  const setFocusSession = useInsights((s) => s.setFocusSession);
   const piVersion = bootstrap?.pi.ok ? bootstrap.pi.info.version : "not found";
   const now = useNow(30_000);
 
@@ -112,7 +114,7 @@ export const StatusBar: React.FC = () => {
       <div className="statusbar__ext">
         {Object.entries(extensionStatus)
           .filter(([key]) => !HIDDEN_STATUS.has(key))
-          .map(([key, text]) => (
+          .map(([key, text]) => key === "mcp" ? <McpChip key={key} text={text} /> : (
             <span key={key} className="statusbar__item">
               {parseAnsi(text).map((seg, i) => (
                 <span key={i} style={{ color: seg.style.color, fontWeight: seg.style.bold ? 600 : undefined }}>
@@ -147,11 +149,25 @@ export const StatusBar: React.FC = () => {
       )}
 
       {cost > 0 && (
-        <span className="statusbar__item mono" title="Cost of this session">
+        <button
+          className="statusbar__btn mono"
+          title="Cost of this session. Click for its usage breakdown"
+          onClick={() => {
+            setFocusSession(activeSessionPath ?? null);
+            openUsageTab();
+          }}
+        >
           {formatCost(cost)}
-        </span>
+        </button>
       )}
-      <button className="statusbar__btn" onClick={openUsageTab} title="Usage analytics">
+      <button
+        className="statusbar__btn"
+        onClick={() => {
+          setFocusSession(null);
+          openUsageTab();
+        }}
+        title="Usage analytics (all sessions)"
+      >
         <BarChart3 size={12} />
       </button>
 
@@ -215,6 +231,27 @@ export const StatusBar: React.FC = () => {
           document.body,
         )}
     </footer>
+  );
+};
+
+/** Compact MCP indicator: "MCP 1" (or "MCP 1/2" once servers connect) with an explanatory tooltip. */
+const McpChip: React.FC<{ text: string }> = ({ text }) => {
+  const plain = parseAnsi(text).map((seg) => seg.text).join("");
+  const enabled = Number(/(\d+)\s+servers?\s+enabled/.exec(plain)?.[1] ?? NaN);
+  const connected = Number(/\((\d+) connected\)/.exec(plain)?.[1] ?? 0);
+  if (!Number.isFinite(enabled)) {
+    // Transient messages such as "connecting to x..." — show as-is, minus the emoji.
+    return <span className="statusbar__item">{plain.replace("🔌", "").trim()}</span>;
+  }
+  const label = connected > 0 ? `MCP ${connected}/${enabled}` : `MCP ${enabled}`;
+  const tip =
+    `MCP (Model Context Protocol) servers give Pi extra tools.\n` +
+    `${enabled} configured, ${connected} connected now (servers connect on first use).\n` +
+    `Configured in ~/.pi/agent/mcp-adapter.json`;
+  return (
+    <span className="statusbar__item" title={tip} style={{ opacity: connected > 0 ? 1 : 0.7 }}>
+      {label}
+    </span>
   );
 };
 
