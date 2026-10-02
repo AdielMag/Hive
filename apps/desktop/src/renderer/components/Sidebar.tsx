@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -8,6 +8,7 @@ import {
   EyeOff,
   FolderPlus,
   Link2,
+  Loader2,
   MessageSquare,
   MessageSquarePlus,
   Pencil,
@@ -25,6 +26,15 @@ import { ProjectSettingsModal, type ProjectSettingsSection } from "./ProjectSett
 
 const VISIBLE_SESSIONS = 5;
 
+type SessionBadge = "running" | "input" | "done" | "error";
+
+const BADGE_LABEL: Record<SessionBadge, string> = {
+  running: "running",
+  input: "waiting for your input",
+  done: "finished, not viewed yet",
+  error: "failed, not viewed yet",
+};
+
 export const Sidebar: React.FC = () => {
   const {
     projects,
@@ -36,6 +46,11 @@ export const Sidebar: React.FC = () => {
     deleteSessionFile,
     renameSession,
     setSessionArchived,
+    tabs,
+    activeTabId,
+    sessionActivity,
+    tabUi,
+    activeRunning,
   } = useSessionStore(
     useShallow((s) => ({
       projects: s.projects,
@@ -47,8 +62,27 @@ export const Sidebar: React.FC = () => {
       deleteSessionFile: s.deleteSessionFile,
       renameSession: s.renameSession,
       setSessionArchived: s.setSessionArchived,
+      tabs: s.tabs,
+      activeTabId: s.activeTabId,
+      sessionActivity: s.sessionActivity,
+      tabUi: s.tabUi,
+      activeRunning: s.transcript.running,
     })),
   );
+
+  // Live agent state per session file, mirroring the tab strip: running / waiting for input / unseen result.
+  const sessionState = useMemo(() => {
+    const out: Record<string, SessionBadge> = {};
+    for (const t of tabs) {
+      if ((t.kind && t.kind !== "session") || !t.sessionPath) continue;
+      const active = t.id === activeTabId;
+      const activity = sessionActivity[t.id];
+      if (activity === "running" || (active && activeRunning)) out[t.sessionPath] = "running";
+      else if (!active && tabUi[t.id]?.pendingUiDialog) out[t.sessionPath] = "input";
+      else if (activity === "done" || activity === "error") out[t.sessionPath] = activity;
+    }
+    return out;
+  }, [tabs, activeTabId, sessionActivity, tabUi, activeRunning]);
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [showAllSessions, setShowAllSessions] = useState<Record<string, boolean>>({});
@@ -162,10 +196,11 @@ export const Sidebar: React.FC = () => {
     const isActive = sess.path === activeSessionPath;
     const isRenaming = renaming === sess.path;
     const modified = Date.parse(sess.modified);
+    const badge = sessionState[sess.path];
     return (
       <div
         key={sess.id}
-        className={`sb-session${isActive ? " is-active" : ""}${sess.archived ? " is-archived" : ""}`}
+        className={`sb-session${isActive ? " is-active" : ""}${sess.archived ? " is-archived" : ""}${badge === "running" ? " is-running" : ""}`}
         onClick={() => !isRenaming && void openSessionTab(sess.path, project.id, sessionDisplayTitle(sess, 40))}
         onContextMenu={(e) => openSessionMenu(e, sess, project.id)}
         onKeyDown={(e) => {
@@ -178,9 +213,17 @@ export const Sidebar: React.FC = () => {
           }
         }}
         tabIndex={0}
-        title={isRenaming ? undefined : `${title}${Number.isFinite(modified) ? `\n${formatAgo(modified)}` : ""}`}
+        title={
+          isRenaming
+            ? undefined
+            : `${title}${badge ? ` (${BADGE_LABEL[badge]})` : ""}${Number.isFinite(modified) ? `\n${formatAgo(modified)}` : ""}`
+        }
       >
-        <MessageSquare size={12} className="sb-session__icon" />
+        {badge === "running" ? (
+          <Loader2 size={12} className="spin sb-session__icon sb-session__busy" />
+        ) : (
+          <MessageSquare size={12} className="sb-session__icon" />
+        )}
         {isRenaming ? (
           <RenameInput
             initial={sess.title || title}
@@ -194,6 +237,7 @@ export const Sidebar: React.FC = () => {
         )}
         {!isRenaming && (
           <>
+            {badge && badge !== "running" && <span className={`sb-session__dot sb-session__dot--${badge}`} aria-hidden />}
             {sess.messageCount > 0 && <span className="sb-session__count">{sess.messageCount}</span>}
             <button
               className="sb-icon-btn sb-session__action"
