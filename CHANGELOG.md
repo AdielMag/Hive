@@ -2,6 +2,13 @@
 
 All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
 
+## v0.7.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.6.1...v0.7.0)
+
+### ✨ Features
+
+- **tools-panel:** collapsible sections and clearer subagent rows ([`7072ef8`](https://github.com/AdielMag/pi-studio/commit/7072ef86356e15fc04db8ce5bf63ff222cd4bbf8))
+- **library:** calmer Skills & Agents view with progressive disclosure ([`63034a7`](https://github.com/AdielMag/pi-studio/commit/63034a798ff39f86eaec3e6d1c8a8a02e0806a4a))
+
 ## v0.6.1 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.6.0...v0.6.1)
 
 ### 🐛 Fixes
