@@ -22,13 +22,51 @@ export interface GitRepoStatus {
   untracked: GitFileStatus[];
 }
 
-export async function runGit(args: string[], cwd: string): Promise<string> {
+export async function runGit(
+  args: string[],
+  cwd: string,
+  options?: { env?: NodeJS.ProcessEnv; timeout?: number },
+): Promise<string> {
   const { stdout } = await execFileAsync("git", ["-c", "core.quotepath=false", ...args], {
     cwd,
     windowsHide: true,
     maxBuffer: 10 * 1024 * 1024,
+    ...(options?.env ? { env: options.env } : {}),
+    ...(options?.timeout ? { timeout: options.timeout } : {}),
   });
   return stdout.trim();
+}
+
+/** Network operations must never block on an interactive credential prompt. */
+const NETWORK_OPTIONS = {
+  env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+  timeout: 120_000,
+};
+
+async function runGitNetwork(args: string[], cwd: string): Promise<string> {
+  try {
+    return await runGit(args, cwd, NETWORK_OPTIONS);
+  } catch (err: any) {
+    const detail = String(err?.stderr || "").trim();
+    throw new Error(detail || err?.message || String(err));
+  }
+}
+
+export async function gitFetch(cwd: string): Promise<string> {
+  return runGitNetwork(["fetch", "--all", "--prune"], cwd);
+}
+
+export async function gitPull(cwd: string): Promise<string> {
+  return runGitNetwork(["pull", "--no-edit"], cwd);
+}
+
+export async function gitPush(cwd: string): Promise<string> {
+  const { upstream, branch } = await getGitStatus(cwd);
+  // No upstream yet: publish the current branch to origin and track it.
+  if (!upstream && branch && branch !== "detached HEAD") {
+    return runGitNetwork(["push", "--set-upstream", "origin", "HEAD"], cwd);
+  }
+  return runGitNetwork(["push"], cwd);
 }
 
 export async function getGitStatus(cwd: string): Promise<GitRepoStatus> {

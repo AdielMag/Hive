@@ -182,6 +182,15 @@ const api: StudioApi = {
   generateCommitMessage(cwd: string, model?: string) {
     return ipcRenderer.invoke(IPC.gitGenerateCommitMessage, { cwd, model });
   },
+  gitFetch(cwd: string) {
+    return ipcRenderer.invoke(IPC.gitFetch, { cwd });
+  },
+  gitPull(cwd: string) {
+    return ipcRenderer.invoke(IPC.gitPull, { cwd });
+  },
+  gitPush(cwd: string) {
+    return ipcRenderer.invoke(IPC.gitPush, { cwd });
+  },
 
   // Files
   listFiles(dirPath: string) {

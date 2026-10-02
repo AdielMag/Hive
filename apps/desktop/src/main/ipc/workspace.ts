@@ -31,6 +31,9 @@ export function registerWorkspaceIpc(ctx: AppContext): void {
   handle(IPC.gitDiff, ({ cwd, options }: Cwd & { options?: { staged?: boolean; filePath?: string } }) =>
     git.getGitDiff(cwd, options),
   );
+  handle(IPC.gitFetch, ({ cwd }: Cwd) => git.gitFetch(cwd));
+  handle(IPC.gitPull, ({ cwd }: Cwd) => git.gitPull(cwd));
+  handle(IPC.gitPush, ({ cwd }: Cwd) => git.gitPush(cwd));
   handle(IPC.gitGenerateCommitMessage, ({ cwd, model }: Cwd & { model?: string }) => {
     if (!ctx.pi.ok) throw new Error("Pi CLI not available to generate commit message");
     return git.generateCommitMessage(cwd, ctx.pi.info, model);

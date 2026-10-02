@@ -171,6 +171,9 @@ export const IPC = {
   gitLog: "git:log",
   gitDiff: "git:diff",
   gitGenerateCommitMessage: "git:generate-commit-message",
+  gitFetch: "git:fetch",
+  gitPull: "git:pull",
+  gitPush: "git:push",
   // Settings & Compaction
   settingsGetCompaction: "settings:get-compaction",
   settingsSaveCompaction: "settings:save-compaction",
@@ -402,6 +405,9 @@ export interface StudioApi {
   getGitLog(cwd: string, maxCount?: number): Promise<Array<{ hash: string; author: string; relativeDate: string; message: string }>>;
   getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }): Promise<string>;
   generateCommitMessage(cwd: string, model?: string): Promise<string>;
+  gitFetch(cwd: string): Promise<string>;
+  gitPull(cwd: string): Promise<string>;
+  gitPush(cwd: string): Promise<string>;
   getCompactionSettings(): Promise<CompactionSettings>;
   saveCompactionSettings(settings: CompactionSettings): Promise<{ success: boolean; modelsUpdated: number }>;
 
