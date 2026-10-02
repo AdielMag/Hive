@@ -17,7 +17,6 @@ import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { ContextRing } from "./ContextRing.tsx";
-import { ContextBreakdownModal } from "./ContextBreakdownModal.tsx";
 import { useContextBreakdown } from "./ContextBreakdownView.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { ThinkingPicker } from "./ThinkingPicker.tsx";
@@ -33,7 +32,6 @@ interface ComposerProps {
 export const Composer: React.FC<ComposerProps> = ({ height }) => {
   const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets })));
 
-  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [modelFilter, setModelFilter] = useState("");
   const modelPickerRef = useRef<HTMLDivElement>(null);
@@ -747,12 +745,10 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               tokens={contextTokens}
               total={contextWindow}
               percent={contextPercent}
-              onClick={() => setBreakdownOpen(true)}
+              onClick={() => useUi.getState().toggleRight("context")}
             />
             </span>
           </div>
-
-          <ContextBreakdownModal isOpen={breakdownOpen} onClose={() => setBreakdownOpen(false)} />
 
           {/* Right: Send or Abort button */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
