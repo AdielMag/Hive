@@ -265,6 +265,33 @@
   background: var(--bg-elevated);
 }
 
+.quota-popover--cost { width: 280px; }
+.quota-popover--cost .quota-popover__foot { display: flex; justify-content: center; }
+
+.sb-cost__total {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  padding: 4px 0 2px;
+}
+.sb-cost__rows { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.sb-cost__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.sb-cost__row dt, .sb-cost__row dd { margin: 0; }
+.sb-cost__row dd { color: var(--text-primary); }
+.sb-cost__row.is-strong {
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+  font-weight: 600;
+}
+
 /* ---------- Usage view ---------- */
 .usage {
   height: 100%;

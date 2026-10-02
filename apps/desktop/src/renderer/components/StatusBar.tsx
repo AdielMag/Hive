@@ -1,13 +1,13 @@
 /** Bottom status bar on the window frame: Pi version, run state, extension statuses, live quota meters. */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BarChart3, Gauge, RefreshCw, X } from "lucide-react";
+import { BarChart3, Coins, ExternalLink, Gauge, RefreshCw, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { parseAnsi } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
 import { useInsights, useNow, useQuotaPolling } from "../features/insights/insights-store.ts";
 import { ProviderQuotaCard, usageTone } from "../features/insights/quota-ui.tsx";
-import { formatAgo, formatCost } from "../lib/format.ts";
+import { formatAgo, formatCost, formatTokens } from "../lib/format.ts";
 
 const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "openai-codex": "Codex" };
 const TONE_COLOR = { ok: "#3fb27f", warn: "#e0a43a", danger: "#e5534b" } as const;
@@ -15,11 +15,67 @@ const TONE_COLOR = { ok: "#3fb27f", warn: "#e0a43a", danger: "#e5534b" } as cons
 /** Extension statuses that duplicate the built-in quota meters. */
 const HIDDEN_STATUS = new Set(["agy-sub", "quota", "pi-quota-status"]);
 
+/** Hover-to-peek / click-to-pin popover anchored above a status bar button. */
+function useHoverPopover() {
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [pos, setPos] = useState<{ bottom: number; right: number }>({ bottom: 32, right: 16 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const updatePos = () => {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setPos({
+      bottom: Math.max(32, window.innerHeight - rect.top + 8),
+      right: Math.max(16, window.innerWidth - rect.right),
+    });
+  };
+  const onEnter = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    updatePos();
+    setOpen(true);
+  };
+  const onLeave = () => {
+    if (pinned) return;
+    closeTimerRef.current = setTimeout(() => setOpen(false), 150);
+  };
+  const onClick = () => {
+    updatePos();
+    if (!open) {
+      setOpen(true);
+      setPinned(true);
+    } else {
+      setPinned((prev) => !prev);
+    }
+  };
+  const close = () => {
+    setPinned(false);
+    setOpen(false);
+  };
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  return { open, pinned, pos, btnRef, onEnter, onLeave, onClick, close };
+}
+
 export const StatusBar: React.FC = () => {
   useQuotaPolling();
-  const { bootstrap, extensionStatus, running, cost } = useSessionStore(
-    useShallow((s) => ({ bootstrap: s.bootstrap, extensionStatus: s.extensionStatus, running: s.transcript.running, cost: s.stats?.cost ?? 0 })),
+  const { bootstrap, extensionStatus, running, stats } = useSessionStore(
+    useShallow((s) => ({ bootstrap: s.bootstrap, extensionStatus: s.extensionStatus, running: s.transcript.running, stats: s.stats })),
   );
+  const cost = stats?.cost ?? 0;
   const quota = useInsights((s) => s.quota);
   const quotaLoading = useInsights((s) => s.quotaLoading);
   const refreshQuota = useInsights((s) => s.refreshQuota);
@@ -29,12 +85,8 @@ export const StatusBar: React.FC = () => {
   const piVersion = bootstrap?.pi.ok ? bootstrap.pi.info.version : "not found";
   const now = useNow(30_000);
 
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const [pinned, setPinned] = useState(false);
-  const [popoverPos, setPopoverPos] = useState<{ bottom: number; right: number }>({ bottom: 32, right: 16 });
-
-  const meterBtnRef = useRef<HTMLButtonElement>(null);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quotaPop = useHoverPopover();
+  const costPop = useHoverPopover();
 
   const meters = useMemo(
     () =>
@@ -53,54 +105,6 @@ export const StatusBar: React.FC = () => {
     () => (quota?.providers ?? []).filter((p) => p.status !== "unsupported"),
     [quota],
   );
-
-  const updatePopoverPos = () => {
-    if (meterBtnRef.current) {
-      const rect = meterBtnRef.current.getBoundingClientRect();
-      const bottom = Math.max(32, window.innerHeight - rect.top + 8);
-      const right = Math.max(16, window.innerWidth - rect.right);
-      setPopoverPos({ bottom, right });
-    }
-  };
-
-  const handleMouseEnter = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    updatePopoverPos();
-    setPopoverOpen(true);
-  };
-
-  const handleMouseLeave = () => {
-    if (pinned) return;
-    closeTimerRef.current = setTimeout(() => {
-      setPopoverOpen(false);
-    }, 150);
-  };
-
-  const handleClick = () => {
-    updatePopoverPos();
-    if (!popoverOpen) {
-      setPopoverOpen(true);
-      setPinned(true);
-    } else {
-      setPinned((prev) => !prev);
-    }
-  };
-
-  // Close on Escape or click outside when pinned
-  useEffect(() => {
-    if (!popoverOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setPinned(false);
-        setPopoverOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [popoverOpen]);
 
   return (
     <footer className="statusbar">
@@ -127,16 +131,16 @@ export const StatusBar: React.FC = () => {
 
       {meters.length > 0 && (
         <button
-          ref={meterBtnRef}
-          className={`sb-quota${popoverOpen ? " is-active" : ""}`}
-          onClick={handleClick}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          onFocus={handleMouseEnter}
-          onBlur={handleMouseLeave}
+          ref={quotaPop.btnRef}
+          className={`sb-quota${quotaPop.open ? " is-active" : ""}`}
+          onClick={quotaPop.onClick}
+          onMouseEnter={quotaPop.onEnter}
+          onMouseLeave={quotaPop.onLeave}
+          onFocus={quotaPop.onEnter}
+          onBlur={quotaPop.onLeave}
           title="Subscription limits — hover or click for full window details"
           aria-haspopup="dialog"
-          aria-expanded={popoverOpen}
+          aria-expanded={quotaPop.open}
         >
           {meters.map((m) => (
             <span key={m.id} className="sb-quota__item">
@@ -150,13 +154,16 @@ export const StatusBar: React.FC = () => {
 
       {cost > 0 && (
         <button
-          className="statusbar__btn mono"
-          title="Cost of this session. Click for its usage breakdown"
-          disabled={!activeSessionPath}
-          onClick={() => {
-            openUsageTab();
-            setFocusSession(activeSessionPath ?? null);
-          }}
+          ref={costPop.btnRef}
+          className={`statusbar__btn mono${costPop.open ? " is-active" : ""}`}
+          onClick={costPop.onClick}
+          onMouseEnter={costPop.onEnter}
+          onMouseLeave={costPop.onLeave}
+          onFocus={costPop.onEnter}
+          onBlur={costPop.onLeave}
+          title="Cost of this session — hover or click for details"
+          aria-haspopup="dialog"
+          aria-expanded={costPop.open}
         >
           {formatCost(cost)}
         </button>
@@ -169,21 +176,21 @@ export const StatusBar: React.FC = () => {
         <BarChart3 size={12} />
       </button>
 
-      {popoverOpen &&
+      {quotaPop.open &&
         typeof document !== "undefined" &&
         createPortal(
           <div
             className="quota-popover"
-            style={{ bottom: popoverPos.bottom, right: popoverPos.right }}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
+            style={{ bottom: quotaPop.pos.bottom, right: quotaPop.pos.right }}
+            onMouseEnter={quotaPop.onEnter}
+            onMouseLeave={quotaPop.onLeave}
             role="dialog"
             aria-label="Subscription limits"
           >
             <div className="quota-popover__head">
               <div className="quota-popover__title">
                 <Gauge size={14} /> Subscription limits
-                {pinned && <span className="quota-popover__pin-hint">(pinned)</span>}
+                {quotaPop.pinned && <span className="quota-popover__pin-hint">(pinned)</span>}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <button
@@ -194,13 +201,10 @@ export const StatusBar: React.FC = () => {
                 >
                   <RefreshCw size={12} className={quotaLoading ? "spin" : undefined} />
                 </button>
-                {pinned && (
+                {quotaPop.pinned && (
                   <button
                     className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
-                    onClick={() => {
-                      setPinned(false);
-                      setPopoverOpen(false);
-                    }}
+                    onClick={quotaPop.close}
                     title="Close popover (Esc)"
                   >
                     <X size={12} />
@@ -228,6 +232,70 @@ export const StatusBar: React.FC = () => {
           </div>,
           document.body,
         )}
+
+      {costPop.open &&
+        stats &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="quota-popover quota-popover--cost"
+            style={{ bottom: costPop.pos.bottom, right: costPop.pos.right }}
+            onMouseEnter={costPop.onEnter}
+            onMouseLeave={costPop.onLeave}
+            role="dialog"
+            aria-label="Session cost"
+          >
+            <div className="quota-popover__head">
+              <div className="quota-popover__title">
+                <Coins size={14} /> Session cost
+                {costPop.pinned && <span className="quota-popover__pin-hint">(pinned)</span>}
+              </div>
+              {costPop.pinned && (
+                <button
+                  className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
+                  onClick={costPop.close}
+                  title="Close popover (Esc)"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <div className="quota-popover__body ui-scroll">
+              <div className="sb-cost__total mono">{formatCost(stats.cost)}</div>
+              <dl className="sb-cost__rows">
+                <CostRow label="Input tokens" value={formatTokens(stats.tokens.input)} />
+                <CostRow label="Output tokens" value={formatTokens(stats.tokens.output)} />
+                <CostRow label="Cache read" value={formatTokens(stats.tokens.cacheRead)} />
+                <CostRow label="Cache write" value={formatTokens(stats.tokens.cacheWrite)} />
+                <CostRow label="Total tokens" value={formatTokens(stats.tokens.total)} strong />
+                <CostRow label="Assistant turns" value={String(stats.assistantMessages)} />
+                <CostRow label="Tool calls" value={String(stats.toolCalls)} />
+                {stats.contextUsage?.percent != null && (
+                  <CostRow
+                    label="Context used"
+                    value={`${Math.round(stats.contextUsage.percent)}% · ${formatTokens(stats.contextUsage.tokens ?? 0)} / ${formatTokens(stats.contextUsage.contextWindow)}`}
+                  />
+                )}
+              </dl>
+            </div>
+
+            <div className="quota-popover__foot">
+              <button
+                className="ui-btn ui-btn--sm ui-btn--ghost"
+                disabled={!activeSessionPath}
+                onClick={() => {
+                  costPop.close();
+                  openUsageTab();
+                  setFocusSession(activeSessionPath ?? null);
+                }}
+              >
+                <ExternalLink size={12} /> Full usage breakdown
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
     </footer>
   );
 };
@@ -252,6 +320,13 @@ const McpChip: React.FC<{ text: string }> = ({ text }) => {
     </span>
   );
 };
+
+const CostRow: React.FC<{ label: string; value: string; strong?: boolean }> = ({ label, value, strong }) => (
+  <div className={`sb-cost__row${strong ? " is-strong" : ""}`}>
+    <dt>{label}</dt>
+    <dd className="mono">{value}</dd>
+  </div>
+);
 
 const Mini: React.FC<{ label: string; used: number }> = ({ label, used }) => {
   const tone = usageTone(used);
