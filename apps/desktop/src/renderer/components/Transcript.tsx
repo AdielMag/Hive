@@ -34,6 +34,7 @@ import { SkillLoadCard } from "./transcript/SkillLoadCard.tsx";
 import { SubagentCard } from "./transcript/SubagentCard.tsx";
 import { Markdown } from "./code/Markdown.tsx";
 import { CodeBlock } from "./code/CodeBlock.tsx";
+import { ImageThumbnail } from "./ImageThumbnail.tsx";
 import { languageFromPath } from "../lib/highlight/languages.ts";
 import { copyText } from "../lib/clipboard.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
@@ -300,7 +301,11 @@ const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; da
             {images.length > 0 && (
               <div className="msg-user__images">
                 {images.map((img, i) => (
-                  <img key={i} src={`data:${img.mimeType};base64,${img.data}`} alt="attachment" />
+                  <ImageThumbnail
+                    key={i}
+                    src={`data:${img.mimeType};base64,${img.data}`}
+                    alt={`Attachment ${i + 1}`}
+                  />
                 ))}
               </div>
             )}
@@ -551,8 +556,19 @@ const ToolCall: React.FC<{
           </div>,
         );
       }
-      for (const [i, img] of result.images.entries()) {
-        pieces.push(<img key={`img${i}`} className="msg-tool__image" src={`data:${img.mimeType};base64,${img.data}`} alt="tool output" />);
+      if (result.images.length > 0) {
+        pieces.push(
+          <div key="tool-images" className="msg-tool__image-wrap">
+            {result.images.map((img, i) => (
+              <ImageThumbnail
+                key={`img${i}`}
+                className="msg-tool__image-thumb"
+                src={`data:${img.mimeType};base64,${img.data}`}
+                alt={`Tool output ${i + 1}`}
+              />
+            ))}
+          </div>,
+        );
       }
     } else if (!block.complete && block.argsText) {
       pieces.push(<CodeBlock key="partial" code={block.argsText} language="json" streaming bare lineNumbers={false} />);

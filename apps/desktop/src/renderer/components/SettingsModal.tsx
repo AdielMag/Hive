@@ -1,15 +1,17 @@
 /** Settings dialog: Appearance, Models, AI providers, Updates, About. */
 import React, { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, LogOut, Minimize2, Palette, RefreshCw, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Globe, Info, Key, Keyboard, LogOut, Minimize2, Palette, RefreshCw, X } from "lucide-react";
 import { ArcThemeEditor } from "../features/appearance/ArcThemeEditor.tsx";
 import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
 import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
+import { KeyboardSettings } from "../features/commands/KeyboardSettings.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { type UpdateInfo, isInstalling, useUpdates } from "../store/update-store.ts";
 import { UpdateProgressBar } from "./UpdateProgressBar.tsx";
+import { BrowserSettingsContent } from "./browser/BrowserSettingsContent.tsx";
 
-export type SettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "updates" | "about";
+export type SettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "keyboard" | "browser" | "updates" | "about";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -30,6 +32,8 @@ const TABS: Array<{ id: SettingsTabId; label: string; icon: React.ReactNode; tit
   { id: "models", label: "Models", icon: <Cpu size={15} />, title: "Models" },
   { id: "compaction", label: "Compaction", icon: <Minimize2 size={15} />, title: "Auto-Compaction & Context" },
   { id: "accounts", label: "AI Providers", icon: <Key size={15} />, title: "AI providers & accounts" },
+  { id: "keyboard", label: "Keyboard", icon: <Keyboard size={15} />, title: "Keyboard Shortcuts" },
+  { id: "browser", label: "Browser & RAM", icon: <Globe size={15} />, title: "Hive Browser & Memory Management" },
   { id: "updates", label: "Updates", icon: <Download size={15} />, title: "Updates" },
   { id: "about", label: "About", icon: <Info size={15} />, title: "About Hive" },
 ];
@@ -78,8 +82,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             {tab === "models" && <ModelsSettingsContent />}
             {tab === "compaction" && <CompactionSettingsContent />}
             {tab === "accounts" && <AccountsTab />}
+            {tab === "keyboard" && <KeyboardSettings />}
             {tab === "updates" && <UpdatesTab info={update} checking={checking} onCheck={checkUpdate} />}
             {tab === "about" && <AboutTab />}
+            {tab === "browser" && <BrowserSettingsContent />}
           </div>
         </section>
       </div>

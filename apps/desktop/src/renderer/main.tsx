@@ -9,6 +9,8 @@ import "./styles/settings.css";
 import "./styles/sidebar.css";
 import "./styles/question-form.css";
 import "./styles/transcript.css";
+import "./styles/image-preview.css";
+import "./styles/browser.css";
 import "./components/code/code.css";
 import "./features/appearance/appearance.css";
 import "./features/insights/insights.css";

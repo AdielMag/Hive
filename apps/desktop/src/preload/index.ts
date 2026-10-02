@@ -338,8 +338,16 @@ const api: StudioApi = {
   },
 
   // Shell
-  openExternal(url: string) {
-    return ipcRenderer.invoke(IPC.openExternal, url);
+  openExternal(url: string, options?: { external?: boolean }) {
+    return ipcRenderer.invoke(IPC.openExternal, url, options);
+  },
+  openSystemBrowser(url: string) {
+    return ipcRenderer.invoke(IPC.openSystemBrowser, url);
+  },
+  onOpenBrowserTab(listener: (data: { url: string; title?: string }) => void): () => void {
+    const handler = (_event: Electron.IpcRendererEvent, data: { url: string; title?: string }) => listener(data);
+    ipcRenderer.on(IPC.evtOpenBrowserTab, handler);
+    return () => ipcRenderer.removeListener(IPC.evtOpenBrowserTab, handler);
   },
   zoom(direction: "in" | "out" | "reset") {
     const level = direction === "reset" ? 0 : webFrame.getZoomLevel() + (direction === "in" ? 0.5 : -0.5);

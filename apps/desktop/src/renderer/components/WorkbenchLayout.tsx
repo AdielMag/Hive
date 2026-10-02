@@ -10,6 +10,7 @@ import {
   FolderKanban,
   GitBranch,
   GitCommit,
+  Globe,
   PieChart,
   Settings,
   ShoppingBag,
@@ -28,11 +29,14 @@ import { AppTitleBar } from "./AppTitleBar.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
 import { QuestionFormModal } from "./QuestionFormModal.tsx";
+import { ImagePreviewModal } from "./ImagePreviewModal.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { SessionErrorBanner } from "./SessionErrorBanner.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
-import { useGlobalShortcuts } from "../hooks/useGlobalShortcuts.ts";
+import { useKeybindings } from "../features/commands/useKeybindings.ts";
+import { useShortcut } from "../features/commands/useShortcut.ts";
+import { CommandPalette } from "../features/commands/CommandPalette.tsx";
 import hiveIcon from "../assets/hive-icon.png";
 
 // Heavy views load on demand to keep startup fast (xterm, charts, settings, file/diff viewers).
@@ -48,13 +52,30 @@ const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel"
 const ToolsPanel = named(() => import("./ToolsPanel.tsx"), "ToolsPanel");
 const UsageView = named(() => import("../features/insights/UsageView.tsx"), "UsageView");
 const LibraryView = named(() => import("../features/library/LibraryView.tsx"), "LibraryView");
+const BrowserTab = named(() => import("./browser/BrowserTab.tsx"), "BrowserTab");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
 
 export const WorkbenchLayout: React.FC = () => {
-  useGlobalShortcuts();
-  const { activeProject, tabs, activeTabId, error, openUsageTab, openLibraryTab } = useSessionStore(
-    useShallow((s) => ({ activeProject: s.activeProject, tabs: s.tabs, activeTabId: s.activeTabId, error: s.error, openUsageTab: s.openUsageTab, openLibraryTab: s.openLibraryTab })),
+  useKeybindings();
+  const projectsShortcut = useShortcut("view.projects");
+  const filesShortcut = useShortcut("view.files");
+  const gitShortcut = useShortcut("view.git");
+  const libraryShortcut = useShortcut("view.library");
+  const usageShortcut = useShortcut("view.usage");
+  const settingsShortcut = useShortcut("settings.open");
+  const terminalShortcut = useShortcut("view.terminal");
+
+  const { activeProject, tabs, activeTabId, error, openUsageTab, openLibraryTab, openBrowserTab } = useSessionStore(
+    useShallow((s) => ({
+      activeProject: s.activeProject,
+      tabs: s.tabs,
+      activeTabId: s.activeTabId,
+      error: s.error,
+      openUsageTab: s.openUsageTab,
+      openLibraryTab: s.openLibraryTab,
+      openBrowserTab: s.openBrowserTab,
+    })),
   );
   const ui = useUi(
     useShallow((s) => ({
@@ -85,14 +106,55 @@ export const WorkbenchLayout: React.FC = () => {
           <div className="rail__brand" title="Hive">
             <img src={hiveIcon} alt="Hive" draggable={false} />
           </div>
-          <RailButton icon={<FolderKanban size={18} />} title="Projects & Sessions (Ctrl+B)" active={ui.left === "projects"} onClick={() => ui.toggleLeft("projects")} />
-          <RailButton icon={<Files size={18} />} title="Files (Ctrl+Shift+E)" active={ui.left === "files"} onClick={() => ui.toggleLeft("files")} />
-          <RailButton icon={<GitCommit size={18} />} title="Commits & Staging (Ctrl+Shift+G)" active={ui.left === "git"} onClick={() => ui.toggleLeft("git")} />
-          <RailButton icon={<GitBranch size={18} />} title="Branches & History" active={ui.left === "branches"} onClick={() => ui.toggleLeft("branches")} />
+          <RailButton
+            icon={<FolderKanban size={18} />}
+            title={projectsShortcut ? `Projects & Sessions (${projectsShortcut})` : "Projects & Sessions"}
+            active={ui.left === "projects"}
+            onClick={() => ui.toggleLeft("projects")}
+          />
+          <RailButton
+            icon={<Files size={18} />}
+            title={filesShortcut ? `Files (${filesShortcut})` : "Files"}
+            active={ui.left === "files"}
+            onClick={() => ui.toggleLeft("files")}
+          />
+          <RailButton
+            icon={<GitCommit size={18} />}
+            title={gitShortcut ? `Commits & Staging (${gitShortcut})` : "Commits & Staging"}
+            active={ui.left === "git"}
+            onClick={() => ui.toggleLeft("git")}
+          />
+          <RailButton
+            icon={<GitBranch size={18} />}
+            title="Branches & History"
+            active={ui.left === "branches"}
+            onClick={() => ui.toggleLeft("branches")}
+          />
           <div className="rail__spacer" />
-          <RailButton icon={<Blocks size={18} />} title="Skills & Agents (Ctrl+Shift+K)" active={activeTab?.kind === "library"} onClick={openLibraryTab} />
-          <RailButton icon={<BarChart3 size={18} />} title="Usage analytics (Ctrl+Shift+U)" active={activeTab?.kind === "usage"} onClick={openUsageTab} />
-          <RailButton icon={<Settings size={18} />} title="Settings (Ctrl+,)" active={ui.settingsOpen} onClick={() => ui.openSettings()} />
+          <RailButton
+            icon={<Blocks size={18} />}
+            title={libraryShortcut ? `Skills & Agents (${libraryShortcut})` : "Skills & Agents"}
+            active={activeTab?.kind === "library"}
+            onClick={openLibraryTab}
+          />
+          <RailButton
+            icon={<Globe size={18} />}
+            title="Hive Browser (Ctrl+Shift+B)"
+            active={activeTab?.kind === "browser"}
+            onClick={() => openBrowserTab("https://pi.dev")}
+          />
+          <RailButton
+            icon={<BarChart3 size={18} />}
+            title={usageShortcut ? `Usage analytics (${usageShortcut})` : "Usage analytics"}
+            active={activeTab?.kind === "usage"}
+            onClick={openUsageTab}
+          />
+          <RailButton
+            icon={<Settings size={18} />}
+            title={settingsShortcut ? `Settings (${settingsShortcut})` : "Settings"}
+            active={ui.settingsOpen}
+            onClick={() => ui.openSettings()}
+          />
         </nav>
 
         {ui.left && (
@@ -120,6 +182,8 @@ export const WorkbenchLayout: React.FC = () => {
                 <FileViewerTab tab={activeTab} />
               ) : activeTab?.kind === "diff" ? (
                 <DiffViewerTab tab={activeTab} />
+              ) : activeTab?.kind === "browser" ? (
+                <BrowserTab tab={activeTab} />
               ) : hasSession ? (
                 <SessionView />
               ) : (
@@ -144,7 +208,12 @@ export const WorkbenchLayout: React.FC = () => {
         <nav className="rail rail--right">
           <RailButton icon={<Wrench size={18} />} title="AI tools" active={ui.right === "tools"} onClick={() => ui.toggleRight("tools")} />
           <RailButton icon={<PieChart size={18} />} title="Context breakdown" active={ui.right === "context"} onClick={() => ui.toggleRight("context")} />
-          <RailButton icon={<TerminalIcon size={18} />} title="Terminal (Ctrl+`)" active={ui.right === "terminal"} onClick={() => ui.toggleRight("terminal")} />
+          <RailButton
+            icon={<TerminalIcon size={18} />}
+            title={terminalShortcut ? `Terminal (${terminalShortcut})` : "Terminal"}
+            active={ui.right === "terminal"}
+            onClick={() => ui.toggleRight("terminal")}
+          />
           <RailButton icon={<ShoppingBag size={18} />} title="Marketplace" active={ui.right === "marketplace"} onClick={() => ui.toggleRight("marketplace")} />
         </nav>
       </div>
@@ -152,6 +221,8 @@ export const WorkbenchLayout: React.FC = () => {
       <StatusBar />
       <ExtensionDialogModal />
       <QuestionFormModal />
+      <ImagePreviewModal />
+      <CommandPalette />
       {ui.settingsOpen && (
         <Suspense fallback={null}>
           <SettingsModal isOpen initialTab={ui.settingsTab} onClose={ui.closeSettings} />

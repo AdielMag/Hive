@@ -62,7 +62,7 @@ export type AgentMode = "plan" | "auto-edit" | "manual" | "debug";
 
 export interface TabItem {
   id: string; // tab identifier (usually sessionPath or temp id)
-  kind?: "session" | "file" | "diff" | "usage" | "library";
+  kind?: "session" | "file" | "diff" | "usage" | "library" | "browser";
   sessionPath?: string;
   projectId: string;
   title: string;
@@ -81,6 +81,12 @@ export interface TabItem {
   // Diff tab fields
   diffStaged?: boolean;
   diffContent?: string;
+
+  // Browser tab fields
+  url?: string;
+  favicon?: string;
+  isSleeping?: boolean;
+  lastActiveAt?: number;
 }
 
 export interface UiStateFile {

@@ -1,10 +1,12 @@
 /** Frameless window title bar: app menus, active project, update badge and caption buttons. */
 import React, { useEffect, useRef, useState } from "react";
-import { Copy, Download, FolderKanban, Minus, Square, X } from "lucide-react";
+import { Copy, Download, FolderKanban, Minus, Search, Square, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
-import { openProjectFolder } from "../hooks/useGlobalShortcuts.ts";
+import { openProjectFolder } from "../features/commands/registry.ts";
+import { useShortcut } from "../features/commands/useShortcut.ts";
+import { usePalette } from "../features/commands/palette-store.ts";
 import { isInstalling, startUpdateChecks, useUpdates } from "../store/update-store.ts";
 import { updatePercent } from "./UpdateProgressBar.tsx";
 
@@ -17,7 +19,7 @@ interface MenuItem {
 }
 
 export const AppTitleBar: React.FC = () => {
-  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab, openLibraryTab } = useSessionStore(
+  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab, openLibraryTab, openBrowserTab } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       activeTabId: s.activeTabId,
@@ -25,6 +27,7 @@ export const AppTitleBar: React.FC = () => {
       newSessionTab: s.newSessionTab,
       openUsageTab: s.openUsageTab,
       openLibraryTab: s.openLibraryTab,
+      openBrowserTab: s.openBrowserTab,
     })),
   );
   const ui = useUi(useShallow((s) => ({ openSettings: s.openSettings, toggleLeft: s.toggleLeft, toggleRight: s.toggleRight })));
@@ -35,6 +38,23 @@ export const AppTitleBar: React.FC = () => {
   const installing = isInstalling(install);
   const installPct = install ? updatePercent(install) : null;
   const barRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic shortcut hints
+  const kbdNewSession = useShortcut("session.new");
+  const kbdNewBrowser = useShortcut("browser.new");
+  const kbdOpenProject = useShortcut("project.open");
+  const kbdCloseTab = useShortcut("tab.close");
+  const kbdSettings = useShortcut("settings.open");
+  const kbdPalette = useShortcut("palette.open");
+  const kbdProjects = useShortcut("view.projects");
+  const kbdFiles = useShortcut("view.files");
+  const kbdGit = useShortcut("view.git");
+  const kbdLibrary = useShortcut("view.library");
+  const kbdUsage = useShortcut("view.usage");
+  const kbdTerminal = useShortcut("view.terminal");
+  const kbdZoomIn = useShortcut("zoom.in");
+  const kbdZoomOut = useShortcut("zoom.out");
+  const kbdZoomReset = useShortcut("zoom.reset");
 
   useEffect(() => {
     const outside = (e: MouseEvent) => {
@@ -59,11 +79,12 @@ export const AppTitleBar: React.FC = () => {
 
   const menus: Record<string, MenuItem[]> = {
     File: [
-      { label: "New Session", shortcut: "Ctrl+N", disabled: !activeProject, action: () => activeProject && void newSessionTab(activeProject.id) },
-      { label: "Open Project Folder…", shortcut: "Ctrl+O", action: () => void openProjectFolder() },
-      { label: "Close Tab", shortcut: "Ctrl+W", disabled: !activeTabId, action: () => activeTabId && void closeTab(activeTabId) },
+      { label: "New Session", shortcut: kbdNewSession, disabled: !activeProject, action: () => activeProject && void newSessionTab(activeProject.id) },
+      { label: "New Browser Tab", shortcut: kbdNewBrowser, action: () => openBrowserTab("https://pi.dev") },
+      { label: "Open Project Folder…", shortcut: kbdOpenProject, action: () => void openProjectFolder() },
+      { label: "Close Tab", shortcut: kbdCloseTab, disabled: !activeTabId, action: () => activeTabId && void closeTab(activeTabId) },
       { separator: true, label: "" },
-      { label: "Settings…", shortcut: "Ctrl+,", action: () => ui.openSettings() },
+      { label: "Settings…", shortcut: kbdSettings, action: () => ui.openSettings() },
       { separator: true, label: "" },
       { label: "Exit", action: () => void window.studio.closeWindow() },
     ],
@@ -76,24 +97,26 @@ export const AppTitleBar: React.FC = () => {
       { label: "Paste", shortcut: "Ctrl+V", action: () => document.execCommand("paste") },
     ],
     View: [
-      { label: "Projects", shortcut: "Ctrl+B", action: () => ui.toggleLeft("projects") },
-      { label: "Files", shortcut: "Ctrl+Shift+E", action: () => ui.toggleLeft("files") },
-      { label: "Source Control", shortcut: "Ctrl+Shift+G", action: () => ui.toggleLeft("git") },
+      { label: "Command Palette…", shortcut: kbdPalette, action: () => usePalette.getState().openPalette() },
+      { separator: true, label: "" },
+      { label: "Projects", shortcut: kbdProjects, action: () => ui.toggleLeft("projects") },
+      { label: "Files", shortcut: kbdFiles, action: () => ui.toggleLeft("files") },
+      { label: "Source Control", shortcut: kbdGit, action: () => ui.toggleLeft("git") },
       { separator: true, label: "" },
       { label: "AI Tools", action: () => ui.toggleRight("tools") },
-      { label: "Skills & Agents", shortcut: "Ctrl+Shift+K", action: () => openLibraryTab() },
-      { label: "Usage Analytics", shortcut: "Ctrl+Shift+U", action: () => openUsageTab() },
-      { label: "Terminal", shortcut: "Ctrl+`", action: () => ui.toggleRight("terminal") },
+      { label: "Skills & Agents", shortcut: kbdLibrary, action: () => openLibraryTab() },
+      { label: "Usage Analytics", shortcut: kbdUsage, action: () => openUsageTab() },
+      { label: "Terminal", shortcut: kbdTerminal, action: () => ui.toggleRight("terminal") },
       { separator: true, label: "" },
       { label: "Appearance…", action: () => ui.openSettings("appearance") },
-      { label: "Zoom In", shortcut: "Ctrl+=", action: () => window.studio.zoom("in") },
-      { label: "Zoom Out", shortcut: "Ctrl+-", action: () => window.studio.zoom("out") },
-      { label: "Reset Zoom", shortcut: "Ctrl+0", action: () => window.studio.zoom("reset") },
+      { label: "Zoom In", shortcut: kbdZoomIn, action: () => window.studio.zoom("in") },
+      { label: "Zoom Out", shortcut: kbdZoomOut, action: () => window.studio.zoom("out") },
+      { label: "Reset Zoom", shortcut: kbdZoomReset, action: () => window.studio.zoom("reset") },
     ],
     Help: [
-      { label: "Pi Documentation", action: () => void window.studio.openExternal("https://pi.dev") },
-      { label: "Hive on GitHub", action: () => void window.studio.openExternal("https://github.com/AdielMag/pi-studio") },
-      { label: "Release Notes", action: () => void window.studio.openExternal("https://github.com/AdielMag/pi-studio/releases") },
+      { label: "Pi Documentation", action: () => openBrowserTab("https://pi.dev", "Pi Documentation") },
+      { label: "Hive on GitHub", action: () => openBrowserTab("https://github.com/AdielMag/pi-studio", "Hive on GitHub") },
+      { label: "Release Notes", action: () => openBrowserTab("https://github.com/AdielMag/pi-studio/releases", "Release Notes") },
       { separator: true, label: "" },
       { label: "About Hive", action: () => ui.openSettings("about") },
     ],
@@ -139,6 +162,16 @@ export const AppTitleBar: React.FC = () => {
         ) : (
           <span className="titlebar__project is-muted">Hive</span>
         )}
+        <button
+          type="button"
+          className="titlebar__search-trigger no-drag"
+          onClick={() => usePalette.getState().openPalette()}
+          title={`Quick search & commands (${kbdPalette ?? "Ctrl+K"})`}
+        >
+          <Search size={11} />
+          <span>Search</span>
+          <kbd>{kbdPalette ?? "Ctrl+K"}</kbd>
+        </button>
       </div>
 
       <div className="titlebar__right no-drag">

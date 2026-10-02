@@ -69,7 +69,21 @@ export function registerAppIpc(ctx: AppContext): void {
     return r.canceled ? [] : r.filePaths;
   });
 
-  handle(IPC.openExternal, async (url: string) => {
+  handle(IPC.openExternal, async (url: string, options?: { external?: boolean }) => {
+    if (!isSafeExternalUrl(url)) return;
+    if (options?.external) {
+      await shell.openExternal(url);
+    } else {
+      const win = ctx.getWindow();
+      if (win) {
+        win.webContents.send(IPC.evtOpenBrowserTab, { url });
+      } else {
+        await shell.openExternal(url);
+      }
+    }
+  });
+
+  handle(IPC.openSystemBrowser, async (url: string) => {
     if (isSafeExternalUrl(url)) await shell.openExternal(url);
   });
 

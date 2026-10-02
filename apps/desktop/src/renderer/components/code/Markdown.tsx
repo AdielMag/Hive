@@ -6,6 +6,9 @@ import React, { memo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock } from "./CodeBlock.tsx";
+import { ImageThumbnail } from "../ImageThumbnail.tsx";
+import { useSessionStore } from "../../store/session-store.ts";
+import { useBrowserStore } from "../../lib/browser/browser-store.ts";
 
 const REMARK_PLUGINS = [remarkGfm];
 
@@ -25,7 +28,14 @@ function makeComponents(streaming: boolean): Components {
         href={href}
         onClick={(e) => {
           e.preventDefault();
-          if (href) void window.studio.openExternal(href);
+          if (href) {
+            const settings = useBrowserStore.getState().settings;
+            if (settings.openExternalInHive) {
+              useSessionStore.getState().openBrowserTab(href);
+            } else {
+              void window.studio.openSystemBrowser(href);
+            }
+          }
         }}
         title={href}
       >
@@ -33,6 +43,10 @@ function makeComponents(streaming: boolean): Components {
       </a>
     ),
     input: ({ checked, type }) => (type === "checkbox" ? <input type="checkbox" checked={!!checked} readOnly /> : null),
+    img: ({ src, alt, title }) => {
+      if (!src) return null;
+      return <ImageThumbnail src={src} alt={alt || "Image"} title={title || alt || undefined} className="md-image-thumb" />;
+    },
   };
 }
 

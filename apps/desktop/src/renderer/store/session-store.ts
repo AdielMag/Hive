@@ -24,6 +24,7 @@ import {
   createTranscript,
   type TranscriptState,
 } from "@hive/pi-adapter";
+import { evaluateTabsForMemory, formatUrlOrSearch, useBrowserStore } from "../lib/browser/browser-store.ts";
 import { useInsights } from "../features/insights/insights-store.ts";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
@@ -128,6 +129,14 @@ export interface SessionStoreState {
   openUsageTab: () => void;
   /** Open (or focus) the singleton Skills & Agents library tab. */
   openLibraryTab: () => void;
+  /** Open (or focus) a Chromium browser tab inside Hive. */
+  openBrowserTab: (url?: string, title?: string) => void;
+  /** Update sleeping state of a browser tab to free/restore RAM. */
+  setTabSleeping: (tabId: string, isSleeping: boolean) => void;
+  /** Patch browser tab metadata (e.g. url, title, favicon). */
+  updateBrowserTab: (tabId: string, patch: Partial<TabItem>) => void;
+  /** Put all background browser tabs to sleep immediately. */
+  sleepAllBackgroundTabs: () => void;
   switchTab: (tabId: string) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
   setPromptText: (text: string) => void;
@@ -411,6 +420,24 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
 export const USAGE_TAB_ID = "studio:usage";
 export const LIBRARY_TAB_ID = "studio:library";
 
+let memoryIntervalStarted = false;
+
+export function runMemoryCheck(): void {
+  const state = useSessionStore.getState();
+  const { tabs, activeTabId } = state;
+  const settings = useBrowserStore.getState().settings;
+  const { tabsToSleep, tabsToWake } = evaluateTabsForMemory(tabs, activeTabId, settings);
+  if (tabsToSleep.length > 0 || tabsToWake.length > 0) {
+    useSessionStore.setState((s) => ({
+      tabs: s.tabs.map((tab) => {
+        if (tabsToSleep.includes(tab.id)) return { ...tab, isSleeping: true };
+        if (tabsToWake.includes(tab.id)) return { ...tab, isSleeping: false, lastActiveAt: Date.now() };
+        return tab;
+      }),
+    }));
+  }
+}
+
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   bootstrap: null,
   projects: [],
@@ -562,6 +589,18 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           updateTabUi(tabId, (s) => (s.pendingForm?.id === id ? { pendingForm: null } : {}));
         }
       });
+
+      // Listen for open browser tab events from Electron main process
+      window.studio.onOpenBrowserTab(({ url, title }) => {
+        get().openBrowserTab(url, title);
+      });
+
+      if (!memoryIntervalStarted) {
+        memoryIntervalStarted = true;
+        setInterval(() => {
+          runMemoryCheck();
+        }, 15000);
+      }
 
       // Initial projects and catalog load
       await Promise.all([get().refreshCatalog(), get().loadModelsCatalog()]);
@@ -921,16 +960,93 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set({ activeTabId: LIBRARY_TAB_ID });
   },
 
+  openBrowserTab: (rawUrl = "https://pi.dev", title) => {
+    const settings = useBrowserStore.getState().settings;
+    const url = formatUrlOrSearch(rawUrl, settings.searchEngine);
+    const { tabs, activeProject } = get();
+
+    // Check if an existing browser tab already has this URL
+    const existing = tabs.find((t) => t.kind === "browser" && t.url === url);
+    if (existing) {
+      void get().switchTab(existing.id);
+      return;
+    }
+
+    const tabId = `browser-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const parsedTitle = title || (() => {
+      try {
+        const u = new URL(url);
+        return u.hostname || "Browser";
+      } catch {
+        return "Browser";
+      }
+    })();
+
+    const newTab: TabItem = {
+      id: tabId,
+      kind: "browser",
+      projectId: activeProject?.id ?? "",
+      title: parsedTitle,
+      url,
+      isSleeping: false,
+      lastActiveAt: Date.now(),
+      pinned: false,
+    };
+
+    set({
+      tabs: [...tabs, newTab],
+      activeTabId: tabId,
+    });
+
+    runMemoryCheck();
+  },
+
+  setTabSleeping: (tabId: string, isSleeping: boolean) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isSleeping, lastActiveAt: isSleeping ? t.lastActiveAt : Date.now() } : t)),
+    }));
+  },
+
+  updateBrowserTab: (tabId: string, patch: Partial<TabItem>) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t)),
+    }));
+  },
+
+  sleepAllBackgroundTabs: () => {
+    const { activeTabId } = get();
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.kind === "browser" && t.id !== activeTabId ? { ...t, isSleeping: true } : t)),
+    }));
+  },
+
   switchTab: async (tabId: string) => {
+    const currentTab = get().tabs.find((t) => t.id === get().activeTabId);
+    if (currentTab?.kind === "browser") {
+      set((s) => ({
+        tabs: s.tabs.map((t) => (t.id === currentTab.id ? { ...t, lastActiveAt: Date.now() } : t)),
+      }));
+    }
+
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
+    if (tab.kind === "browser") {
+      set((s) => ({
+        activeTabId: tabId,
+        tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isSleeping: false, lastActiveAt: Date.now() } : t)),
+      }));
+      runMemoryCheck();
+      return;
+    }
     if (tab.kind === "usage" || tab.kind === "library") {
       set({ activeTabId: tabId });
+      runMemoryCheck();
       return;
     }
     // File / diff tabs are views; they must not tear down the live session's transcript.
     if (tab.kind === "file" || tab.kind === "diff") {
       set({ activeTabId: tabId, activeProject: get().projects.find((p) => p.id === tab.projectId) ?? get().activeProject });
+      runMemoryCheck();
       return;
     }
     // Leaving a non-session tab back to the same live session: nothing to reload.
@@ -992,6 +1108,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     } else if (remaining.length === 0) {
       set({ activeTabId: null, activeProject: null, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });
     }
+    runMemoryCheck();
   },
 
   setPromptText: (text: string) => set({ promptText: text }),

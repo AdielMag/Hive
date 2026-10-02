@@ -106,8 +106,8 @@
   gap: 8px;
 }
 .msg-user__images img {
-  max-height: 220px;
-  max-width: 100%;
+  max-height: 110px;
+  max-width: 160px;
   border-radius: 8px;
   border: 1px solid var(--border-subtle);
   object-fit: contain;

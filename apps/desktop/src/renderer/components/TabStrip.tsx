@@ -1,12 +1,13 @@
 /** Tabs across the top of the content card (sessions, files, diffs, usage). Middle-click closes. */
 import React from "react";
-import { BarChart3, FileCode, GitCompare, Loader2, MessageSquare, PenLine, Plus, Sparkles, X } from "lucide-react";
+import { BarChart3, FileCode, GitCompare, Globe, Loader2, MessageSquare, Moon, PenLine, Plus, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { TabItem } from "@hive/protocol";
 import { hasDraft, useSessionStore } from "../store/session-store.ts";
+import { useShortcut } from "../features/commands/useShortcut.ts";
 
 export const TabStrip: React.FC = () => {
-  const { tabs, activeTabId, projects, switchTab, closeTab, newSessionTab, activeProject, running, sessionActivity, tabUi } = useSessionStore(
+  const { tabs, activeTabId, projects, switchTab, closeTab, newSessionTab, openBrowserTab, activeProject, running, sessionActivity, tabUi } = useSessionStore(
     useShallow((s) => ({
       tabs: s.tabs,
       activeTabId: s.activeTabId,
@@ -14,12 +15,14 @@ export const TabStrip: React.FC = () => {
       switchTab: s.switchTab,
       closeTab: s.closeTab,
       newSessionTab: s.newSessionTab,
+      openBrowserTab: s.openBrowserTab,
       activeProject: s.activeProject,
       running: s.transcript.running,
       sessionActivity: s.sessionActivity,
       tabUi: s.tabUi,
     })),
   );
+  const newSessionShortcut = useShortcut("session.new");
 
   if (tabs.length === 0 && !activeProject) return null;
 
@@ -46,7 +49,9 @@ export const TabStrip: React.FC = () => {
                 ? " (finished, not viewed yet)"
                 : unseen === "error"
                   ? " (failed, not viewed yet)"
-                  : "") + (draft ? " (unsent draft)" : "");
+                  : "") +
+          (draft ? " (unsent draft)" : "") +
+          (tab.kind === "browser" && tab.isSleeping ? " (sleeping to save RAM)" : "");
         return (
           <div
             key={tab.id}
@@ -65,6 +70,11 @@ export const TabStrip: React.FC = () => {
               <TabIcon tab={tab} />
             </span>
             <span className="tab__title">{tab.title}</span>
+            {tab.kind === "browser" && tab.isSleeping && (
+              <span className="tab__sleep-badge" title="Sleeping to save RAM">
+                <Moon size={10} />
+              </span>
+            )}
             {draft && (
               <span className="tab__draft" aria-hidden title="Unsent draft">
                 <PenLine size={11} />
@@ -91,10 +101,21 @@ export const TabStrip: React.FC = () => {
         );
       })}
       {activeProject && (
-        <button className="tabstrip__new" onClick={() => void newSessionTab(activeProject.id)} title={`New session in ${activeProject.name} (Ctrl+N)`}>
+        <button
+          className="tabstrip__new"
+          onClick={() => void newSessionTab(activeProject.id)}
+          title={newSessionShortcut ? `New session in ${activeProject.name} (${newSessionShortcut})` : `New session in ${activeProject.name}`}
+        >
           <Plus size={14} />
         </button>
       )}
+      <button
+        className="tabstrip__new"
+        onClick={() => void openBrowserTab("https://pi.dev")}
+        title="Open Hive Browser Tab (Ctrl+Shift+B)"
+      >
+        <Globe size={13} />
+      </button>
     </div>
   );
 };
@@ -109,6 +130,19 @@ const TabIcon: React.FC<{ tab: TabItem }> = ({ tab }) => {
       return <BarChart3 size={13} />;
     case "library":
       return <Sparkles size={13} />;
+    case "browser":
+      return tab.favicon ? (
+        <img
+          src={tab.favicon}
+          alt=""
+          className="browser-tab-favicon"
+          onError={(e) => {
+            (e.currentTarget as HTMLElement).style.display = "none";
+          }}
+        />
+      ) : (
+        <Globe size={13} />
+      );
     default:
       return <MessageSquare size={13} />;
   }

@@ -1,5 +1,5 @@
 /** Main BrowserWindow creation: frameless shell, safe external links, renderer diagnostics. */
-import { BrowserWindow, Menu, app, shell } from "electron";
+import { BrowserWindow, Menu, app } from "electron";
 import { existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,6 +46,7 @@ export function createMainWindow(): BrowserWindow {
       nodeIntegration: false,
       spellcheck: false,
       backgroundThrottling: false,
+      webviewTag: true,
     },
   });
 
@@ -53,15 +54,44 @@ export function createMainWindow(): BrowserWindow {
   win.on("maximize", () => win.webContents.send(IPC.evtWindowMaximized, true));
   win.on("unmaximize", () => win.webContents.send(IPC.evtWindowMaximized, false));
 
-  // Never let the renderer navigate away from the app or open new Electron windows.
+  // Enforce strict sandboxing on all attached webviews
+  win.webContents.on("will-attach-webview", (_event, webPreferences, _params) => {
+    delete (webPreferences as any).preload;
+    delete (webPreferences as any).preloadURL;
+    webPreferences.nodeIntegration = false;
+    webPreferences.nodeIntegrationInSubFrames = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+  });
+
+  // Intercept window.open from within webviews so target="_blank" links open as new Hive browser tabs
+  win.webContents.on("did-attach-webview", (_event, guestWebContents) => {
+    guestWebContents.setWindowOpenHandler(({ url }) => {
+      if (isSafeExternalUrl(url)) {
+        win.webContents.send(IPC.evtOpenBrowserTab, { url });
+      }
+      return { action: "deny" };
+    });
+    guestWebContents.on("will-navigate", (event, navigationUrl) => {
+      if (!isSafeExternalUrl(navigationUrl)) {
+        event.preventDefault();
+      }
+    });
+  });
+
+  // External links clicked inside the app open in Hive's integrated browser by default!
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isSafeExternalUrl(url)) void shell.openExternal(url);
+    if (isSafeExternalUrl(url)) {
+      win.webContents.send(IPC.evtOpenBrowserTab, { url });
+    }
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (event, url) => {
     if (url !== win.webContents.getURL()) {
       event.preventDefault();
-      if (isSafeExternalUrl(url)) void shell.openExternal(url);
+      if (isSafeExternalUrl(url)) {
+        win.webContents.send(IPC.evtOpenBrowserTab, { url });
+      }
     }
   });
 

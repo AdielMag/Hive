@@ -216,6 +216,8 @@ export const IPC = {
   usageGet: "insights:usage",
   // Shell
   openExternal: "shell:open-external",
+  openSystemBrowser: "shell:open-system-browser",
+  evtOpenBrowserTab: "browser:open-tab",
   // Skills & agents library
   libraryList: "library:list",
   librarySetField: "library:set-field",
@@ -473,7 +475,9 @@ export interface StudioApi {
   readSubagentOutput(path: string, fromOffset?: number): Promise<SubagentOutputChunk>;
 
   // Shell
-  openExternal(url: string): Promise<void>;
+  openExternal(url: string, options?: { external?: boolean }): Promise<void>;
+  openSystemBrowser(url: string): Promise<void>;
+  onOpenBrowserTab(listener: (data: { url: string; title?: string }) => void): () => void;
   /** Page zoom (Ctrl +/-/0). */
   zoom(direction: "in" | "out" | "reset"): void;
 }
