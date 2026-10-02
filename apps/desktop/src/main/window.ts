@@ -1,8 +1,16 @@
 /** Main BrowserWindow creation: frameless shell, safe external links, renderer diagnostics. */
 import { BrowserWindow, Menu, app, shell } from "electron";
 import { existsSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { IPC } from "@pi-studio/protocol";
+
+/**
+ * Directory of the bundled main script (out/main). Derived explicitly: the main bundle is ESM, where
+ * `__dirname` doesn't exist, and electron-vite's injected shim can land inside another module's scope
+ * (v0.5.0 shipped that way and crashed with "__dirname is not defined" before any window opened).
+ */
+const mainDir = dirname(fileURLToPath(import.meta.url));
 
 export function isSafeExternalUrl(url: string): boolean {
   try {
@@ -14,8 +22,8 @@ export function isSafeExternalUrl(url: string): boolean {
 }
 
 export function createMainWindow(): BrowserWindow {
-  const preloadCjs = join(__dirname, "../preload/index.cjs");
-  const preloadPath = existsSync(preloadCjs) ? preloadCjs : join(__dirname, "../preload/index.js");
+  const preloadCjs = join(mainDir, "../preload/index.cjs");
+  const preloadPath = existsSync(preloadCjs) ? preloadCjs : join(mainDir, "../preload/index.js");
 
   Menu.setApplicationMenu(null);
 
@@ -75,7 +83,7 @@ export function createMainWindow(): BrowserWindow {
   if (process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    void win.loadFile(join(__dirname, "../renderer/index.html"));
+    void win.loadFile(join(mainDir, "../renderer/index.html"));
   }
 
   // Dev aid: PI_STUDIO_CAPTURE=<file.png> writes a screenshot after load and quits.
