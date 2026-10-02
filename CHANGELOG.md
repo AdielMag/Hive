@@ -2,6 +2,26 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.9.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.8.0...v0.9.0)
+
+### ✨ Features
+
+- **git:** add fetch, pull and push buttons to Git panel ([`d588d69`](https://github.com/AdielMag/pi-studio/commit/d588d693989806445ac7e9d741f9612250efb5bf))
+- **ui:** multi-question form for extensions over the Studio bridge ([`15fca79`](https://github.com/AdielMag/pi-studio/commit/15fca79188b18250d23434f72a6c4620753b212c))
+- **usage:** per-session usage breakdown and scoping ([`b6cc017`](https://github.com/AdielMag/pi-studio/commit/b6cc017cf70a7974d6c0d700f273606bff0a4267))
+- finish Hive rebrand (name, icon, data paths) ([`88e34be`](https://github.com/AdielMag/pi-studio/commit/88e34be4062d0b7d6debad29bbb267df6bdb143c))
+- **sidebar:** show session activity state on project session rows ([`38d70ef`](https://github.com/AdielMag/pi-studio/commit/38d70ef833160b5726fcec5c2037c323a241a3f6))
+- **context:** open context breakdown in right side panel with redesigned UI ([`2defe11`](https://github.com/AdielMag/pi-studio/commit/2defe111a0fd848e4aae3ef80d7c5e4add84be96))
+
+### 🐛 Fixes
+
+- **quota:** restore subscription limits (5h/weekly + resets) after Hive rebrand ([`d5df396`](https://github.com/AdielMag/pi-studio/commit/d5df396d51c143aba21059ffda3862a2d8c3fabc))
+
+### 🧹 Other changes
+
+- **desktop:** refresh tsconfig.node tsbuildinfo ([`a19b0e4`](https://github.com/AdielMag/pi-studio/commit/a19b0e4850d5fdc55989d5d2c4d97abf5861efff))
+- Show compact MCP chip with tooltip in status bar ([`e230718`](https://github.com/AdielMag/pi-studio/commit/e2307182478a339058ff10aa11f9e23737be9706))
+
 ## v0.8.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.7.0...v0.8.0)
 
 ### ✨ Features
