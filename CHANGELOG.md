@@ -2,6 +2,16 @@
 
 All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
 
+## v0.6.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.5.0...v0.6.0)
+
+### ✨ Features
+
+- **updater:** show download/install progress when applying an update ([`57d3f4e`](https://github.com/AdielMag/pi-studio/commit/57d3f4e3b049f09e30c8c9f1747d48aa827199b0))
+
+### 🐛 Fixes
+
+- **main:** app fails to open — __dirname undefined in ESM main bundle ([`773999e`](https://github.com/AdielMag/pi-studio/commit/773999ebac62a89eaf6cea4c28aa08af1a10ddf5))
+
 ## v0.5.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.4.2...v0.5.0)
 
 ### ✨ Features
