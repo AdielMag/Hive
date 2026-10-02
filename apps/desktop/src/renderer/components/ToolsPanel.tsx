@@ -1,23 +1,52 @@
+/**
+ * AI Tools panel: what this session used — skills, subagents, MCP servers, built-in and extension tools.
+ * Every section is collapsible (state persisted); a filter forces matching sections open.
+ */
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Blocks,
   Bot,
   Box,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Cpu,
+  CircleDashed,
+  Clock,
+  Loader2,
   Network,
   RefreshCw,
+  Search,
   Sparkles,
   Wrench,
+  X,
+  XCircle,
 } from "lucide-react";
 import { buildTimeline } from "@pi-studio/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
 import { useActiveRegistry, useAiRegistryStore } from "../store/ai-registry-store.ts";
-import { availableOnly, collectToolUsage } from "../lib/ai/tool-usage.ts";
+import { availableOnly, collectToolUsage, type ToolUsageRef } from "../lib/ai/tool-usage.ts";
+import type { SubagentView } from "../lib/ai/subagents.ts";
 import { scrollToToolCall } from "./Transcript.tsx";
 import { formatCost } from "../lib/format.ts";
 import "../styles/tools-panel.css";
+
+type SectionId = "skills" | "subagents" | "mcp" | "builtin" | "extensions";
+
+const COLLAPSE_KEY = "pi-studio:tools-panel:collapsed";
+const SUBAGENT_PREVIEW = 6;
+
+function loadCollapsed(): Partial<Record<SectionId, boolean>> {
+  try {
+    return JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? "{}") as Partial<Record<SectionId, boolean>>;
+  } catch {
+    return {};
+  }
+}
+
+const jump = (ref?: ToolUsageRef) => {
+  const target = ref?.toolCallId || ref?.itemKey;
+  if (target) scrollToToolCall(target);
+};
 
 export const ToolsPanel: React.FC = () => {
   const activeKey = useSessionStore((s) => s.activeKey);
@@ -32,72 +61,82 @@ export const ToolsPanel: React.FC = () => {
   const loadRegistry = useAiRegistryStore((s) => s.load);
 
   const [filter, setFilter] = useState("");
-  const [showAvailableSkills, setShowAvailableSkills] = useState(false);
-  const [showAvailableMcp, setShowAvailableMcp] = useState(false);
-  const [showAvailableExt, setShowAvailableExt] = useState(false);
+  const [collapsed, setCollapsed] = useState(loadCollapsed);
+  const [showAllAgents, setShowAllAgents] = useState(false);
 
   useEffect(() => {
     initRegistry();
-    if (activeKey) {
-      void loadRegistry(activeKey);
-    }
+    if (activeKey) void loadRegistry(activeKey);
   }, [activeKey, initRegistry, loadRegistry]);
 
+  const toggleSection = (id: SectionId, wasOpen: boolean) => {
+    // While filtering, sections are forced open; don't persist a collapse the user can't see.
+    if (filter.trim()) return;
+    setCollapsed((prev) => {
+      const next = { ...prev, [id]: wasOpen };
+      try {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next));
+      } catch {
+        // storage unavailable: keep in-memory state only
+      }
+      return next;
+    });
+  };
+
   const timeline = useMemo(() => buildTimeline(transcript), [transcript]);
-
-  const report = useMemo(() => {
-    const ctx = {
-      cwd: activeProject?.path ?? "",
-      homeDir: registry?.homeDir ?? "",
-      registry,
-      mcpCatalog: mcp,
-    };
-    return collectToolUsage(timeline, ctx);
-  }, [timeline, activeProject?.path, registry, mcp]);
-
-  const available = useMemo(() => {
-    return availableOnly(report, registry, mcp);
-  }, [report, registry, mcp]);
+  const report = useMemo(
+    () =>
+      collectToolUsage(timeline, {
+        cwd: activeProject?.path ?? "",
+        homeDir: registry?.homeDir ?? "",
+        registry,
+        mcpCatalog: mcp,
+      }),
+    [timeline, activeProject?.path, registry, mcp],
+  );
+  const available = useMemo(() => availableOnly(report, registry, mcp), [report, registry, mcp]);
 
   const q = filter.trim().toLowerCase();
+  const has = (...values: Array<string | undefined>) => !q || values.some((v) => v?.toLowerCase().includes(q));
 
-  const filteredSkills = report.skills.filter(
-    (s) => !q || s.label.toLowerCase().includes(q) || String(s.details?.description ?? "").toLowerCase().includes(q),
-  );
-  const filteredAvailableSkills = available.skills.filter(
-    (s) => !q || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
-  );
+  const skills = report.skills.filter((s) => has(s.label, String(s.details?.description ?? "")));
+  const availableSkills = available.skills.filter((s) => has(s.name, s.description));
+  const agents = report.subagents.agents.filter((a) => has(a.type, a.description, a.model));
+  const mcpUsed = report.mcp.filter((m) => has(m.server, ...Object.keys(m.tools)));
+  const mcpAvailable = available.mcp.filter((m) => has(m.name, ...m.tools.map((t) => t.name)));
+  const builtin = report.builtin.filter((b) => has(b.label));
+  const extensions = report.extensions.filter((e) => has(e.packageName, ...Object.keys(e.tools)));
+  const extAvailable = available.extensions.filter((e) => has(e.packageName, ...e.tools.map((t) => t.name)));
 
-  const filteredSubagents = report.subagents.agents.filter(
-    (a) => !q || a.type.toLowerCase().includes(q) || a.description.toLowerCase().includes(q) || (a.model ?? "").toLowerCase().includes(q),
-  );
+  /**
+   * Filtering forces sections open so matches are visible. Otherwise the user's last choice wins; sections
+   * where nothing was used yet (only "available" items) start collapsed to keep the panel short.
+   */
+  const isOpen = (id: SectionId, used: number) => Boolean(q) || (collapsed[id] === undefined ? used > 0 : !collapsed[id]);
 
-  const filteredMcp = report.mcp.filter(
-    (m) => !q || m.server.toLowerCase().includes(q) || Object.keys(m.tools).some((t) => t.toLowerCase().includes(q)),
-  );
-  const filteredAvailableMcp = available.mcp.filter(
-    (m) => !q || m.name.toLowerCase().includes(q) || m.tools.some((t) => t.name.toLowerCase().includes(q)),
-  );
+  const totalCalls =
+    report.builtin.reduce((n, b) => n + b.count, 0) +
+    report.mcp.reduce((n, m) => n + m.totalCount, 0) +
+    report.extensions.reduce((n, e) => n + e.totalCount, 0);
 
-  const filteredBuiltin = report.builtin.filter((b) => !q || b.label.toLowerCase().includes(q));
+  const statusCounts = useMemo(() => {
+    const c = { running: 0, completed: 0, failed: 0 };
+    for (const a of report.subagents.agents) {
+      if (a.status === "running" || a.status === "queued" || a.status === "background") c.running++;
+      else if (a.status === "completed" || a.status === "steered") c.completed++;
+      else c.failed++;
+    }
+    return c;
+  }, [report.subagents.agents]);
 
-  const filteredExtensions = report.extensions.filter(
-    (e) => !q || e.packageName.toLowerCase().includes(q) || Object.keys(e.tools).some((t) => t.toLowerCase().includes(q)),
-  );
-  const filteredAvailableExt = available.extensions.filter(
-    (e) => !q || e.packageName.toLowerCase().includes(q) || e.tools.some((t) => t.name.toLowerCase().includes(q)),
-  );
+  const nothing =
+    skills.length + availableSkills.length + agents.length + mcpUsed.length + mcpAvailable.length + builtin.length + extensions.length + extAvailable.length === 0;
 
-  const hasAnyActivity =
-    report.skills.length > 0 ||
-    report.subagents.totalCount > 0 ||
-    report.mcp.length > 0 ||
-    report.builtin.length > 0 ||
-    report.extensions.length > 0;
+  const visibleAgents = showAllAgents || q ? agents : agents.slice(-SUBAGENT_PREVIEW);
+  const hiddenAgents = agents.length - visibleAgents.length;
 
   return (
     <div className="tools-panel">
-      {/* Panel Header */}
       <div className="ui-panel-header">
         <div className="ui-panel-title">
           <Blocks size={14} /> AI Tools
@@ -112,306 +151,396 @@ export const ToolsPanel: React.FC = () => {
         </button>
       </div>
 
-      {/* Filter search */}
       <div className="tools-panel__filter">
-        <input
-          type="text"
-          className="tools-panel__input"
-          placeholder="Filter tools, skills, subagents..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
+        <div className="tools-panel__search">
+          <Search size={12} className="tools-panel__search-icon" />
+          <input
+            type="text"
+            className="tools-panel__input"
+            placeholder="Filter tools, skills, subagents…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+          {filter && (
+            <button className="tools-panel__clear" onClick={() => setFilter("")} title="Clear filter" aria-label="Clear filter">
+              <X size={11} />
+            </button>
+          )}
+        </div>
+        {(totalCalls > 0 || report.subagents.totalCount > 0) && !q && (
+          <div className="tools-panel__summary">
+            <span>
+              <strong>{totalCalls}</strong> tool calls
+            </span>
+            {report.subagents.totalCount > 0 && (
+              <span>
+                <strong>{report.subagents.totalCount}</strong> subagents
+              </span>
+            )}
+            {report.skills.length > 0 && (
+              <span>
+                <strong>{report.skills.length}</strong> skills
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="tools-panel__body ui-scroll">
-        {!hasAnyActivity && available.skills.length === 0 && available.mcp.length === 0 && (
+        {nothing && (
           <div className="ui-empty" style={{ margin: "30px auto" }}>
             <Blocks size={24} />
-            <div>No AI tools registered yet</div>
-            <div style={{ fontSize: 11 }}>Tools and skills appear as soon as a Pi session is active.</div>
+            <div>{q ? "Nothing matches this filter" : "No AI tools registered yet"}</div>
+            {!q && <div style={{ fontSize: 11 }}>Tools and skills appear as soon as a Pi session is active.</div>}
           </div>
         )}
 
-        {/* 1. SKILLS SECTION */}
-        {(filteredSkills.length > 0 || filteredAvailableSkills.length > 0) && (
-          <div className="tools-section">
-            <div className="tools-section__header">
-              <span className="tools-section__title">
-                <Sparkles size={13} /> Skills ({filteredSkills.length} used)
-              </span>
-            </div>
-
-            <div className="tools-list">
-              {filteredSkills.map((s) => (
-                <div
-                  key={s.id}
-                  className="tools-item is-used is-clickable"
-                  onClick={() => {
-                    const target = s.firstRef?.toolCallId || s.firstRef?.itemKey;
-                    if (target) scrollToToolCall(target);
-                  }}
-                  title="Click to jump to first skill use"
-                >
-                  <div className="tools-item__icon">
-                    <Sparkles size={13} />
-                  </div>
-                  <div className="tools-item__content">
-                    <div className="tools-item__name-row">
-                      <span className="tools-item__name">{s.label}</span>
-                    </div>
-                    {typeof s.details?.description === "string" && s.details.description && (
-                      <span className="tools-item__sub">{s.details.description}</span>
-                    )}
-                  </div>
-                  <div className="tools-item__chips">
-                    <span className="ui-chip ui-chip--accent">×{s.count}</span>
-                  </div>
-                </div>
+        {/* Subagents first: the most information-dense, most-checked section. */}
+        {agents.length > 0 && (
+          <Section
+            id="subagents"
+            icon={<Bot size={13} />}
+            title="Subagents"
+            count={agents.length}
+            open={isOpen("subagents", agents.length)}
+            onToggle={toggleSection}
+            meta={
+              <>
+                {statusCounts.running > 0 && (
+                  <span className="tools-status-count is-running" title="Running">
+                    <Loader2 size={10} className="spin" /> {statusCounts.running}
+                  </span>
+                )}
+                {statusCounts.completed > 0 && (
+                  <span className="tools-status-count is-ok" title="Completed">
+                    <CheckCircle2 size={10} /> {statusCounts.completed}
+                  </span>
+                )}
+                {statusCounts.failed > 0 && (
+                  <span className="tools-status-count is-failed" title="Failed / aborted">
+                    <XCircle size={10} /> {statusCounts.failed}
+                  </span>
+                )}
+                {report.subagents.totalCost > 0 && <span className="tools-section__cost mono">{formatCost(report.subagents.totalCost)}</span>}
+              </>
+            }
+          >
+            {hiddenAgents > 0 && (
+              <button className="tools-more" onClick={() => setShowAllAgents(true)}>
+                Show {hiddenAgents} earlier
+              </button>
+            )}
+            <div className="tools-agents">
+              {visibleAgents.map((a) => (
+                <SubagentRow key={a.toolCallId} agent={a} />
               ))}
+            </div>
+            {showAllAgents && agents.length > SUBAGENT_PREVIEW && !q && (
+              <button className="tools-more" onClick={() => setShowAllAgents(false)}>
+                Show fewer
+              </button>
+            )}
+          </Section>
+        )}
 
-              {/* Available skills */}
-              {filteredAvailableSkills.length > 0 && (
-                <div className="tools-available-wrap">
-                  <button
-                    className="tools-available-toggle"
-                    onClick={() => setShowAvailableSkills((p) => !p)}
-                  >
-                    {showAvailableSkills ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    <span>Available skills ({filteredAvailableSkills.length})</span>
+        {(skills.length > 0 || availableSkills.length > 0) && (
+          <Section
+            id="skills"
+            icon={<Sparkles size={13} />}
+            title="Skills"
+            count={skills.length}
+            open={isOpen("skills", skills.length)}
+            onToggle={toggleSection}
+            meta={availableSkills.length > 0 ? <span className="tools-section__hint">{availableSkills.length} available</span> : null}
+          >
+            {skills.length > 0 && (
+              <div className="tools-rows">
+                {skills.map((s) => (
+                  <button key={s.id} className="tools-row" onClick={() => jump(s.firstRef)} title="Jump to first use">
+                    <Sparkles size={12} className="tools-row__icon" />
+                    <span className="tools-row__main">
+                      <span className="tools-row__name">{s.label}</span>
+                      {typeof s.details?.description === "string" && s.details.description && (
+                        <span className="tools-row__sub">{s.details.description}</span>
+                      )}
+                    </span>
+                    <span className="tools-count">×{s.count}</span>
                   </button>
-                  {showAvailableSkills &&
-                    filteredAvailableSkills.map((sk) => (
-                      <div key={sk.name} className="tools-item tools-item--available">
-                        <div className="tools-item__content">
-                          <span className="tools-item__name">{sk.name}</span>
-                          {sk.description && <span className="tools-item__sub">{sk.description}</span>}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 2. SUBAGENTS SECTION */}
-        {filteredSubagents.length > 0 && (
-          <div className="tools-section">
-            <div className="tools-section__header">
-              <span className="tools-section__title">
-                <Bot size={13} /> Subagents ({filteredSubagents.length})
-              </span>
-              {report.subagents.totalCost > 0 && (
-                <span className="tools-section__meta mono">
-                  {formatCost(report.subagents.totalCost)}
-                </span>
-              )}
-            </div>
-
-            <div className="tools-list">
-              {filteredSubagents.map((a) => (
-                <div
-                  key={a.toolCallId}
-                  className="tools-item is-used is-clickable"
-                  onClick={() => scrollToToolCall(a.toolCallId)}
-                  title="Click to jump to subagent card"
-                >
-                  <div className="tools-item__icon">
-                    <Bot size={13} />
-                  </div>
-                  <div className="tools-item__content">
-                    <div className="tools-item__name-row">
-                      <span className="tools-item__name">{a.type}</span>
-                      <span className={`msg-agent-card__status-chip status-${a.status}`}>
-                        {a.status}
-                      </span>
-                    </div>
-                    <span className="tools-item__sub">{a.description}</span>
-                  </div>
-                  <div className="tools-item__chips">
-                    {a.model && (
-                      <span className="ui-chip ui-chip--neutral" style={{ fontSize: "10px" }}>
-                        <Cpu size={10} /> {a.model}
-                      </span>
-                    )}
-                    {a.cost !== undefined && a.cost > 0 && (
-                      <span className="ui-chip ui-chip--neutral mono" style={{ fontSize: "10px" }}>
-                        {formatCost(a.cost)}
-                      </span>
-                    )}
-                  </div>
+                ))}
+              </div>
+            )}
+            <Available label={`Show ${availableSkills.length} available`} show={availableSkills.length > 0} forceOpen={Boolean(q)} inline={skills.length === 0}>
+              {availableSkills.map((sk) => (
+                <div key={sk.name} className="tools-row tools-row--available" title={sk.description}>
+                  <span className="tools-row__main">
+                    <span className="tools-row__name">{sk.name}</span>
+                    {sk.description && <span className="tools-row__sub">{sk.description}</span>}
+                  </span>
                 </div>
               ))}
-            </div>
-          </div>
+            </Available>
+          </Section>
         )}
 
-        {/* 3. MCP SERVERS SECTION */}
-        {(filteredMcp.length > 0 || filteredAvailableMcp.length > 0) && (
-          <div className="tools-section">
-            <div className="tools-section__header">
-              <span className="tools-section__title">
-                <Network size={13} /> MCP Servers
-              </span>
-            </div>
-
-            <div className="tools-list">
-              {filteredMcp.map((m) => (
-                <div key={m.server} className="tools-item is-used" style={{ flexDirection: "column", alignItems: "stretch" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Network size={12} className="tools-item__icon" />
-                      <span className="tools-item__name">{m.server}</span>
-                    </div>
-                    <span className="ui-chip ui-chip--neutral">×{m.totalCount} calls</span>
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                    {Object.entries(m.tools).map(([toolName, info]) => (
-                      <button
-                        key={toolName}
-                        type="button"
-                        className="ui-chip ui-chip--accent"
-                        style={{ cursor: info.firstRef?.toolCallId ? "pointer" : "default" }}
-                        onClick={() => {
-                          if (info.firstRef?.toolCallId) scrollToToolCall(info.firstRef.toolCallId);
-                        }}
-                        title={info.firstRef?.toolCallId ? "Jump to tool call" : undefined}
-                      >
-                        {toolName} ×{info.count}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {filteredAvailableMcp.length > 0 && (
-                <div className="tools-available-wrap">
-                  <button
-                    className="tools-available-toggle"
-                    onClick={() => setShowAvailableMcp((p) => !p)}
-                  >
-                    {showAvailableMcp ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    <span>Available MCP tools ({filteredAvailableMcp.reduce((acc, x) => acc + x.tools.length, 0)})</span>
+        {builtin.length > 0 && (
+          <Section
+            id="builtin"
+            icon={<Wrench size={13} />}
+            title="Built-in tools"
+            count={builtin.length}
+            open={isOpen("builtin", builtin.length)}
+            onToggle={toggleSection}
+            meta={<span className="tools-section__hint">{builtin.reduce((n, b) => n + b.count, 0)} calls</span>}
+          >
+            <div className="tools-chips">
+              {[...builtin]
+                .sort((a, b) => b.count - a.count)
+                .map((b) => (
+                  <button key={b.id} className="tools-chip" onClick={() => jump(b.firstRef)} title="Jump to first use">
+                    <span className="tools-chip__name">{b.label}</span>
+                    <span className="tools-chip__count">{b.count}</span>
                   </button>
-                  {showAvailableMcp &&
-                    filteredAvailableMcp.map((srv) => (
-                      <div key={srv.name} className="tools-item tools-item--available" style={{ flexDirection: "column", alignItems: "stretch" }}>
-                        <span className="tools-item__name">{srv.name}</span>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2 }}>
-                          {srv.tools.map((t) => (
-                            <span key={t.name} className="ui-chip ui-chip--neutral" title={t.description}>
-                              {t.name}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
+                ))}
             </div>
-          </div>
+          </Section>
         )}
 
-        {/* 4. BUILT-IN TOOLS SECTION */}
-        {filteredBuiltin.length > 0 && (
-          <div className="tools-section">
-            <div className="tools-section__header">
-              <span className="tools-section__title">
-                <Wrench size={13} /> Built-in Tools
-              </span>
-            </div>
-
-            <div className="tools-list">
-              {filteredBuiltin.map((b) => (
-                <div
-                  key={b.id}
-                  className="tools-item is-used is-clickable"
-                  onClick={() => {
-                    if (b.firstRef?.toolCallId) scrollToToolCall(b.firstRef.toolCallId);
-                  }}
-                  title="Click to jump to first use"
-                >
-                  <div className="tools-item__icon">
-                    <Wrench size={12} />
-                  </div>
-                  <div className="tools-item__content">
-                    <span className="tools-item__name">{b.label}</span>
-                  </div>
-                  <div className="tools-item__chips">
-                    <span className="ui-chip ui-chip--neutral">×{b.count}</span>
-                  </div>
-                </div>
+        {(mcpUsed.length > 0 || mcpAvailable.length > 0) && (
+          <Section
+            id="mcp"
+            icon={<Network size={13} />}
+            title="MCP servers"
+            count={mcpUsed.length}
+            open={isOpen("mcp", mcpUsed.length)}
+            onToggle={toggleSection}
+            meta={
+              mcpAvailable.length > 0 ? (
+                <span className="tools-section__hint">{mcpAvailable.reduce((n, x) => n + x.tools.length, 0)} tools available</span>
+              ) : null
+            }
+          >
+            {mcpUsed.map((m) => (
+              <ToolGroup key={m.server} icon={<Network size={12} />} name={m.server} total={m.totalCount} tools={m.tools} />
+            ))}
+            <Available label={`Show ${mcpAvailable.reduce((n, x) => n + x.tools.length, 0)} available`} show={mcpAvailable.length > 0} forceOpen={Boolean(q)} inline={mcpUsed.length === 0}>
+              {mcpAvailable.map((srv) => (
+                <AvailableGroup key={srv.name} name={srv.name} tools={srv.tools} />
               ))}
-            </div>
-          </div>
+            </Available>
+          </Section>
         )}
 
-        {/* 5. EXTENSION TOOLS SECTION */}
-        {(filteredExtensions.length > 0 || filteredAvailableExt.length > 0) && (
-          <div className="tools-section">
-            <div className="tools-section__header">
-              <span className="tools-section__title">
-                <Box size={13} /> Extension Tools
-              </span>
-            </div>
-
-            <div className="tools-list">
-              {filteredExtensions.map((pkg) => (
-                <div key={pkg.packageName} className="tools-item is-used" style={{ flexDirection: "column", alignItems: "stretch" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Box size={12} className="tools-item__icon" />
-                      <span className="tools-item__name">{pkg.packageName}</span>
-                    </div>
-                    <span className="ui-chip ui-chip--neutral">×{pkg.totalCount}</span>
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                    {Object.entries(pkg.tools).map(([toolName, info]) => (
-                      <button
-                        key={toolName}
-                        type="button"
-                        className="ui-chip ui-chip--accent"
-                        style={{ cursor: info.firstRef?.toolCallId ? "pointer" : "default" }}
-                        onClick={() => {
-                          if (info.firstRef?.toolCallId) scrollToToolCall(info.firstRef.toolCallId);
-                        }}
-                        title={info.firstRef?.toolCallId ? "Jump to tool call" : undefined}
-                      >
-                        {toolName} ×{info.count}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+        {(extensions.length > 0 || extAvailable.length > 0) && (
+          <Section
+            id="extensions"
+            icon={<Box size={13} />}
+            title="Extension tools"
+            count={extensions.length}
+            open={isOpen("extensions", extensions.length)}
+            onToggle={toggleSection}
+            meta={
+              extAvailable.length > 0 ? (
+                <span className="tools-section__hint">{extAvailable.reduce((n, x) => n + x.tools.length, 0)} tools available</span>
+              ) : null
+            }
+          >
+            {extensions.map((pkg) => (
+              <ToolGroup key={pkg.packageName} icon={<Box size={12} />} name={pkg.packageName} total={pkg.totalCount} tools={pkg.tools} />
+            ))}
+            <Available label={`Show ${extAvailable.reduce((n, x) => n + x.tools.length, 0)} available`} show={extAvailable.length > 0} forceOpen={Boolean(q)} inline={extensions.length === 0}>
+              {extAvailable.map((ext) => (
+                <AvailableGroup key={ext.packageName} name={ext.packageName} tools={ext.tools} />
               ))}
-
-              {filteredAvailableExt.length > 0 && (
-                <div className="tools-available-wrap">
-                  <button
-                    className="tools-available-toggle"
-                    onClick={() => setShowAvailableExt((p) => !p)}
-                  >
-                    {showAvailableExt ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    <span>Available extensions ({filteredAvailableExt.reduce((acc, x) => acc + x.tools.length, 0)})</span>
-                  </button>
-                  {showAvailableExt &&
-                    filteredAvailableExt.map((ext) => (
-                      <div key={ext.packageName} className="tools-item tools-item--available" style={{ flexDirection: "column", alignItems: "stretch" }}>
-                        <span className="tools-item__name">{ext.packageName}</span>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2 }}>
-                          {ext.tools.map((t) => (
-                            <span key={t.name} className="ui-chip ui-chip--neutral" title={t.description}>
-                              {t.name}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-          </div>
+            </Available>
+          </Section>
         )}
       </div>
     </div>
+  );
+};
+
+/* ── Building blocks ─────────────────────────────────────────────────── */
+
+const Section: React.FC<{
+  id: SectionId;
+  icon: React.ReactNode;
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle(id: SectionId, wasOpen: boolean): void;
+  meta?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ id, icon, title, count, open, onToggle, meta, children }) => (
+  <section className={`tools-section${open ? " is-open" : ""}`}>
+    <button className="tools-section__header" onClick={() => onToggle(id, open)} aria-expanded={open}>
+      <span className="tools-section__chevron">{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</span>
+      <span className="tools-section__title">
+        {icon} {title}
+      </span>
+      {count > 0 && <span className="tools-section__count">{count}</span>}
+      <span className="tools-section__meta">{meta}</span>
+    </button>
+    {open && <div className="tools-section__body">{children}</div>}
+  </section>
+);
+
+/** "Available but unused" items. Rendered inline when the section has nothing used (the section toggle is enough). */
+const Available: React.FC<{ label: string; show: boolean; forceOpen: boolean; inline?: boolean; children: React.ReactNode }> = ({
+  label,
+  show,
+  forceOpen,
+  inline,
+  children,
+}) => {
+  const [open, setOpen] = useState(false);
+  if (!show) return null;
+  if (inline) return <div className="tools-available__list is-inline">{children}</div>;
+  const isOpen = open || forceOpen;
+  return (
+    <div className="tools-available">
+      <button className="tools-available__toggle" onClick={() => setOpen((p) => !p)} aria-expanded={isOpen}>
+        {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+        <span>{label}</span>
+      </button>
+      {isOpen && <div className="tools-available__list">{children}</div>}
+    </div>
+  );
+};
+
+const ToolGroup: React.FC<{
+  icon: React.ReactNode;
+  name: string;
+  total: number;
+  tools: Record<string, { count: number; errors: number; firstRef?: ToolUsageRef }>;
+}> = ({ icon, name, total, tools }) => (
+  <div className="tools-group">
+    <div className="tools-group__head">
+      <span className="tools-group__icon">{icon}</span>
+      <span className="tools-row__name">{name}</span>
+      <span className="tools-count">{total} calls</span>
+    </div>
+    <div className="tools-chips">
+      {Object.entries(tools)
+        .sort(([, a], [, b]) => b.count - a.count)
+        .map(([toolName, info]) => (
+          <button
+            key={toolName}
+            className={`tools-chip${info.errors > 0 ? " has-errors" : ""}`}
+            onClick={() => jump(info.firstRef)}
+            disabled={!info.firstRef}
+            title={info.errors > 0 ? `${info.errors} failed call(s) — jump to first use` : "Jump to first use"}
+          >
+            <span className="tools-chip__name">{toolName}</span>
+            <span className="tools-chip__count">{info.count}</span>
+          </button>
+        ))}
+    </div>
+  </div>
+);
+
+const AvailableGroup: React.FC<{ name: string; tools: Array<{ name: string; description?: string }> }> = ({ name, tools }) => (
+  <div className="tools-group tools-group--available">
+    <div className="tools-group__head">
+      <span className="tools-row__name">{name}</span>
+      <span className="tools-count">{tools.length}</span>
+    </div>
+    <div className="tools-chips">
+      {tools.map((t) => (
+        <span key={t.name} className="tools-chip tools-chip--static" title={t.description}>
+          <span className="tools-chip__name">{t.name}</span>
+        </span>
+      ))}
+    </div>
+  </div>
+);
+
+/* ── Subagent row ────────────────────────────────────────────────────── */
+
+const STATUS_LABEL: Record<SubagentView["status"], string> = {
+  queued: "Queued",
+  running: "Running",
+  background: "Running in background",
+  completed: "Completed",
+  steered: "Completed (steered)",
+  aborted: "Aborted",
+  stopped: "Stopped",
+  error: "Failed",
+};
+
+function statusTone(status: SubagentView["status"]): "running" | "ok" | "failed" | "idle" {
+  if (status === "running" || status === "background") return "running";
+  if (status === "queued") return "idle";
+  if (status === "completed" || status === "steered") return "ok";
+  return "failed";
+}
+
+const StatusIcon: React.FC<{ status: SubagentView["status"] }> = ({ status }) => {
+  const tone = statusTone(status);
+  if (tone === "running") return <Loader2 size={13} className="spin" />;
+  if (tone === "ok") return <CheckCircle2 size={13} />;
+  if (tone === "failed") return <XCircle size={13} />;
+  return status === "queued" ? <Clock size={13} /> : <CircleDashed size={13} />;
+};
+
+/** "gemini 2.5 pro (antigravity) (asked anthropic/…)" → "gemini 2.5 pro"; full string goes in the tooltip. */
+function shortModel(model?: string): string | undefined {
+  if (!model) return undefined;
+  const base = model.split(" (")[0]!.trim();
+  return base.includes("/") ? base.split("/").pop() : base;
+}
+
+/** One readable line for an error (raw provider errors are often JSON blobs / long URLs); full text stays in the tooltip. */
+function summarizeError(error: string): string {
+  const status = error.match(/\b(4\d\d|5\d\d)\b/)?.[1];
+  if (status === "429" || (!status && /rate.?limit|resource.?exhausted/i.test(error))) return "Rate limited (429)";
+  const message = error.match(/"message"\s*:\s*"([^"]+)"/)?.[1];
+  const text = (message ?? error).split(/\r?\n/)[0]!.replace(/,?\s*endpoint=\S+/i, "").trim();
+  return status && !text.includes(status) ? `${text} (${status})` : text;
+}
+
+function shortDuration(ms?: number): string | undefined {
+  if (!ms || ms < 0) return undefined;
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+const SubagentRow: React.FC<{ agent: SubagentView }> = ({ agent: a }) => {
+  const tone = statusTone(a.status);
+  const model = shortModel(a.model);
+  const duration = shortDuration(a.durationMs);
+  const meta = [model, duration, a.toolUses ? `${a.toolUses} tool${a.toolUses === 1 ? "" : "s"}` : undefined].filter(Boolean);
+  const tooltip = [
+    `${a.type} — ${STATUS_LABEL[a.status]}`,
+    a.description,
+    a.model && `Model: ${a.model}`,
+    a.error && `Error: ${a.error}`,
+    "Click to jump to the subagent card",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return (
+    <button className={`tools-agent tone-${tone}`} onClick={() => scrollToToolCall(a.toolCallId)} title={tooltip}>
+      <span className="tools-agent__status" role="img" aria-label={STATUS_LABEL[a.status]}>
+        <StatusIcon status={a.status} />
+      </span>
+      <span className="tools-agent__main">
+        <span className="tools-agent__top">
+          <span className="tools-agent__type">{a.type || "agent"}</span>
+          {a.cost !== undefined && a.cost > 0 && <span className="tools-agent__cost mono">{formatCost(a.cost)}</span>}
+        </span>
+        {a.description && <span className="tools-agent__desc">{a.description}</span>}
+        {tone === "running" && a.activity ? (
+          <span className="tools-agent__meta is-activity">{a.activity}</span>
+        ) : tone === "failed" && a.error ? (
+          <span className="tools-agent__meta is-error">{summarizeError(a.error)}</span>
+        ) : (
+          meta.length > 0 && <span className="tools-agent__meta">{meta.join(" · ")}</span>
+        )}
+      </span>
+    </button>
   );
 };
