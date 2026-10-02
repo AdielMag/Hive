@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   parseAnthropicUsage,
@@ -5,7 +8,9 @@ import {
   parseCodexUsage,
   parseQuotaStatusCache,
 } from "./parsers.ts";
-import { parseCredentialsOutput } from "./credentials.ts";
+import { parseCredentialsOutput, SENTINEL } from "./credentials.ts";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { QuotaService } from "./index.ts";
 import { UnsupportedError } from "./fetchers.ts";
 import type { PiInstallInfo } from "@hive/protocol";
@@ -85,11 +90,19 @@ describe("quota parsers", () => {
 
 describe("credential helper output", () => {
   it("ignores noise before the sentinel line", () => {
-    const out = "warn: something\n@@PI_STUDIO_CREDENTIALS@@" + JSON.stringify({ ok: true, credentials: [{ providerId: "x", type: "oauth", apiKey: "k" }] });
+    const out = "warn: something\n@@HIVE_CREDENTIALS@@" + JSON.stringify({ ok: true, credentials: [{ providerId: "x", type: "oauth", apiKey: "k" }] });
     expect(parseCredentialsOutput(out)).toEqual([{ providerId: "x", type: "oauth", apiKey: "k" }]);
   });
   it("throws on failure payloads", () => {
-    expect(() => parseCredentialsOutput('@@PI_STUDIO_CREDENTIALS@@{"ok":false,"error":"boom"}')).toThrow("boom");
+    expect(() => parseCredentialsOutput('@@HIVE_CREDENTIALS@@{"ok":false,"error":"boom"}')).toThrow("boom");
+  });
+  it("still accepts the legacy Pi Studio sentinel", () => {
+    const out = '@@PI_STUDIO_CREDENTIALS@@{"ok":true,"credentials":[]}';
+    expect(parseCredentialsOutput(out)).toEqual([]);
+  });
+  it("matches the sentinel emitted by the bundled helper", () => {
+    const helper = readFileSync(resolve(__dirname, "../../../../resources/helpers/pi-credentials.mjs"), "utf8");
+    expect(helper).toContain(`"${SENTINEL}"`);
   });
 });
 

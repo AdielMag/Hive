@@ -10,12 +10,21 @@ export interface ProviderCredential {
   error?: string;
 }
 
-const SENTINEL = "@@PI_STUDIO_CREDENTIALS@@";
+/** Must match the SENTINEL in resources/helpers/pi-credentials.mjs. Legacy value accepted for old helpers. */
+export const SENTINEL = "@@HIVE_CREDENTIALS@@";
+const SENTINELS = [SENTINEL, "@@PI_STUDIO_CREDENTIALS@@"];
 
 export function parseCredentialsOutput(stdout: string): ProviderCredential[] {
-  const line = stdout.split(/\r?\n/).find((l) => l.startsWith(SENTINEL));
-  if (!line) throw new Error("Credential helper produced no result");
-  const payload = JSON.parse(line.slice(SENTINEL.length)) as { ok: boolean; error?: string; credentials?: ProviderCredential[] };
+  let rest: string | undefined;
+  for (const l of stdout.split(/\r?\n/)) {
+    const s = SENTINELS.find((x) => l.startsWith(x));
+    if (s) {
+      rest = l.slice(s.length);
+      break;
+    }
+  }
+  if (rest === undefined) throw new Error("Credential helper produced no result");
+  const payload = JSON.parse(rest) as { ok: boolean; error?: string; credentials?: ProviderCredential[] };
   if (!payload.ok) throw new Error(payload.error || "Credential helper failed");
   return payload.credentials ?? [];
 }
