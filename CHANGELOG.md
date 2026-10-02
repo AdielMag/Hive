@@ -2,6 +2,16 @@
 
 All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
 
+## v0.8.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.7.0...v0.8.0)
+
+### ✨ Features
+
+- rebrand to Hive and redesign sidebar with project management ([`9dfde99`](https://github.com/AdielMag/pi-studio/commit/9dfde999b27a30cbc2b708ea9e9a55acfb38aab8))
+
+### 🐛 Fixes
+
+- update internal package imports from @pi-studio/* to @hive/* ([`b13ca30`](https://github.com/AdielMag/pi-studio/commit/b13ca302901aeeb87558988fa0b8ec434c8932df))
+
 ## v0.7.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.6.1...v0.7.0)
 
 ### ✨ Features
