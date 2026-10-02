@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Brain, Check, ChevronDown, Sparkles } from "lucide-react";
 import { useSessionStore } from "../store/session-store.ts";
+import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 
 interface ThinkingLevelMeta {
   label: string;
@@ -36,17 +37,28 @@ export const ThinkingPicker: React.FC = () => {
   }, [open]);
 
   // Determine available levels dynamically
-  let availableLevels: string[] = [];
-  if (thinkingLevels && thinkingLevels.length > 0) {
-    availableLevels = thinkingLevels;
-  } else if (selectedModel?.reasoning) {
-    availableLevels = ["off", "low", "medium", "high"];
-  } else {
-    availableLevels = ["off"];
-  }
+  const availableLevels = useMemo(() => {
+    if (thinkingLevels && thinkingLevels.length > 0) {
+      return thinkingLevels;
+    }
+    return getSupportedThinkingLevels(selectedModel);
+  }, [thinkingLevels, selectedModel]);
 
-  const supportsReasoning = availableLevels.some((l) => l !== "off") || Boolean(selectedModel?.reasoning);
-  const currentLevel = selectedThinkingLevel || (supportsReasoning ? "medium" : "off");
+  const supportsReasoning = Boolean(selectedModel?.reasoning) && availableLevels.some((l) => l !== "off");
+
+  const currentLevel = useMemo(() => {
+    if (!supportsReasoning) return "off";
+    if (availableLevels.includes(selectedThinkingLevel)) return selectedThinkingLevel;
+    return clampThinkingLevel(selectedModel, selectedThinkingLevel);
+  }, [supportsReasoning, availableLevels, selectedThinkingLevel, selectedModel]);
+
+  // If the active level doesn't match the store's level (e.g. model clamped it), sync store
+  useEffect(() => {
+    if (supportsReasoning && selectedThinkingLevel !== currentLevel && availableLevels.includes(currentLevel)) {
+      void setThinkingLevel(currentLevel);
+    }
+  }, [supportsReasoning, selectedThinkingLevel, currentLevel, availableLevels, setThinkingLevel]);
+
   const isReasoningActive = currentLevel !== "off" && supportsReasoning;
 
   const currentMeta = THINKING_META[currentLevel] || {
@@ -66,7 +78,9 @@ export const ThinkingPicker: React.FC = () => {
         onClick={() => setOpen((prev) => !prev)}
         title={
           supportsReasoning
-            ? `Reasoning effort: ${currentMeta.label} (${currentMeta.desc})`
+            ? `Reasoning effort: ${currentMeta.label} (${currentMeta.desc}) · Supported: ${availableLevels.join(", ")}`
+            : selectedModel
+            ? `Thinking mode is not supported by ${selectedModel.name || selectedModel.id}`
             : "Thinking mode not supported by the selected model"
         }
         style={{
@@ -147,7 +161,7 @@ export const ThinkingPicker: React.FC = () => {
             </span>
             {supportsReasoning && (
               <span style={{ fontSize: 9, color: "var(--accent-base)", display: "flex", alignItems: "center", gap: 3 }}>
-                <Sparkles size={10} /> Model supported
+                <Sparkles size={10} /> {availableLevels.length} level{availableLevels.length === 1 ? "" : "s"} supported
               </span>
             )}
           </div>

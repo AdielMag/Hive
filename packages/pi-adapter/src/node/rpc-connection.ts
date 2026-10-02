@@ -9,7 +9,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
 import type { RpcExtensionUIRequest, RpcExtensionUIResponse, RpcResponse } from "@earendil-works/pi-coding-agent";
-import type { PiStreamEvent, StudioRpcCommand } from "@pi-studio/protocol";
+import type { PiStreamEvent, StudioRpcCommand } from "@hive/protocol";
 import { JsonlSplitter, serializeRecord } from "../jsonl.ts";
 import { killProcessTree } from "./kill.ts";
 

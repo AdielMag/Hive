@@ -20,7 +20,7 @@ import {
   type SubagentLocateRequest,
   type UiRequestMessage,
   type UpdateProgress,
-} from "@pi-studio/protocol";
+} from "@hive/protocol";
 
 const api: StudioApi = {
   bootstrap(): Promise<Bootstrap> {
@@ -118,6 +118,10 @@ const api: StudioApi = {
 
   deleteSessionFile(sessionPath: string) {
     return ipcRenderer.invoke(IPC.sessionsDelete, { path: sessionPath });
+  },
+
+  updateSessionMeta(sessionPath: string, updates: any) {
+    return ipcRenderer.invoke(IPC.sessionsUpdateMeta, { path: sessionPath, updates });
   },
 
   checkTrust(path: string) {

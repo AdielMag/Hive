@@ -16,7 +16,7 @@ describe("asar path mapping", () => {
   });
 
   it("only swaps when the unpacked twin exists", () => {
-    const root = mkdtempSync(join(tmpdir(), "pi-studio-asar-"));
+    const root = mkdtempSync(join(tmpdir(), "hive-asar-"));
     mkdirSync(join(root, "app.asar.unpacked", "resources"), { recursive: true });
     writeFileSync(join(root, "app.asar.unpacked", "resources", "b.ts"), "");
     expect(unpacked(join(root, "app.asar", "resources", "b.ts"))).toBe(join(root, "app.asar.unpacked", "resources", "b.ts"));

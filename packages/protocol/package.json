@@ -1,9 +1,9 @@
 {
-  "name": "@pi-studio/protocol",
+  "name": "@hive/protocol",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Shared contracts: Studio Bridge protocol v1 and main/renderer IPC types",
+  "description": "Shared contracts: Hive Bridge protocol v1 and main/renderer IPC types",
   "exports": {
     ".": "./src/index.ts"
   }

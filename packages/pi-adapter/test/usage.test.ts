@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SessionUsageParser, lastNDays, localDay, parseUsageLine, projectLabel, summarizeUsage } from "../src/usage.ts";
-import type { UsageBucket } from "@pi-studio/protocol";
+import type { UsageBucket } from "@hive/protocol";
 
 const assistant = (ts: number, model: string, cost: number, provider = "anthropic") =>
   JSON.stringify({

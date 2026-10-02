@@ -19,9 +19,9 @@ export const BRIDGE_PROTOCOL_VERSION = 1 as const;
 /** Environment variables Studio sets on each Pi process. */
 export const BRIDGE_ENV = {
   /** Pipe path (Windows) or socket path (POSIX). */
-  address: "PI_STUDIO_BRIDGE",
+  address: "HIVE_BRIDGE",
   /** One-time token; the first record from the bridge must echo it. */
-  token: "PI_STUDIO_TOKEN",
+  token: "HIVE_TOKEN",
 } as const;
 
 /** Hidden slash command used for command-context actions. Filtered out of every UI command list. */

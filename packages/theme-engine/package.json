@@ -1,9 +1,9 @@
 {
-  "name": "@pi-studio/theme-engine",
+  "name": "@hive/theme-engine",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Arc-inspired color palette and WCAG contrast solver for Pi Studio",
+  "description": "Arc-inspired color palette and WCAG contrast solver for Hive",
   "exports": {
     ".": "./src/index.ts"
   },

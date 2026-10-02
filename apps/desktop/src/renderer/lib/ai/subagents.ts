@@ -184,7 +184,13 @@ export function resolveSubagentView(params: {
     }
   }
 
-  let status = (details?.status ?? (run?.status === "running" ? "running" : result?.isError ? "error" : "completed")) as SubagentView["status"];
+  // Without a result yet, the call is still streaming/pending — never default to "completed".
+  const fallbackStatus: SubagentView["status"] = result
+    ? result.isError ? "error" : "completed"
+    : run
+      ? run.status === "running" ? "running" : run.status === "error" ? "error" : "completed"
+      : "queued";
+  let status = (details?.status ?? fallbackStatus) as SubagentView["status"];
   let toolUses = details?.toolUses;
   let turns = details?.turnCount;
   let maxTurns = details?.maxTurns ?? (typeof args.max_turns === "number" ? args.max_turns : undefined);

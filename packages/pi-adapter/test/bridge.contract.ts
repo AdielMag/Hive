@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { locatePi } from "../src/node/locator.ts";
 import { PiRpcConnection } from "../src/node/rpc-connection.ts";
 import { createBridgeServer } from "../../../apps/desktop/src/main/bridge-server/index.ts";
-import type { BridgeToStudio, PiStreamEvent } from "@pi-studio/protocol";
+import type { BridgeToStudio, PiStreamEvent } from "@hive/protocol";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const testProviderPath = resolve(__dirname, "../../test-provider/index.ts");

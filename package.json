@@ -1,8 +1,8 @@
 {
-  "name": "pi-studio",
+  "name": "hive",
   "private": true,
   "version": "0.7.0",
-  "author": "Pi Studio Contributors",
+  "author": "Hive Contributors",
   "repository": {
     "type": "git",
     "url": "https://github.com/AdielMag/pi-studio.git"
@@ -19,7 +19,7 @@
   "scripts": {
     "dev": "npm --prefix apps/desktop run dev",
     "build": "npm --prefix apps/desktop run build",
-    "typecheck": "tsc -p packages/protocol && tsc -p packages/pi-adapter && tsc -p packages/test-provider && tsc -p packages/theme-engine && npm run typecheck -w @pi-studio/desktop",
+    "typecheck": "tsc -p packages/protocol && tsc -p packages/pi-adapter && tsc -p packages/test-provider && tsc -p packages/theme-engine && npm run typecheck -w @hive/desktop",
     "test": "vitest run --project unit",
     "test:contract": "vitest run --project contract",
     "dist": "npm --prefix apps/desktop run dist",

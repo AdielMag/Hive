@@ -133,10 +133,19 @@ export class GuiStore {
 
   updateSessionMeta(sessionPath: string, updates: Partial<SessionMetaEntry>): SessionMetaEntry {
     const curr = this.sessionMeta[sessionPath] ?? {};
-    const updated = { ...curr, ...updates };
+    const updated: SessionMetaEntry = { ...curr, ...updates };
+    for (const k of Object.keys(updated) as Array<keyof SessionMetaEntry>) {
+      if (updated[k] === undefined) delete updated[k];
+    }
     this.sessionMeta[sessionPath] = updated;
     this.saveSessionMeta();
     return updated;
+  }
+
+  removeSessionMeta(sessionPath: string): void {
+    if (!(sessionPath in this.sessionMeta)) return;
+    delete this.sessionMeta[sessionPath];
+    this.saveSessionMeta();
   }
 
   // --- Internal Load & Save (Atomic) ---

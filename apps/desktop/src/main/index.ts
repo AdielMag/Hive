@@ -1,19 +1,24 @@
 /**
- * Pi Studio main process entry: owns app lifecycle only. Services live in ./services, IPC wiring in
+ * Hive main process entry: owns app lifecycle only. Services live in ./services, IPC wiring in
  * ./ipc, window creation in ./window.ts.
  */
 import { app, BrowserWindow } from "electron";
 import { createAppContext, type AppContext } from "./context.ts";
 import { registerIpc } from "./ipc/index.ts";
 import { createMainWindow } from "./window.ts";
+import { migrateUserDataDir } from "./migrate-legacy.ts";
+
+// Migrate legacy userData if needed before touching userData or stores.
+migrateUserDataDir(app);
 
 // Isolated profile for tests / screenshot automation.
-if (process.env.PI_STUDIO_USER_DATA) app.setPath("userData", process.env.PI_STUDIO_USER_DATA);
+const customUserData = process.env.HIVE_USER_DATA ?? process.env.PI_STUDIO_USER_DATA;
+if (customUserData) app.setPath("userData", customUserData);
 
 let mainWindow: BrowserWindow | null = null;
 let ctx: AppContext | null = null;
 
-// Only one Pi Studio instance: a second launch focuses the existing window.
+// Only one Hive instance: a second launch focuses the existing window.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

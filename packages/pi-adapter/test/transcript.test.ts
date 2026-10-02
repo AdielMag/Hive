@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyEvent, applyEntries, buildTimeline, createTranscript, messagesToTimeline } from "../src/transcript.ts";
-import type { PiStreamEvent } from "@pi-studio/protocol";
+import type { PiStreamEvent } from "@hive/protocol";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 describe("transcript reducer", () => {
@@ -207,7 +207,7 @@ describe("transcript reducer", () => {
         role: "toolResult",
         toolCallId: "sub_1",
         toolName: "read",
-        content: [{ type: "text", text: "{ name: 'pi-studio' }" }],
+        content: [{ type: "text", text: "{ name: 'hive' }" }],
         isError: false,
         timestamp: 102,
       },
@@ -224,6 +224,20 @@ describe("transcript reducer", () => {
     expect(timeline.items[1]?.kind).toBe("assistant");
     expect(timeline.items[2]?.kind).toBe("assistant");
     expect(timeline.toolResults["sub_1"]).toBeDefined();
-    expect(timeline.toolResults["sub_1"]?.text).toBe("{ name: 'pi-studio' }");
+    expect(timeline.toolResults["sub_1"]?.text).toBe("{ name: 'hive' }");
+  });
+
+  it('derives lastUsage from persisted entries on a full load (context ring after switching sessions)', () => {
+    const usage = { input: 100, output: 50, cacheRead: 1000, cacheWrite: 0, totalTokens: 1150 };
+    const entries = [
+      { type: 'message', id: 'u1', parentId: null, timestamp: '', message: { role: 'user', content: 'hi' } },
+      { type: 'message', id: 'a1', parentId: 'u1', timestamp: '', message: { role: 'assistant', content: [], usage, stopReason: 'stop' } },
+      { type: 'message', id: 'u2', parentId: 'a1', timestamp: '', message: { role: 'user', content: 'again' } },
+    ] as unknown as SessionEntry[];
+    const state = applyEntries(createTranscript(), entries, 'u2', 'replace');
+    expect(state.lastUsage?.totalTokens).toBe(1150);
+
+    const compacted = [...entries, { type: 'compaction', id: 'c1', parentId: 'u2', timestamp: '', summary: 's' }] as unknown as SessionEntry[];
+    expect(applyEntries(createTranscript(), compacted, 'c1', 'replace').lastUsage).toBeNull();
   });
 });

@@ -91,6 +91,49 @@ describe("Pi locator", () => {
     if (!r.ok) expect(r.error).toMatch(/Pi was found.*Node\.js 22\.19/);
   });
 
+  it("uses HIVE_PI_CLI when set, or falls back to PI_STUDIO_PI_CLI", () => {
+    const home = mkdtempSync(join(tmpdir(), "pi-loc-"));
+    const install1 = join(home, "hive-pi");
+    const root1 = fakePi(install1);
+    fakeNode(install1, "win32");
+
+    const install2 = join(home, "studio-pi");
+    const root2 = fakePi(install2);
+    fakeNode(install2, "win32");
+
+    // HIVE_PI_CLI takes precedence
+    const r1 = locatePi({ env: { Path: "", HIVE_PI_CLI: root1, PI_STUDIO_PI_CLI: root2 }, platform: "win32", homedir: home, nodeVersion: newNode });
+    expect(r1.ok && r1.info.packageRoot).toBe(root1);
+
+    // Fallback to PI_STUDIO_PI_CLI if HIVE_PI_CLI is absent
+    const r2 = locatePi({ env: { Path: "", PI_STUDIO_PI_CLI: root2 }, platform: "win32", homedir: home, nodeVersion: newNode });
+    expect(r2.ok && r2.info.packageRoot).toBe(root2);
+  });
+
+  it("uses HIVE_NODE when set, or falls back to PI_STUDIO_NODE", () => {
+    const home = mkdtempSync(join(tmpdir(), "pi-loc-"));
+    const install = join(home, "pi");
+    fakePi(install);
+    const node1 = fakeNode(join(home, "hive-node-bin"), "win32");
+    const node2 = fakeNode(join(home, "studio-node-bin"), "win32");
+
+    const r1 = locatePi({
+      env: { Path: "", HIVE_PI_CLI: install, HIVE_NODE: node1, PI_STUDIO_NODE: node2 },
+      platform: "win32",
+      homedir: home,
+      nodeVersion: newNode,
+    });
+    expect(r1.ok && r1.info.nodePath).toBe(node1);
+
+    const r2 = locatePi({
+      env: { Path: "", HIVE_PI_CLI: install, PI_STUDIO_NODE: node2 },
+      platform: "win32",
+      homedir: home,
+      nodeVersion: newNode,
+    });
+    expect(r2.ok && r2.info.nodePath).toBe(node2);
+  });
+
   it("reports not-found with guidance when nothing is installed", () => {
     const home = mkdtempSync(join(tmpdir(), "pi-loc-"));
     const r = locatePi({ env: { PATH: "" }, platform: "linux", homedir: home, nodeVersion: newNode });

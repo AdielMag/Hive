@@ -35,7 +35,7 @@ export default defineConfig({
       react(),
       {
         // The dev server injects inline scripts (React Fast Refresh); relax CSP only while serving.
-        name: "pi-studio:dev-csp",
+        name: "hive:dev-csp",
         apply: "serve",
         transformIndexHtml: (html: string) => html.replace("script-src 'self'", "script-src 'self' 'unsafe-inline' 'unsafe-eval'"),
       },

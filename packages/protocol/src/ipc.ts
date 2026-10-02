@@ -13,7 +13,7 @@ import type {
 export type { SessionStats } from "@earendil-works/pi-coding-agent";
 export type { Model } from "@earendil-works/pi-ai";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
-import type { ProjectDefaults, ProjectEntry, SessionCatalogItem } from "./projects.ts";
+import type { ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
 import type { QuotaSnapshot, UsageReport } from "./insights.ts";
 import type {
   McpServerInfo,
@@ -69,7 +69,7 @@ export interface Bootstrap {
   pi: PiLocateResult;
   appVersion: string;
   platform: string;
-  /** Folder to open at startup (env PI_STUDIO_PROJECT, else last used). */
+  /** Folder to open at startup (env HIVE_PROJECT, else last used). */
   initialProjectPath: string | null;
   testMode: boolean;
 }
@@ -151,6 +151,7 @@ export const IPC = {
   sessionsListAll: "sessions:list-all",
   sessionsReadFile: "sessions:read-file",
   sessionsDelete: "sessions:delete",
+  sessionsUpdateMeta: "sessions:update-meta",
   trustCheck: "trust:check",
   trustSet: "trust:set",
   // Git
@@ -311,6 +312,7 @@ export interface ModelCatalogItem {
   contextWindow?: number;
   maxTokens?: number;
   reasoning?: boolean;
+  thinkingLevelMap?: Record<string, string | null>;
   input?: string[];
   cost?: {
     input?: number;
@@ -376,6 +378,8 @@ export interface StudioApi {
   listAllSessions(): Promise<SessionCatalogItem[]>;
   readSessionFile(sessionPath: string): Promise<{ entries: SessionEntry[]; leafId: string | null }>;
   deleteSessionFile(sessionPath: string): Promise<boolean>;
+  /** Patch Studio-side session metadata (title / archived / pinned). */
+  updateSessionMeta(sessionPath: string, updates: Partial<SessionMetaEntry>): Promise<SessionMetaEntry>;
   checkTrust(path: string): Promise<{ hasTrustResources: boolean; trusted: boolean }>;
   setTrust(path: string, trusted: boolean): Promise<void>;
 

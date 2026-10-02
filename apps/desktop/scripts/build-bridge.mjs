@@ -2,8 +2,8 @@
  * Bundle the Pi bridge extension into a single self-contained file for packaged builds.
  *
  * Pi loads the bridge as a separate Node process from `app.asar.unpacked`, where there is no
- * node_modules: workspace packages like `@pi-studio/protocol` cannot be resolved there, which made
- * every packaged session crash on start ("Cannot find module '@pi-studio/protocol'"). So we inline
+ * node_modules: workspace packages like `@hive/protocol` cannot be resolved there, which made
+ * every packaged session crash on start ("Cannot find module '@hive/protocol'"). So we inline
  * everything except `@earendil-works/pi-coding-agent`, which Pi provides to extensions itself.
  */
 import { build } from "esbuild";

@@ -50,6 +50,12 @@ export interface SessionCatalogItem {
   messageCount: number;
   firstMessage: string;
   projectId?: string;
+  /** Studio-side display title set by the user (overrides Pi's name / first message). */
+  title?: string;
+  /** Hidden from the session list without deleting the file. */
+  archived?: boolean;
+  /** Renderer-only: a just-started session whose file Pi hasn't listed yet (optimistic sidebar entry). */
+  pending?: boolean;
 }
 
 export type AgentMode = "plan" | "auto-edit" | "manual" | "debug";
@@ -85,6 +91,8 @@ export interface UiStateFile {
 }
 
 export interface SessionMetaEntry {
+  /** User-chosen display title (rename). */
+  title?: string;
   pinned?: boolean;
   archived?: boolean;
   unread?: boolean;

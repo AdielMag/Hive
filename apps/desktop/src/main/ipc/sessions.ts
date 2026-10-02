@@ -3,6 +3,7 @@ import {
   type BridgeActionRequest,
   type LinkedProject,
   type RpcExtensionUIResponse,
+  type SessionMetaEntry,
   type StartSessionRequest,
   type StudioRpcCommand,
 } from "@pi-studio/protocol";
@@ -37,8 +38,22 @@ export function registerSessionIpc(ctx: AppContext): void {
     return ctx.catalog.readSessionFile(path);
   });
   handle(IPC.sessionsDelete, ({ path }: { path: string }) => ctx.catalog?.deleteSession(path) ?? false);
+  handle(IPC.sessionsUpdateMeta, ({ path, updates }: { path: string; updates: Partial<SessionMetaEntry> }) =>
+    ctx.guiStore.updateSessionMeta(path, sanitizeSessionMeta(updates)),
+  );
   handle(IPC.trustCheck, ({ path }: { path: string }) => ctx.catalog?.checkTrust(path) ?? { hasTrustResources: false, trusted: true });
   handle(IPC.trustSet, async ({ path, trusted }: { path: string; trusted: boolean }) => {
     await ctx.catalog?.setTrust(path, trusted);
   });
+}
+
+/** Only accept the known, renderer-editable meta fields. */
+function sanitizeSessionMeta(updates: Partial<SessionMetaEntry>): Partial<SessionMetaEntry> {
+  const out: Partial<SessionMetaEntry> = {};
+  if (updates && typeof updates === "object") {
+    if ("title" in updates) out.title = typeof updates.title === "string" && updates.title.trim() ? updates.title.trim().slice(0, 200) : undefined;
+    if (typeof updates.archived === "boolean") out.archived = updates.archived;
+    if (typeof updates.pinned === "boolean") out.pinned = updates.pinned;
+  }
+  return out;
 }

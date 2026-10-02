@@ -1,8 +1,8 @@
 /**
  * Find the user's installed Pi (plan decision D3: use the installed `pi`, same version as the
  * terminal). Resolution order:
- *   1. PI_STUDIO_PI_CLI (cli.js, package root, or an install dir) [+ PI_STUDIO_NODE]
- *   2. A location the user picked in Pi Studio ("Locate Pi…")
+ *   1. HIVE_PI_CLI (cli.js, package root, or an install dir) [+ HIVE_NODE]
+ *   2. A location the user picked in Hive ("Locate Pi…")
  *   3. `pi` launchers on PATH (project-local node_modules/.bin entries are skipped)
  *   4. Known install locations: the Pi installer, npm global prefixes (incl. custom `prefix` in .npmrc),
  *      Homebrew, nvm / nvm-windows, fnm, volta, asdf, mise, n, scoop, pnpm and bun globals.
@@ -14,7 +14,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir as osHomedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import type { PiInstallInfo, PiLocateResult } from "@pi-studio/protocol";
+import type { PiInstallInfo, PiLocateResult } from "@hive/protocol";
 import { MIN_PI_VERSION, TESTED_MAX_PI_VERSION, compareVersions, piSupport } from "../version.ts";
 
 const PACKAGE_NAME = "@earendil-works/pi-coding-agent";
@@ -217,7 +217,7 @@ interface Ctx {
 }
 
 function findNode(preferredDirs: string[], { env, platform, home, probe }: Ctx): { path: string; version: string } | { error: string } {
-  const explicit = env.PI_STUDIO_NODE;
+  const explicit = env.HIVE_NODE ?? env.PI_STUDIO_NODE;
   const bin = nodeBinaryName(platform);
   const dirs = [...preferredDirs, ...pathDirs(env, platform)];
   for (const prefix of knownPrefixes(env, platform, home)) dirs.push(prefix, join(prefix, "bin"));
@@ -233,8 +233,8 @@ function findNode(preferredDirs: string[], { env, platform, home, probe }: Ctx):
   }
   return {
     error: tooOld
-      ? `Pi was found, but it needs Node.js ${MIN_NODE_VERSION}+ and ${tooOld}. Install a newer Node.js or set PI_STUDIO_NODE.`
-      : `Pi was found, but Node.js was not. Pi needs Node.js ${MIN_NODE_VERSION}+ (or set PI_STUDIO_NODE).`,
+      ? `Pi was found, but it needs Node.js ${MIN_NODE_VERSION}+ and ${tooOld}. Install a newer Node.js or set HIVE_NODE.`
+      : `Pi was found, but Node.js was not. Pi needs Node.js ${MIN_NODE_VERSION}+ (or set HIVE_NODE).`,
   };
 }
 
@@ -270,16 +270,16 @@ export function locatePi(options: LocateOptions = {}): PiLocateResult {
   const searched: string[] = [];
   const ctx: Ctx = { env, platform, home, probe: options.nodeVersion ?? nodeVersion, searched };
 
-  const explicit = env.PI_STUDIO_PI_CLI;
+  const explicit = env.HIVE_PI_CLI ?? env.PI_STUDIO_PI_CLI;
   if (explicit) {
-    searched.push(`PI_STUDIO_PI_CLI=${explicit}`);
+    searched.push(`HIVE_PI_CLI=${explicit}`);
     const root = packageRootFrom(explicit);
-    if (!root) return { ok: false, error: `PI_STUDIO_PI_CLI does not point to a Pi install: ${explicit}`, searched };
+    if (!root) return { ok: false, error: `HIVE_PI_CLI does not point to a Pi install: ${explicit}`, searched };
     return finish(root, "env", [], ctx);
   }
 
   if (options.configuredPath) {
-    searched.push(`Chosen in Pi Studio: ${options.configuredPath}`);
+    searched.push(`Chosen in Hive: ${options.configuredPath}`);
     const root = packageRootFrom(options.configuredPath);
     if (root) return finish(root, "env", [], ctx);
   }

@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from "react";
-import { Minimize2, Loader2, CheckCircle2, Info } from "lucide-react";
+import { Minimize2, Loader2, CheckCircle2, Info, Brain } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { estimateContextBreakdown, type ContextCategory, type ContextBreakdownResult } from "@pi-studio/pi-adapter";
 import { ProviderIcon } from "./ProviderIcon.tsx";
+import { getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 
 export const CATEGORY_COLORS: Record<ContextCategory, string> = {
   system: "#a78bfa",
@@ -40,10 +41,10 @@ export function useContextBreakdown(): ContextBreakdownData {
     useShallow((s) => ({ transcript: s.transcript, stats: s.stats, selectedModel: s.selectedModel })),
   );
   const contextTokens = stats?.contextUsage?.tokens ?? transcript.lastUsage?.totalTokens ?? 0;
-  const contextWindow = stats?.contextUsage?.contextWindow ?? selectedModel?.contextWindow ?? 200_000;
+  const contextWindow = selectedModel?.contextWindow ?? stats?.contextUsage?.contextWindow ?? 200_000;
   const breakdown = useMemo(() => estimateContextBreakdown(transcript, contextTokens), [transcript, contextTokens]);
   const tokens = contextTokens > 0 ? contextTokens : breakdown.totalTokens;
-  const percent = stats?.contextUsage?.percent ?? (contextWindow > 0 ? (tokens / contextWindow) * 100 : 0);
+  const percent = contextWindow > 0 ? (tokens / contextWindow) * 100 : 0;
   return { breakdown, contextTokens: tokens, contextWindow, percent };
 }
 
@@ -215,30 +216,53 @@ export const ContextBreakdownView: React.FC<{ compact?: boolean }> = ({ compact 
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
+              flexDirection: "column",
+              gap: 6,
               fontSize: 11,
               color: "var(--text-muted)",
               borderTop: "1px solid var(--border-subtle)",
               paddingTop: 10,
-              gap: 8,
             }}
           >
-            <span>Model</span>
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                color: "var(--text-secondary)",
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-                textOverflow: "ellipsis",
-              }}
-            >
-              <ProviderIcon provider={selectedModel.provider} size={12} />
-              {selectedModel.name || selectedModel.id}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span>Model</span>
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  color: "var(--text-secondary)",
+                  overflow: "hidden",
+                  whiteSpace: "nowrap",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                <ProviderIcon provider={selectedModel.provider} size={12} />
+                {selectedModel.name || selectedModel.id}
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span>Context size</span>
+              <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
+                {contextWindow.toLocaleString()} tokens ({fmtK(contextWindow)})
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span>Thinking levels</span>
+              <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}>
+                {(() => {
+                  const levels = getSupportedThinkingLevels(selectedModel);
+                  const hasReasoning = Boolean(selectedModel.reasoning) && levels.some((l) => l !== "off");
+                  if (!hasReasoning) return <span style={{ color: "var(--text-muted)" }}>Not supported</span>;
+                  return (
+                    <>
+                      <Brain size={11} style={{ color: "var(--accent-base)" }} />
+                      <span>{levels.filter((l) => l !== "off").join(", ")}</span>
+                    </>
+                  );
+                })()}
+              </span>
+            </div>
           </div>
         )}
       </div>

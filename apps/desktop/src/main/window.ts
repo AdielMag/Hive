@@ -3,7 +3,7 @@ import { BrowserWindow, Menu, app, shell } from "electron";
 import { existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { IPC } from "@pi-studio/protocol";
+import { IPC } from "@hive/protocol";
 
 /**
  * Directory of the bundled main script (out/main). Derived explicitly: the main bundle is ESM, where
@@ -34,7 +34,7 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 620,
     show: false,
     backgroundColor: "#0c0d12",
-    title: "Pi Studio",
+    title: "Hive",
     // macOS keeps its native traffic lights inset into our custom title bar; elsewhere we draw our own.
     ...(process.platform === "darwin"
       ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 14, y: 12 } }
@@ -86,13 +86,13 @@ export function createMainWindow(): BrowserWindow {
     void win.loadFile(join(mainDir, "../renderer/index.html"));
   }
 
-  // Dev aid: PI_STUDIO_CAPTURE=<file.png> writes a screenshot after load and quits.
-  const capture = process.env.PI_STUDIO_CAPTURE;
+  // Dev aid: HIVE_CAPTURE=<file.png> writes a screenshot after load and quits.
+  const capture = process.env.HIVE_CAPTURE ?? process.env.PI_STUDIO_CAPTURE;
   if (capture) {
     win.webContents.once("did-finish-load", async () => {
       win.show();
-      const delay = Number(process.env.PI_STUDIO_CAPTURE_DELAY ?? 6000);
-      const script = process.env.PI_STUDIO_CAPTURE_SCRIPT;
+      const delay = Number(process.env.HIVE_CAPTURE_DELAY ?? process.env.PI_STUDIO_CAPTURE_DELAY ?? 6000);
+      const script = process.env.HIVE_CAPTURE_SCRIPT ?? process.env.PI_STUDIO_CAPTURE_SCRIPT;
       if (script) {
         await new Promise((r) => setTimeout(r, delay / 2));
         await win.webContents.executeJavaScript(script).catch((e) => console.error("[capture] script failed", e));

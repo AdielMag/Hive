@@ -4,7 +4,7 @@
  * Main streams every session file through `SessionUsageParser` to produce compact per-day buckets;
  * the renderer slices those buckets with `summarizeUsage` for any range / grouping.
  */
-import type { UsageBucket } from "@pi-studio/protocol";
+import type { UsageBucket } from "@hive/protocol";
 
 export interface UsageTurn {
   timestamp: number;

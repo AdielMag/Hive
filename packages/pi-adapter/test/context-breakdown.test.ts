@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyEvent, applyEntries, createTranscript, estimateContextBreakdown } from "../src/transcript.ts";
-import type { PiStreamEvent } from "@pi-studio/protocol";
+import type { PiStreamEvent } from "@hive/protocol";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 const end = (message: Record<string, unknown>) =>

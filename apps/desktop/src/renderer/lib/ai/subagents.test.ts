@@ -140,6 +140,19 @@ Execution summary here...`;
     expect(view.toolUses).toBe(12);
   });
 
+  it("does not report completed before the subagent run has a result", () => {
+    const block = {
+      type: "toolCall" as const,
+      id: "call_2",
+      name: "Agent",
+      arguments: { description: "Scout", subagent_type: "scout", prompt: "x" },
+      complete: false,
+    };
+    expect(resolveSubagentView({ block }).status).toBe("queued");
+    const run = { toolCallId: "call_2", toolName: "Agent", args: {}, status: "running" as const, startedAt: 0 };
+    expect(resolveSubagentView({ block, run }).status).toBe("running");
+  });
+
   it("parses output lines into user prompt and messages", () => {
     const lines = [
       {

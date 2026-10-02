@@ -5,7 +5,8 @@
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, type BrowserWindow } from "electron";
-import type { PiLocateResult } from "@pi-studio/protocol";
+import type { PiLocateResult } from "@hive/protocol";
+import { ensureHiveDataDir } from "./migrate-legacy.ts";
 import { GuiStore } from "./store/index.ts";
 import { SessionCatalogService } from "./services/catalog.ts";
 import { MainSessionManager } from "./services/session-manager.ts";
@@ -39,12 +40,13 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
   const userData = app.getPath("userData");
   const piInstall = new PiInstallService(userData);
   const pi = piInstall.locate();
-  const testMode = process.env.PI_STUDIO_TEST_MODE === "1";
+  const testMode = (process.env.HIVE_TEST_MODE ?? process.env.PI_STUDIO_TEST_MODE) === "1";
   const testProviderPath = testMode
     ? resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../packages/test-provider/index.ts")
     : undefined;
   const guiStore = new GuiStore(userData);
   const info = pi.ok ? pi.info : null;
+  const hiveDataDir = ensureHiveDataDir(userData);
 
   return {
     pi,
@@ -57,9 +59,9 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     auth: info ? new AuthService(info.packageRoot) : null,
     marketplace: new MarketplaceService(),
     updater: new AppUpdaterService(),
-    models: new ModelsService(undefined, join(userData, "pi-studio")),
+    models: new ModelsService(undefined, hiveDataDir),
     quota: new QuotaService(info),
-    usage: new UsageService(join(userData, "pi-studio", "usage-cache.json")),
+    usage: new UsageService(join(hiveDataDir, "usage-cache.json")),
     terminals: terminalManager,
   };
 }

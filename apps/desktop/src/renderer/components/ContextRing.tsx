@@ -26,8 +26,18 @@ export const ContextRing: React.FC<ContextRingProps> = ({
   if (clampedPercent > 80) strokeColor = "#e5534b"; // red
   else if (clampedPercent > 50) strokeColor = "#c69026"; // amber
 
-  const formattedTokens = tokens > 1000 ? `${(tokens / 1000).toFixed(0)}k` : `${tokens}`;
-  const formattedTotal = total > 1000 ? `${(total / 1000).toFixed(0)}k` : `${total}`;
+  const formattedTokens =
+    tokens >= 1_000_000
+      ? `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+      : tokens >= 1000
+      ? `${Math.round(tokens / 1000)}k`
+      : `${tokens}`;
+  const formattedTotal =
+    total >= 1_000_000
+      ? `${(total / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+      : total >= 1000
+      ? `${Math.round(total / 1000)}k`
+      : `${total}`;
 
   return (
     <div

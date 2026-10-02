@@ -443,6 +443,91 @@
   flex-shrink: 0;
   margin-right: 4px;
 }
+
+/* Running: a light sweeps along the bottom of the tab, and the icon breathes. */
+.tab.is-running::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 1px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--tab-color), transparent) no-repeat;
+  background-size: 40% 100%;
+  animation: tab-sweep 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+.tab.is-running .tab__icon {
+  animation: tab-breathe 1.6s ease-in-out infinite;
+}
+@keyframes tab-sweep {
+  from { background-position: -60% 0; }
+  to { background-position: 160% 0; }
+}
+@keyframes tab-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Finished while you were away: a dot that pings a few times, then stays until you open the tab. */
+.tab__end {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+.tab__dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dot-color);
+  box-shadow: 0 0 6px var(--dot-color);
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.tab__dot--done { --dot-color: var(--success); }
+.tab__dot--error { --dot-color: var(--danger); }
+/* Waiting on you (an extension asked a question): amber, keeps pinging until answered. */
+.tab__dot--input { --dot-color: var(--warning); }
+.tab__dot--input::after { animation-iteration-count: infinite; }
+.tab.needs-input .tab__title { color: var(--text-primary); }
+
+/* Unsent text/attachments parked in a background tab's composer. */
+.tab__draft {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+.tab__dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--dot-color);
+  animation: tab-ping 1.4s cubic-bezier(0, 0, 0.2, 1) 3;
+}
+@keyframes tab-ping {
+  75%, 100% { transform: scale(2.6); opacity: 0; }
+}
+.tab.has-unseen .tab__title {
+  color: var(--text-primary);
+}
+/* The dot sits where the close button is: show one or the other. */
+.tab.has-unseen:not(:hover) .tab__close,
+.tab.needs-input:not(:hover) .tab__close { opacity: 0; }
+.tab.has-unseen:hover .tab__dot,
+.tab.needs-input:hover .tab__dot { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tab.is-running::before,
+  .tab.is-running .tab__icon,
+  .tab__dot::after { animation: none; }
+}
 .tabstrip__new {
   display: grid;
   place-items: center;

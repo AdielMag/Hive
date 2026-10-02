@@ -1,23 +1,58 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Plus,
+  Archive,
+  ArchiveRestore,
   ChevronDown,
   ChevronRight,
-  MessageSquare,
-  Trash2,
-  Link as LinkIcon,
   Eye,
   EyeOff,
+  FolderPlus,
+  Link2,
+  MessageSquare,
+  MessageSquarePlus,
+  Pencil,
+  Plus,
+  Settings2,
+  Trash2,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import type { ProjectEntry, SessionCatalogItem } from "@pi-studio/protocol";
 import { useSessionStore } from "../store/session-store.ts";
-import { DEFAULT_PROJECT_HUES } from "@pi-studio/protocol";
+import { sessionDisplayTitle } from "../lib/session-title.ts";
+import { formatAgo } from "../lib/format.ts";
+import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
+import { ProjectSettingsModal, type ProjectSettingsSection } from "./ProjectSettingsModal.tsx";
+
+const VISIBLE_SESSIONS = 5;
 
 export const Sidebar: React.FC = () => {
-  const { projects, allSessions, addProject, updateProject, openSessionTab, newSessionTab, deleteSessionFile } = useSessionStore(useShallow((s) => ({ projects: s.projects, allSessions: s.allSessions, addProject: s.addProject, updateProject: s.updateProject, openSessionTab: s.openSessionTab, newSessionTab: s.newSessionTab, deleteSessionFile: s.deleteSessionFile })));
+  const {
+    projects,
+    allSessions,
+    activeSessionPath,
+    addProject,
+    openSessionTab,
+    newSessionTab,
+    deleteSessionFile,
+    renameSession,
+    setSessionArchived,
+  } = useSessionStore(
+    useShallow((s) => ({
+      projects: s.projects,
+      allSessions: s.allSessions,
+      activeSessionPath: s.tabs.find((t) => t.id === s.activeTabId)?.sessionPath,
+      addProject: s.addProject,
+      openSessionTab: s.openSessionTab,
+      newSessionTab: s.newSessionTab,
+      deleteSessionFile: s.deleteSessionFile,
+      renameSession: s.renameSession,
+      setSessionArchived: s.setSessionArchived,
+    })),
+  );
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [showAllSessions, setShowAllSessions] = useState<Record<string, boolean>>({});
+  const [showArchived, setShowArchived] = useState<Record<string, boolean>>({});
   const [showAllUnsorted, setShowAllUnsorted] = useState(false);
   const [hideOtherSessions, setHideOtherSessions] = useState(() => {
     try {
@@ -26,7 +61,10 @@ export const Sidebar: React.FC = () => {
       return false;
     }
   });
-  const [colorPickerPrj, setColorPickerPrj] = useState<string | null>(null);
+  const [menu, setMenu] = useState<ContextMenuState | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [settingsFor, setSettingsFor] = useState<{ id: string; section: ProjectSettingsSection } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   const toggleHideOtherSessions = () => {
     setHideOtherSessions((prev) => {
@@ -38,9 +76,7 @@ export const Sidebar: React.FC = () => {
     });
   };
 
-  const toggleExpand = (id: string) => {
-    setExpandedProjects((s) => ({ ...s, [id]: !(s[id] ?? true) }));
-  };
+  const toggleExpand = (id: string) => setExpandedProjects((s) => ({ ...s, [id]: !(s[id] ?? true) }));
 
   const handlePickFolder = async () => {
     const folder = await window.studio.pickFolder();
@@ -50,319 +86,240 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const handleAddLink = async (projectId: string) => {
-    const folder = await window.studio.pickFolder();
-    if (!folder) return;
-    const project = projects.find((p) => p.id === projectId);
-    if (!project) return;
-    const existing = project.links || [];
-    if (existing.some((l) => l.path === folder)) return;
-
-    const newLinks = [
-      ...existing,
-      {
-        path: folder,
-        alias: folder.split(/[/\\]/).pop() || folder,
-        access: "read-only" as const,
-      },
-    ];
-    await updateProject(projectId, { links: newLinks });
+  const confirmDelete = async (sess: SessionCatalogItem) => {
+    const title = sessionDisplayTitle(sess) || "this session";
+    if (confirm(`Delete "${title}"?\n\nThe session file will be moved to the system trash.`)) {
+      await deleteSessionFile(sess.path);
+    }
   };
 
-  // Group sessions by projectId
-  const sessionsByProject: Record<string, typeof allSessions> = {};
-  const unsortedSessions: typeof allSessions = [];
+  const openSessionMenu = (e: React.MouseEvent, sess: SessionCatalogItem, projectId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: "Open",
+          icon: <MessageSquare size={13} />,
+          onSelect: () => void openSessionTab(sess.path, projectId, sessionDisplayTitle(sess, 40)),
+        },
+        { label: "Rename", icon: <Pencil size={13} />, hint: "F2", onSelect: () => setRenaming(sess.path) },
+        sess.archived
+          ? { label: "Unarchive", icon: <ArchiveRestore size={13} />, onSelect: () => void setSessionArchived(sess.path, false) }
+          : { label: "Archive", icon: <Archive size={13} />, onSelect: () => void setSessionArchived(sess.path, true) },
+        { kind: "separator" },
+        { label: "Delete", icon: <Trash2 size={13} />, danger: true, onSelect: () => void confirmDelete(sess) },
+      ],
+    });
+  };
 
+  const openProjectMenu = (e: React.MouseEvent, project: ProjectEntry) => {
+    e.preventDefault();
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: "New session", icon: <MessageSquarePlus size={13} />, onSelect: () => void newSessionTab(project.id) },
+        { kind: "separator" },
+        { label: "Project settings…", icon: <Settings2 size={13} />, onSelect: () => setSettingsFor({ id: project.id, section: "general" }) },
+        { label: "Linked folders…", icon: <Link2 size={13} />, onSelect: () => setSettingsFor({ id: project.id, section: "links" }) },
+      ],
+    });
+  };
+
+  // Group sessions by projectId (archived ones are kept aside, not hidden from memory).
+  const sessionsByProject: Record<string, { active: SessionCatalogItem[]; archived: SessionCatalogItem[] }> = {};
+  const unsortedSessions: SessionCatalogItem[] = [];
   for (const s of allSessions) {
     if (s.projectId) {
-      if (!sessionsByProject[s.projectId]) sessionsByProject[s.projectId] = [];
-      sessionsByProject[s.projectId]!.push(s);
+      const bucket = (sessionsByProject[s.projectId] ??= { active: [], archived: [] });
+      (s.archived ? bucket.archived : bucket.active).push(s);
     } else {
       unsortedSessions.push(s);
     }
   }
 
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        background: "var(--bg-sidebar)",
-        fontSize: 12,
-        userSelect: "none",
-        overflowY: "auto",
-      }}
-    >
-      {/* Header */}
+  // "Other" sessions are only useful per folder (to add it as a project), so collapse them by cwd.
+  const otherFolders: Array<{ cwd: string; count: number }> = [];
+  {
+    const seen = new Map<string, { cwd: string; count: number }>();
+    for (const s of unsortedSessions) {
+      const key = s.cwd.replace(/\\/g, "/").toLowerCase();
+      const entry = seen.get(key);
+      if (entry) entry.count++;
+      else {
+        const created = { cwd: s.cwd, count: 1 };
+        seen.set(key, created);
+        otherFolders.push(created);
+      }
+    }
+  }
+
+  const renderSession = (sess: SessionCatalogItem, project: ProjectEntry) => {
+    const title = sessionDisplayTitle(sess) || "Empty session";
+    const isActive = sess.path === activeSessionPath;
+    const isRenaming = renaming === sess.path;
+    const modified = Date.parse(sess.modified);
+    return (
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "10px 14px",
-          borderBottom: "1px solid var(--border-subtle)",
+        key={sess.id}
+        className={`sb-session${isActive ? " is-active" : ""}${sess.archived ? " is-archived" : ""}`}
+        onClick={() => !isRenaming && void openSessionTab(sess.path, project.id, sessionDisplayTitle(sess, 40))}
+        onContextMenu={(e) => openSessionMenu(e, sess, project.id)}
+        onKeyDown={(e) => {
+          if (e.key === "F2") {
+            e.preventDefault();
+            setRenaming(sess.path);
+          } else if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            if (!isRenaming) void openSessionTab(sess.path, project.id, sessionDisplayTitle(sess, 40));
+          }
         }}
+        tabIndex={0}
+        title={isRenaming ? undefined : `${title}${Number.isFinite(modified) ? `\n${formatAgo(modified)}` : ""}`}
       >
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.05em" }}>
-          PROJECTS
-        </span>
-        <button
-          onClick={handlePickFolder}
-          title="Open project folder"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            background: "var(--accent-subtle)",
-            border: "1px solid var(--accent-base)",
-            color: "var(--accent-hover)",
-            borderRadius: 4,
-            padding: "2px 8px",
-            fontSize: 11,
-            cursor: "pointer",
-            fontWeight: 500,
-          }}
-        >
-          <Plus size={12} /> Add
+        <MessageSquare size={12} className="sb-session__icon" />
+        {isRenaming ? (
+          <RenameInput
+            initial={sess.title || title}
+            onDone={(value) => {
+              setRenaming(null);
+              if (value !== null && value.trim() !== (sess.title || title)) void renameSession(sess.path, value);
+            }}
+          />
+        ) : (
+          <span className="sb-session__title">{title}</span>
+        )}
+        {!isRenaming && (
+          <>
+            {sess.messageCount > 0 && <span className="sb-session__count">{sess.messageCount}</span>}
+            <button
+              className="sb-icon-btn sb-session__action"
+              onClick={(e) => {
+                e.stopPropagation();
+                void setSessionArchived(sess.path, !sess.archived);
+              }}
+              title={sess.archived ? "Unarchive session" : "Archive session (right-click for more)"}
+            >
+              {sess.archived ? <ArchiveRestore size={12} /> : <Archive size={12} />}
+            </button>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="sb">
+      {/* Header */}
+      <div className="sb-header">
+        <span className="ui-section-label">Projects</span>
+        <button className="sb-icon-btn" onClick={handlePickFolder} title="Open project folder">
+          <FolderPlus size={14} />
         </button>
       </div>
 
+      {projects.length === 0 && (
+        <div className="sb-empty">
+          <span>No projects yet.</span>
+          <button className="ui-btn ui-btn--sm" onClick={handlePickFolder}>
+            <Plus size={12} /> Open folder
+          </button>
+        </div>
+      )}
+
       {/* Project list */}
-      <div style={{ display: "flex", flexDirection: "column", padding: "6px 0" }}>
+      <div className="sb-projects">
         {projects.map((project) => {
           const isExpanded = expandedProjects[project.id] ?? true;
-          const sessions = sessionsByProject[project.id] || [];
+          const bucket = sessionsByProject[project.id] ?? { active: [], archived: [] };
+          const sessions = bucket.active;
+          const isAll = showAllSessions[project.id] ?? false;
+          const visible = isAll ? sessions : sessions.slice(0, VISIBLE_SESSIONS);
+          const remaining = sessions.length - VISIBLE_SESSIONS;
+          const archivedOpen = showArchived[project.id] ?? false;
+          const links = project.links ?? [];
 
           return (
-            <div key={project.id} style={{ display: "flex", flexDirection: "column" }}>
-              {/* Project Row */}
+            <div key={project.id} className="sb-project" style={{ ["--prj-color" as string]: project.color }}>
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  padding: "6px 12px",
-                  gap: 6,
-                  cursor: "pointer",
-                  borderRadius: 4,
-                  margin: "1px 6px",
-                  background: "transparent",
-                }}
-                className="project-row"
+                className="sb-project__row"
+                onClick={() => toggleExpand(project.id)}
+                onContextMenu={(e) => openProjectMenu(e, project)}
+                title={project.path}
               >
-                <span onClick={() => toggleExpand(project.id)} style={{ display: "flex" }}>
-                  {isExpanded ? <ChevronDown size={14} color="var(--text-muted)" /> : <ChevronRight size={14} color="var(--text-muted)" />}
+                <span className="sb-project__chevron">
+                  {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </span>
+                <span className="sb-project__avatar">{project.name.slice(0, 1).toUpperCase()}</span>
+                <span className="sb-project__name">{project.name}</span>
 
-                <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    backgroundColor: project.color,
-                    flexShrink: 0,
-                  }}
-                  onClick={() => setColorPickerPrj(colorPickerPrj === project.id ? null : project.id)}
-                  title="Change project color"
-                />
-
-                <span
-                  style={{ flex: 1, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                  onClick={() => toggleExpand(project.id)}
-                  title={project.path}
-                >
-                  {project.name}
-                </span>
-
-                {/* Color swatches popup */}
-                {colorPickerPrj === project.id && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 40,
-                      zIndex: 1000,
-                      background: "var(--bg-elevated)",
-                      border: "1px solid var(--border-prominent)",
-                      borderRadius: 6,
-                      padding: 6,
-                      display: "flex",
-                      gap: 4,
-                      boxShadow: "0 8px 16px rgba(0,0,0,0.4)",
+                {links.length > 0 && (
+                  <button
+                    className="sb-link-chip"
+                    title={`Linked: ${links.map((l) => l.alias || l.path).join(", ")}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSettingsFor({ id: project.id, section: "links" });
                     }}
                   >
-                    {DEFAULT_PROJECT_HUES.map((c) => (
-                      <div
-                        key={c}
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          await updateProject(project.id, { color: c });
-                          setColorPickerPrj(null);
-                        }}
-                        style={{
-                          width: 16,
-                          height: 16,
-                          borderRadius: "50%",
-                          background: c,
-                          cursor: "pointer",
-                          border: project.color === c ? "2px solid #fff" : "none",
-                        }}
-                      />
-                    ))}
-                  </div>
+                    <Link2 size={10} />
+                    {links.length}
+                  </button>
                 )}
 
-                <button
-                  onClick={() => newSessionTab(project.id)}
-                  title="New Session"
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    padding: 2,
-                    display: "flex",
-                  }}
-                >
-                  <Plus size={14} />
-                </button>
+                <span className="sb-project__actions">
+                  <button
+                    className="sb-icon-btn"
+                    title="Project settings"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSettingsFor({ id: project.id, section: "general" });
+                    }}
+                  >
+                    <Settings2 size={13} />
+                  </button>
+                  <button
+                    className="sb-icon-btn"
+                    title="New session"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void newSessionTab(project.id);
+                    }}
+                  >
+                    <Plus size={14} />
+                  </button>
+                </span>
               </div>
 
-              {/* Sessions list */}
               {isExpanded && (
-                <div style={{ display: "flex", flexDirection: "column", paddingLeft: 22, paddingRight: 6 }}>
-                  {sessions.length === 0 && (
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "4px 8px" }}>
-                      No sessions yet
-                    </div>
+                <div className="sb-project__body">
+                  {sessions.length === 0 && <div className="sb-muted-line">No sessions yet</div>}
+                  {visible.map((sess) => renderSession(sess, project))}
+
+                  {remaining > 0 && (
+                    <button
+                      className="sb-text-btn"
+                      onClick={() => setShowAllSessions((s) => ({ ...s, [project.id]: !isAll }))}
+                    >
+                      {isAll ? "Show less" : `Show ${remaining} more`}
+                    </button>
                   )}
 
-                  {(() => {
-                    const isAll = showAllSessions[project.id] ?? false;
-                    const visibleSessions = isAll ? sessions : sessions.slice(0, 5);
-                    const remaining = sessions.length - 5;
-
-                    return (
-                      <>
-                        {visibleSessions.map((sess) => (
-                          <div
-                            key={sess.id}
-                            onClick={() => openSessionTab(sess.path, project.id, sess.name || sess.firstMessage)}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                              padding: "5px 8px",
-                              borderRadius: 4,
-                              cursor: "pointer",
-                              margin: "1px 0",
-                            }}
-                            className="session-row"
-                          >
-                            <MessageSquare size={12} color="var(--text-muted)" />
-                            <span
-                              style={{
-                                flex: 1,
-                                fontSize: 11,
-                                color: "var(--text-secondary)",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                              title={sess.name || sess.firstMessage || "Session"}
-                            >
-                              {sess.name || sess.firstMessage || "Empty session"}
-                            </span>
-
-                            {sess.messageCount > 0 && (
-                              <span
-                                style={{
-                                  fontSize: 10,
-                                  padding: "1px 5px",
-                                  borderRadius: 10,
-                                  background: "rgba(var(--fg-rgb), 0.06)",
-                                  color: "var(--text-muted)",
-                                }}
-                              >
-                                {sess.messageCount}
-                              </span>
-                            )}
-
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (confirm("Move this session to trash?")) {
-                                  await deleteSessionFile(sess.path);
-                                }
-                              }}
-                              title="Delete session"
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                color: "var(--text-muted)",
-                                cursor: "pointer",
-                                padding: 2,
-                                display: "flex",
-                              }}
-                            >
-                              <Trash2 size={11} />
-                            </button>
-                          </div>
-                        ))}
-
-                        {remaining > 0 && (
-                          <button
-                            onClick={() =>
-                              setShowAllSessions((s) => ({ ...s, [project.id]: !isAll }))
-                            }
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              color: "var(--accent-hover)",
-                              fontSize: 10,
-                              cursor: "pointer",
-                              textAlign: "left",
-                              padding: "4px 8px",
-                              fontWeight: 500,
-                            }}
-                          >
-                            {isAll ? "Show less" : `+ Show all (${remaining} more)`}
-                          </button>
-                        )}
-                      </>
-                    );
-                  })()}
-
-                  {/* Linked projects subsection */}
-                  <div style={{ marginTop: 4, marginBottom: 6, paddingLeft: 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--text-muted)", fontSize: 10 }}>
-                      <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-                        <LinkIcon size={10} /> LINKED ({project.links?.length || 0})
-                      </span>
+                  {bucket.archived.length > 0 && (
+                    <>
                       <button
-                        onClick={() => handleAddLink(project.id)}
-                        style={{ background: "transparent", border: "none", color: "var(--accent-hover)", cursor: "pointer", fontSize: 10 }}
+                        className="sb-text-btn sb-text-btn--muted"
+                        onClick={() => setShowArchived((s) => ({ ...s, [project.id]: !archivedOpen }))}
                       >
-                        + Link
+                        {archivedOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                        <Archive size={11} /> Archived ({bucket.archived.length})
                       </button>
-                    </div>
-                    {project.links?.map((lnk) => (
-                      <div
-                        key={lnk.path}
-                        style={{
-                          fontSize: 10,
-                          color: "var(--text-secondary)",
-                          padding: "2px 4px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          fontFamily: "var(--font-mono)",
-                        }}
-                      >
-                        <span title={lnk.path}>../{lnk.alias || lnk.path.split(/[/\\]/).pop()}</span>
-                        <span style={{ color: "var(--text-muted)" }}>{lnk.access}</span>
-                      </div>
-                    ))}
-                  </div>
+                      {archivedOpen && bucket.archived.map((sess) => renderSession(sess, project))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -370,97 +327,37 @@ export const Sidebar: React.FC = () => {
         })}
 
         {/* Unsorted / Discovered from Pi CLI */}
-        {unsortedSessions.length > 0 && (
-          <div style={{ marginTop: 12, borderTop: "1px solid var(--border-subtle)", paddingTop: 8 }}>
-            <div
-              onClick={toggleHideOtherSessions}
-              style={{
-                padding: "4px 14px",
-                fontSize: 10,
-                fontWeight: 700,
-                color: "var(--text-muted)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                cursor: "pointer",
-                userSelect: "none",
-              }}
-              title="Click to toggle visibility of other Pi sessions"
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                {hideOtherSessions ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                <span>OTHER PI SESSIONS ({unsortedSessions.length})</span>
-              </div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleHideOtherSessions();
-                }}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  padding: 2,
-                }}
-                title={hideOtherSessions ? "Show other sessions" : "Hide other sessions"}
-              >
+        {otherFolders.length > 0 && (
+          <div className="sb-other">
+            <div className="sb-other__head" onClick={toggleHideOtherSessions} title="Folders with Pi sessions that aren't projects yet">
+              {hideOtherSessions ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+              <span className="ui-section-label" style={{ flex: 1 }}>
+                Other Pi folders ({otherFolders.length})
+              </span>
+              <span className="sb-icon-btn" aria-hidden>
                 {hideOtherSessions ? <EyeOff size={12} /> : <Eye size={12} />}
-              </button>
+              </span>
             </div>
 
             {!hideOtherSessions && (
               <>
-                {(showAllUnsorted ? unsortedSessions : unsortedSessions.slice(0, 5)).map((s) => (
-                  <div
-                    key={s.id}
-                    style={{
-                      padding: "4px 14px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      fontSize: 11,
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={s.cwd}>
+                {(showAllUnsorted ? otherFolders : otherFolders.slice(0, VISIBLE_SESSIONS)).map((s) => (
+                  <div key={s.cwd} className="sb-other__row">
+                    <span className="sb-other__name" title={s.cwd}>
                       {s.cwd.split(/[/\\]/).pop()}
                     </span>
-                    <button
-                      onClick={() => addProject(s.cwd)}
-                      style={{
-                        background: "var(--accent-subtle)",
-                        border: "none",
-                        color: "var(--accent-base)",
-                        fontSize: 10,
-                        borderRadius: 3,
-                        padding: "1px 5px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      + Add
+                    <span className="sb-session__count" title={`${s.count} session${s.count === 1 ? "" : "s"}`}>
+                      {s.count}
+                    </span>
+                    <button className="sb-add-chip" onClick={() => void addProject(s.cwd)}>
+                      <Plus size={10} /> Add
                     </button>
                   </div>
                 ))}
 
-                {unsortedSessions.length > 5 && (
-                  <button
-                    onClick={() => setShowAllUnsorted(!showAllUnsorted)}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "var(--accent-hover)",
-                      fontSize: 10,
-                      cursor: "pointer",
-                      textAlign: "left",
-                      padding: "6px 14px",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {showAllUnsorted ? "Show less" : `+ Show all (${unsortedSessions.length - 5} more)`}
+                {otherFolders.length > VISIBLE_SESSIONS && (
+                  <button className="sb-text-btn" style={{ marginLeft: 8 }} onClick={() => setShowAllUnsorted(!showAllUnsorted)}>
+                    {showAllUnsorted ? "Show less" : `Show ${otherFolders.length - VISIBLE_SESSIONS} more`}
                   </button>
                 )}
               </>
@@ -468,6 +365,48 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
       </div>
+
+      <ContextMenu menu={menu} onClose={closeMenu} />
+      {settingsFor && (
+        <ProjectSettingsModal
+          projectId={settingsFor.id}
+          initialSection={settingsFor.section}
+          onClose={() => setSettingsFor(null)}
+        />
+      )}
     </div>
+  );
+};
+
+/** Inline title editor. Enter/blur commits, Escape cancels (onDone(null)). */
+const RenameInput: React.FC<{ initial: string; onDone: (value: string | null) => void }> = ({ initial, onDone }) => {
+  const [value, setValue] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  const finish = (v: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(v);
+  };
+
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+
+  return (
+    <input
+      ref={ref}
+      className="sb-rename"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onBlur={() => finish(value)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") finish(value);
+        else if (e.key === "Escape") finish(null);
+      }}
+    />
   );
 };

@@ -1,6 +1,6 @@
 import { createServer, type Server, type Socket } from "node:net";
 import { randomBytes } from "node:crypto";
-import { JsonlSplitter, serializeRecord } from "@pi-studio/pi-adapter";
+import { JsonlSplitter, serializeRecord } from "@hive/pi-adapter";
 import {
   BRIDGE_COMMAND,
   BRIDGE_ENV,
@@ -11,8 +11,8 @@ import {
   type LinkedProject,
   type StudioToBridge,
   isBridgeToStudio,
-} from "@pi-studio/protocol";
-import type { PiRpcConnection } from "@pi-studio/pi-adapter/node";
+} from "@hive/protocol";
+import type { PiRpcConnection } from "@hive/pi-adapter/node";
 
 export interface BridgeServerOptions {
   /** Override the pipe or socket path (defaults to auto-generated). */
@@ -39,10 +39,10 @@ export interface BridgeSessionHandle {
 export function generateBridgeAddress(platform: NodeJS.Platform = process.platform): string {
   const id = randomBytes(6).toString("hex");
   if (platform === "win32") {
-    return `\\\\.\\pipe\\pi-studio-${process.pid}-${id}`;
+    return `\\\\.\\pipe\\hive-${process.pid}-${id}`;
   }
   // POSIX: unix socket path must stay short (< 104 bytes on macOS)
-  return `/tmp/pis-${id}.sock`;
+  return `/tmp/hive-${id}.sock`;
 }
 
 export async function createBridgeServer(

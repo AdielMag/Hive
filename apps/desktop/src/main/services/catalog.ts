@@ -51,6 +51,7 @@ export class SessionCatalogService {
 
     return rawSessions.map((s) => {
       const project = this.store.getProjectByPath(s.cwd);
+      const meta = this.store.getSessionMeta(s.path);
       return {
         path: s.path,
         id: s.id,
@@ -62,6 +63,8 @@ export class SessionCatalogService {
         messageCount: s.messageCount ?? 0,
         firstMessage: s.firstMessage ?? "",
         projectId: project?.id,
+        ...(meta.title ? { title: meta.title } : {}),
+        ...(meta.archived ? { archived: true } : {}),
       };
     });
   }
@@ -85,6 +88,7 @@ export class SessionCatalogService {
     if (!existsSync(sessionPath)) return false;
     try {
       await shell.trashItem(sessionPath);
+      this.store.removeSessionMeta(sessionPath);
       return true;
     } catch {
       return false;

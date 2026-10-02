@@ -1,10 +1,10 @@
 {
-  "name": "@pi-studio/desktop",
+  "name": "@hive/desktop",
   "version": "0.7.0",
   "private": true,
   "type": "module",
-  "description": "Pi Studio Desktop App",
-  "author": "Pi Studio Contributors",
+  "description": "Hive Desktop App",
+  "author": "Hive Contributors",
   "repository": {
     "type": "git",
     "url": "https://github.com/AdielMag/pi-studio.git"
@@ -20,8 +20,8 @@
   },
   "build": {
     "appId": "dev.pi.studio",
-    "productName": "Pi Studio",
-    "executableName": "pi-studio",
+    "productName": "Hive",
+    "executableName": "hive",
     "electronVersion": "35.7.5",
     "publish": {
       "provider": "github",
@@ -64,24 +64,24 @@
       "resources/**",
       "out/bridge/**"
     ],
-    "artifactName": "Pi-Studio-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Hive-${version}-${os}-${arch}.${ext}",
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "Pi-Studio-Setup-${version}.${ext}",
-      "shortcutName": "Pi Studio"
+      "artifactName": "Hive-Setup-${version}.${ext}",
+      "shortcutName": "Hive"
     },
     "portable": {
-      "artifactName": "Pi-Studio-${version}-portable.${ext}"
+      "artifactName": "Hive-${version}-portable.${ext}"
     }
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
-    "@pi-studio/pi-adapter": "0.1.0",
-    "@pi-studio/protocol": "0.1.0",
-    "@pi-studio/theme-engine": "0.1.0",
+    "@hive/pi-adapter": "0.1.0",
+    "@hive/protocol": "0.1.0",
+    "@hive/theme-engine": "0.1.0",
     "@shikijs/langs": "^4.5.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",

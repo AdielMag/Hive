@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { locatePi } from "../src/node/locator.ts";
 import { PiRpcConnection } from "../src/node/rpc-connection.ts";
-import type { PiStreamEvent } from "@pi-studio/protocol";
+import type { PiStreamEvent } from "@hive/protocol";
 import type { RpcExtensionUIRequest } from "@earendil-works/pi-coding-agent";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));

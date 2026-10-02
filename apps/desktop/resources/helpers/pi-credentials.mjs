@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
-const SENTINEL = "@@PI_STUDIO_CREDENTIALS@@";
+const SENTINEL = "@@HIVE_CREDENTIALS@@";
 const root = process.argv[2];
 
 async function main() {

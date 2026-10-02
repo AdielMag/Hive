@@ -16,7 +16,7 @@ import {
   type RegistryTool,
   type StudioToBridge,
   renderLinkedProjectsSection,
-} from "@pi-studio/protocol";
+} from "@hive/protocol";
 
 export default function studioBridge(pi: ExtensionAPI): void {
   const address = process.env[BRIDGE_ENV.address];

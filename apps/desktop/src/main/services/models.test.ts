@@ -41,6 +41,7 @@ describe("ModelsService", () => {
                 name: "Custom Gemini",
                 provider: "antigravity",
                 reasoning: true,
+                thinkingLevelMap: { off: null, low: "low", medium: "medium", high: "high" },
                 contextWindow: 500000,
               },
             ],
@@ -54,6 +55,7 @@ describe("ModelsService", () => {
       expect(catalog.models.length).toBe(1);
       expect(catalog.models[0]?.id).toBe("gemini-custom-1");
       expect(catalog.models[0]?.reasoning).toBe(true);
+      expect(catalog.models[0]?.thinkingLevelMap).toEqual({ off: null, low: "low", medium: "medium", high: "high" });
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

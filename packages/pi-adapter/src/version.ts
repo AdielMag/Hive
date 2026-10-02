@@ -1,4 +1,4 @@
-import type { PiSupport } from "@pi-studio/protocol";
+import type { PiSupport } from "@hive/protocol";
 
 /** Oldest Pi we support: the version the plan's evidence and spikes were built on. */
 export const MIN_PI_VERSION = "0.87.1";

@@ -15,5 +15,6 @@ RELEASE_NOTES.md
 /shot*.png
 /tmp.png
 /capture.png
+icon-options/
 apps/desktop/run*.log
 .tmp-*

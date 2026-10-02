@@ -6,7 +6,8 @@ import {
   Paperclip,
   FileText,
   X,
-  Image as ChevronDown,
+  ChevronDown,
+  Brain,
   Check,
   Search,
   Cpu,
@@ -17,9 +18,12 @@ import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { ContextRing } from "./ContextRing.tsx";
 import { ContextBreakdownModal } from "./ContextBreakdownModal.tsx";
+import { useContextBreakdown } from "./ContextBreakdownView.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { ThinkingPicker } from "./ThinkingPicker.tsx";
 import { ModePicker } from "./ModePicker.tsx";
+import { QueuedMessagesBar } from "./transcript/QueuedMessages.tsx";
+import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import type { AttachedItem } from "@pi-studio/protocol";
 
 interface ComposerProps {
@@ -27,7 +31,7 @@ interface ComposerProps {
 }
 
 export const Composer: React.FC<ComposerProps> = ({ height }) => {
-  const { promptText, setPromptText, sendPrompt, abort, running, lastUsage, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, stats, extensionWidgets } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, lastUsage: s.transcript.lastUsage, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, stats: s.stats, extensionWidgets: s.extensionWidgets })));
+  const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets })));
 
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -283,9 +287,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
   }
 
   // Context usage metrics
-  const contextTokens = stats?.contextUsage?.tokens ?? lastUsage?.totalTokens ?? 0;
-  const contextWindow = stats?.contextUsage?.contextWindow ?? selectedModel?.contextWindow ?? 200_000;
-  const contextPercent = stats?.contextUsage?.percent ?? (contextWindow > 0 ? (contextTokens / contextWindow) * 100 : 0);
+  // Same source as the breakdown modal, so the ring and the popup always agree.
+  const { contextTokens, contextWindow, percent: contextPercent } = useContextBreakdown();
 
   const canSend = promptText.trim().length > 0 || attachments.length > 0;
 
@@ -324,6 +327,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
           ))}
         </div>
       ))}
+
+      {/* Queued messages banner if any */}
+      <QueuedMessagesBar />
 
       {/* Editor Box (Droppable area) */}
       <div
@@ -493,6 +499,15 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                 type="button"
                 onClick={() => setModelPickerOpen((prev) => !prev)}
                 disabled={isLoadingModels && visibleModels.length === 0}
+                title={
+                  selectedModel
+                    ? `${selectedModel.name || selectedModel.id} (${selectedModel.provider}) · Context: ${formatContextWindow(selectedModel.contextWindow) || "unknown"} (${(selectedModel.contextWindow ?? 0).toLocaleString()} tokens) · Thinking: ${
+                        Boolean(selectedModel.reasoning)
+                          ? getSupportedThinkingLevels(selectedModel).filter((l) => l !== "off").join(", ") || "supported"
+                          : "off"
+                      }`
+                    : undefined
+                }
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -521,7 +536,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                     maxWidth: 160,
                   }}
                 >
-                  {selectedModel ? selectedModel.name || selectedModel.id : "Select Model"}
+                  {selectedModel ? selectedModel.name || selectedModel.id : isLoadingModels ? "Loading model…" : "Select Model"}
                 </span>
                 <ChevronDown
                   size={11}
@@ -599,6 +614,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                     ) : (
                       filteredModels.map((m) => {
                         const isSelected = selectedModel?.provider === m.provider && selectedModel?.id === m.id;
+                        const ctxStr = formatContextWindow(m.contextWindow);
+                        const modelLevels = getSupportedThinkingLevels(m);
+                        const hasReasoning = Boolean(m.reasoning) && modelLevels.some((l) => l !== "off");
                         return (
                           <div
                             key={`${m.provider}/${m.id}`}
@@ -631,7 +649,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden", flex: 1 }}>
                               <ProviderIcon provider={m.provider} size={14} />
-                              <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                              <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
                                 <span style={{ fontWeight: isSelected ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {m.name || m.id}
                                 </span>
@@ -640,7 +658,37 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                                 </span>
                               </div>
                             </div>
-                            {isSelected && <Check size={12} color="var(--accent-base)" style={{ flexShrink: 0 }} />}
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                              {ctxStr && (
+                                <span
+                                  title={`Context window: ${m.contextWindow?.toLocaleString()} tokens`}
+                                  style={{
+                                    fontSize: 9,
+                                    padding: "1px 4px",
+                                    borderRadius: 3,
+                                    background: "var(--bg-card)",
+                                    border: "1px solid var(--border-subtle)",
+                                    color: "var(--text-muted)",
+                                    fontFamily: "var(--font-mono, monospace)",
+                                  }}
+                                >
+                                  {ctxStr}
+                                </span>
+                              )}
+                              {hasReasoning && (
+                                <span
+                                  title={`Supports reasoning (${modelLevels.filter((l) => l !== "off").join(", ")})`}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    color: "var(--accent-base)",
+                                  }}
+                                >
+                                  <Brain size={12} />
+                                </span>
+                              )}
+                              {isSelected && <Check size={12} color="var(--accent-base)" style={{ flexShrink: 0 }} />}
+                            </div>
                           </div>
                         );
                       })

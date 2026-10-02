@@ -8,7 +8,7 @@
  * `message_end` message. Completed messages stay in `live` until an entries sync persists them.
  */
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { PiStreamEvent } from "@pi-studio/protocol";
+import type { PiStreamEvent } from "@hive/protocol";
 
 export interface UsageLike {
   input: number;
@@ -340,6 +340,8 @@ export function applyEntries(
   const live = mode === "replace" ? [] : state.live.filter((m) => !persisted.has(messageKey(m)));
   return {
     ...state,
+    // A full (re)load has no streaming events to learn usage from; take it from the persisted branch.
+    lastUsage: mode === "replace" ? lastUsageOnBranch(byId, leafId) : state.lastUsage,
     byId,
     order,
     leafId,
@@ -347,6 +349,31 @@ export function applyEntries(
     live,
     revision: state.revision + 1,
   };
+}
+
+/**
+ * Usage of the last successful assistant message on the branch ending at `leafId` (what Pi uses for
+ * context size). Returns null if a compaction happened after it, since that usage is then stale.
+ */
+function lastUsageOnBranch(byId: Record<string, SessionEntry>, leafId: string | null): UsageLike | null {
+  const seen = new Set<string>();
+  let id = leafId;
+  while (id && !seen.has(id)) {
+    seen.add(id);
+    const entry = byId[id];
+    if (!entry) break;
+    if (entry.type === "compaction") return null;
+    if (entry.type === "message") {
+      const msg = entry.message as unknown as AnyMessage & { usage?: UsageLike; stopReason?: string };
+      const u = msg.role === "assistant" ? msg.usage : undefined;
+      if (u && msg.stopReason !== "aborted" && msg.stopReason !== "error") {
+        const total = u.totalTokens || u.input + u.output + u.cacheRead + u.cacheWrite;
+        if (total > 0) return { ...u, totalTokens: total };
+      }
+    }
+    id = entry.parentId;
+  }
+  return null;
 }
 
 /** Entries on the active branch, root first (walks parentId from the leaf). */

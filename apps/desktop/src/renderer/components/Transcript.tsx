@@ -37,6 +37,7 @@ import { CodeBlock } from "./code/CodeBlock.tsx";
 import { languageFromPath } from "../lib/highlight/languages.ts";
 import { copyText } from "../lib/clipboard.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
+import { QueuedMessagesList } from "./transcript/QueuedMessages.tsx";
 
 export function scrollToToolCall(id: string): void {
   const sel = CSS.escape(id);
@@ -106,7 +107,7 @@ export const Transcript: React.FC = () => {
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [timeline]);
+  }, [timeline, transcript.queue]);
 
   const jump = () => {
     const el = scrollRef.current;
@@ -145,6 +146,7 @@ export const Transcript: React.FC = () => {
                 <Loader2 size={13} className="spin" /> Working…
               </div>
             )}
+            <QueuedMessagesList />
           </div>
         </div>
         {showJump && (
