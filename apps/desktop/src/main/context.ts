@@ -57,7 +57,7 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     auth: info ? new AuthService(info.packageRoot) : null,
     marketplace: new MarketplaceService(),
     updater: new AppUpdaterService(),
-    models: new ModelsService(),
+    models: new ModelsService(undefined, join(userData, "pi-studio")),
     quota: new QuotaService(info),
     usage: new UsageService(join(userData, "pi-studio", "usage-cache.json")),
     terminals: terminalManager,

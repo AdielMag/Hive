@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEvent, applyEntries, buildTimeline, createTranscript } from "../src/transcript.ts";
+import { applyEvent, applyEntries, buildTimeline, createTranscript, messagesToTimeline } from "../src/transcript.ts";
 import type { PiStreamEvent } from "@pi-studio/protocol";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
@@ -141,5 +141,89 @@ describe("transcript reducer", () => {
     expect(timeline.items).toHaveLength(2);
     expect(timeline.items[0]?.kind).toBe("user");
     expect(timeline.items[1]?.kind).toBe("assistant");
+  });
+
+  it("preserves details on custom messages and custom_message entries", () => {
+    let state = createTranscript();
+    const notificationDetails = { id: "agent_42", status: "completed", totalCost: 0.05 };
+
+    // Live custom message
+    state = applyEvent(state, {
+      type: "message_end",
+      message: {
+        role: "custom",
+        customType: "subagent-notification",
+        content: "Agent finished",
+        details: notificationDetails,
+      },
+    } as unknown as PiStreamEvent);
+
+    const timelineLive = buildTimeline(state);
+    const customItem = timelineLive.items.find((i) => i.kind === "custom");
+    expect(customItem).toBeDefined();
+    if (customItem && customItem.kind === "custom") {
+      expect(customItem.customType).toBe("subagent-notification");
+      expect(customItem.details).toEqual(notificationDetails);
+    }
+
+    // Persisted custom_message entry
+    let persistedState = createTranscript();
+    persistedState = applyEntries(
+      persistedState,
+      [
+        {
+          type: "custom_message",
+          id: "cm_1",
+          parentId: null,
+          customType: "subagent-notification",
+          content: "Agent completed in background",
+          display: true,
+          details: notificationDetails,
+        } as unknown as SessionEntry,
+      ],
+      "cm_1",
+      "replace",
+    );
+    const timelinePersisted = buildTimeline(persistedState);
+    const persistedItem = timelinePersisted.items[0];
+    expect(persistedItem?.kind).toBe("custom");
+    if (persistedItem && persistedItem.kind === "custom") {
+      expect(persistedItem.details).toEqual(notificationDetails);
+    }
+  });
+
+  it("builds timeline from standalone messages with messagesToTimeline", () => {
+    const messages = [
+      { role: "user", content: "Analyze repo", timestamp: 100 },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Working on it" },
+          { type: "toolCall", id: "sub_1", name: "read", arguments: { path: "package.json" }, complete: true },
+        ],
+        timestamp: 101,
+      },
+      {
+        role: "toolResult",
+        toolCallId: "sub_1",
+        toolName: "read",
+        content: [{ type: "text", text: "{ name: 'pi-studio' }" }],
+        isError: false,
+        timestamp: 102,
+      },
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "All done!" }],
+        timestamp: 103,
+      },
+    ];
+
+    const timeline = messagesToTimeline(messages, "subagent");
+    expect(timeline.items).toHaveLength(3); // 1 user + 2 assistants (toolResult is mapped to toolResults)
+    expect(timeline.items[0]?.kind).toBe("user");
+    expect(timeline.items[1]?.kind).toBe("assistant");
+    expect(timeline.items[2]?.kind).toBe("assistant");
+    expect(timeline.toolResults["sub_1"]).toBeDefined();
+    expect(timeline.toolResults["sub_1"]?.text).toBe("{ name: 'pi-studio' }");
   });
 });

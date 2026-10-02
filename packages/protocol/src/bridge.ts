@@ -12,6 +12,8 @@
  *   with the hidden command `/__studio <json>`; their results come back over the pipe.
  */
 
+import type { SessionRegistry } from "./registry.ts";
+
 export const BRIDGE_PROTOCOL_VERSION = 1 as const;
 
 /** Environment variables Studio sets on each Pi process. */
@@ -39,6 +41,7 @@ export const BRIDGE_CAPABILITIES = [
   "prompt_sections",
   "boundaries",
   "events",
+  "registry",
   "actions:ping",
   "actions:navigate_tree",
   "actions:reload",
@@ -75,6 +78,7 @@ export type BridgeToStudio =
       leafEntryId: string | null;
     }
   | { v: 1; type: "event"; topic: string; data: unknown }
+  | ({ v: 1; type: "registry" } & Omit<SessionRegistry, "receivedAt">)
   | { v: 1; type: "command_result"; id: string; ok: boolean; data?: unknown; error?: string };
 
 /** Records sent by Studio to the bridge. */

@@ -1,6 +1,6 @@
 /** Tabs across the top of the content card (sessions, files, diffs, usage). Middle-click closes. */
 import React from "react";
-import { BarChart3, FileCode, GitCompare, Loader2, MessageSquare, Plus, X } from "lucide-react";
+import { BarChart3, FileCode, GitCompare, Loader2, MessageSquare, Plus, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { TabItem } from "@pi-studio/protocol";
 import { useSessionStore } from "../store/session-store.ts";
@@ -78,6 +78,8 @@ const TabIcon: React.FC<{ tab: TabItem }> = ({ tab }) => {
       return <GitCompare size={13} />;
     case "usage":
       return <BarChart3 size={13} />;
+    case "library":
+      return <Sparkles size={13} />;
     default:
       return <MessageSquare size={13} />;
   }

@@ -1,4 +1,6 @@
 import { connect, type Socket } from "node:net";
+import os from "node:os";
+import path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { VERSION } from "@earendil-works/pi-coding-agent";
 import {
@@ -10,6 +12,8 @@ import {
   type BridgeAction,
   type BridgeToStudio,
   type LinkedProject,
+  type RegistrySkill,
+  type RegistryTool,
   type StudioToBridge,
   renderLinkedProjectsSection,
 } from "@pi-studio/protocol";
@@ -22,6 +26,8 @@ export default function studioBridge(pi: ExtensionAPI): void {
   let socket: Socket | null = null;
   let linkedProjects: LinkedProject[] = [];
   let readBuffer = "";
+  let lastRegistryHash = "";
+  let lastSessionCtx: any = null;
 
   const send = (message: BridgeToStudio) => {
     if (!socket || socket.destroyed) return;
@@ -30,6 +36,107 @@ export default function studioBridge(pi: ExtensionAPI): void {
     } catch {
       // ignore write errors; socket error handler handles disconnect
     }
+  };
+
+  const buildAndSendRegistry = (
+    ctx?: any,
+    promptSkills?: Array<{ name: string; description?: string; filePath?: string; baseDir?: string }>,
+  ) => {
+    const effectiveCtx = ctx ?? lastSessionCtx;
+    if (!effectiveCtx) return;
+
+    const allTools = (typeof (pi as any).getAllTools === "function" ? (pi as any).getAllTools() : []) as any[];
+    const activeToolsList = (typeof (pi as any).getActiveTools === "function" ? (pi as any).getActiveTools() : allTools) as any[];
+    const activeSet = new Set(activeToolsList.map((t) => t.name));
+
+    const tools: RegistryTool[] = allTools.map((t) => {
+      const srcInfo = t.sourceInfo;
+      const sourcePath = String(srcInfo?.path ?? "");
+      let source: "builtin" | "sdk" | "extension" = "extension";
+      if (srcInfo?.source === "builtin" || srcInfo?.source === "sdk") {
+        source = srcInfo.source;
+      } else if (["read", "bash", "edit", "write", "grep", "find", "ls"].includes(t.name)) {
+        source = "builtin";
+      }
+
+      let packageName: string | undefined;
+      const pkgMatch = sourcePath.replace(/\\/g, "/").match(/node_modules\/((?:@[^/]+\/)?[^/]+)/);
+      if (pkgMatch) {
+        packageName = pkgMatch[1];
+      }
+
+      const desc = typeof t.description === "string" ? t.description.slice(0, 400) : "";
+
+      return {
+        name: t.name,
+        description: desc,
+        active: activeSet.has(t.name),
+        source,
+        sourcePath,
+        packageName,
+      };
+    });
+
+    const skillsMap = new Map<string, RegistrySkill>();
+    const commands = (typeof (pi as any).getCommands === "function" ? (pi as any).getCommands() : []) as any[];
+    for (const cmd of commands) {
+      if (cmd.source === "skill" || cmd.sourceInfo?.source === "skill") {
+        const cleanName = cmd.name.replace(/^skill:/, "");
+        const filePath = String(cmd.sourceInfo?.path ?? "");
+        const baseDir = filePath ? path.dirname(filePath) : "";
+        skillsMap.set(cleanName, {
+          name: cleanName,
+          description: typeof cmd.description === "string" ? cmd.description.slice(0, 400) : "",
+          filePath,
+          baseDir,
+        });
+      }
+    }
+
+    if (Array.isArray(promptSkills)) {
+      for (const ps of promptSkills) {
+        if (!skillsMap.has(ps.name)) {
+          const filePath = ps.filePath ?? "";
+          const baseDir = ps.baseDir ?? (filePath ? path.dirname(filePath) : "");
+          skillsMap.set(ps.name, {
+            name: ps.name,
+            description: ps.description ?? "",
+            filePath,
+            baseDir,
+          });
+        }
+      }
+    }
+
+    const skills = Array.from(skillsMap.values());
+    const sessionId = (typeof effectiveCtx.sessionManager?.getSessionId === "function"
+      ? effectiveCtx.sessionManager.getSessionId()
+      : null) as string | null;
+
+    const cwd = effectiveCtx.cwd ?? process.cwd();
+    const homeDir = os.homedir();
+
+    const payload = {
+      tools,
+      skills,
+      sessionId,
+      cwd,
+      homeDir,
+    };
+
+    const hash = JSON.stringify(payload);
+    if (hash === lastRegistryHash) return;
+    lastRegistryHash = hash;
+
+    send({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: "registry",
+      sessionId,
+      cwd,
+      homeDir,
+      tools,
+      skills,
+    });
   };
 
   const handleStudioMessage = (msg: StudioToBridge) => {
@@ -41,7 +148,11 @@ export default function studioBridge(pi: ExtensionAPI): void {
   };
 
   pi.on("session_start", async (_event, ctx) => {
-    if (socket) return;
+    lastSessionCtx = ctx;
+    if (socket) {
+      buildAndSendRegistry(ctx);
+      return;
+    }
 
     const s = connect(address);
     socket = s;
@@ -58,6 +169,7 @@ export default function studioBridge(pi: ExtensionAPI): void {
         trusted: ctx.isProjectTrusted(),
         capabilities: BRIDGE_CAPABILITIES,
       });
+      buildAndSendRegistry(ctx);
     });
 
     s.on("data", (chunk: string) => {
@@ -119,6 +231,7 @@ export default function studioBridge(pi: ExtensionAPI): void {
       type: "prompt_sections",
       sections,
     });
+    buildAndSendRegistry(undefined, (opts as any).skills);
   });
 
   // Checkpoint boundaries
@@ -141,12 +254,14 @@ export default function studioBridge(pi: ExtensionAPI): void {
   });
 
   pi.on("agent_settled", async (_event, ctx) => {
+    lastSessionCtx = ctx;
     send({
       v: BRIDGE_PROTOCOL_VERSION,
       type: "boundary",
       phase: "agent_settled",
       leafEntryId: ctx.sessionManager.getLeafId?.() ?? null,
     });
+    buildAndSendRegistry(ctx);
   });
 
   // Hidden command for command-context actions

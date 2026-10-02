@@ -15,6 +15,13 @@ export type { Model } from "@earendil-works/pi-ai";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
 import type { ProjectDefaults, ProjectEntry, SessionCatalogItem } from "./projects.ts";
 import type { QuotaSnapshot, UsageReport } from "./insights.ts";
+import type {
+  McpServerInfo,
+  SessionRegistry,
+  SubagentLocateRequest,
+  SubagentOutputChunk,
+  SubagentOutputRef,
+} from "./registry.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
@@ -193,7 +200,98 @@ export const IPC = {
   usageGet: "insights:usage",
   // Shell
   openExternal: "shell:open-external",
+  // Skills & agents library
+  libraryList: "library:list",
+  librarySetField: "library:set-field",
+  libraryReveal: "library:reveal",
+  libraryOpenPath: "library:open-path",
+  // AI Registry, MCP, and Subagent output
+  aiSessionRegistry: "ai:session-registry",
+  aiMcpCatalog: "ai:mcp-catalog",
+  subagentLocate: "subagents:locate",
+  subagentRead: "subagents:read",
 } as const;
+
+export type LibraryKind = "skill" | "agent";
+export type LibraryScope = "project" | "global" | "builtin";
+export type LibraryFieldValue = string | number | boolean | null;
+
+export interface LibrarySection {
+  /** Heading level (1-6); 0 for the untitled intro ("Overview"). */
+  level: number;
+  title: string;
+  /** Unique within the entry. */
+  slug: string;
+  /** Markdown content under the heading (heading line excluded). */
+  content: string;
+}
+
+export interface LibraryEntry {
+  /** Absolute file path, or `builtin:<name>` for built-in agents. */
+  id: string;
+  kind: LibraryKind;
+  scope: LibraryScope;
+  /** Absolute file path (null for built-ins). */
+  path: string | null;
+  /** Discovery root the file was found under (null for built-ins). */
+  sourceDir: string | null;
+  /** Effective name: frontmatter `name`, else folder (SKILL.md) or file name. */
+  name: string;
+  displayName?: string;
+  description?: string;
+  color?: string;
+  frontmatter: Record<string, unknown>;
+  /** Full file source. */
+  raw: string;
+  /** Markdown after the frontmatter. */
+  body: string;
+  sections: LibrarySection[];
+  mtimeMs: number;
+  parseError?: string;
+  /** Non-fatal problems (e.g. a skill without a description is not loaded by Pi). */
+  warnings: string[];
+  /** Built-ins cannot be edited. */
+  readOnly: boolean;
+  /** A higher-priority entry with the same kind + name wins over this one. */
+  shadowed: boolean;
+  /** Path of the entry that wins over this one. */
+  overriddenBy?: string;
+  /** Agent file that replaces a pi-subagents built-in of the same name. */
+  overridesBuiltin?: boolean;
+  /** Skills only: files next to SKILL.md (relative, `/`-separated). */
+  supportingFiles?: string[];
+  supportingFilesTruncated?: boolean;
+}
+
+export interface LibraryRootInfo {
+  dir: string;
+  kind: LibraryKind;
+  scope: Exclude<LibraryScope, "builtin">;
+  exists: boolean;
+}
+
+export interface LibrarySnapshot {
+  cwd: string | null;
+  roots: LibraryRootInfo[];
+  entries: LibraryEntry[];
+  scannedAt: number;
+  scanMs: number;
+}
+
+export interface LibrarySetFieldRequest {
+  /** Project the file belongs to (decides which project roots are writable). */
+  cwd?: string;
+  path: string;
+  key: string;
+  /** null removes the key. */
+  value: LibraryFieldValue;
+  /** Reject with "conflict" when the file's mtime differs (edited elsewhere). */
+  expectedMtimeMs?: number;
+}
+
+export type LibrarySetFieldResult =
+  | { ok: true; entry: LibraryEntry }
+  | { ok: false; code: "conflict" | "not-allowed" | "io" | "invalid"; error: string };
 
 export interface ModelCatalogItem {
   id: string;
@@ -217,6 +315,18 @@ export interface ModelsCatalogResponse {
 }
 
 /** API exposed on `window.studio` by the preload script. */
+/**
+ * Auto-compaction expressed relative to each model's context window. Pi only understands absolute
+ * token counts, so Studio converts these into per-model `compaction.modelOverrides` in settings.json.
+ */
+export interface CompactionSettings {
+  enabled: boolean;
+  /** Compact once context fills this % of the model's window (Pi: reserveTokens = window * (100 - %)). */
+  triggerPercent: number;
+  /** Keep this % of the model's window as recent, un-summarized history (Pi: keepRecentTokens). */
+  keepRecentPercent: number;
+}
+
 export interface StudioApi {
   bootstrap(): Promise<Bootstrap>;
   /** Search for Pi again (fresh PATH). On success the app restarts itself to start using it. */
@@ -274,8 +384,8 @@ export interface StudioApi {
   getGitLog(cwd: string, maxCount?: number): Promise<Array<{ hash: string; author: string; relativeDate: string; message: string }>>;
   getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }): Promise<string>;
   generateCommitMessage(cwd: string, model?: string): Promise<string>;
-  getCompactionSettings(): Promise<{ enabled: boolean; reserveTokens: number; keepRecentTokens: number }>;
-  saveCompactionSettings(settings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number }): Promise<{ success: boolean }>;
+  getCompactionSettings(): Promise<CompactionSettings>;
+  saveCompactionSettings(settings: CompactionSettings): Promise<{ success: boolean; modelsUpdated: number }>;
 
   // File operations
   listFiles(dirPath: string): Promise<any[]>;
@@ -322,6 +432,20 @@ export interface StudioApi {
   getQuota(force?: boolean): Promise<QuotaSnapshot>;
   /** Aggregated token/cost usage parsed from Pi session files. */
   getUsage(force?: boolean): Promise<UsageReport>;
+
+  // Skills & agents library
+  listLibrary(cwd?: string): Promise<LibrarySnapshot>;
+  setLibraryField(request: LibrarySetFieldRequest): Promise<LibrarySetFieldResult>;
+  /** Show a library file in the OS file manager. */
+  revealLibraryPath(path: string, cwd?: string): Promise<void>;
+  /** Open a library file (or skill folder) with the OS default application. */
+  openLibraryPath(path: string, cwd?: string): Promise<{ ok: boolean; error?: string }>;
+
+  // AI Registry, MCP, and Subagent output
+  getSessionRegistry(key?: string): Promise<SessionRegistry | null>;
+  getMcpCatalog(): Promise<McpServerInfo[]>;
+  locateSubagentOutput(req: SubagentLocateRequest): Promise<SubagentOutputRef | null>;
+  readSubagentOutput(path: string, fromOffset?: number): Promise<SubagentOutputChunk>;
 
   // Shell
   openExternal(url: string): Promise<void>;

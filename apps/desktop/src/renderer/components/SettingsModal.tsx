@@ -6,6 +6,7 @@ import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
 import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useSessionStore } from "../store/session-store.ts";
+import { type UpdateInfo, useUpdates } from "../store/update-store.ts";
 
 export type SettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "updates" | "about";
 
@@ -23,15 +24,6 @@ interface Account {
   email?: string;
 }
 
-interface UpdateInfo {
-  hasUpdate: boolean;
-  currentVersion: string;
-  latestVersion?: string;
-  downloadUrl?: string;
-  releaseUrl?: string;
-  notes?: string;
-}
-
 const TABS: Array<{ id: SettingsTabId; label: string; icon: React.ReactNode; title: string }> = [
   { id: "appearance", label: "Appearance", icon: <Palette size={15} />, title: "Appearance" },
   { id: "models", label: "Models", icon: <Cpu size={15} />, title: "Models" },
@@ -43,19 +35,10 @@ const TABS: Array<{ id: SettingsTabId; label: string; icon: React.ReactNode; tit
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialTab = "appearance" }) => {
   const [tab, setTab] = useState<SettingsTabId>(initialTab);
-  const [update, setUpdate] = useState<UpdateInfo | null>(null);
-  const [checking, setChecking] = useState(false);
-
-  const checkUpdate = useCallback(async () => {
-    setChecking(true);
-    try {
-      setUpdate(await window.studio.checkForUpdates());
-    } catch {
-      // offline: keep previous info
-    } finally {
-      setChecking(false);
-    }
-  }, []);
+  // Shared with the title-bar badge: a check here also lights up the badge, and vice versa.
+  const update = useUpdates((s) => s.info);
+  const checking = useUpdates((s) => s.checking);
+  const checkUpdate = useUpdates((s) => s.check);
 
   useEffect(() => {
     if (!isOpen) return;

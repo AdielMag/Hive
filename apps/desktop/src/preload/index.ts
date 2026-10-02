@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
 import {
   IPC,
   type Bootstrap,
+  type CompactionSettings,
+  type LibrarySetFieldRequest,
   type PiLocateResult,
   type BridgeActionRequest,
   type BridgeActionResult,
@@ -15,6 +17,7 @@ import {
   type StartSessionResult,
   type StudioApi,
   type StudioRpcCommand,
+  type SubagentLocateRequest,
   type UiRequestMessage,
 } from "@pi-studio/protocol";
 
@@ -271,7 +274,7 @@ const api: StudioApi = {
   getCompactionSettings() {
     return ipcRenderer.invoke(IPC.settingsGetCompaction);
   },
-  saveCompactionSettings(settings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number }) {
+  saveCompactionSettings(settings: CompactionSettings) {
     return ipcRenderer.invoke(IPC.settingsSaveCompaction, settings);
   },
 
@@ -281,6 +284,34 @@ const api: StudioApi = {
   },
   getUsage(force?: boolean) {
     return ipcRenderer.invoke(IPC.usageGet, { force });
+  },
+
+  // Skills & agents library
+  listLibrary(cwd?: string) {
+    return ipcRenderer.invoke(IPC.libraryList, { cwd });
+  },
+  setLibraryField(request: LibrarySetFieldRequest) {
+    return ipcRenderer.invoke(IPC.librarySetField, request);
+  },
+  revealLibraryPath(path: string, cwd?: string) {
+    return ipcRenderer.invoke(IPC.libraryReveal, { path, cwd });
+  },
+  openLibraryPath(path: string, cwd?: string) {
+    return ipcRenderer.invoke(IPC.libraryOpenPath, { path, cwd });
+  },
+
+  // AI Registry, MCP, and Subagent output
+  getSessionRegistry(key?: string) {
+    return ipcRenderer.invoke(IPC.aiSessionRegistry, { key });
+  },
+  getMcpCatalog() {
+    return ipcRenderer.invoke(IPC.aiMcpCatalog);
+  },
+  locateSubagentOutput(req: SubagentLocateRequest) {
+    return ipcRenderer.invoke(IPC.subagentLocate, req);
+  },
+  readSubagentOutput(path: string, fromOffset?: number) {
+    return ipcRenderer.invoke(IPC.subagentRead, { path, fromOffset });
   },
 
   // Shell

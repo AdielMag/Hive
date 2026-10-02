@@ -375,7 +375,7 @@ export interface ToolResultView {
   isError: boolean;
   text: string;
   images: ImageRef[];
-  details: unknown;
+  details?: unknown;
 }
 
 export type TimelineItem =
@@ -400,7 +400,7 @@ export type TimelineItem =
       cancelled: boolean;
       truncated: boolean;
     }
-  | { kind: "custom"; key: string; customType: string; text: string; images: ImageRef[] }
+  | { kind: "custom"; key: string; customType: string; text: string; images: ImageRef[]; details?: unknown }
   | { kind: "summary"; key: string; variant: "compaction" | "branch"; summary: string; tokensBefore?: number }
   | { kind: "marker"; key: string; text: string }
   | { kind: "unknown"; key: string; label: string; raw: unknown };
@@ -455,7 +455,7 @@ function messageItem(message: AnyMessage, key: string, isFirstSystem: boolean): 
     case "custom": {
       if (message.display === false) return null;
       const { text, images } = contentText(message.content);
-      return { kind: "custom", key, customType: String(message.customType ?? "custom"), text, images };
+      return { kind: "custom", key, customType: String(message.customType ?? "custom"), text, images, details: message.details };
     }
     case "compactionSummary":
       return {
@@ -534,7 +534,7 @@ export function buildTimeline(state: TranscriptState): Timeline {
       case "custom_message": {
         if (!entry.display) break;
         const { text, images } = contentText(entry.content);
-        items.push({ kind: "custom", key, customType: entry.customType, text, images });
+        items.push({ kind: "custom", key, customType: entry.customType, text, images, details: (entry as { details?: unknown }).details });
         break;
       }
       default:
@@ -561,6 +561,25 @@ export function buildTimeline(state: TranscriptState): Timeline {
     });
   }
 
+  return { items, toolResults };
+}
+
+/**
+ * Builds a timeline from a standalone list of messages (e.g. from a subagent transcript).
+ */
+export function messagesToTimeline(messages: AnyMessage[], keyPrefix = "msg"): Timeline {
+  const items: TimelineItem[] = [];
+  const toolResults: Record<string, ToolResultView> = {};
+  let idx = 0;
+  for (const message of messages) {
+    idx++;
+    const key = `${keyPrefix}:${idx}:${messageKey(message)}`;
+    if (message.role === "toolResult") {
+      toolResults[String(message.toolCallId)] = toolResultView(message);
+    }
+    const item = messageItem(message, key, false);
+    if (item) items.push(item);
+  }
   return { items, toolResults };
 }
 

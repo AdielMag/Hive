@@ -1,4 +1,4 @@
-import { IPC } from "@pi-studio/protocol";
+import { type CompactionSettings, IPC } from "@pi-studio/protocol";
 import type { AppContext } from "../context.ts";
 import { handle } from "./util.ts";
 
@@ -23,7 +23,7 @@ export function registerAccountIpc(ctx: AppContext): void {
     ctx.models.saveEnabledModels(enabledModels),
   );
   handle(IPC.settingsGetCompaction, () => ctx.models.getCompactionSettings());
-  handle(IPC.settingsSaveCompaction, (settings: { enabled: boolean; reserveTokens: number; keepRecentTokens: number }) =>
+  handle(IPC.settingsSaveCompaction, (settings: CompactionSettings) =>
     ctx.models.saveCompactionSettings(settings),
   );
 

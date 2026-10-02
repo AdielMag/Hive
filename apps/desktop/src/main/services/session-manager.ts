@@ -18,6 +18,7 @@ import {
 } from "@pi-studio/protocol";
 import { bridgeExtensionPath } from "../paths.ts";
 import { createBridgeServer, type BridgeSessionHandle } from "../bridge-server/index.ts";
+import type { SessionRegistry } from "@pi-studio/protocol";
 
 interface ActiveSession {
   key: string;
@@ -27,6 +28,7 @@ interface ActiveSession {
   bridge: BridgeSessionHandle;
   eventBuffer: PiStreamEvent[];
   flushTimer: ReturnType<typeof setTimeout> | null;
+  registry?: SessionRegistry;
 }
 
 export class MainSessionManager {
@@ -91,6 +93,16 @@ export class MainSessionManager {
     });
 
     bridge.onMessage((msg) => {
+      if (msg.type === "registry") {
+        session.registry = {
+          sessionId: msg.sessionId,
+          cwd: msg.cwd,
+          homeDir: msg.homeDir,
+          tools: msg.tools,
+          skills: msg.skills,
+          receivedAt: Date.now(),
+        };
+      }
       this.sendToWindow(IPC.evtBridge, { key, message: msg });
     });
 
@@ -142,6 +154,33 @@ export class MainSessionManager {
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
+  }
+
+  getRegistry(key: string): SessionRegistry | null {
+    const session = this.sessions.get(key);
+    return session?.registry ?? null;
+  }
+
+  getProjectPath(key: string): string | null {
+    const session = this.sessions.get(key);
+    return session?.projectPath ?? null;
+  }
+
+  async getPiSessionId(key: string): Promise<string | null> {
+    const session = this.sessions.get(key);
+    if (!session) return null;
+    if (session.registry?.sessionId) return session.registry.sessionId;
+    try {
+      const res = await session.rpc.send({ type: "get_state" });
+      const anyRes = res as Record<string, unknown>;
+      const resData = anyRes?.data as Record<string, unknown> | undefined;
+      if (res.success && resData && typeof resData.sessionId === "string") {
+        return resData.sessionId;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
   }
 
   async respondUi(key: string, response: RpcExtensionUIResponse): Promise<void> {

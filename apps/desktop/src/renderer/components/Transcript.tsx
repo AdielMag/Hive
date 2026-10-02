@@ -4,7 +4,7 @@
  *  - settled rows are memoized on a cheap signature, so streaming re-renders just the live message,
  *  - auto-scroll only pins to the bottom when the user is already there (no fighting manual scrolling).
  */
-import React, { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, memo, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowDown,
@@ -25,20 +25,75 @@ import {
   Terminal,
   Wrench,
 } from "lucide-react";
-import { buildTimeline, type AssistantBlock, type TimelineItem, type ToolResultView } from "@pi-studio/pi-adapter";
+import { buildTimeline, type AssistantBlock, type Timeline, type TimelineItem, type ToolResultView, type ToolRun } from "@pi-studio/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
+import { useActiveRegistry } from "../store/ai-registry-store.ts";
+import { indexSkills, parseSkillBlock, type SkillIndex } from "../lib/ai/skills.ts";
+import { indexSubagents, parseGetResultText, resolveSubagentView, type NotificationDetails, type SubagentIndex } from "../lib/ai/subagents.ts";
+import { SkillLoadCard } from "./transcript/SkillLoadCard.tsx";
+import { SubagentCard } from "./transcript/SubagentCard.tsx";
 import { Markdown } from "./code/Markdown.tsx";
 import { CodeBlock } from "./code/CodeBlock.tsx";
 import { languageFromPath } from "../lib/highlight/languages.ts";
 import { copyText } from "../lib/clipboard.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
 
+export function scrollToToolCall(id: string): void {
+  const sel = CSS.escape(id);
+  const el = document.querySelector(`[data-tool-call-id="${sel}"]`) || document.querySelector(`[data-item-key="${sel}"]`);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("is-flash");
+    setTimeout(() => el.classList.remove("is-flash"), 1600);
+  }
+}
+
+interface TranscriptAnnotations {
+  skills: SkillIndex;
+  subagents: SubagentIndex;
+}
+
+/** Cheap content signature, so a re-index that found nothing new keeps the previous object identity. */
+function annotationsSig(a: TranscriptAnnotations): string {
+  const join = <V,>(m: Map<string, V>, f: (v: V) => string) => [...m].map(([k, v]) => `${k}=${f(v)}`).join("|");
+  return [
+    join(a.skills.loads, (v) => `${v.name}:${v.filePath}`),
+    join(a.skills.usedBy, (v) => v),
+    join(a.subagents.notifications, (v) => `${v.itemKey}:${JSON.stringify(v.details)}`),
+    join(a.subagents.results, (v) => `${v.status}:${v.toolCallId}`),
+    join(a.subagents.cards, (v) => v),
+  ].join("\n");
+}
+
+const TranscriptContext = createContext<{
+  annotations: TranscriptAnnotations;
+  renderNested: (timeline: Timeline) => React.ReactNode;
+} | null>(null);
+
 export const Transcript: React.FC = () => {
   const transcript = useSessionStore((s) => s.transcript);
+  const activeProject = useSessionStore((s) => s.activeProject);
+  const registry = useActiveRegistry();
+
   const timeline = useMemo(() => buildTimeline(transcript), [transcript]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const [showJump, setShowJump] = useState(false);
+
+  // Every row reads this through context, which bypasses TimelineRow's memo. Keep its identity stable
+  // while streaming (the timeline object changes on every token) so settled rows don't all re-render.
+  const annotationsRef = useRef<{ sig: string; value: TranscriptAnnotations } | null>(null);
+  const annotations = useMemo<TranscriptAnnotations>(() => {
+    const pCtx = {
+      cwd: activeProject?.path ?? "",
+      homeDir: registry?.homeDir ?? "",
+    };
+    const value = { skills: indexSkills(timeline, registry, pCtx), subagents: indexSubagents(timeline) };
+    const sig = annotationsSig(value);
+    if (annotationsRef.current?.sig === sig) return annotationsRef.current.value;
+    annotationsRef.current = { sig, value };
+    return value;
+  }, [timeline, registry, activeProject?.path]);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -60,36 +115,59 @@ export const Transcript: React.FC = () => {
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   };
 
+  const renderNested = useCallback(
+    (nestedTimeline: Timeline) => <NestedTimeline timeline={nestedTimeline} />,
+    [],
+  );
+
+  const ctxValue = useMemo(() => ({ annotations, renderNested }), [annotations, renderNested]);
   const empty = timeline.items.length === 0 && !transcript.running;
 
   return (
-    <div className="transcript-wrap">
-      <div ref={scrollRef} className="transcript" onScroll={onScroll}>
-        <div className="transcript__inner">
-          {empty && (
-            <div className="transcript__empty">
-              <div className="transcript__empty-icon">
-                <Sparkles size={20} />
+    <TranscriptContext.Provider value={ctxValue}>
+      <div className="transcript-wrap">
+        <div ref={scrollRef} className="transcript" onScroll={onScroll}>
+          <div className="transcript__inner">
+            {empty && (
+              <div className="transcript__empty">
+                <div className="transcript__empty-icon">
+                  <Sparkles size={20} />
+                </div>
+                <div className="transcript__empty-title">What are we building?</div>
+                <div className="transcript__empty-sub">Ask Pi a question or hand it a task in this project.</div>
               </div>
-              <div className="transcript__empty-title">What are we building?</div>
-              <div className="transcript__empty-sub">Ask Pi a question or hand it a task in this project.</div>
-            </div>
-          )}
-          {timeline.items.map((item) => (
-            <TimelineRow key={item.key} item={item} results={resultsFor(item, timeline.toolResults)} tools={transcript.tools} />
-          ))}
-          {transcript.running && !transcript.streaming && (
-            <div className="transcript__working">
-              <Loader2 size={13} className="spin" /> Working…
-            </div>
-          )}
+            )}
+            {timeline.items.map((item) => (
+              <TimelineRow key={item.key} item={item} results={resultsFor(item, timeline.toolResults)} tools={transcript.tools} />
+            ))}
+            {transcript.running && !transcript.streaming && (
+              <div className="transcript__working">
+                <Loader2 size={13} className="spin" /> Working…
+              </div>
+            )}
+          </div>
         </div>
+        {showJump && (
+          <button className="transcript__jump" onClick={jump} title="Jump to latest">
+            <ArrowDown size={14} />
+          </button>
+        )}
       </div>
-      {showJump && (
-        <button className="transcript__jump" onClick={jump} title="Jump to latest">
-          <ArrowDown size={14} />
-        </button>
-      )}
+    </TranscriptContext.Provider>
+  );
+};
+
+const NestedTimeline: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {timeline.items.map((item) => (
+        <TimelineRow
+          key={item.key}
+          item={item}
+          results={resultsFor(item, timeline.toolResults)}
+          tools={{}}
+        />
+      ))}
     </div>
   );
 };
@@ -113,14 +191,16 @@ const resultSig = (r?: ToolResultView[]) => (r ? r.map((x) => `${x.toolCallId}:$
 
 const TimelineRow = memo(
   ({ item, results, tools }: RowProps) => {
+    const ctx = useContext(TranscriptContext);
+
     switch (item.kind) {
       case "user":
-        return <UserMessage text={item.text} images={item.images} />;
+        return <UserMessage text={item.text} images={item.images} itemKey={item.key} />;
       case "assistant":
-        return <AssistantMessage item={item} results={results ?? []} tools={tools} />;
+        return <AssistantMessage item={item} results={results ?? []} tools={tools} itemKey={item.key} />;
       case "bash":
         return (
-          <div className="msg-tool is-open">
+          <div className="msg-tool is-open" data-item-key={item.key}>
             <div className="msg-tool__head">
               <Terminal size={13} className="msg-tool__icon" />
               <span className="msg-tool__name">Shell</span>
@@ -131,21 +211,47 @@ const TimelineRow = memo(
           </div>
         );
       case "marker":
-        return <div className="msg-marker">{item.text}</div>;
+        return <div className="msg-marker" data-item-key={item.key}>{item.text}</div>;
       case "summary":
         return (
-          <div className="msg-summary">
+          <div className="msg-summary" data-item-key={item.key}>
             <div className="msg-summary__title">{item.variant === "compaction" ? "Context compacted" : "Branch summary"}</div>
             <Markdown text={item.summary} />
           </div>
         );
-      case "custom":
+      case "custom": {
+        if (item.customType === "subagent-notification") {
+          const notif = item.details as NotificationDetails | undefined;
+          const targetCard = notif?.id && ctx ? ctx.annotations.subagents.cards.get(notif.id) : undefined;
+          const isOk = notif?.status === "completed";
+          return (
+            <div className="msg-agent-action-row" data-item-key={item.key}>
+              <Bot size={14} className="msg-agent-action-row__icon" />
+              <span className="msg-agent-action-row__label">Subagent finished:</span>
+              <span className="msg-agent-action-row__target" title={notif?.description || item.text}>
+                {notif?.description || item.text}
+              </span>
+              <span className={`ui-chip ui-chip--${isOk ? "ok" : "danger"}`}>
+                {notif?.status ?? "done"}
+              </span>
+              {targetCard && (
+                <button
+                  className="msg-agent-action-row__link"
+                  onClick={() => scrollToToolCall(targetCard)}
+                >
+                  View agent card
+                </button>
+              )}
+            </div>
+          );
+        }
         return item.text ? (
-          <div className="msg-summary">
+          <div className="msg-summary" data-item-key={item.key}>
             <div className="msg-summary__title">{item.customType}</div>
             <Markdown text={item.text} />
           </div>
         ) : null;
+      }
       default:
         return null;
     }
@@ -163,33 +269,57 @@ const TimelineRow = memo(
 );
 TimelineRow.displayName = "TimelineRow";
 
-const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; data: string }> }> = ({ text, images }) => {
+const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; data: string }>; itemKey: string }> = ({
+  text,
+  images,
+  itemKey,
+}) => {
   const [copied, setCopied] = useState(false);
+  const parsedSkill = useMemo(() => parseSkillBlock(text), [text]);
+
   return (
-    <div className="msg-user">
-      <div className="msg-user__bubble selectable">
-        {images.length > 0 && (
-          <div className="msg-user__images">
-            {images.map((img, i) => (
-              <img key={i} src={`data:${img.mimeType};base64,${img.data}`} alt="attachment" />
-            ))}
+    <div data-item-key={itemKey}>
+      {parsedSkill && (
+        <div style={{ marginBottom: 8 }}>
+          <SkillLoadCard
+            load={{
+              name: parsedSkill.name,
+              body: parsedSkill.body,
+              baseDir: "",
+              filePath: parsedSkill.location,
+              source: "/skill",
+            }}
+          />
+        </div>
+      )}
+      {(!parsedSkill || parsedSkill.rest) && (
+        <div className="msg-user">
+          <div className="msg-user__bubble selectable">
+            {images.length > 0 && (
+              <div className="msg-user__images">
+                {images.map((img, i) => (
+                  <img key={i} src={`data:${img.mimeType};base64,${img.data}`} alt="attachment" />
+                ))}
+              </div>
+            )}
+            {(parsedSkill?.rest || text) && <div className="msg-user__text">{parsedSkill?.rest || text}</div>}
           </div>
-        )}
-        {text && <div className="msg-user__text">{text}</div>}
-      </div>
-      {text && (
-        <button
-          className="msg-action"
-          title="Copy message"
-          onClick={async () => {
-            if (await copyText(text)) {
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1200);
-            }
-          }}
-        >
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-        </button>
+          {(parsedSkill?.rest || text) && (
+            <button
+              className="msg-action"
+              title="Copy message"
+              onClick={async () => {
+                const copyTarget = parsedSkill?.rest || text;
+                if (await copyText(copyTarget)) {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1200);
+                }
+              }}
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -199,7 +329,8 @@ const AssistantMessage: React.FC<{
   item: Extract<TimelineItem, { kind: "assistant" }>;
   results: ToolResultView[];
   tools: ToolRuns;
-}> = ({ item, results, tools }) => {
+  itemKey: string;
+}> = ({ item, results, tools, itemKey }) => {
   const [copied, setCopied] = useState(false);
   const text = item.blocks
     .filter((b): b is Extract<AssistantBlock, { type: "text" }> => b.type === "text")
@@ -208,12 +339,20 @@ const AssistantMessage: React.FC<{
   const lastTextIndex = item.blocks.map((b) => b.type).lastIndexOf("text");
 
   return (
-    <div className="msg-assistant">
+    <div className="msg-assistant" data-item-key={itemKey}>
       {item.blocks.map((block, idx) => {
         if (block.type === "thinking") return <ThinkingBlock key={idx} text={block.thinking} live={item.streaming && idx === item.blocks.length - 1} />;
         if (block.type === "text") return block.text ? <Markdown key={idx} text={block.text} streaming={item.streaming && idx === lastTextIndex} /> : null;
         if (block.type === "toolCall") {
-          return <ToolCall key={block.id || idx} block={block} result={results.find((r) => r.toolCallId === block.id)} running={tools[block.id]?.status === "running"} />;
+          return (
+            <ToolCall
+              key={block.id || idx}
+              block={block}
+              result={results.find((r) => r.toolCallId === block.id)}
+              run={tools[block.id]}
+              running={tools[block.id]?.status === "running"}
+            />
+          );
         }
         return null;
       })}
@@ -332,12 +471,59 @@ function editAsDiff(args: Record<string, unknown>): string | null {
     .join("\n@@\n");
 }
 
-const ToolCall: React.FC<{ block: ToolCallBlockT; result?: ToolResultView; running: boolean }> = ({ block, result, running }) => {
+const ToolCall: React.FC<{
+  block: ToolCallBlockT;
+  result?: ToolResultView;
+  run?: ToolRun;
+  running: boolean;
+}> = ({ block, result, run, running }) => {
+  const ctx = useContext(TranscriptContext);
   const [open, setOpen] = useState(false);
+
+  // 1. Skill load card
+  if (ctx?.annotations.skills.loads.has(block.id)) {
+    const load = ctx.annotations.skills.loads.get(block.id)!;
+    return <SkillLoadCard load={load} toolCallId={block.id} />;
+  }
+
+  // 2. Subagent card (Agent / SubagentWorkflow)
+  if (block.name === "Agent" || block.name === "SubagentWorkflow") {
+    const view = resolveSubagentView({
+      block,
+      run,
+      result,
+      subagentIndex: ctx?.annotations.subagents,
+    });
+    return <SubagentCard view={view} renderNested={ctx?.renderNested} />;
+  }
+
+  // 3. Compact subagent action row (get_subagent_result / steer_subagent)
+  if (block.name === "get_subagent_result" || block.name === "steer_subagent") {
+    const isSteer = block.name === "steer_subagent";
+    const parsed = parseGetResultText(result?.text ?? "");
+    const targetId = parsed.agentId || (typeof block.arguments?.agent_id === "string" ? block.arguments.agent_id : undefined);
+    const targetCard = targetId && ctx ? ctx.annotations.subagents.cards.get(targetId) : undefined;
+    return (
+      <div className="msg-agent-action-row" data-tool-call-id={block.id}>
+        <Bot size={13} className="msg-agent-action-row__icon" />
+        <span className="msg-agent-action-row__label">{isSteer ? "Steer subagent" : "Subagent result"}</span>
+        {targetId && <span className="msg-agent-action-row__target">({targetId.slice(0, 8)})</span>}
+        {parsed.status && <span className="ui-chip ui-chip--neutral">{parsed.status}</span>}
+        {targetCard && (
+          <button className="msg-agent-action-row__link" onClick={() => scrollToToolCall(targetCard)}>
+            Jump to agent
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // 4. Standard tool call
   const meta = TOOL_META[block.name] ?? { icon: <Wrench size={13} />, label: block.name };
   const summary = toolSummary(block.name, block.arguments ?? {});
   const path = str(block.arguments?.path ?? block.arguments?.file_path);
   const status = result ? (result.isError ? "error" : "done") : running || !block.complete ? "running" : "pending";
+  const usedSkill = ctx?.annotations.skills.usedBy.get(block.id);
 
   let body: React.ReactNode = null;
   if (open) {
@@ -373,11 +559,16 @@ const ToolCall: React.FC<{ block: ToolCallBlockT; result?: ToolResultView; runni
   }
 
   return (
-    <div className={`msg-tool${open ? " is-open" : ""}`}>
+    <div className={`msg-tool${open ? " is-open" : ""}`} data-tool-call-id={block.id}>
       <button className="msg-tool__head" onClick={() => setOpen(!open)}>
         <ChevronRight size={13} className="msg-chevron" />
         <span className="msg-tool__icon">{meta.icon}</span>
         <span className="msg-tool__name">{meta.label}</span>
+        {usedSkill && (
+          <span className="msg-tool__skill-badge" title={`Invoked under skill ${usedSkill}`}>
+            <Sparkles size={10} /> skill: {usedSkill}
+          </span>
+        )}
         <span className="msg-tool__arg mono" title={summary}>
           {summary}
         </span>

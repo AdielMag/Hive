@@ -1,0 +1,348 @@
+/* Skill Load Card */
+.msg-skill-card {
+  padding: 10px 14px;
+  background: rgba(var(--accent-rgb), 0.04);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.15s ease;
+}
+.msg-skill-card:hover {
+  border-color: rgba(var(--accent-rgb), 0.35);
+}
+.msg-skill-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.msg-skill-card__icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-subtle);
+  color: var(--accent-base);
+  flex-shrink: 0;
+}
+.msg-skill-card__title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.msg-skill-card__action {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.msg-skill-card__name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.msg-skill-card__desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  padding-left: 36px;
+}
+.msg-skill-card__body {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+/* Subagent Card */
+.msg-agent-card {
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg, 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  transition: border-color 0.15s ease;
+}
+.msg-agent-card.is-running {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.02);
+}
+.msg-agent-card.is-completed {
+  border-color: rgba(var(--success-rgb, 63, 178, 127), 0.3);
+}
+.msg-agent-card.is-error {
+  border-color: rgba(var(--danger-rgb, 229, 83, 75), 0.3);
+}
+.msg-agent-card.is-background {
+  border-color: rgba(var(--accent-rgb), 0.25);
+}
+
+.msg-agent-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.msg-agent-card__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--accent-base);
+  flex-shrink: 0;
+}
+.msg-agent-card__title-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.msg-agent-card__top-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.msg-agent-card__type {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.msg-agent-card__desc {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-agent-card__badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.msg-agent-card__activity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--accent-base);
+}
+.msg-agent-card__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.msg-agent-card__status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.msg-agent-card__status-chip.status-running,
+.msg-agent-card__status-chip.status-queued {
+  background: var(--accent-subtle);
+  color: var(--accent-base);
+}
+.msg-agent-card__status-chip.status-completed {
+  background: rgba(63, 178, 127, 0.15);
+  color: var(--success);
+}
+.msg-agent-card__status-chip.status-error,
+.msg-agent-card__status-chip.status-aborted {
+  background: rgba(229, 83, 75, 0.15);
+  color: var(--danger);
+}
+.msg-agent-card__status-chip.status-background {
+  background: rgba(var(--fg-rgb), 0.08);
+  color: var(--text-muted);
+}
+
+.msg-agent-card__stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 38px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.msg-agent-card__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.msg-agent-card__id {
+  opacity: 0.7;
+}
+
+.msg-agent-card__body {
+  margin-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.msg-agent-card__prompt-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.msg-agent-card__section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.msg-agent-card__section-toggle:hover {
+  color: var(--text-primary);
+}
+.msg-agent-card__prompt-text {
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.msg-agent-card__section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.msg-agent-card__nested-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+.msg-agent-card__empty-hint {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border-radius: 6px;
+  border: 1px dashed var(--border-subtle);
+}
+.msg-agent-card__result-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.msg-agent-card__result-text {
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* Tool call skill badge */
+.msg-tool__skill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-subtle);
+  color: var(--accent-base);
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+/* Subagent compact action row (for get_subagent_result / steer_subagent) */
+.msg-agent-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.msg-agent-action-row__icon {
+  color: var(--accent-base);
+  display: grid;
+  place-items: center;
+}
+.msg-agent-action-row__label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.msg-agent-action-row__target {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-agent-action-row__link {
+  font-size: 11px;
+  color: var(--accent-base);
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+/* Highlight flash animation for jump-to-tool-call */
+.is-flash {
+  animation: flashOutline 1.5s ease-out;
+}
+@keyframes flashOutline {
+  0% {
+    box-shadow: 0 0 0 3px var(--accent-base), 0 0 20px rgba(var(--accent-rgb), 0.5);
+  }
+  100% {
+    box-shadow: none;
+  }
+}

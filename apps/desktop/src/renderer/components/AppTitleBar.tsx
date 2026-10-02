@@ -5,6 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { openProjectFolder } from "../hooks/useGlobalShortcuts.ts";
+import { startUpdateChecks, useUpdates } from "../store/update-store.ts";
 
 interface MenuItem {
   label: string;
@@ -14,26 +15,21 @@ interface MenuItem {
   separator?: boolean;
 }
 
-interface UpdateInfo {
-  hasUpdate: boolean;
-  latestVersion?: string;
-  downloadUrl?: string;
-}
-
 export const AppTitleBar: React.FC = () => {
-  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab } = useSessionStore(
+  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab, openLibraryTab } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       activeTabId: s.activeTabId,
       closeTab: s.closeTab,
       newSessionTab: s.newSessionTab,
       openUsageTab: s.openUsageTab,
+      openLibraryTab: s.openLibraryTab,
     })),
   );
   const ui = useUi(useShallow((s) => ({ openSettings: s.openSettings, toggleLeft: s.toggleLeft, toggleRight: s.toggleRight })));
   const [menu, setMenu] = useState<string | null>(null);
   const [maximized, setMaximized] = useState(false);
-  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const update = useUpdates((s) => s.info);
   const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,17 +39,12 @@ export const AppTitleBar: React.FC = () => {
     window.addEventListener("mousedown", outside);
     void window.studio.isWindowMaximized().then(setMaximized).catch(() => {});
     const off = window.studio.onWindowMaximizedChange(setMaximized);
-    // Check for updates shortly after launch, off the critical path.
-    const t = setTimeout(() => {
-      void window.studio
-        .checkForUpdates()
-        .then((info: UpdateInfo) => info?.hasUpdate && setUpdate(info))
-        .catch(() => {});
-    }, 4000);
+    // Background update checks: shortly after launch, then periodically and on window focus.
+    const stopUpdates = startUpdateChecks();
     return () => {
       window.removeEventListener("mousedown", outside);
       off();
-      clearTimeout(t);
+      stopUpdates();
     };
   }, []);
 
@@ -85,7 +76,8 @@ export const AppTitleBar: React.FC = () => {
       { label: "Files", shortcut: "Ctrl+Shift+E", action: () => ui.toggleLeft("files") },
       { label: "Source Control", shortcut: "Ctrl+Shift+G", action: () => ui.toggleLeft("git") },
       { separator: true, label: "" },
-      { label: "Subscription Limits", shortcut: "Ctrl+Shift+L", action: () => ui.toggleRight("limits") },
+      { label: "AI Tools", action: () => ui.toggleRight("tools") },
+      { label: "Skills & Agents", shortcut: "Ctrl+Shift+K", action: () => openLibraryTab() },
       { label: "Usage Analytics", shortcut: "Ctrl+Shift+U", action: () => openUsageTab() },
       { label: "Terminal", shortcut: "Ctrl+`", action: () => ui.toggleRight("terminal") },
       { separator: true, label: "" },
@@ -149,8 +141,8 @@ export const AppTitleBar: React.FC = () => {
         {update?.hasUpdate && (
           <button
             className="titlebar__update"
-            onClick={() => void window.studio.applyUpdate(update.downloadUrl)}
-            title={`Pi Studio v${update.latestVersion} is available — click to install`}
+            onClick={() => ui.openSettings("updates")}
+            title={`Pi Studio v${update.latestVersion} is available — click for details`}
           >
             <Download size={11} /> Update v{update.latestVersion}
           </button>

@@ -1,13 +1,13 @@
 /** Bottom status bar on the window frame: Pi version, run state, extension statuses, live quota meters. */
-import React, { useMemo } from "react";
-import { BarChart3 } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { BarChart3, Gauge, RefreshCw, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { parseAnsi } from "@pi-studio/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
-import { useUi } from "../store/ui-store.ts";
-import { useInsights, useQuotaPolling } from "../features/insights/insights-store.ts";
-import { usageTone } from "../features/insights/QuotaPanel.tsx";
-import { formatCost } from "../lib/format.ts";
+import { useInsights, useNow, useQuotaPolling } from "../features/insights/insights-store.ts";
+import { ProviderQuotaCard, usageTone } from "../features/insights/quota-ui.tsx";
+import { formatAgo, formatCost } from "../lib/format.ts";
 
 const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "openai-codex": "Codex" };
 const TONE_COLOR = { ok: "#3fb27f", warn: "#e0a43a", danger: "#e5534b" } as const;
@@ -21,9 +21,18 @@ export const StatusBar: React.FC = () => {
     useShallow((s) => ({ bootstrap: s.bootstrap, extensionStatus: s.extensionStatus, running: s.transcript.running, cost: s.stats?.cost ?? 0 })),
   );
   const quota = useInsights((s) => s.quota);
-  const toggleRight = useUi((s) => s.toggleRight);
+  const quotaLoading = useInsights((s) => s.quotaLoading);
+  const refreshQuota = useInsights((s) => s.refreshQuota);
   const openUsageTab = useSessionStore((s) => s.openUsageTab);
   const piVersion = bootstrap?.pi.ok ? bootstrap.pi.info.version : "not found";
+  const now = useNow(30_000);
+
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [popoverPos, setPopoverPos] = useState<{ bottom: number; right: number }>({ bottom: 32, right: 16 });
+
+  const meterBtnRef = useRef<HTMLButtonElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const meters = useMemo(
     () =>
@@ -37,6 +46,59 @@ export const StatusBar: React.FC = () => {
         }),
     [quota],
   );
+
+  const subscriptions = useMemo(
+    () => (quota?.providers ?? []).filter((p) => p.status !== "unsupported"),
+    [quota],
+  );
+
+  const updatePopoverPos = () => {
+    if (meterBtnRef.current) {
+      const rect = meterBtnRef.current.getBoundingClientRect();
+      const bottom = Math.max(32, window.innerHeight - rect.top + 8);
+      const right = Math.max(16, window.innerWidth - rect.right);
+      setPopoverPos({ bottom, right });
+    }
+  };
+
+  const handleMouseEnter = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    updatePopoverPos();
+    setPopoverOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (pinned) return;
+    closeTimerRef.current = setTimeout(() => {
+      setPopoverOpen(false);
+    }, 150);
+  };
+
+  const handleClick = () => {
+    updatePopoverPos();
+    if (!popoverOpen) {
+      setPopoverOpen(true);
+      setPinned(true);
+    } else {
+      setPinned((prev) => !prev);
+    }
+  };
+
+  // Close on Escape or click outside when pinned
+  useEffect(() => {
+    if (!popoverOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPinned(false);
+        setPopoverOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [popoverOpen]);
 
   return (
     <footer className="statusbar">
@@ -62,7 +124,18 @@ export const StatusBar: React.FC = () => {
       </div>
 
       {meters.length > 0 && (
-        <button className="sb-quota" onClick={() => toggleRight("limits")} title="Subscription limits — click for details">
+        <button
+          ref={meterBtnRef}
+          className={`sb-quota${popoverOpen ? " is-active" : ""}`}
+          onClick={handleClick}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onFocus={handleMouseEnter}
+          onBlur={handleMouseLeave}
+          title="Subscription limits — hover or click for full window details"
+          aria-haspopup="dialog"
+          aria-expanded={popoverOpen}
+        >
           {meters.map((m) => (
             <span key={m.id} className="sb-quota__item">
               <span>{m.label}</span>
@@ -81,6 +154,66 @@ export const StatusBar: React.FC = () => {
       <button className="statusbar__btn" onClick={openUsageTab} title="Usage analytics">
         <BarChart3 size={12} />
       </button>
+
+      {popoverOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="quota-popover"
+            style={{ bottom: popoverPos.bottom, right: popoverPos.right }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            role="dialog"
+            aria-label="Subscription limits"
+          >
+            <div className="quota-popover__head">
+              <div className="quota-popover__title">
+                <Gauge size={14} /> Subscription limits
+                {pinned && <span className="quota-popover__pin-hint">(pinned)</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button
+                  className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
+                  onClick={() => void refreshQuota(true)}
+                  title="Refresh now"
+                  disabled={quotaLoading}
+                >
+                  <RefreshCw size={12} className={quotaLoading ? "spin" : undefined} />
+                </button>
+                {pinned && (
+                  <button
+                    className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
+                    onClick={() => {
+                      setPinned(false);
+                      setPopoverOpen(false);
+                    }}
+                    title="Close popover (Esc)"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="quota-popover__body ui-scroll">
+              {subscriptions.length === 0 ? (
+                <div className="ui-empty" style={{ padding: "16px 8px" }}>
+                  <Gauge size={20} />
+                  <div>No subscription accounts connected</div>
+                </div>
+              ) : (
+                subscriptions.map((p) => <ProviderQuotaCard key={p.providerId} provider={p} now={now} />)
+              )}
+            </div>
+
+            {quota && (
+              <div className="quota-popover__foot">
+                Updated {formatAgo(quota.fetchedAt, now)} · auto-refreshes every 2 min
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
     </footer>
   );
 };

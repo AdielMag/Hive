@@ -4,17 +4,17 @@
  */
 import { create } from "zustand";
 import type { SettingsTabId } from "../components/SettingsModal.tsx";
+import {
+  clamp,
+  LIMITS,
+  sanitizeLayout,
+  type LeftPanel,
+  type RightPanel,
+  type PersistedLayout as Persisted,
+} from "./layout-persist.ts";
 
-export type LeftPanel = "projects" | "files" | "git" | "branches";
-export type RightPanel = "limits" | "context" | "terminal" | "marketplace";
-
-interface Persisted {
-  left: LeftPanel | null;
-  right: RightPanel | null;
-  leftWidth: number;
-  rightWidth: number;
-  composerHeight: number;
-}
+export type { LeftPanel, RightPanel };
+export { LIMITS };
 
 interface UiState extends Persisted {
   settingsOpen: boolean;
@@ -29,25 +29,12 @@ interface UiState extends Persisted {
 }
 
 const KEY = "pi-studio.layout.v1";
-export const LIMITS = {
-  leftWidth: [200, 560] as const,
-  rightWidth: [260, 760] as const,
-  composerHeight: [96, 480] as const,
-};
-const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.max(lo, Math.min(hi, v));
 
 function load(): Persisted {
   const fallback: Persisted = { left: "projects", right: null, leftWidth: 268, rightWidth: 360, composerHeight: 150 };
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<Persisted> | null;
-    if (!raw) return fallback;
-    return {
-      left: raw.left === undefined ? fallback.left : raw.left,
-      right: raw.right === undefined ? fallback.right : raw.right,
-      leftWidth: clamp(Number(raw.leftWidth) || fallback.leftWidth, LIMITS.leftWidth),
-      rightWidth: clamp(Number(raw.rightWidth) || fallback.rightWidth, LIMITS.rightWidth),
-      composerHeight: clamp(Number(raw.composerHeight) || fallback.composerHeight, LIMITS.composerHeight),
-    };
+    return sanitizeLayout(raw, fallback);
   } catch {
     return fallback;
   }

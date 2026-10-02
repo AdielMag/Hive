@@ -5,9 +5,9 @@
 import React, { Suspense, lazy, useCallback, useRef, useState } from "react";
 import {
   BarChart3,
+  Blocks,
   Files,
   FolderKanban,
-  Gauge,
   GitBranch,
   GitCommit,
   PieChart,
@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   Sparkles,
   Terminal as TerminalIcon,
+  Wrench,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "./Sidebar.tsx";
@@ -29,7 +30,6 @@ import { StatusBar } from "./StatusBar.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { SessionErrorBanner } from "./SessionErrorBanner.tsx";
-import { QuotaPanel } from "../features/insights/QuotaPanel.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
 import { useGlobalShortcuts } from "../hooks/useGlobalShortcuts.ts";
@@ -44,14 +44,16 @@ const TerminalPanel = named(() => import("./TerminalPanel.tsx"), "TerminalPanel"
 const SettingsModal = named(() => import("./SettingsModal.tsx"), "SettingsModal");
 const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
 const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel");
+const ToolsPanel = named(() => import("./ToolsPanel.tsx"), "ToolsPanel");
 const UsageView = named(() => import("../features/insights/UsageView.tsx"), "UsageView");
+const LibraryView = named(() => import("../features/library/LibraryView.tsx"), "LibraryView");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
 
 export const WorkbenchLayout: React.FC = () => {
   useGlobalShortcuts();
-  const { activeProject, tabs, activeTabId, error, openUsageTab } = useSessionStore(
-    useShallow((s) => ({ activeProject: s.activeProject, tabs: s.tabs, activeTabId: s.activeTabId, error: s.error, openUsageTab: s.openUsageTab })),
+  const { activeProject, tabs, activeTabId, error, openUsageTab, openLibraryTab } = useSessionStore(
+    useShallow((s) => ({ activeProject: s.activeProject, tabs: s.tabs, activeTabId: s.activeTabId, error: s.error, openUsageTab: s.openUsageTab, openLibraryTab: s.openLibraryTab })),
   );
   const ui = useUi(
     useShallow((s) => ({
@@ -87,6 +89,7 @@ export const WorkbenchLayout: React.FC = () => {
           <RailButton icon={<GitCommit size={18} />} title="Commits & Staging (Ctrl+Shift+G)" active={ui.left === "git"} onClick={() => ui.toggleLeft("git")} />
           <RailButton icon={<GitBranch size={18} />} title="Branches & History" active={ui.left === "branches"} onClick={() => ui.toggleLeft("branches")} />
           <div className="rail__spacer" />
+          <RailButton icon={<Blocks size={18} />} title="Skills & Agents (Ctrl+Shift+K)" active={activeTab?.kind === "library"} onClick={openLibraryTab} />
           <RailButton icon={<BarChart3 size={18} />} title="Usage analytics (Ctrl+Shift+U)" active={activeTab?.kind === "usage"} onClick={openUsageTab} />
           <RailButton icon={<Settings size={18} />} title="Settings (Ctrl+,)" active={ui.settingsOpen} onClick={() => ui.openSettings()} />
         </nav>
@@ -110,6 +113,8 @@ export const WorkbenchLayout: React.FC = () => {
               <Suspense fallback={<Loading />}>
               {activeTab?.kind === "usage" ? (
                 <UsageView />
+              ) : activeTab?.kind === "library" ? (
+                <LibraryView />
               ) : activeTab?.kind === "file" ? (
                 <FileViewerTab tab={activeTab} />
               ) : activeTab?.kind === "diff" ? (
@@ -136,7 +141,7 @@ export const WorkbenchLayout: React.FC = () => {
 
         {/* Right rail */}
         <nav className="rail rail--right">
-          <RailButton icon={<Gauge size={18} />} title="Subscription limits (Ctrl+Shift+L)" active={ui.right === "limits"} onClick={() => ui.toggleRight("limits")} />
+          <RailButton icon={<Wrench size={18} />} title="AI tools" active={ui.right === "tools"} onClick={() => ui.toggleRight("tools")} />
           <RailButton icon={<PieChart size={18} />} title="Context breakdown" active={ui.right === "context"} onClick={() => ui.toggleRight("context")} />
           <RailButton icon={<TerminalIcon size={18} />} title="Terminal (Ctrl+`)" active={ui.right === "terminal"} onClick={() => ui.toggleRight("terminal")} />
           <RailButton icon={<ShoppingBag size={18} />} title="Marketplace" active={ui.right === "marketplace"} onClick={() => ui.toggleRight("marketplace")} />
@@ -158,7 +163,7 @@ const LeftPanelContent: React.FC<{ panel: LeftPanel }> = ({ panel }) =>
   panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : panel === "branches" ? <BranchesPanel /> : <GitPanel />;
 
 const RightPanelContent: React.FC<{ panel: RightPanel }> = ({ panel }) =>
-  panel === "limits" ? <QuotaPanel /> : panel === "context" ? <ContextBreakdownPanel /> : panel === "terminal" ? <TerminalPanel /> : <MarketplacePanel />;
+  panel === "tools" ? <ToolsPanel /> : panel === "context" ? <ContextBreakdownPanel /> : panel === "terminal" ? <TerminalPanel /> : <MarketplacePanel />;
 
 const SessionView: React.FC = () => {
   const composerHeight = useUi((s) => s.composerHeight);

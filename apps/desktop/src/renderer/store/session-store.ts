@@ -78,6 +78,8 @@ export interface SessionStoreState {
   openDiffTab: (filePath: string, staged: boolean, projectId: string) => Promise<void>;
   /** Open (or focus) the singleton Usage analytics tab. */
   openUsageTab: () => void;
+  /** Open (or focus) the singleton Skills & Agents library tab. */
+  openLibraryTab: () => void;
   switchTab: (tabId: string) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
   setPromptText: (text: string) => void;
@@ -184,6 +186,7 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
   }
 }
 export const USAGE_TAB_ID = "studio:usage";
+export const LIBRARY_TAB_ID = "studio:library";
 
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   bootstrap: null,
@@ -608,10 +611,19 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set({ activeTabId: USAGE_TAB_ID });
   },
 
+  openLibraryTab: () => {
+    const { tabs } = get();
+    if (!tabs.some((t) => t.id === LIBRARY_TAB_ID)) {
+      const tab: TabItem = { id: LIBRARY_TAB_ID, kind: "library", projectId: "", title: "Skills & Agents", pinned: false };
+      set({ tabs: [...tabs, tab] });
+    }
+    set({ activeTabId: LIBRARY_TAB_ID });
+  },
+
   switchTab: async (tabId: string) => {
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
-    if (tab.kind === "usage") {
+    if (tab.kind === "usage" || tab.kind === "library") {
       set({ activeTabId: tabId });
       return;
     }

@@ -31,7 +31,7 @@ export function useGlobalShortcuts(): void {
       else if (key === "g" && e.shiftKey) ui.toggleLeft("git");
       else if (key === "`") ui.toggleRight("terminal");
       else if (key === "u" && e.shiftKey) s.openUsageTab();
-      else if (key === "l" && e.shiftKey) ui.toggleRight("limits");
+      else if (key === "k" && e.shiftKey) s.openLibraryTab();
       else if (key === "=" || key === "+") window.studio.zoom("in");
       else if (key === "-") window.studio.zoom("out");
       else if (key === "0") window.studio.zoom("reset");

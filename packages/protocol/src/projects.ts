@@ -56,7 +56,7 @@ export type AgentMode = "plan" | "auto-edit" | "manual" | "debug";
 
 export interface TabItem {
   id: string; // tab identifier (usually sessionPath or temp id)
-  kind?: "session" | "file" | "diff" | "usage";
+  kind?: "session" | "file" | "diff" | "usage" | "library";
   sessionPath?: string;
   projectId: string;
   title: string;

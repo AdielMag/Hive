@@ -32,6 +32,12 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     ctx = createAppContext(() => mainWindow);
     registerIpc(ctx);
+    // Give models added since the last save their percentage-based compaction values.
+    try {
+      ctx.models.reapplyCompaction();
+    } catch (err) {
+      console.error("Failed to re-apply compaction settings", err);
+    }
     mainWindow = createMainWindow();
     mainWindow.on("closed", () => {
       mainWindow = null;
