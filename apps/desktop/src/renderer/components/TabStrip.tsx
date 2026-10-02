@@ -34,7 +34,7 @@ export const TabStrip: React.FC = () => {
         const unseen = !busy && (activity === "done" || activity === "error") ? activity : undefined;
         // Parked (non-displayed) session state: a question waiting for you, or an unsent draft.
         const parked = isSession && !active ? tabUi[tab.id] : undefined;
-        const needsInput = !!parked?.pendingUiDialog;
+        const needsInput = !!parked?.pendingUiDialog || !!parked?.pendingForm;
         const dotKind = needsInput ? "input" : unseen;
         const draft = hasDraft(parked);
         const stateLabel =

@@ -138,6 +138,7 @@ export const IPC = {
   rpc: "session:rpc",
   uiResponse: "session:ui-response",
   bridgeAction: "session:bridge-action",
+  bridgeEmit: "session:bridge-emit",
   setLinkedProjects: "session:set-linked-projects",
   evtEvents: "session:events",
   evtStatus: "session:status",
@@ -352,6 +353,8 @@ export interface StudioApi {
   rpc(key: string, command: StudioRpcCommand): Promise<RpcResult>;
   respondUi(key: string, response: RpcExtensionUIResponse): Promise<void>;
   bridgeAction(key: string, action: BridgeActionRequest): Promise<BridgeActionResult>;
+  /** Publish on the session's `pi.events` bus (e.g. answer a question form on `BRIDGE_TOPICS.fromGui`). */
+  bridgeEmit(key: string, topic: string, data: unknown): Promise<void>;
   setLinkedProjects(key: string, links: LinkedProject[]): Promise<void>;
   /** Absolute path of a dropped/picked File (Electron webUtils). */
   getPathForFile(file: File): string;

@@ -27,6 +27,7 @@ import { ContextBreakdownPanel } from "./ContextBreakdownPanel.tsx";
 import { AppTitleBar } from "./AppTitleBar.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
+import { QuestionFormModal } from "./QuestionFormModal.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { SessionErrorBanner } from "./SessionErrorBanner.tsx";
 import { useSessionStore } from "../store/session-store.ts";
@@ -150,6 +151,7 @@ export const WorkbenchLayout: React.FC = () => {
 
       <StatusBar />
       <ExtensionDialogModal />
+      <QuestionFormModal />
       {ui.settingsOpen && (
         <Suspense fallback={null}>
           <SettingsModal isOpen initialTab={ui.settingsTab} onClose={ui.closeSettings} />

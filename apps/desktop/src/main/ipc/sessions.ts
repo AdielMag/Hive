@@ -1,4 +1,5 @@
 import {
+  BRIDGE_TOPICS,
   IPC,
   type BridgeActionRequest,
   type LinkedProject,
@@ -21,6 +22,10 @@ export function registerSessionIpc(ctx: AppContext): void {
   handle(IPC.rpc, (key: string, cmd: StudioRpcCommand) => ctx.sessions?.executeRpc(key, cmd) ?? NO_PI);
   handle(IPC.uiResponse, (key: string, res: RpcExtensionUIResponse) => ctx.sessions?.respondUi(key, res));
   handle(IPC.bridgeAction, (key: string, action: BridgeActionRequest) => ctx.sessions?.executeBridgeAction(key, action) ?? NO_PI);
+  // The renderer may only publish on the GUI->extension topic, not arbitrary bus channels.
+  handle(IPC.bridgeEmit, (key: string, topic: string, data: unknown) =>
+    topic === BRIDGE_TOPICS.fromGui ? ctx.sessions?.emitToBridge(key, topic, data) : undefined,
+  );
   handle(IPC.setLinkedProjects, (key: string, links: LinkedProject[]) => ctx.sessions?.setLinkedProjects(key, links));
 
   // Projects & catalog

@@ -59,6 +59,10 @@ const api: StudioApi = {
     return ipcRenderer.invoke(IPC.bridgeAction, key, action);
   },
 
+  bridgeEmit(key: string, topic: string, data: unknown): Promise<void> {
+    return ipcRenderer.invoke(IPC.bridgeEmit, key, topic, data);
+  },
+
   setLinkedProjects(key: string, links: LinkedProject[]): Promise<void> {
     return ipcRenderer.invoke(IPC.setLinkedProjects, key, links);
   },

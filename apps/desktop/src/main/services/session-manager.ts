@@ -1,6 +1,7 @@
 import { type BrowserWindow } from "electron";
 import { PiRpcConnection } from "@hive/pi-adapter/node";
 import {
+  BRIDGE_PROTOCOL_VERSION,
   IPC,
   type BridgeActionRequest,
   type BridgeActionResult,
@@ -201,6 +202,13 @@ export class MainSessionManager {
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
+  }
+
+  /** Publish on the session's `pi.events` bus via the bridge (no-op if the session or bridge is gone). */
+  async emitToBridge(key: string, topic: string, data: unknown): Promise<void> {
+    const session = this.sessions.get(key);
+    if (!session) return;
+    await session.bridge.send({ v: BRIDGE_PROTOCOL_VERSION, type: "emit", topic, data });
   }
 
   async setLinkedProjects(key: string, links: LinkedProject[]): Promise<void> {

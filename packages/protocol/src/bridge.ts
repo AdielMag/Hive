@@ -46,8 +46,94 @@ export const BRIDGE_CAPABILITIES = [
   "actions:navigate_tree",
   "actions:reload",
   "actions:refresh_models",
+  "ui:form",
 ] as const;
 export type BridgeCapability = (typeof BRIDGE_CAPABILITIES)[number];
+
+/**
+ * Question forms (capability "ui:form"). Pi's own extension-UI protocol only has select/confirm/input/
+ * editor, so extensions that want a multi-question form in Studio (e.g. `questionnaire`) exchange these
+ * records over the `pi.events` topics above, discriminated by `kind`:
+ *   extension -> Studio on `toGui`:   StudioFormRequest | StudioFormCancel
+ *   Studio -> extension on `fromGui`: StudioFormResult
+ * Extensions live outside this repo and cannot import this package: they must mirror these shapes.
+ */
+export interface StudioFormOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+export interface StudioFormQuestion {
+  id: string;
+  /** Short tab/section label. */
+  label: string;
+  prompt: string;
+  options: StudioFormOption[];
+  /** Offer a free-text answer next to the options. */
+  allowOther: boolean;
+}
+
+export interface StudioFormRequest {
+  kind: "form";
+  /** Correlates the request with its result / cancel. */
+  id: string;
+  title?: string;
+  questions: StudioFormQuestion[];
+}
+
+/** The extension gave up (agent aborted): Studio should close the form without answering. */
+export interface StudioFormCancel {
+  kind: "form_cancel";
+  id: string;
+}
+
+export interface StudioFormAnswer {
+  id: string;
+  /** Option value, or the typed text when `wasCustom`. */
+  value: string;
+  /** Option label, or the typed text when `wasCustom`. */
+  label: string;
+  wasCustom: boolean;
+  /** 1-based position of the chosen option (omitted for custom text). */
+  index?: number;
+}
+
+export interface StudioFormResult {
+  kind: "form_result";
+  id: string;
+  cancelled: boolean;
+  answers: StudioFormAnswer[];
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+
+const isOptString = (v: unknown): v is string | undefined => v === undefined || typeof v === "string";
+
+/**
+ * Narrow a bridge `event` payload to a usable form request. Payloads come from third-party extensions and
+ * end up in React, so reject anything the modal could not render or the user could not answer: bad field
+ * types, no questions, a question with neither options nor free text, or duplicate question ids.
+ */
+export function isStudioFormRequest(value: unknown): value is StudioFormRequest {
+  if (!isRecord(value) || value.kind !== "form" || typeof value.id !== "string" || !isOptString(value.title)) return false;
+  if (!Array.isArray(value.questions) || value.questions.length === 0) return false;
+  const ids = new Set<string>();
+  for (const q of value.questions) {
+    if (!isRecord(q) || typeof q.id !== "string" || ids.has(q.id)) return false;
+    ids.add(q.id);
+    if (typeof q.prompt !== "string" || !isOptString(q.label) || typeof q.allowOther !== "boolean") return false;
+    if (!Array.isArray(q.options) || (q.options.length === 0 && !q.allowOther)) return false;
+    for (const o of q.options) {
+      if (!isRecord(o) || typeof o.value !== "string" || typeof o.label !== "string" || !isOptString(o.description)) return false;
+    }
+  }
+  return true;
+}
+
+export function isStudioFormCancel(value: unknown): value is StudioFormCancel {
+  return isRecord(value) && value.kind === "form_cancel" && typeof value.id === "string";
+}
 
 export interface LinkedProject {
   /** Absolute path of the linked folder. */

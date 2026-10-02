@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import {
+  BRIDGE_TOPICS,
+  isStudioFormCancel,
+  isStudioFormRequest,
   type AgentMode,
   type AttachedItem,
   type Bootstrap,
@@ -11,6 +14,8 @@ import {
   type SessionStats,
   type SessionStatusUpdate,
   type StudioApi,
+  type StudioFormRequest,
+  type StudioFormResult,
   type TabItem,
 } from "@hive/protocol";
 import {
@@ -39,6 +44,8 @@ export interface TabUiState {
   promptText: string;
   attachments: AttachedItem[];
   pendingUiDialog: RpcExtensionUIRequest | null;
+  /** Multi-question form from an extension (bridge capability "ui:form"). */
+  pendingForm: StudioFormRequest | null;
   extensionWidgets: Record<string, ExtensionWidgetState>;
   extensionStatus: Record<string, string>;
 }
@@ -47,6 +54,7 @@ const EMPTY_TAB_UI: TabUiState = {
   promptText: "",
   attachments: [],
   pendingUiDialog: null,
+  pendingForm: null,
   extensionWidgets: {},
   extensionStatus: {},
 };
@@ -93,6 +101,7 @@ export interface SessionStoreState {
   extensionWidgets: Record<string, ExtensionWidgetState>;
   extensionStatus: Record<string, string>;
   pendingUiDialog: RpcExtensionUIRequest | null;
+  pendingForm: StudioFormRequest | null;
   promptText: string;
   attachments: AttachedItem[];
   isLoadingModels: boolean;
@@ -129,6 +138,8 @@ export interface SessionStoreState {
   setMode: (mode: AgentMode) => void;
   clearError: () => void;
   respondDialog: (response: RpcExtensionUIResponse) => Promise<void>;
+  /** Answer (or cancel) the displayed tab's pending question form. */
+  respondForm: (result: Omit<StudioFormResult, "kind">) => Promise<void>;
   deleteSessionFile: (sessionPath: string) => Promise<void>;
   /** Delete a specific queued message from steering or follow-up queue. */
   deleteQueuedMessage: (type: "steering" | "followUp", index: number) => Promise<void>;
@@ -183,6 +194,7 @@ function swapInSessionTab(nextTabId: string): Partial<SessionStoreState> {
       promptText: s.promptText,
       attachments: s.attachments,
       pendingUiDialog: s.pendingUiDialog,
+      pendingForm: s.pendingForm,
       extensionWidgets: s.extensionWidgets,
       extensionStatus: s.extensionStatus,
     };
@@ -275,6 +287,8 @@ function dropSessionKey(key: string, crashed = false): void {
     const wasRunning = useSessionStore.getState().sessionActivity[tabId] === "running";
     runErrored.delete(tabId);
     if (wasRunning) setActivity(tabId, crashed && !isTabInView(tabId) ? "error" : null);
+    // Nobody is left to answer a pending dialog/form; leaving it open would block the whole window.
+    updateTabUi(tabId, () => ({ pendingUiDialog: null, pendingForm: null }));
   }
   useSessionStore.setState((s) => ({
     tabs: s.tabs.map((t) => (t.activeKey === key ? { ...t, activeKey: undefined, isCold: true } : t)),
@@ -421,6 +435,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   extensionWidgets: {},
   extensionStatus: {},
   pendingUiDialog: null,
+  pendingForm: null,
   promptText: "",
   attachments: [],
   isLoadingModels: false,
@@ -521,6 +536,30 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
         if (["select", "confirm", "input", "editor"].includes(request.method)) {
           updateTabUi(tabId, () => ({ pendingUiDialog: request }));
+        }
+      });
+
+      // Question forms ride on the bridge's event bus (Pi's RPC UI protocol has no multi-question dialog).
+      window.studio.onBridgeMessage(({ key, message }) => {
+        if (message.type !== "event" || message.topic !== BRIDGE_TOPICS.toGui) return;
+        const tabId = key === get().activeKey && displayedSessionTabId ? displayedSessionTabId : tabIdForKey(key);
+        if (!tabId) return;
+        if (isStudioFormRequest(message.data)) {
+          const form = message.data;
+          const st = useSessionStore.getState();
+          const previous = (isDisplayed(tabId) ? st.pendingForm : st.tabUi[tabId]?.pendingForm) ?? null;
+          // Tell the extension its form arrived (it falls back to plain dialogs if nobody acks).
+          void window.studio.bridgeEmit(key, BRIDGE_TOPICS.fromGui, { kind: "form_ack", id: form.id }).catch(() => {});
+          // A newer form replaces an unanswered one: release the older request instead of leaving it hanging.
+          if (previous && previous.id !== form.id) {
+            void window.studio
+              .bridgeEmit(key, BRIDGE_TOPICS.fromGui, { kind: "form_result", id: previous.id, cancelled: true, answers: [] })
+              .catch(() => {});
+          }
+          updateTabUi(tabId, () => ({ pendingForm: form }));
+        } else if (isStudioFormCancel(message.data)) {
+          const { id } = message.data;
+          updateTabUi(tabId, (s) => (s.pendingForm?.id === id ? { pendingForm: null } : {}));
         }
       });
 
@@ -1204,6 +1243,18 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (!activeKey) return;
     await window.studio.respondUi(activeKey, response);
     set({ pendingUiDialog: null });
+  },
+
+  respondForm: async (result) => {
+    const { activeKey, pendingForm } = get();
+    if (!pendingForm) return;
+    set({ pendingForm: null });
+    if (!activeKey) return; // session already gone: just close the form
+    try {
+      await window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, { kind: "form_result", ...result });
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+    }
   },
 
   deleteSessionFile: async (sessionPath: string) => {
