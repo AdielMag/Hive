@@ -7,6 +7,9 @@
  * focus, so any check (including Settings' "Check now") lights up the badge.
  */
 import { create } from "zustand";
+import type { UpdateProgress } from "@pi-studio/protocol";
+
+export type { UpdateProgress };
 
 export interface UpdateInfo {
   hasUpdate: boolean;
@@ -26,13 +29,37 @@ interface UpdateState {
   info: UpdateInfo | null;
   checking: boolean;
   lastCheckedAt: number;
+  /** Live state of a "Download & install" run; null when idle. */
+  install: UpdateProgress | null;
   check(): Promise<void>;
+  applyUpdate(): Promise<void>;
 }
+
+/** True while an install is in flight (button should be disabled, progress shown). */
+export const isInstalling = (p: UpdateProgress | null): boolean => p?.phase === "downloading" || p?.phase === "launching";
 
 export const useUpdates = create<UpdateState>((set, get) => ({
   info: null,
   checking: false,
   lastCheckedAt: 0,
+  install: null,
+  applyUpdate: async () => {
+    const url = get().info?.downloadUrl;
+    if (isInstalling(get().install)) return;
+    set({ install: { phase: "downloading", received: 0 } });
+    const off = window.studio.onUpdateProgress((install) => set({ install }));
+    try {
+      const res = await window.studio.applyUpdate(url);
+      const cur = get().install;
+      if (!res.success) set({ install: { phase: "error", received: 0, message: res.message } });
+      // Opened in the browser (no in-app download): clear the progress UI after a moment.
+      else if (cur?.phase === "browser" || cur?.phase === "error") setTimeout(() => set({ install: null }), 4_000);
+    } catch (err) {
+      set({ install: { phase: "error", received: 0, message: err instanceof Error ? err.message : String(err) } });
+    } finally {
+      off();
+    }
+  },
   check: async () => {
     if (get().checking) return;
     set({ checking: true });

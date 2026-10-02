@@ -16,7 +16,21 @@ export function registerAccountIpc(ctx: AppContext): void {
   );
 
   handle(IPC.updaterCheck, () => ctx.updater.checkForUpdates());
-  handle(IPC.updaterApply, ({ downloadUrl }: { downloadUrl?: string }) => ctx.updater.applyUpdate(downloadUrl));
+  handle(IPC.updaterApply, ({ downloadUrl }: { downloadUrl?: string }) =>
+    ctx.updater.applyUpdate(downloadUrl, (progress) => {
+      const win = ctx.getWindow();
+      if (!win || win.isDestroyed()) return;
+      win.webContents.send(IPC.evtUpdaterProgress, progress);
+      // Mirror the download in the OS taskbar / dock icon.
+      if (progress.phase === "downloading") {
+        win.setProgressBar(progress.total ? progress.received / progress.total : 2); // >1 = indeterminate
+      } else if (progress.phase === "launching") {
+        win.setProgressBar(1);
+      } else {
+        win.setProgressBar(-1);
+      }
+    }),
+  );
 
   handle(IPC.modelsGetCatalog, () => ctx.models.getModelsCatalog());
   handle(IPC.modelsSaveEnabled, ({ enabledModels }: { enabledModels: string[] }) =>

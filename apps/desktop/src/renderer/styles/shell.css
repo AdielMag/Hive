@@ -112,6 +112,12 @@
   font-weight: 600;
   cursor: pointer;
 }
+/* While installing, the badge fills left→right like a progress bar. */
+.titlebar__update.is-installing {
+  background: linear-gradient(90deg, rgba(87, 171, 90, 0.45) var(--update-pct, 0%), rgba(87, 171, 90, 0.12) var(--update-pct, 0%));
+  font-variant-numeric: tabular-nums;
+  transition: background 0.2s ease-out;
+}
 .caption-btn {
   width: 46px;
   height: 100%;

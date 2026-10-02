@@ -1,5 +1,6 @@
 import { app, shell } from "electron";
 import { compareVersions } from "@pi-studio/pi-adapter";
+import type { UpdateProgress } from "@pi-studio/protocol";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -76,52 +77,74 @@ export class AppUpdaterService {
     }
   }
 
-  async applyUpdate(downloadUrl?: string): Promise<{ success: boolean; message: string }> {
+  async applyUpdate(
+    downloadUrl?: string,
+    onProgress: (progress: UpdateProgress) => void = () => {},
+  ): Promise<{ success: boolean; message: string }> {
     if (!downloadUrl) return { success: false, message: "No download URL provided" };
+
+    const openInBrowser = async (message: string) => {
+      await shell.openExternal(downloadUrl);
+      onProgress({ phase: "browser", received: 0, message });
+      return { success: true, message };
+    };
 
     // If it's a web URL or github page, open in default browser
     if (downloadUrl.startsWith("http") && (downloadUrl.includes("/releases/tag") || downloadUrl.includes("/releases/latest"))) {
-      await shell.openExternal(downloadUrl);
-      return { success: true, message: "Opened release in browser" };
+      return openInBrowser("Opened release in browser");
     }
 
     // Direct binary download for Windows installer (.exe)
     if (process.platform === "win32" && downloadUrl.endsWith(".exe")) {
+      onProgress({ phase: "downloading", received: 0 });
       try {
         const tempDir = join(tmpdir(), "pi-studio-update");
         if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
         const installerPath = join(tempDir, "Pi-Studio-Update.exe");
 
         const res = await fetch(downloadUrl);
-        if (!res.ok || !res.body) {
-          await shell.openExternal(downloadUrl);
-          return { success: true, message: "Opened download link in browser" };
-        }
+        if (!res.ok || !res.body) return openInBrowser("Opened download link in browser");
+
+        const totalHeader = Number(res.headers.get("content-length"));
+        const total = Number.isFinite(totalHeader) && totalHeader > 0 ? totalHeader : undefined;
+        let received = 0;
+        let lastEmit = 0;
 
         const fileStream = createWriteStream(installerPath);
+        const finished = new Promise<void>((resolve, reject) => {
+          fileStream.on("finish", () => resolve());
+          fileStream.on("error", reject);
+        });
         const reader = res.body.getReader();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          fileStream.write(value);
+          received += value.byteLength;
+          if (!fileStream.write(value)) await new Promise<void>((r) => fileStream.once("drain", () => r()));
+          const now = Date.now();
+          if (now - lastEmit >= 100) {
+            lastEmit = now;
+            onProgress({ phase: "downloading", received, total });
+          }
         }
         fileStream.end();
+        await finished;
+        onProgress({ phase: "downloading", received, total: total ?? received });
 
-        await new Promise<void>((r) => fileStream.on("finish", () => r()));
-
-        // Launch installer and quit current app
+        // Launch installer and quit current app (short pause so the "launching" state is visible).
+        onProgress({ phase: "launching", received, total: total ?? received, message: "Launching installer…" });
         spawn(installerPath, [], { detached: true, stdio: "ignore" }).unref();
-        app.quit();
+        setTimeout(() => app.quit(), 800);
         return { success: true, message: "Launching installer..." };
       } catch (err) {
         console.error("Direct download failed, opening browser", err);
+        onProgress({ phase: "error", received: 0, message: "Download failed — opening in browser instead" });
         await shell.openExternal(downloadUrl);
         return { success: true, message: "Opened download in browser" };
       }
     }
 
     // Default: open in browser
-    await shell.openExternal(downloadUrl);
-    return { success: true, message: "Opened release download in browser" };
+    return openInBrowser("Opened release download in browser");
   }
 }

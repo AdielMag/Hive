@@ -19,6 +19,7 @@ import {
   type StudioRpcCommand,
   type SubagentLocateRequest,
   type UiRequestMessage,
+  type UpdateProgress,
 } from "@pi-studio/protocol";
 
 const api: StudioApi = {
@@ -235,6 +236,11 @@ const api: StudioApi = {
   },
   applyUpdate(downloadUrl?: string) {
     return ipcRenderer.invoke(IPC.updaterApply, { downloadUrl });
+  },
+  onUpdateProgress(listener: (progress: UpdateProgress) => void) {
+    const handler = (_event: Electron.IpcRendererEvent, progress: UpdateProgress) => listener(progress);
+    ipcRenderer.on(IPC.evtUpdaterProgress, handler);
+    return () => ipcRenderer.removeListener(IPC.evtUpdaterProgress, handler);
   },
 
   // Terminal

@@ -163,3 +163,97 @@
   white-space: pre-wrap;
   color: var(--text-secondary);
 }
+
+/* ── Update install progress ─────────────────────────────────────────── */
+.update-progress {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+}
+.update-progress__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.update-progress__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.update-progress__pct {
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.update-progress--launching .update-progress__pct {
+  color: #7ee08a;
+}
+.update-progress--error {
+  border-color: rgba(229, 83, 75, 0.5);
+}
+.update-progress--error .update-progress__label {
+  color: #f0908a;
+}
+.update-progress__track {
+  position: relative;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(var(--accent-rgb), 0.15);
+}
+.update-progress__fill {
+  position: relative;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-base);
+  transition: width 0.2s ease-out;
+  overflow: hidden;
+}
+/* moving sheen so the bar looks alive even between progress ticks */
+.update-progress__fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: translateX(-100%);
+  animation: update-sheen 1.4s ease-in-out infinite;
+}
+.update-progress__track.is-indeterminate .update-progress__fill {
+  width: 35%;
+  animation: update-indeterminate 1.2s ease-in-out infinite;
+}
+.update-progress--launching .update-progress__fill {
+  background: #57ab5a;
+}
+.update-progress__bounce {
+  animation: update-bounce 1s ease-in-out infinite;
+}
+@keyframes update-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes update-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+@keyframes update-bounce {
+  0%,
+  100% {
+    transform: translateY(-1px);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}

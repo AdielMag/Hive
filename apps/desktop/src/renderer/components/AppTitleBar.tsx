@@ -5,7 +5,8 @@ import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { openProjectFolder } from "../hooks/useGlobalShortcuts.ts";
-import { startUpdateChecks, useUpdates } from "../store/update-store.ts";
+import { isInstalling, startUpdateChecks, useUpdates } from "../store/update-store.ts";
+import { updatePercent } from "./UpdateProgressBar.tsx";
 
 interface MenuItem {
   label: string;
@@ -30,6 +31,9 @@ export const AppTitleBar: React.FC = () => {
   const [menu, setMenu] = useState<string | null>(null);
   const [maximized, setMaximized] = useState(false);
   const update = useUpdates((s) => s.info);
+  const install = useUpdates((s) => s.install);
+  const installing = isInstalling(install);
+  const installPct = install ? updatePercent(install) : null;
   const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -140,11 +144,19 @@ export const AppTitleBar: React.FC = () => {
       <div className="titlebar__right no-drag">
         {update?.hasUpdate && (
           <button
-            className="titlebar__update"
+            className={`titlebar__update${installing ? " is-installing" : ""}`}
             onClick={() => ui.openSettings("updates")}
-            title={`Pi Studio v${update.latestVersion} is available — click for details`}
+            title={installing ? "Installing update — click for details" : `Pi Studio v${update.latestVersion} is available — click for details`}
+            style={installing ? ({ "--update-pct": `${installPct ?? 0}%` } as React.CSSProperties) : undefined}
           >
-            <Download size={11} /> Update v{update.latestVersion}
+            <Download size={11} className={installing ? "update-progress__bounce" : undefined} />{" "}
+            {installing
+              ? install?.phase === "launching"
+                ? "Restarting…"
+                : installPct != null
+                  ? `Updating ${installPct}%`
+                  : "Updating…"
+              : `Update v${update.latestVersion}`}
           </button>
         )}
         <button className="caption-btn" onClick={() => void window.studio.minimizeWindow()} title="Minimize" aria-label="Minimize">

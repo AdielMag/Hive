@@ -76,6 +76,16 @@ export interface Bootstrap {
 
 export type SessionPhase = "starting" | "ready" | "stopping" | "exited" | "crashed";
 
+/** Progress of an in-app update install (main → renderer). */
+export interface UpdateProgress {
+  phase: "downloading" | "launching" | "browser" | "error";
+  /** Bytes downloaded so far. */
+  received: number;
+  /** Total bytes, when the server reports a Content-Length. */
+  total?: number;
+  message?: string;
+}
+
 export interface SessionStatusUpdate {
   key: string;
   phase: SessionPhase;
@@ -184,6 +194,7 @@ export const IPC = {
   // Updater
   updaterCheck: "updater:check",
   updaterApply: "updater:apply",
+  evtUpdaterProgress: "updater:progress",
   // Terminal
   terminalCreate: "terminal:create",
   terminalWrite: "terminal:write",
@@ -413,6 +424,7 @@ export interface StudioApi {
   // Updater
   checkForUpdates(): Promise<any>;
   applyUpdate(downloadUrl?: string): Promise<{ success: boolean; message: string }>;
+  onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void;
 
   // Terminal
   terminalCreate(options?: { cwd?: string; shell?: string; cols?: number; rows?: number }): Promise<{ id: string; shell: string; cwd: string }>;

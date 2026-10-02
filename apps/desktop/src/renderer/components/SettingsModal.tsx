@@ -6,7 +6,8 @@ import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
 import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useSessionStore } from "../store/session-store.ts";
-import { type UpdateInfo, useUpdates } from "../store/update-store.ts";
+import { type UpdateInfo, isInstalling, useUpdates } from "../store/update-store.ts";
+import { UpdateProgressBar } from "./UpdateProgressBar.tsx";
 
 export type SettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "updates" | "about";
 
@@ -186,6 +187,9 @@ const AccountsTab: React.FC = () => {
 
 const UpdatesTab: React.FC<{ info: UpdateInfo | null; checking: boolean; onCheck(): void }> = ({ info, checking, onCheck }) => {
   const appVersion = useSessionStore((s) => s.bootstrap?.appVersion);
+  const install = useUpdates((s) => s.install);
+  const applyUpdate = useUpdates((s) => s.applyUpdate);
+  const busy = isInstalling(install);
   return (
     <div className="settings__stack">
       <div className="ui-card" style={{ padding: 16 }}>
@@ -208,11 +212,12 @@ const UpdatesTab: React.FC<{ info: UpdateInfo | null; checking: boolean; onCheck
                 </button>
               )}
             </div>
-            <button className="ui-btn ui-btn--primary" onClick={() => void window.studio.applyUpdate(info.downloadUrl)}>
-              <Download size={13} /> Download & install
+            <button className="ui-btn ui-btn--primary" onClick={() => void applyUpdate()} disabled={busy}>
+              {busy ? <RefreshCw size={13} className="spin" /> : <Download size={13} />} {busy ? "Installing…" : "Download & install"}
             </button>
           </div>
         )}
+        {info?.hasUpdate && install && <UpdateProgressBar progress={install} />}
         {info?.hasUpdate && info.notes && <pre className="settings__notes selectable">{info.notes}</pre>}
       </div>
     </div>
