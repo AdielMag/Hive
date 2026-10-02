@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync, mkdirS
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import type { CompactionSettings, ModelCatalogItem, ModelsCatalogResponse } from "@hive/protocol";
+import { NEW_COMPACTION_FILE_NAME, migrateCompactionPrefs } from "../migrate-legacy.ts";
 
 /** Pi's built-in defaults (docs/compaction.md). */
 const PI_DEFAULT_RESERVE = 16384;
@@ -38,7 +39,8 @@ export class ModelsService {
     this.configDir = customConfigDir || process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
     this.settingsPath = join(this.configDir, "settings.json");
     this.modelsStorePath = join(this.configDir, "models-store.json");
-    this.compactionPrefsPath = join(studioDataDir ?? this.configDir, "pi-studio-compaction.json");
+    this.compactionPrefsPath = join(studioDataDir ?? this.configDir, NEW_COMPACTION_FILE_NAME);
+    migrateCompactionPrefs(this.compactionPrefsPath);
   }
 
   private readSettings(): Record<string, any> {

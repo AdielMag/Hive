@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { AlertTriangle, Check, Copy, FolderSearch, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, Check, Copy, FolderSearch, RefreshCw } from "lucide-react";
 import type { PiLocateResult } from "@hive/protocol";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "./store/session-store.ts";
 import { WorkbenchLayout } from "./components/WorkbenchLayout.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { copyText } from "./lib/clipboard.ts";
+import hiveIcon from "./assets/hive-icon.png";
 
 const INSTALL_CMD = "npm install -g @earendil-works/pi-coding-agent";
 
@@ -22,9 +23,9 @@ export const App: React.FC = () => {
     return (
       <div className="boot">
         <div className="boot__logo">
-          <Sparkles size={18} />
+          <img src={hiveIcon} alt="Hive" draggable={false} />
         </div>
-        <div className="boot__title">Pi Studio</div>
+        <div className="boot__title">Hive</div>
         <div className="boot__sub">Connecting to your local Pi…</div>
       </div>
     );
@@ -33,7 +34,7 @@ export const App: React.FC = () => {
   if (bootstrap?.pi && !bootstrap.pi.ok) return <PiMissing searched={bootstrap.pi.searched} error={bootstrap.pi.error} />;
 
   return (
-    <ErrorBoundary label="Pi Studio">
+    <ErrorBoundary label="Hive">
       <WorkbenchLayout />
     </ErrorBoundary>
   );
@@ -71,7 +72,7 @@ const PiMissing: React.FC<{ searched: string[]; error: string }> = (initial) => 
           <p className="boot__text">{found}</p>
         ) : (
           <>
-            <p className="boot__text selectable">Pi Studio drives your installed Pi coding agent. {result.error}</p>
+            <p className="boot__text selectable">Hive drives your installed Pi coding agent. {result.error}</p>
             {!nodeProblem && (
               <div className="boot__cmd">
                 <code className="selectable">{INSTALL_CMD}</code>
@@ -90,9 +91,9 @@ const PiMissing: React.FC<{ searched: string[]; error: string }> = (initial) => 
               </div>
             )}
             <p className="boot__text">
-              Installed already? Press <b>Check again</b> — Pi Studio re-reads your PATH — or use <b>Locate Pi…</b> to pick the{" "}
+              Installed already? Press <b>Check again</b> — Hive re-reads your PATH — or use <b>Locate Pi…</b> to pick the{" "}
               <code>pi</code> command (run <code>{navigator.platform.startsWith("Win") ? "where pi" : "which pi"}</code> in a terminal to see
-              where it is). You can also set <code>PI_STUDIO_PI_CLI</code>.
+              where it is). You can also set <code>HIVE_PI_CLI</code>.
             </p>
             <details className="boot__details">
               <summary>Searched {result.searched.length} locations</summary>

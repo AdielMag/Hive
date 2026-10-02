@@ -12,7 +12,7 @@ export function registerAppIpc(ctx: AppContext): void {
     pi: ctx.pi,
     appVersion: app.getVersion(),
     platform: process.platform,
-    initialProjectPath: process.env.PI_STUDIO_PROJECT ?? null,
+    initialProjectPath: process.env.HIVE_PROJECT ?? process.env.PI_STUDIO_PROJECT ?? null,
     testMode: ctx.testMode,
   }));
 

@@ -3,13 +3,13 @@ import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 const PI_CLI = "C:/Users/Adiel/AppData/Local/pi-node/current/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js";
 const NODE = "C:/Users/Adiel/AppData/Local/pi-node/current/node.exe";
-const PIPE = process.platform === "win32" ? `\\\\.\\pipe\\pi-studio-e2e-${process.pid}` : `/tmp/pis-e2e-${process.pid}.sock`;
+const PIPE = process.platform === "win32" ? `\\\\.\\pipe\\hive-e2e-${process.pid}` : `/tmp/pis-e2e-${process.pid}.sock`;
 const bridgeMsgs = [];
 const server = createServer((s) => { let b = ""; s.on("data", (d) => { b += d; let i; while ((i = b.indexOf("\n")) >= 0) { bridgeMsgs.push(JSON.parse(b.slice(0, i))); b = b.slice(i + 1); } }); });
 await new Promise((r) => server.listen(PIPE, r));
 
 const p = spawn(NODE, [PI_CLI, "--mode", "rpc", "--no-session", "-e", "./test-provider.ts", "-e", "./bridge.ts", "--model", "studio-test/scripted-1"], {
-  cwd: fileURLToPath(new URL(".", import.meta.url)), env: { ...process.env, PI_STUDIO_BRIDGE: PIPE }, stdio: ["pipe", "pipe", "pipe"],
+  cwd: fileURLToPath(new URL(".", import.meta.url)), env: { ...process.env, HIVE_BRIDGE: PIPE }, stdio: ["pipe", "pipe", "pipe"],
 });
 let buf = ""; const pending = new Map(); let n = 0; const events = [];
 let settled; const settledP = new Promise((r) => (settled = r));

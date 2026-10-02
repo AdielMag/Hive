@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
+All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
 ## v0.8.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.7.0...v0.8.0)
 

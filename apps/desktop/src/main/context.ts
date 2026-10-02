@@ -38,6 +38,8 @@ export interface AppContext {
 
 export function createAppContext(getWindow: () => BrowserWindow | null): AppContext {
   const userData = app.getPath("userData");
+  // Must run before any service touches `<userData>/hive` so legacy Pi Studio data is migrated first.
+  const hiveDataDir = ensureHiveDataDir(userData);
   const piInstall = new PiInstallService(userData);
   const pi = piInstall.locate();
   const testMode = (process.env.HIVE_TEST_MODE ?? process.env.PI_STUDIO_TEST_MODE) === "1";
@@ -46,7 +48,6 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     : undefined;
   const guiStore = new GuiStore(userData);
   const info = pi.ok ? pi.info : null;
-  const hiveDataDir = ensureHiveDataDir(userData);
 
   return {
     pi,

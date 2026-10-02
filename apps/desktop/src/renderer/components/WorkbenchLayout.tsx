@@ -13,7 +13,6 @@ import {
   PieChart,
   Settings,
   ShoppingBag,
-  Sparkles,
   Terminal as TerminalIcon,
   Wrench,
 } from "lucide-react";
@@ -33,6 +32,7 @@ import { SessionErrorBanner } from "./SessionErrorBanner.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
 import { useGlobalShortcuts } from "../hooks/useGlobalShortcuts.ts";
+import hiveIcon from "../assets/hive-icon.png";
 
 // Heavy views load on demand to keep startup fast (xterm, charts, settings, file/diff viewers).
 const named = <T extends string>(loader: () => Promise<Record<T, React.ComponentType<any>>>, key: T) =>
@@ -81,8 +81,8 @@ export const WorkbenchLayout: React.FC = () => {
       <div className="shell__body">
         {/* Left rail */}
         <nav className="rail">
-          <div className="rail__brand" title="Pi Studio">
-            <Sparkles size={14} />
+          <div className="rail__brand" title="Hive">
+            <img src={hiveIcon} alt="Hive" draggable={false} />
           </div>
           <RailButton icon={<FolderKanban size={18} />} title="Projects & Sessions (Ctrl+B)" active={ui.left === "projects"} onClick={() => ui.toggleLeft("projects")} />
           <RailButton icon={<Files size={18} />} title="Files (Ctrl+Shift+E)" active={ui.left === "files"} onClick={() => ui.toggleLeft("files")} />

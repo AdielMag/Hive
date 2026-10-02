@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="apps/desktop/build/icon.png" width="96" alt="Pi Studio icon" />
+<img src="apps/desktop/build/icon.png" width="96" alt="Hive icon" />
 
-# Pi Studio
+# Hive
 
 **A fast, beautiful desktop workbench for the [Pi coding agent](https://pi.dev).**
 Multi-session tabs, IDE-grade code rendering, live subscription limits, usage analytics and an Arc-browser-style theme engine — all driving the Pi CLI you already have installed.
@@ -11,7 +11,7 @@ Multi-session tabs, IDE-grade code rendering, live subscription limits, usage an
 [![CI](https://github.com/AdielMag/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/AdielMag/pi-studio/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/AdielMag/pi-studio?sort=semver)](https://github.com/AdielMag/pi-studio/releases/latest)
 
-![Pi Studio workbench](docs/screenshots/workbench.png)
+![Hive workbench](docs/screenshots/workbench.png)
 
 </div>
 
@@ -21,7 +21,7 @@ Multi-session tabs, IDE-grade code rendering, live subscription limits, usage an
 
 - [Features](#features)
 - [Install](#install)
-- [Using Pi Studio](#using-pi-studio)
+- [Using Hive](#using-hive)
   - [Subscription limits](#subscription-limits)
   - [Usage analytics](#usage-analytics)
   - [Appearance (Arc-style themes)](#appearance-arc-style-themes)
@@ -61,30 +61,30 @@ Multi-session tabs, IDE-grade code rendering, live subscription limits, usage an
 
 ## Install
 
-1. **Install Pi** (Pi Studio drives your local Pi; it does not bundle one):
+1. **Install Pi** (Hive drives your local Pi; it does not bundle one):
    ```bash
    npm install -g @earendil-works/pi-coding-agent
    pi            # sign in to your providers once
    ```
    Pi needs Node.js **22.19+**.
-2. **Download Pi Studio** from the [latest release](https://github.com/AdielMag/pi-studio/releases/latest):
+2. **Download Hive** from the [latest release](https://github.com/AdielMag/pi-studio/releases/latest):
 
    | Platform | File |
    |---|---|
-   | Windows | `Pi-Studio-Setup-<version>.exe` (installer) or `Pi-Studio-<version>-portable.exe` |
-   | macOS | `Pi-Studio-<version>-mac-<arch>.dmg` |
-   | Linux | `Pi-Studio-<version>-linux-x86_64.AppImage` |
+   | Windows | `Hive-Setup-<version>.exe` (installer) or `Hive-<version>-portable.exe` |
+   | macOS | `Hive-<version>-mac-<arch>.dmg` |
+   | Linux | `Hive-<version>-linux-x86_64.AppImage` |
 
    Builds are currently **unsigned**: on Windows choose *More info → Run anyway*; on macOS right-click → *Open* the first time.
-3. Launch Pi Studio, click **Open a Project Folder**, and start a session.
+3. Launch Hive, click **Open a Project Folder**, and start a session.
 
-## Using Pi Studio
+## Using Hive
 
 ### Subscription limits
 
 Open with the **gauge** icon on the right rail, `Ctrl+Shift+L`, or by clicking the meters in the status bar.
 
-For every account you are signed in to, Pi Studio shows each rate-limit window — the rolling **5-hour** window and the **weekly** window (plus model-specific windows such as *Weekly · Opus* when the provider reports them) — with % used, % left, a live **"resets in 2h 14m · Today 17:00"** countdown, and colour-coded severity (green < 70 %, amber < 90 %, red ≥ 90 %).
+For every account you are signed in to, Hive shows each rate-limit window — the rolling **5-hour** window and the **weekly** window (plus model-specific windows such as *Weekly · Opus* when the provider reports them) — with % used, % left, a live **"resets in 2h 14m · Today 17:00"** countdown, and colour-coded severity (green < 70 %, amber < 90 %, red ≥ 90 %).
 
 | Provider | Source |
 |---|---|
@@ -93,7 +93,7 @@ For every account you are signed in to, Pi Studio shows each rate-limit window �
 | ChatGPT / Codex | `chatgpt.com/backend-api/wham/usage` |
 | API-key providers | Listed as *pay-as-you-go* (no windows) |
 
-Credentials are resolved by Pi itself (including OAuth token refresh) through a tiny helper run under Pi's own Node runtime, so Pi Studio never re-implements auth. If a live request fails (offline, `429`), the panel falls back to the last good value or the [`pi-quota-status`](https://github.com/hafiezul/pi-quota-status) cache and marks the card **cached**. Rate-limited providers back off for 5 minutes. Data refreshes every 2 minutes while visible.
+Credentials are resolved by Pi itself (including OAuth token refresh) through a tiny helper run under Pi's own Node runtime, so Hive never re-implements auth. If a live request fails (offline, `429`), the panel falls back to the last good value or the [`pi-quota-status`](https://github.com/hafiezul/pi-quota-status) cache and marks the card **cached**. Rate-limited providers back off for 5 minutes. Data refreshes every 2 minutes while visible.
 
 ### Usage analytics
 
@@ -106,7 +106,7 @@ Everything is computed locally from your Pi session files (`~/.pi/agent/sessions
 - **Token mix** – input / output / cache-read / cache-write split.
 - **Breakdown table** – by model, provider or project, with requests, tokens, cost and share.
 
-Session files are parsed once and cached by modification time/size (`<userData>/pi-studio/usage-cache.json`), so re-opening the view takes milliseconds even with hundreds of MB of history.
+Session files are parsed once and cached by modification time/size (`<userData>/hive/usage-cache.json`), so re-opening the view takes milliseconds even with hundreds of MB of history.
 
 ### Appearance (Arc-style themes)
 
@@ -155,14 +155,16 @@ Like Arc, the *frame* (title bar, rails, side panels, status bar) is painted wit
 
 | Variable | Purpose |
 |---|---|
-| `PI_STUDIO_PI_CLI` | Path to Pi's `cli.js`, package root or install dir (skip auto-detection). |
-| `PI_STUDIO_NODE` | Node.js binary used to run Pi (must be ≥ 22.19). |
-| `PI_STUDIO_PROJECT` | Folder to open on first launch. |
+| `HIVE_PI_CLI` | Path to Pi's `cli.js`, package root or install dir (skip auto-detection). |
+| `HIVE_NODE` | Node.js binary used to run Pi (must be ≥ 22.19). |
+| `HIVE_PROJECT` | Folder to open on first launch. |
 | `PI_CODING_AGENT_DIR` | Pi's agent dir (default `~/.pi/agent`); honoured like Pi itself does. |
-| `PI_STUDIO_USER_DATA` | Use a separate profile directory (testing). |
-| `PI_STUDIO_CAPTURE`, `PI_STUDIO_CAPTURE_DELAY`, `PI_STUDIO_CAPTURE_SCRIPT` | Screenshot automation: write a PNG after load (optionally running a script first) and exit. |
+| `HIVE_USER_DATA` | Use a separate profile directory (testing). |
+| `HIVE_CAPTURE`, `HIVE_CAPTURE_DELAY`, `HIVE_CAPTURE_SCRIPT` | Screenshot automation: write a PNG after load (optionally running a script first) and exit. |
 
-Pi auto-detection order: `PI_STUDIO_PI_CLI` → `pi` launchers on `PATH` → known install locations (`%LOCALAPPDATA%\pi-node\current`, global npm, Homebrew, …).
+The legacy `PI_STUDIO_*` names are still accepted as fallbacks.
+
+Pi auto-detection order: `HIVE_PI_CLI` → `pi` launchers on `PATH` → known install locations (`%LOCALAPPDATA%\pi-node\current`, global npm, Homebrew, …).
 
 Settings that belong to Pi (enabled models, default model, auth) are read from and written to Pi's own files, so the CLI and Studio stay in sync.
 
@@ -261,7 +263,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org) for PR titles / 
 
 | Problem | Fix |
 |---|---|
-| **"Pi CLI not found"** | Install Pi globally, or set `PI_STUDIO_PI_CLI`. The screen lists every path searched. |
+| **"Pi CLI not found"** | Install Pi globally, or set `HIVE_PI_CLI`. The screen lists every path searched. |
 | **Session fails to start** | The error banner shows Pi's stderr. Run `pi` in a terminal in the same folder to see the same error; check Node ≥ 22.19. |
 | **Limits card says "cached"** | The provider rate-limited or was unreachable; Studio shows the last good data and retries automatically. Hover the badge for the reason. |
 | **No subscription windows for a provider** | API-key accounts are billed per token and have no windows; only OAuth subscriptions report limits. |

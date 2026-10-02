@@ -193,7 +193,7 @@ export const LibraryDetail: React.FC<Props> = ({ entry }) => {
               <button type="button" className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" onClick={handleReveal} title="Show in folder" aria-label="Show in folder">
                 <FolderOpen size={13} />
               </button>
-              <button type="button" className="ui-btn ui-btn--sm ui-btn--primary" onClick={handleOpenInEditor} title="Open in Pi Studio's editor">
+              <button type="button" className="ui-btn ui-btn--sm ui-btn--primary" onClick={handleOpenInEditor} title="Open in Hive's editor">
                 <FileCode size={12} />
                 <span>Open in Editor</span>
               </button>

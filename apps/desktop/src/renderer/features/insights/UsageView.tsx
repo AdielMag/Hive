@@ -25,6 +25,7 @@ import { UsageChart, type ChartType } from "./UsageChart.tsx";
 import { RANGE_DAYS, buildStackedSeries, prettyModel, type UsageMetric, type UsageRange } from "./usage-series.ts";
 import { AiUsageInsightsModal } from "./AiUsageInsights.tsx";
 import { analyzeUsageTelemetry, type AiUsageAnalysisResult } from "./insights-analyzer.ts";
+import { getStoredItem, setStoredItem } from "../../lib/storage.ts";
 
 const RANGES: Array<[UsageRange, string]> = [
   ["today", "Today"],
@@ -38,9 +39,9 @@ export const UsageView: React.FC = () => {
   const loading = useInsights((s) => s.usageLoading);
   const error = useInsights((s) => s.usageError);
   const refresh = useInsights((s) => s.refreshUsage);
-  const [range, setRange] = useState<UsageRange>(() => (localStorage.getItem("pi-studio.usage.range") as UsageRange) || "7d");
+  const [range, setRange] = useState<UsageRange>(() => (getStoredItem("hive.usage.range") as UsageRange) || "7d");
   const [metric, setMetric] = useState<UsageMetric>("cost");
-  const [chartType, setChartType] = useState<ChartType>(() => (localStorage.getItem("pi-studio.usage.chartType") as ChartType) || "line");
+  const [chartType, setChartType] = useState<ChartType>(() => (getStoredItem("hive.usage.chartType") as ChartType) || "line");
   const [table, setTable] = useState<"model" | "provider" | "project">("model");
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -49,8 +50,8 @@ export const UsageView: React.FC = () => {
   useEffect(() => {
     void refresh();
   }, [refresh]);
-  useEffect(() => localStorage.setItem("pi-studio.usage.range", range), [range]);
-  useEffect(() => localStorage.setItem("pi-studio.usage.chartType", chartType), [chartType]);
+  useEffect(() => setStoredItem("hive.usage.range", range), [range]);
+  useEffect(() => setStoredItem("hive.usage.chartType", chartType), [chartType]);
 
   const days = useMemo(() => lastNDays(RANGE_DAYS[range]), [range, usage?.generatedAt]);
   const summary = useMemo(() => (usage ? summarizeUsage(usage.buckets, days, usage.sessionDays) : null), [usage, days]);

@@ -1,4 +1,4 @@
-import { existsSync, cpSync, copyFileSync } from "node:fs";
+import { existsSync, cpSync, copyFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { App } from "electron";
 
@@ -59,6 +59,20 @@ export function ensureHiveDataDir(userData: string): string {
   try {
     if (!existsSync(newDir) && existsSync(oldDir)) {
       cpSync(oldDir, newDir, { recursive: true });
+    } else if (existsSync(oldDir)) {
+      // v0.8.0 copied the dir once but kept writing some files (projects, ui-state, pi-location…) to the
+      // legacy dir. Bring over any top-level file that is missing here or newer in the legacy dir. Nothing
+      // writes to the legacy dir anymore, so this converges after one launch.
+      for (const entry of readdirSync(oldDir, { withFileTypes: true })) {
+        if (!entry.isFile()) continue;
+        const from = join(oldDir, entry.name);
+        const to = join(newDir, entry.name);
+        try {
+          if (!existsSync(to) || statSync(from).mtimeMs > statSync(to).mtimeMs) copyFileSync(from, to);
+        } catch (err) {
+          console.error(`Failed to migrate legacy file ${entry.name}:`, err);
+        }
+      }
     }
   } catch (err) {
     console.error("Failed to migrate legacy store directory:", err);

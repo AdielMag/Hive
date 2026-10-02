@@ -8,7 +8,7 @@ describe("GuiStore", () => {
   let tmpBase: string;
 
   beforeEach(() => {
-    tmpBase = mkdtempSync(join(tmpdir(), "pi-studio-store-test-"));
+    tmpBase = mkdtempSync(join(tmpdir(), "hive-store-test-"));
   });
 
   afterEach(() => {
@@ -73,7 +73,7 @@ describe("GuiStore", () => {
     const store1 = new GuiStore(tmpBase);
     store1.addProject("C:/Users/Test/RepoA");
 
-    const projectsFile = join(tmpBase, "pi-studio", "projects.json");
+    const projectsFile = join(tmpBase, "hive", "projects.json");
     expect(existsSync(projectsFile)).toBe(true);
 
     // Update to generate a .bak file

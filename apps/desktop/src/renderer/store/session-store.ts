@@ -526,7 +526,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       // Initial projects and catalog load
       await Promise.all([get().refreshCatalog(), get().loadModelsCatalog()]);
 
-      // Only auto-open if an explicit project was passed via env PI_STUDIO_PROJECT
+      // Only auto-open if an explicit project was passed via env HIVE_PROJECT
       if (get().projects.length === 0 && bootstrap.initialProjectPath) {
         const p = await get().addProject(bootstrap.initialProjectPath);
         await get().newSessionTab(p.id);

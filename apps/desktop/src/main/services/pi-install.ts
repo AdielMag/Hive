@@ -14,7 +14,7 @@ export class PiInstallService {
   private pathRefreshed = false;
 
   constructor(userData: string) {
-    this.file = join(userData, "pi-studio", "pi-location.json");
+    this.file = join(userData, "hive", "pi-location.json");
   }
 
   configuredPath(): string | undefined {

@@ -22,7 +22,7 @@ export class GuiStore {
   private uiState: UiStateFile = { schemaVersion: 1, tabs: [], activeTabId: null };
 
   constructor(baseDir: string) {
-    this.dir = join(baseDir, "pi-studio");
+    this.dir = join(baseDir, "hive");
     if (!existsSync(this.dir)) {
       mkdirSync(this.dir, { recursive: true });
     }

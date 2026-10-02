@@ -19,7 +19,7 @@ import { useAppearance } from "./appearance-store.ts";
 import { ArcColorPad } from "./ArcColorPad.tsx";
 import { CodeBlock } from "../../components/code/CodeBlock.tsx";
 
-const SAMPLE_CODE = `// Pi Studio · Rider-style highlighting
+const SAMPLE_CODE = `// Hive · Rider-style highlighting
 export class SessionPool<T extends Session> {
   private readonly items = new Map<string, T>();
 

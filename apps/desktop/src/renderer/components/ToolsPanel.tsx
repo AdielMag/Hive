@@ -28,16 +28,17 @@ import { availableOnly, collectToolUsage, type ToolUsageRef } from "../lib/ai/to
 import type { SubagentView } from "../lib/ai/subagents.ts";
 import { scrollToToolCall } from "./Transcript.tsx";
 import { formatCost } from "../lib/format.ts";
+import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import "../styles/tools-panel.css";
 
 type SectionId = "skills" | "subagents" | "mcp" | "builtin" | "extensions";
 
-const COLLAPSE_KEY = "pi-studio:tools-panel:collapsed";
+const COLLAPSE_KEY = "hive:tools-panel:collapsed";
 const SUBAGENT_PREVIEW = 6;
 
 function loadCollapsed(): Partial<Record<SectionId, boolean>> {
   try {
-    return JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? "{}") as Partial<Record<SectionId, boolean>>;
+    return JSON.parse(getStoredItem(COLLAPSE_KEY) ?? "{}") as Partial<Record<SectionId, boolean>>;
   } catch {
     return {};
   }
@@ -74,11 +75,7 @@ export const ToolsPanel: React.FC = () => {
     if (filter.trim()) return;
     setCollapsed((prev) => {
       const next = { ...prev, [id]: wasOpen };
-      try {
-        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next));
-      } catch {
-        // storage unavailable: keep in-memory state only
-      }
+      setStoredItem(COLLAPSE_KEY, JSON.stringify(next));
       return next;
     });
   };

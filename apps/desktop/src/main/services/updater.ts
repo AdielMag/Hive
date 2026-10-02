@@ -27,7 +27,7 @@ export class AppUpdaterService {
     try {
       const res = await fetch(`https://api.github.com/repos/${this.repo}/releases/latest`, {
         headers: {
-          "User-Agent": `Pi-Studio/${currentVersion}`,
+          "User-Agent": `Hive/${currentVersion}`,
           Accept: "application/vnd.github.v3+json",
         },
         signal: AbortSignal.timeout(6000),
@@ -98,9 +98,9 @@ export class AppUpdaterService {
     if (process.platform === "win32" && downloadUrl.endsWith(".exe")) {
       onProgress({ phase: "downloading", received: 0 });
       try {
-        const tempDir = join(tmpdir(), "pi-studio-update");
+        const tempDir = join(tmpdir(), "hive-update");
         if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
-        const installerPath = join(tempDir, "Pi-Studio-Update.exe");
+        const installerPath = join(tempDir, "Hive-Update.exe");
 
         const res = await fetch(downloadUrl);
         if (!res.ok || !res.body) return openInBrowser("Opened download link in browser");

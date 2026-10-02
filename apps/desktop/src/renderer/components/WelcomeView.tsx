@@ -1,7 +1,8 @@
 import React from "react";
-import { FolderPlus, Terminal, Sparkles, Link as LinkIcon, ArrowRight } from "lucide-react";
+import { FolderPlus, Terminal, Link as LinkIcon, ArrowRight } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
+import hiveIcon from "../assets/hive-icon.png";
 
 export const WelcomeView: React.FC = () => {
   const { addProject, allSessions, bootstrap } = useSessionStore(useShallow((s) => ({ addProject: s.addProject, allSessions: s.allSessions, bootstrap: s.bootstrap })));
@@ -44,23 +45,10 @@ export const WelcomeView: React.FC = () => {
       >
         {/* Brand Aura */}
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 16,
-              background: "linear-gradient(135deg, var(--accent-base), #986ee2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 8px 24px var(--accent-subtle)",
-            }}
-          >
-            <Sparkles size={28} color="#fff" />
-          </div>
+          <img src={hiveIcon} alt="Hive" draggable={false} style={{ width: 64, height: 64, objectFit: "contain" }} />
 
           <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
-            Pi Studio
+            Hive
           </h1>
           <p style={{ fontSize: 13, color: "var(--text-secondary)", maxWidth: 440, lineHeight: 1.5 }}>
             Desktop workbench for the Pi coding agent. Independent workspaces, color-coded multi-session tabs, and

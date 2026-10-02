@@ -72,7 +72,7 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
   };
 
   const remove = async () => {
-    if (!confirm(`Remove "${project.name}" from Pi Studio?\n\nThe folder and its Pi sessions stay on disk.`)) return;
+    if (!confirm(`Remove "${project.name}" from Hive?\n\nThe folder and its Pi sessions stay on disk.`)) return;
     for (const t of tabs.filter((t) => t.projectId === project.id)) {
       if (t.activeKey) {
         try {
@@ -194,7 +194,7 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
           <section className="prj-settings__section prj-settings__danger">
             <div className="prj-settings__danger-text">
               <span className="prj-settings__label">Remove project</span>
-              <span className="prj-settings__hint">Hides it from Pi Studio. Files and sessions stay on disk.</span>
+              <span className="prj-settings__hint">Hides it from Hive. Files and sessions stay on disk.</span>
             </div>
             <button className="ui-btn ui-btn--sm prj-settings__danger-btn" onClick={() => void remove()}>
               <Trash2 size={12} /> Remove

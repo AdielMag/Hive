@@ -28,7 +28,7 @@ export const UpdateProgressBar: React.FC<{ progress: UpdateProgress }> = ({ prog
           : `Downloading… ${mb(progress.received)}`;
   } else if (phase === "launching") {
     icon = <Loader2 size={13} className="spin" />;
-    label = progress.message ?? "Launching installer… Pi Studio will restart";
+    label = progress.message ?? "Launching installer… Hive will restart";
   } else if (phase === "browser") {
     icon = <ExternalLink size={13} />;
     label = progress.message ?? "Opened download in your browser";

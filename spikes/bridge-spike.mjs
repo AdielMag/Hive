@@ -3,7 +3,7 @@ import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 const PI_CLI = "C:/Users/Adiel/AppData/Local/pi-node/current/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js";
 const NODE = "C:/Users/Adiel/AppData/Local/pi-node/current/node.exe";
-const PIPE = process.platform === "win32" ? `\\\\.\\pipe\\pi-studio-spike-${process.pid}` : `/tmp/pi-studio-spike-${process.pid}.sock`;
+const PIPE = process.platform === "win32" ? `\\\\.\\pipe\\hive-spike-${process.pid}` : `/tmp/hive-spike-${process.pid}.sock`;
 
 const bridgeMsgs = [];
 const server = createServer((s) => {
@@ -15,7 +15,7 @@ await new Promise((r) => server.listen(PIPE, r));
 const t0 = Date.now();
 const p = spawn(NODE, [PI_CLI, "--mode", "rpc", "--no-session", "-e", "./bridge.ts"], {
   cwd: fileURLToPath(new URL(".", import.meta.url)),
-  env: { ...process.env, PI_STUDIO_BRIDGE: PIPE },
+  env: { ...process.env, HIVE_BRIDGE: PIPE },
   stdio: ["pipe", "pipe", "pipe"],
 });
 let buf = ""; const pending = new Map(); let n = 0; const other = [];

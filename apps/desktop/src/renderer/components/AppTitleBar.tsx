@@ -92,10 +92,10 @@ export const AppTitleBar: React.FC = () => {
     ],
     Help: [
       { label: "Pi Documentation", action: () => void window.studio.openExternal("https://pi.dev") },
-      { label: "Pi Studio on GitHub", action: () => void window.studio.openExternal("https://github.com/AdielMag/pi-studio") },
+      { label: "Hive on GitHub", action: () => void window.studio.openExternal("https://github.com/AdielMag/pi-studio") },
       { label: "Release Notes", action: () => void window.studio.openExternal("https://github.com/AdielMag/pi-studio/releases") },
       { separator: true, label: "" },
-      { label: "About Pi Studio", action: () => ui.openSettings("about") },
+      { label: "About Hive", action: () => ui.openSettings("about") },
     ],
   };
 
@@ -137,7 +137,7 @@ export const AppTitleBar: React.FC = () => {
             {activeProject.name}
           </span>
         ) : (
-          <span className="titlebar__project is-muted">Pi Studio</span>
+          <span className="titlebar__project is-muted">Hive</span>
         )}
       </div>
 
@@ -146,7 +146,7 @@ export const AppTitleBar: React.FC = () => {
           <button
             className={`titlebar__update${installing ? " is-installing" : ""}`}
             onClick={() => ui.openSettings("updates")}
-            title={installing ? "Installing update — click for details" : `Pi Studio v${update.latestVersion} is available — click for details`}
+            title={installing ? "Installing update — click for details" : `Hive v${update.latestVersion} is available — click for details`}
             style={installing ? ({ "--update-pct": `${installPct ?? 0}%` } as React.CSSProperties) : undefined}
           >
             <Download size={11} className={installing ? "update-progress__bounce" : undefined} />{" "}

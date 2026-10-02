@@ -210,13 +210,16 @@
 .rail__brand {
   width: 28px;
   height: 28px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent-base), color-mix(in oklch, var(--accent-base), #ff5fa2 45%));
-  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 10px;
+}
+.rail__brand img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 .rail__spacer {
   flex: 1;
@@ -632,15 +635,17 @@
   padding: 32px;
 }
 .boot__logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent-base), color-mix(in oklch, var(--accent-base), #ff5fa2 45%));
-  box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.35);
   animation: pulse-soft 1.6s ease-in-out infinite;
+}
+.boot__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 @keyframes pulse-soft {
   50% {

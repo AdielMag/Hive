@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync, readFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -54,9 +54,35 @@ describe("migrate-legacy", () => {
       writeFileSync(join(legacyDir, "projects.json"), JSON.stringify([{ id: "old" }]), "utf8");
       writeFileSync(join(newDir, "projects.json"), JSON.stringify([{ id: "new" }]), "utf8");
 
+      const old = new Date(Date.now() - 60_000);
+      utimesSync(join(legacyDir, "projects.json"), old, old);
+
       const resolved = ensureHiveDataDir(tmpBase);
       expect(resolved).toBe(newDir);
       expect(readFileSync(join(resolved, "projects.json"), "utf8")).toContain("new");
+    });
+
+    it("syncs legacy files that are newer than (or missing from) the hive dir", () => {
+      const legacyDir = join(tmpBase, LEGACY_DATA_DIR_NAME);
+      const newDir = join(tmpBase, NEW_DATA_DIR_NAME);
+      mkdirSync(legacyDir, { recursive: true });
+      mkdirSync(newDir, { recursive: true });
+
+      writeFileSync(join(newDir, "projects.json"), '["stale"]', "utf8");
+      writeFileSync(join(legacyDir, "projects.json"), '["fresh"]', "utf8");
+      const older = new Date(Date.now() - 60_000);
+      utimesSync(join(newDir, "projects.json"), older, older);
+
+      writeFileSync(join(legacyDir, "pi-location.json"), '{"path":"x"}', "utf8");
+
+      writeFileSync(join(legacyDir, "usage-cache.json"), '"legacy"', "utf8");
+      writeFileSync(join(newDir, "usage-cache.json"), '"hive"', "utf8");
+      utimesSync(join(legacyDir, "usage-cache.json"), older, older);
+
+      ensureHiveDataDir(tmpBase);
+      expect(readFileSync(join(newDir, "projects.json"), "utf8")).toContain("fresh");
+      expect(readFileSync(join(newDir, "pi-location.json"), "utf8")).toContain("x");
+      expect(readFileSync(join(newDir, "usage-cache.json"), "utf8")).toContain("hive");
     });
 
     it("returns new directory path when legacy directory does not exist", () => {

@@ -4,6 +4,7 @@
  */
 import { create } from "zustand";
 import type { SettingsTabId } from "../components/SettingsModal.tsx";
+import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import {
   clamp,
   LIMITS,
@@ -28,12 +29,12 @@ interface UiState extends Persisted {
   closeSettings(): void;
 }
 
-const KEY = "pi-studio.layout.v1";
+const KEY = "hive.layout.v1";
 
 function load(): Persisted {
   const fallback: Persisted = { left: "projects", right: null, leftWidth: 268, rightWidth: 360, composerHeight: 150 };
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<Persisted> | null;
+    const raw = JSON.parse(getStoredItem(KEY) ?? "null") as Partial<Persisted> | null;
     return sanitizeLayout(raw, fallback);
   } catch {
     return fallback;
@@ -45,7 +46,7 @@ function save(s: Persisted) {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     const { left, right, leftWidth, rightWidth, composerHeight } = s;
-    localStorage.setItem(KEY, JSON.stringify({ left, right, leftWidth, rightWidth, composerHeight }));
+    setStoredItem(KEY, JSON.stringify({ left, right, leftWidth, rightWidth, composerHeight }));
   }, 200);
 }
 

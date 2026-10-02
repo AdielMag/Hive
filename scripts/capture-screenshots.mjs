@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Regenerates docs/screenshots/*.png from the built app (run `npm run build` first).
-// Uses the main process capture hooks: PI_STUDIO_CAPTURE / _DELAY / _SCRIPT. Account e-mails are blurred.
+// Uses the main process capture hooks: HIVE_CAPTURE / _DELAY / _SCRIPT. Account e-mails are blurred.
 import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -32,9 +32,9 @@ for (const [file, script] of Object.entries(shots)) {
     timeout: 90_000,
     env: {
       ...process.env,
-      PI_STUDIO_CAPTURE: join(out, file),
-      PI_STUDIO_CAPTURE_DELAY: "10000",
-      PI_STUDIO_CAPTURE_SCRIPT: `${REDACT}; ${script}`,
+      HIVE_CAPTURE: join(out, file),
+      HIVE_CAPTURE_DELAY: "10000",
+      HIVE_CAPTURE_SCRIPT: `${REDACT}; ${script}`,
     },
   });
 }

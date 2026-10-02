@@ -5,6 +5,7 @@
  */
 import { create } from "zustand";
 import { buildArcTokens, sanitizeArcTheme, type ArcTheme, DEFAULT_ARC_THEME } from "@hive/theme-engine";
+import { getStoredItem, setStoredItem } from "../../lib/storage.ts";
 
 export interface EditorPrefs {
   /** Code font size in px (code blocks, file viewer, diff, terminal). */
@@ -23,12 +24,12 @@ export interface AppearanceState {
   reset(): void;
 }
 
-const STORAGE_KEY = "pi-studio.appearance.v2";
+const STORAGE_KEY = "hive.appearance.v2";
 const DEFAULT_EDITOR: EditorPrefs = { codeFontSize: 12.5, ligatures: true, wrapCode: false };
 
 function load(): { theme: ArcTheme; editor: EditorPrefs } {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = getStoredItem(STORAGE_KEY);
     if (raw) {
       const data = JSON.parse(raw) as { theme?: unknown; editor?: Partial<EditorPrefs> };
       const fontSize = Number(data.editor?.codeFontSize);
@@ -69,7 +70,7 @@ function applyNow(theme: ArcTheme, editor: EditorPrefs): void {
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function persist(theme: ArcTheme, editor: EditorPrefs): void {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, editor })), 150);
+  saveTimer = setTimeout(() => setStoredItem(STORAGE_KEY, JSON.stringify({ theme, editor })), 150);
 }
 
 const initial = load();

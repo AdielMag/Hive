@@ -23,6 +23,7 @@ import { sessionDisplayTitle } from "../lib/session-title.ts";
 import { formatAgo } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
 import { ProjectSettingsModal, type ProjectSettingsSection } from "./ProjectSettingsModal.tsx";
+import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 
 const VISIBLE_SESSIONS = 5;
 
@@ -78,7 +79,7 @@ export const Sidebar: React.FC = () => {
       const active = t.id === activeTabId;
       const activity = sessionActivity[t.id];
       if (activity === "running" || (active && activeRunning)) out[t.sessionPath] = "running";
-      else if (!active && tabUi[t.id]?.pendingUiDialog) out[t.sessionPath] = "input";
+      else if (!active && (tabUi[t.id]?.pendingUiDialog || tabUi[t.id]?.pendingForm)) out[t.sessionPath] = "input";
       else if (activity === "done" || activity === "error") out[t.sessionPath] = activity;
     }
     return out;
@@ -89,11 +90,7 @@ export const Sidebar: React.FC = () => {
   const [showArchived, setShowArchived] = useState<Record<string, boolean>>({});
   const [showAllUnsorted, setShowAllUnsorted] = useState(false);
   const [hideOtherSessions, setHideOtherSessions] = useState(() => {
-    try {
-      return localStorage.getItem("pi-studio.sidebar.hide-other-sessions") === "true";
-    } catch {
-      return false;
-    }
+    return getStoredItem("hive.sidebar.hide-other-sessions") === "true";
   });
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -103,9 +100,7 @@ export const Sidebar: React.FC = () => {
   const toggleHideOtherSessions = () => {
     setHideOtherSessions((prev) => {
       const next = !prev;
-      try {
-        localStorage.setItem("pi-studio.sidebar.hide-other-sessions", String(next));
-      } catch {}
+      setStoredItem("hive.sidebar.hide-other-sessions", String(next));
       return next;
     });
   };

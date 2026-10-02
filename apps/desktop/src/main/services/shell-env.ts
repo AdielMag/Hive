@@ -6,7 +6,7 @@
  */
 import { execFileSync } from "node:child_process";
 
-const SENTINEL = "__PI_STUDIO_ENV__";
+const SENTINEL = "__HIVE_ENV__";
 
 function windowsRegistryPath(): string | null {
   const read = (key: string): string[] => {

@@ -89,7 +89,7 @@ export function renderChangelogSection({ version, date, commits, repoUrl, previo
 
 /** Insert a new section at the top of an existing CHANGELOG.md (below the title/preamble). */
 export function prependChangelog(existing, section) {
-  const title = "# Changelog\n\nAll notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.\n";
+  const title = "# Changelog\n\nAll notable changes to Hive are documented here. This file is generated on every merge to `main`.\n";
   if (!existing || !existing.trim()) return `${title}\n${section}`;
   const idx = existing.indexOf("\n## ");
   if (idx === -1) return `${existing.trimEnd()}\n\n${section}`;

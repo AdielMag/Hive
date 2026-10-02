@@ -3,7 +3,7 @@ import { connect } from "node:net";
 
 // Spike: GUI bridge extension. Side channel over a named pipe given by env.
 export default function (pi: ExtensionAPI) {
-  const pipePath = process.env.PI_STUDIO_BRIDGE;
+  const pipePath = process.env.HIVE_BRIDGE;
   let sock: ReturnType<typeof connect> | undefined;
   const send = (msg: unknown) => sock?.write(JSON.stringify(msg) + "\n");
 

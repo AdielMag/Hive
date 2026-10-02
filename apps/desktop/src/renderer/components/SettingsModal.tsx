@@ -31,7 +31,7 @@ const TABS: Array<{ id: SettingsTabId; label: string; icon: React.ReactNode; tit
   { id: "compaction", label: "Compaction", icon: <Minimize2 size={15} />, title: "Auto-Compaction & Context" },
   { id: "accounts", label: "AI Providers", icon: <Key size={15} />, title: "AI providers & accounts" },
   { id: "updates", label: "Updates", icon: <Download size={15} />, title: "Updates" },
-  { id: "about", label: "About", icon: <Info size={15} />, title: "About Pi Studio" },
+  { id: "about", label: "About", icon: <Info size={15} />, title: "About Hive" },
 ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialTab = "appearance" }) => {
@@ -195,7 +195,7 @@ const UpdatesTab: React.FC<{ info: UpdateInfo | null; checking: boolean; onCheck
       <div className="ui-card" style={{ padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
-            <div className="ui-row__title">Pi Studio v{info?.currentVersion ?? appVersion ?? "?"}</div>
+            <div className="ui-row__title">Hive v{info?.currentVersion ?? appVersion ?? "?"}</div>
             <div className="ui-row__hint">{info?.hasUpdate ? `Version ${info.latestVersion} is available` : checking ? "Checking GitHub releases…" : "You're on the latest version"}</div>
           </div>
           <button className="ui-btn" onClick={onCheck} disabled={checking}>
@@ -228,7 +228,7 @@ const AboutTab: React.FC = () => {
   const bootstrap = useSessionStore((s) => s.bootstrap);
   const pi = bootstrap?.pi;
   const rows: Array<[string, string]> = [
-    ["Pi Studio", `v${bootstrap?.appVersion ?? "?"}`],
+    ["Hive", `v${bootstrap?.appVersion ?? "?"}`],
     ["Pi CLI", pi?.ok ? `v${pi.info.version} (${pi.info.support})` : "not detected"],
     ["Pi location", pi?.ok ? pi.info.cliPath : "—"],
     ["Node for Pi", pi?.ok ? pi.info.nodePath : "—"],
