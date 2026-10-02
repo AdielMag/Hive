@@ -2,6 +2,12 @@
 
 All notable changes to Pi Studio are documented here. This file is generated on every merge to `main`.
 
+## v0.5.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.4.2...v0.5.0)
+
+### ✨ Features
+
+- Skills & Agents library tab, AI tools panel, subagent transcripts, % compaction ([`16886eb`](https://github.com/AdielMag/pi-studio/commit/16886eb0b29e53aab13df85701a91f6a871c87e9))
+
 ## v0.4.2 — 2026-10-01 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.4.1...v0.4.2)
 
 ### 🐛 Fixes
