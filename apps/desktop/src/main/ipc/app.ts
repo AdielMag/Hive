@@ -1,5 +1,5 @@
 import { app, dialog, shell } from "electron";
-import { IPC, type Bootstrap, type PiLocateResult } from "@pi-studio/protocol";
+import { IPC, type Bootstrap, type PiLocateResult } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import { isSafeExternalUrl } from "../window.ts";
 import { handle } from "./util.ts";

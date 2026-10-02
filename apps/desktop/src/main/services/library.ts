@@ -19,7 +19,7 @@ import type {
   LibrarySnapshot,
   LibraryFieldValue,
   LibrarySetFieldResult,
-} from "@pi-studio/protocol";
+} from "@hive/protocol";
 
 export interface LibraryRootOptions {
   /** Pi agent dir (defaults to PI_CODING_AGENT_DIR or ~/.pi/agent). */

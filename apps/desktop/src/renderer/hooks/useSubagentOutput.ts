@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { messagesToTimeline, type AnyMessage, type Timeline } from "@pi-studio/pi-adapter";
+import { messagesToTimeline, type AnyMessage, type Timeline } from "@hive/pi-adapter";
 import { parseOutputLines, type SubagentView } from "../lib/ai/subagents.ts";
 import { useSessionStore } from "../store/session-store.ts";
 

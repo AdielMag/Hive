@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { shell } from "electron";
-import type { SessionCatalogItem } from "@pi-studio/protocol";
+import type { SessionCatalogItem } from "@hive/protocol";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { GuiStore } from "../store/index.ts";
 

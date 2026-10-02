@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FolderOpen, Link2, Plus, Settings2, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { DEFAULT_PROJECT_HUES, type LinkedProject } from "@pi-studio/protocol";
+import { DEFAULT_PROJECT_HUES, type LinkedProject } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
 
 export type ProjectSettingsSection = "general" | "links";

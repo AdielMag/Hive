@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from "react";
 import { Check, Code2, Copy, Eye, FileCode, FileJson, FileText, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import type { TabItem } from "@pi-studio/protocol";
+import type { TabItem } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
 import { Markdown } from "./code/Markdown.tsx";
 import { HighlightedLines } from "./code/HighlightedLines.tsx";

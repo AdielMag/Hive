@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Minimize2, Loader2, CheckCircle2, Info, Brain } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
-import { estimateContextBreakdown, type ContextCategory, type ContextBreakdownResult } from "@pi-studio/pi-adapter";
+import { estimateContextBreakdown, type ContextCategory, type ContextBreakdownResult } from "@hive/pi-adapter";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 

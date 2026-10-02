@@ -5,7 +5,7 @@ import type {
   LibraryKind,
   LibraryScope,
   LibrarySnapshot,
-} from "@pi-studio/protocol";
+} from "@hive/protocol";
 
 export type FilterKind = "all" | LibraryKind;
 export type FilterScope = "all" | LibraryScope;

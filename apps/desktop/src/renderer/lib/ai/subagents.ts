@@ -1,4 +1,4 @@
-import type { AnyMessage, AssistantBlock, Timeline, ToolResultView, ToolRun } from "@pi-studio/pi-adapter";
+import type { AnyMessage, AssistantBlock, Timeline, ToolResultView, ToolRun } from "@hive/pi-adapter";
 
 export interface AgentDetails {
   displayName?: string;

@@ -5,8 +5,8 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { locatePi, packageRootFrom } from "@pi-studio/pi-adapter/node";
-import type { PiLocateResult } from "@pi-studio/protocol";
+import { locatePi, packageRootFrom } from "@hive/pi-adapter/node";
+import type { PiLocateResult } from "@hive/protocol";
 import { refreshProcessPath } from "./shell-env.ts";
 
 export class PiInstallService {

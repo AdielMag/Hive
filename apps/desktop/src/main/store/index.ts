@@ -9,7 +9,7 @@ import {
   type SessionMetaFile,
   type UiStateFile,
   getNextProjectColor,
-} from "@pi-studio/protocol";
+} from "@hive/protocol";
 
 export class GuiStore {
   private readonly dir: string;

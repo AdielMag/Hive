@@ -64,7 +64,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json apps/desktop/package.json CHANGELOG.md
           git commit -m "chore(release): ${TAG} [skip ci]"
-          git tag -a "${TAG}" -m "Pi Studio ${TAG}"
+          git tag -a "${TAG}" -m "Hive ${TAG}"
           # If main is protected the commit push may be rejected; the tag (pointing at the release
           # commit) is what the build uses, so push it regardless.
           git push origin HEAD:main || echo "::warning::Could not push the release commit to main (branch protection?). Tag will still be published."
@@ -128,7 +128,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
-          name: Pi Studio ${{ needs.version.outputs.tag }}
+          name: Hive ${{ needs.version.outputs.tag }}
           body_path: artifacts/release-notes/RELEASE_NOTES.md
           draft: false
           prerelease: false

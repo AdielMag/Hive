@@ -17,7 +17,7 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { lastNDays, localDay, summarizeUsage, type UsageGroupRow, type UsageTotals } from "@pi-studio/pi-adapter";
+import { lastNDays, localDay, summarizeUsage, type UsageGroupRow, type UsageTotals } from "@hive/pi-adapter";
 import { ProviderIcon } from "../../components/ProviderIcon.tsx";
 import { formatCost, formatDayLabel, formatTokens } from "../../lib/format.ts";
 import { useInsights } from "./insights-store.ts";

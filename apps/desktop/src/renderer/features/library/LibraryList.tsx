@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { AlertTriangle, Bot, EyeOff, Filter, Search, Sparkles, X } from "lucide-react";
-import type { LibraryEntry, LibraryScope } from "@pi-studio/protocol";
+import type { LibraryEntry, LibraryScope } from "@hive/protocol";
 import { useLibraryStore } from "./library-store.ts";
 
 const SCOPES: Array<{ id: LibraryScope; label: string }> = [

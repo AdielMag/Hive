@@ -1,7 +1,7 @@
 import { closeSync, fstatSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import type { SubagentLocateRequest, SubagentOutputChunk, SubagentOutputRef } from "@pi-studio/protocol";
+import type { SubagentLocateRequest, SubagentOutputChunk, SubagentOutputRef } from "@hive/protocol";
 
 /**
  * Encodes a cwd path following pi-subagents conventions:

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LibraryEntry, LibrarySnapshot } from "@pi-studio/protocol";
+import type { LibraryEntry, LibrarySnapshot } from "@hive/protocol";
 import { useLibraryStore } from "./library-store.ts";
 
 const mockEntry: LibraryEntry = {

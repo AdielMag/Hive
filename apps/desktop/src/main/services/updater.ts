@@ -1,6 +1,6 @@
 import { app, shell } from "electron";
-import { compareVersions } from "@pi-studio/pi-adapter";
-import type { UpdateProgress } from "@pi-studio/protocol";
+import { compareVersions } from "@hive/pi-adapter";
+import type { UpdateProgress } from "@hive/protocol";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";

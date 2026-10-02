@@ -226,7 +226,7 @@ pi-studio/
 Key design points:
 
 - **Pi is the engine.** Each tab runs `pi --mode rpc` as a child process; Studio talks JSON-RPC over stdio and loads a small bridge extension for things RPC doesn't cover (linked projects, status). Nothing is re-implemented that Pi already does.
-- **Strict process boundary.** The renderer has no Node access; everything goes through the typed `StudioApi` in `@pi-studio/protocol`, implemented by the preload and handled by `ipc/*` modules.
+- **Strict process boundary.** The renderer has no Node access; everything goes through the typed `StudioApi` in `@hive/protocol`, implemented by the preload and handled by `ipc/*` modules.
 - **Services are injectable.** `AppContext` constructs services once; IPC modules receive it. Pure logic (quota parsers, usage aggregation, theme tokens, release versioning) lives in side-effect-free modules with unit tests.
 - **Performance.** Store subscriptions use shallow selectors so streaming only re-renders what changed; settled transcript rows are memoized; highlighting is async, cached (LRU) and debounced while streaming; heavy views (terminal, settings, usage, viewers) are code-split; session events are batched every 50 ms in main.
 

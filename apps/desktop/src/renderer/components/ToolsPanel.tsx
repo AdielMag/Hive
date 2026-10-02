@@ -21,7 +21,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { buildTimeline } from "@pi-studio/pi-adapter";
+import { buildTimeline } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
 import { useActiveRegistry, useAiRegistryStore } from "../store/ai-registry-store.ts";
 import { availableOnly, collectToolUsage, type ToolUsageRef } from "../lib/ai/tool-usage.ts";

@@ -7,8 +7,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { UsageBucket, UsageReport } from "@pi-studio/protocol";
-import { SessionUsageParser } from "@pi-studio/pi-adapter";
+import type { UsageBucket, UsageReport } from "@hive/protocol";
+import { SessionUsageParser } from "@hive/pi-adapter";
 import { piAgentDir } from "../paths.ts";
 
 interface FileEntry {

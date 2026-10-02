@@ -18,7 +18,7 @@ import {
   Terminal,
   Wrench,
 } from "lucide-react";
-import type { LibraryEntry, LibraryFieldValue } from "@pi-studio/protocol";
+import type { LibraryEntry, LibraryFieldValue } from "@hive/protocol";
 import { useLibraryStore } from "./library-store.ts";
 import { useSessionStore } from "../../store/session-store.ts";
 import { ModelPicker } from "./ModelPicker.tsx";

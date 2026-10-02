@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyTool } from "./classify.ts";
-import type { RegistryTool } from "@pi-studio/protocol";
+import type { RegistryTool } from "@hive/protocol";
 
 describe("classifyTool", () => {
   const tools: RegistryTool[] = [

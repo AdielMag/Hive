@@ -16,7 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import type { ProjectEntry, SessionCatalogItem } from "@pi-studio/protocol";
+import type { ProjectEntry, SessionCatalogItem } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
 import { sessionDisplayTitle } from "../lib/session-title.ts";
 import { formatAgo } from "../lib/format.ts";

@@ -2,7 +2,7 @@
  * Pure parsers that normalize each provider's subscription-usage payload into QuotaGroup[].
  * Kept free of I/O so they are unit-testable against recorded payloads.
  */
-import type { QuotaGroup, QuotaWindow } from "@pi-studio/protocol";
+import type { QuotaGroup, QuotaWindow } from "@hive/protocol";
 
 type Rec = Record<string, unknown>;
 const rec = (v: unknown): Rec | undefined => (v && typeof v === "object" && !Array.isArray(v) ? (v as Rec) : undefined);

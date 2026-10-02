@@ -1,4 +1,4 @@
-import type { RegistryTool } from "@pi-studio/protocol";
+import type { RegistryTool } from "@hive/protocol";
 
 export type ToolCategory = "skill" | "mcp" | "subagent" | "builtin" | "extension";
 

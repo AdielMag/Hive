@@ -1,4 +1,4 @@
-import { IPC } from "@pi-studio/protocol";
+import { IPC } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import * as git from "../services/git.ts";
 import { listDirectory, readFileContent, readMediaFile, runWithInterpreter } from "../services/files.ts";

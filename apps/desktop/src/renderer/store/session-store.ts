@@ -12,13 +12,13 @@ import {
   type SessionStatusUpdate,
   type StudioApi,
   type TabItem,
-} from "@pi-studio/protocol";
+} from "@hive/protocol";
 import {
   applyEntries,
   applyEvent,
   createTranscript,
   type TranscriptState,
-} from "@pi-studio/pi-adapter";
+} from "@hive/pi-adapter";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 

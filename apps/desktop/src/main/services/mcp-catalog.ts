@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { McpServerInfo } from "@pi-studio/protocol";
+import type { McpServerInfo } from "@hive/protocol";
 import { piAgentDir } from "../paths.ts";
 
 interface CachedTool {

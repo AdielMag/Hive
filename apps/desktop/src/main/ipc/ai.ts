@@ -1,5 +1,5 @@
 import { closeSync, openSync, readSync } from "node:fs";
-import { IPC, type SubagentLocateRequest } from "@pi-studio/protocol";
+import { IPC, type SubagentLocateRequest } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import { getMcpCatalog } from "../services/mcp-catalog.ts";
 import { locateSubagentOutput, readChunk } from "../services/subagent-output.ts";

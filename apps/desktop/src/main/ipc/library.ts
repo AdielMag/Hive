@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { extname, isAbsolute } from "node:path";
 import { shell } from "electron";
-import { IPC, type LibrarySetFieldRequest } from "@pi-studio/protocol";
+import { IPC, type LibrarySetFieldRequest } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import { piAgentDir } from "../paths.ts";
 import { isInside, libraryRoots, listLibrary, setFrontmatterField } from "../services/library.ts";

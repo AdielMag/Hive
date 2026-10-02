@@ -1,6 +1,6 @@
 /** Resolves fresh provider credentials by running a helper under the user's Pi Node runtime. */
 import { execFile } from "node:child_process";
-import type { PiInstallInfo } from "@pi-studio/protocol";
+import type { PiInstallInfo } from "@hive/protocol";
 import { resourcePath } from "../../paths.ts";
 
 export interface ProviderCredential {

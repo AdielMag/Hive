@@ -1,5 +1,5 @@
 /** Shapes usage buckets into stacked chart series (top N models + "Other"). Pure. */
-import type { UsageBucket } from "@pi-studio/protocol";
+import type { UsageBucket } from "@hive/protocol";
 
 export type UsageMetric = "cost" | "tokens";
 export type UsageRange = "today" | "7d" | "30d" | "90d";

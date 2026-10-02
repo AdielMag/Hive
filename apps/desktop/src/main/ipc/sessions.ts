@@ -6,7 +6,7 @@ import {
   type SessionMetaEntry,
   type StartSessionRequest,
   type StudioRpcCommand,
-} from "@pi-studio/protocol";
+} from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import { handle } from "./util.ts";
 

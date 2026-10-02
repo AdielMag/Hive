@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState } from "react";
 import { Check, Info, RotateCcw, Save } from "lucide-react";
-import type { CompactionSettings } from "@pi-studio/protocol";
+import type { CompactionSettings } from "@hive/protocol";
 
 const DEFAULT_SETTINGS: CompactionSettings = { enabled: true, triggerPercent: 90, keepRecentPercent: 10 };
 

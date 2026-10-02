@@ -1,5 +1,5 @@
-import type { Timeline } from "@pi-studio/pi-adapter";
-import type { SessionRegistry } from "@pi-studio/protocol";
+import type { Timeline } from "@hive/pi-adapter";
+import type { SessionRegistry } from "@hive/protocol";
 import { isUnder, normPath, type PathContext } from "./paths.ts";
 
 export interface SkillLoad {

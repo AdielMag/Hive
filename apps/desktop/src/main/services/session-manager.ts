@@ -1,5 +1,5 @@
 import { type BrowserWindow } from "electron";
-import { PiRpcConnection } from "@pi-studio/pi-adapter/node";
+import { PiRpcConnection } from "@hive/pi-adapter/node";
 import {
   IPC,
   type BridgeActionRequest,
@@ -15,10 +15,10 @@ import {
   type StartSessionRequest,
   type StartSessionResult,
   type StudioRpcCommand,
-} from "@pi-studio/protocol";
+} from "@hive/protocol";
 import { bridgeExtensionPath } from "../paths.ts";
 import { createBridgeServer, type BridgeSessionHandle } from "../bridge-server/index.ts";
-import type { SessionRegistry } from "@pi-studio/protocol";
+import type { SessionRegistry } from "@hive/protocol";
 
 interface ActiveSession {
   key: string;

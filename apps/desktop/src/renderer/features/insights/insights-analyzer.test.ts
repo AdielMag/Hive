@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeUsageTelemetry } from "./insights-analyzer.ts";
-import type { UsageReport } from "@pi-studio/protocol";
-import type { UsageGroupRow, UsageTotals } from "@pi-studio/pi-adapter";
+import type { UsageReport } from "@hive/protocol";
+import type { UsageGroupRow, UsageTotals } from "@hive/pi-adapter";
 
 describe("insights-analyzer", () => {
   const dummyUsage: UsageReport = {

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { create } from "zustand";
-import type { McpServerInfo, SessionRegistry } from "@pi-studio/protocol";
+import type { McpServerInfo, SessionRegistry } from "@hive/protocol";
 import { useSessionStore } from "./session-store.ts";
 
 interface AiRegistryState {

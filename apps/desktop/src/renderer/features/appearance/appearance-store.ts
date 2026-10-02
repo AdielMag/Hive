@@ -4,7 +4,7 @@
  * of the default theme on launch.
  */
 import { create } from "zustand";
-import { buildArcTokens, sanitizeArcTheme, type ArcTheme, DEFAULT_ARC_THEME } from "@pi-studio/theme-engine";
+import { buildArcTokens, sanitizeArcTheme, type ArcTheme, DEFAULT_ARC_THEME } from "@hive/theme-engine";
 
 export interface EditorPrefs {
   /** Code font size in px (code blocks, file viewer, diff, terminal). */

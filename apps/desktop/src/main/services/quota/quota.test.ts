@@ -8,7 +8,7 @@ import {
 import { parseCredentialsOutput } from "./credentials.ts";
 import { QuotaService } from "./index.ts";
 import { UnsupportedError } from "./fetchers.ts";
-import type { PiInstallInfo } from "@pi-studio/protocol";
+import type { PiInstallInfo } from "@hive/protocol";
 
 const NOW = Date.parse("2026-10-01T10:00:00Z");
 

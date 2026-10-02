@@ -11,7 +11,7 @@ import {
   Terminal,
   Wrench,
 } from "lucide-react";
-import type { Timeline } from "@pi-studio/pi-adapter";
+import type { Timeline } from "@hive/pi-adapter";
 import type { SubagentView } from "../../lib/ai/subagents.ts";
 import { formatCost, formatDuration } from "../../lib/format.ts";
 import { useSubagentOutput } from "../../hooks/useSubagentOutput.ts";

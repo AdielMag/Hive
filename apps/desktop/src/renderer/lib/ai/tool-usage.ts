@@ -1,5 +1,5 @@
-import type { Timeline } from "@pi-studio/pi-adapter";
-import type { McpServerInfo, RegistrySkill, RegistryTool, SessionRegistry } from "@pi-studio/protocol";
+import type { Timeline } from "@hive/pi-adapter";
+import type { McpServerInfo, RegistrySkill, RegistryTool, SessionRegistry } from "@hive/protocol";
 import { classifyTool } from "./classify.ts";
 import { indexSkills } from "./skills.ts";
 import { indexSubagents, resolveSubagentView, type SubagentView } from "./subagents.ts";

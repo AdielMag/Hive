@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Compass, Sparkles, CheckSquare, Bug, ChevronDown, Check } from "lucide-react";
-import type { AgentMode } from "@pi-studio/protocol";
+import type { AgentMode } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
 
 export interface ModeMeta {

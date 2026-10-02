@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import type { CompactionSettings, ModelCatalogItem, ModelsCatalogResponse } from "@pi-studio/protocol";
+import type { CompactionSettings, ModelCatalogItem, ModelsCatalogResponse } from "@hive/protocol";
 
 /** Pi's built-in defaults (docs/compaction.md). */
 const PI_DEFAULT_RESERVE = 16384;

@@ -24,7 +24,7 @@ import { ThinkingPicker } from "./ThinkingPicker.tsx";
 import { ModePicker } from "./ModePicker.tsx";
 import { QueuedMessagesBar } from "./transcript/QueuedMessages.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
-import type { AttachedItem } from "@pi-studio/protocol";
+import type { AttachedItem } from "@hive/protocol";
 
 interface ComposerProps {
   height?: number;

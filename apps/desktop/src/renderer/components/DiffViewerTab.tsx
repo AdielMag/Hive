@@ -6,7 +6,7 @@ import {
   X,
   GitCompare,
 } from "lucide-react";
-import type { TabItem } from "@pi-studio/protocol";
+import type { TabItem } from "@hive/protocol";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { DiffView } from "./code/DiffView.tsx";

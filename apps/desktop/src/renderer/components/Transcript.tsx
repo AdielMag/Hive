@@ -25,7 +25,7 @@ import {
   Terminal,
   Wrench,
 } from "lucide-react";
-import { buildTimeline, type AssistantBlock, type Timeline, type TimelineItem, type ToolResultView, type ToolRun } from "@pi-studio/pi-adapter";
+import { buildTimeline, type AssistantBlock, type Timeline, type TimelineItem, type ToolResultView, type ToolRun } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
 import { useActiveRegistry } from "../store/ai-registry-store.ts";
 import { indexSkills, parseSkillBlock, type SkillIndex } from "../lib/ai/skills.ts";

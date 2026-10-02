@@ -2,7 +2,7 @@
 import React from "react";
 import { BarChart3, FileCode, GitCompare, Loader2, MessageSquare, PenLine, Plus, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import type { TabItem } from "@pi-studio/protocol";
+import type { TabItem } from "@hive/protocol";
 import { hasDraft, useSessionStore } from "../store/session-store.ts";
 
 export const TabStrip: React.FC = () => {

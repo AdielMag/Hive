@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react";
-import type { LibrarySection } from "@pi-studio/protocol";
+import type { LibrarySection } from "@hive/protocol";
 import { Markdown } from "../../components/code/Markdown.tsx";
 import { copyText } from "../../lib/clipboard.ts";
 

@@ -5,7 +5,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { PiInstallInfo, ProviderQuota, QuotaGroup, QuotaSnapshot } from "@pi-studio/protocol";
+import type { PiInstallInfo, ProviderQuota, QuotaGroup, QuotaSnapshot } from "@hive/protocol";
 import { piAgentDir } from "../../paths.ts";
 import { resolveCredentials, type ProviderCredential } from "./credentials.ts";
 import { QUOTA_FETCHERS, UnsupportedError } from "./fetchers.ts";

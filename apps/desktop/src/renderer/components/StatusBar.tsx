@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BarChart3, Gauge, RefreshCw, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { parseAnsi } from "@pi-studio/pi-adapter";
+import { parseAnsi } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
 import { useInsights, useNow, useQuotaPolling } from "../features/insights/insights-store.ts";
 import { ProviderQuotaCard, usageTone } from "../features/insights/quota-ui.tsx";

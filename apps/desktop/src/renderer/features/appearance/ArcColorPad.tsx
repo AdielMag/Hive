@@ -4,7 +4,7 @@
  * moves just that dot. Clicking empty space moves the selected dot there.
  */
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { arcDotColor, type ArcColor } from "@pi-studio/theme-engine";
+import { arcDotColor, type ArcColor } from "@hive/theme-engine";
 
 interface Props {
   colors: ArcColor[];

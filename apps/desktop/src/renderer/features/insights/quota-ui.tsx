@@ -4,7 +4,7 @@
  */
 import React from "react";
 import { Clock } from "lucide-react";
-import type { ProviderQuota, QuotaWindow } from "@pi-studio/protocol";
+import type { ProviderQuota, QuotaWindow } from "@hive/protocol";
 import { ProviderIcon } from "../../components/ProviderIcon.tsx";
 import { formatDuration, formatResetAt } from "../../lib/format.ts";
 

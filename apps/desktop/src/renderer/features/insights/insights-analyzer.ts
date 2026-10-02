@@ -1,5 +1,5 @@
-import type { UsageReport } from "@pi-studio/protocol";
-import type { UsageGroupRow, UsageTotals } from "@pi-studio/pi-adapter";
+import type { UsageReport } from "@hive/protocol";
+import type { UsageGroupRow, UsageTotals } from "@hive/pi-adapter";
 import { formatCost, formatTokens } from "../../lib/format.ts";
 
 export interface AiInsightItem {

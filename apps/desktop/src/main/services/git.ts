@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import type { PiInstallInfo } from "@pi-studio/protocol";
+import type { PiInstallInfo } from "@hive/protocol";
 
 const execFileAsync = promisify(execFile);
 

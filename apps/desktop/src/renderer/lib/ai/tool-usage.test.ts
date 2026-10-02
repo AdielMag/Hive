@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { availableOnly, collectToolUsage } from "./tool-usage.ts";
-import type { Timeline } from "@pi-studio/pi-adapter";
-import type { McpServerInfo, SessionRegistry } from "@pi-studio/protocol";
+import type { Timeline } from "@hive/pi-adapter";
+import type { McpServerInfo, SessionRegistry } from "@hive/protocol";
 
 describe("tool-usage helpers", () => {
   const ctx = {

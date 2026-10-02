@@ -1,5 +1,5 @@
 /** Network calls for each provider's subscription usage endpoint. */
-import type { QuotaGroup } from "@pi-studio/protocol";
+import type { QuotaGroup } from "@hive/protocol";
 import { parseAnthropicUsage, parseAntigravityQuota, parseCodexUsage } from "./parsers.ts";
 
 const TIMEOUT_MS = 10_000;

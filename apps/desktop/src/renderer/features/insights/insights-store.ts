@@ -4,7 +4,7 @@
  */
 import { useEffect, useReducer } from "react";
 import { create } from "zustand";
-import type { QuotaSnapshot, UsageReport } from "@pi-studio/protocol";
+import type { QuotaSnapshot, UsageReport } from "@hive/protocol";
 
 interface InsightsState {
   quota: QuotaSnapshot | null;

@@ -6,7 +6,7 @@ import {
   parseSkillBlock,
   skillForToolCall,
 } from "./skills.ts";
-import type { Timeline } from "@pi-studio/pi-adapter";
+import type { Timeline } from "@hive/pi-adapter";
 
 describe("skills helpers", () => {
   const ctx = {

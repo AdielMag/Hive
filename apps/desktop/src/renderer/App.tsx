@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle, Check, Copy, FolderSearch, RefreshCw, Sparkles } from "lucide-react";
-import type { PiLocateResult } from "@pi-studio/protocol";
+import type { PiLocateResult } from "@hive/protocol";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "./store/session-store.ts";
 import { WorkbenchLayout } from "./components/WorkbenchLayout.tsx";

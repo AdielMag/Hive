@@ -7,7 +7,7 @@
  * focus, so any check (including Settings' "Check now") lights up the badge.
  */
 import { create } from "zustand";
-import type { UpdateProgress } from "@pi-studio/protocol";
+import type { UpdateProgress } from "@hive/protocol";
 
 export type { UpdateProgress };
 

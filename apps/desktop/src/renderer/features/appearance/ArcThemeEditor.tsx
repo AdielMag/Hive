@@ -14,7 +14,7 @@ import {
   type ArcColor,
   type ArcMode,
   type ArcTheme,
-} from "@pi-studio/theme-engine";
+} from "@hive/theme-engine";
 import { useAppearance } from "./appearance-store.ts";
 import { ArcColorPad } from "./ArcColorPad.tsx";
 import { CodeBlock } from "../../components/code/CodeBlock.tsx";

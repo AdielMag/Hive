@@ -1,4 +1,4 @@
-import { type CompactionSettings, IPC } from "@pi-studio/protocol";
+import { type CompactionSettings, IPC } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import { handle } from "./util.ts";
 
