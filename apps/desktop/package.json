@@ -7,7 +7,7 @@
   "author": "Hive Contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AdielMag/pi-studio.git"
+    "url": "https://github.com/AdielMag/Hive.git"
   },
   "main": "./out/main/index.js",
   "bin": {
@@ -29,7 +29,7 @@
     "publish": {
       "provider": "github",
       "owner": "AdielMag",
-      "repo": "pi-studio"
+      "repo": "Hive"
     },
     "directories": {
       "output": "dist-release",

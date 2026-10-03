@@ -5,7 +5,7 @@
   "author": "Hive Contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AdielMag/pi-studio.git"
+    "url": "https://github.com/AdielMag/Hive.git"
   },
   "description": "Desktop GUI for agentic coding on top of the Pi CLI",
   "type": "module",

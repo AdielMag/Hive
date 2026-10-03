@@ -7,9 +7,9 @@
 **Desktop workbench for the [Pi coding agent](https://pi.dev).**  
 Multi-session tabs, per-project workspaces, live subscription limits, local cost analytics, and an adaptive color engine — driving your local Pi CLI.
 
-[![Release](https://github.com/AdielMag/pi-studio/actions/workflows/release.yml/badge.svg)](https://github.com/AdielMag/pi-studio/actions/workflows/release.yml)
-[![CI](https://github.com/AdielMag/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/AdielMag/pi-studio/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/AdielMag/pi-studio?sort=semver)](https://github.com/AdielMag/pi-studio/releases/latest)
+[![Release](https://github.com/AdielMag/Hive/actions/workflows/release.yml/badge.svg)](https://github.com/AdielMag/Hive/actions/workflows/release.yml)
+[![CI](https://github.com/AdielMag/Hive/actions/workflows/ci.yml/badge.svg)](https://github.com/AdielMag/Hive/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/AdielMag/Hive?sort=semver)](https://github.com/AdielMag/Hive/releases/latest)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.19-blue.svg)](https://nodejs.org)
 
 <br />
@@ -176,7 +176,7 @@ pi
 
 ### 2. Download Hive
 
-Download the binary for your platform from the [Latest Release](https://github.com/AdielMag/pi-studio/releases/latest):
+Download the binary for your platform from the [Latest Release](https://github.com/AdielMag/Hive/releases/latest):
 
 | Platform | Installer / Package |
 |---|---|
@@ -241,7 +241,7 @@ Hive respects standard Pi environment variables and provides custom overrides wh
 Hive is designed around an architecture that keeps the GUI lean and fast while using Pi's runtime as the core agent engine:
 
 ```
-pi-studio/
+Hive/
 ├── apps/
 │   └── desktop/                 # Frameless Electron desktop application
 │       ├── src/main/            # Process lifecycle, window controls, and IPC services
@@ -269,8 +269,8 @@ pi-studio/
 
 ```bash
 # Clone the repository
-git clone https://github.com/AdielMag/pi-studio.git
-cd pi-studio
+git clone https://github.com/AdielMag/Hive.git
+cd Hive
 
 # Install dependencies (Node 22.19+ required)
 npm ci --legacy-peer-deps

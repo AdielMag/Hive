@@ -115,8 +115,8 @@ export const AppTitleBar: React.FC = () => {
     ],
     Help: [
       { label: "Pi Documentation", action: () => openBrowserTab("https://pi.dev", "Pi Documentation") },
-      { label: "Hive on GitHub", action: () => openBrowserTab("https://github.com/AdielMag/pi-studio", "Hive on GitHub") },
-      { label: "Release Notes", action: () => openBrowserTab("https://github.com/AdielMag/pi-studio/releases", "Release Notes") },
+      { label: "Hive on GitHub", action: () => openBrowserTab("https://github.com/AdielMag/Hive", "Hive on GitHub") },
+      { label: "Release Notes", action: () => openBrowserTab("https://github.com/AdielMag/Hive/releases", "Release Notes") },
       { separator: true, label: "" },
       { label: "About Hive", action: () => ui.openSettings("about") },
     ],
