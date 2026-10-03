@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.11.0 — 2026-10-03 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.10.0...v0.11.0)
+
+### ✨ Features
+
+- **transcript:** add immediate run action for queued messages ([`8a038f6`](https://github.com/AdielMag/pi-studio/commit/8a038f69e235a2c847477a2b6abba7d6c4ccc1f2))
+
 ## v0.10.0 — 2026-10-03 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.9.0...v0.10.0)
 
 ### ✨ Features
