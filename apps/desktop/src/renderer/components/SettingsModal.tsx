@@ -202,7 +202,17 @@ const UpdatesTab: React.FC<{ info: UpdateInfo | null; checking: boolean; onCheck
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <div className="ui-row__title">Hive v{info?.currentVersion ?? appVersion ?? "?"}</div>
-            <div className="ui-row__hint">{info?.hasUpdate ? `Version ${info.latestVersion} is available` : checking ? "Checking GitHub releases…" : "You're on the latest version"}</div>
+            <div className="ui-row__hint">
+              {info?.hasUpdate
+                ? `Version ${info.latestVersion} is available`
+                : checking
+                  ? "Checking GitHub releases…"
+                  : info?.error
+                    ? `${info.error}. Try again in a moment.`
+                    : info
+                      ? "You're on the latest version"
+                      : "Not checked yet"}
+            </div>
           </div>
           <button className="ui-btn" onClick={onCheck} disabled={checking}>
             <RefreshCw size={13} className={checking ? "spin" : undefined} /> Check now
@@ -255,10 +265,10 @@ const AboutTab: React.FC = () => {
         ))}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button className="ui-btn" onClick={() => void window.studio.openExternal("https://github.com/AdielMag/pi-studio")}>
+        <button className="ui-btn" onClick={() => void window.studio.openExternal("https://github.com/AdielMag/Hive")}>
           <ExternalLink size={12} /> GitHub
         </button>
-        <button className="ui-btn" onClick={() => void window.studio.openExternal("https://github.com/AdielMag/pi-studio/blob/main/CHANGELOG.md")}>
+        <button className="ui-btn" onClick={() => void window.studio.openExternal("https://github.com/AdielMag/Hive/blob/main/CHANGELOG.md")}>
           <ExternalLink size={12} /> Changelog
         </button>
       </div>

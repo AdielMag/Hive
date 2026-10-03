@@ -18,6 +18,8 @@ export interface UpdateInfo {
   downloadUrl?: string;
   releaseUrl?: string;
   notes?: string;
+  /** The release lookup failed — update status is unknown (not "up to date"). */
+  error?: string;
 }
 
 const FIRST_CHECK_DELAY_MS = 4_000;

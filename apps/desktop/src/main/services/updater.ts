@@ -1,80 +1,22 @@
 import { app, shell } from "electron";
-import { compareVersions } from "@hive/pi-adapter";
 import type { UpdateProgress } from "@hive/protocol";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
+import { checkLatestRelease, type UpdateInfo } from "./update-check.ts";
 
-export interface UpdateInfo {
-  hasUpdate: boolean;
-  currentVersion: string;
-  latestVersion?: string;
-  releaseUrl?: string;
-  downloadUrl?: string;
-  notes?: string;
-}
+export type { UpdateInfo };
 
 export class AppUpdaterService {
-  private repo = "AdielMag/pi-studio";
+  private repo = "AdielMag/Hive";
 
   setRepo(repo: string): void {
     this.repo = repo;
   }
 
   async checkForUpdates(): Promise<UpdateInfo> {
-    const currentVersion = app.getVersion();
-    try {
-      const res = await fetch(`https://api.github.com/repos/${this.repo}/releases/latest`, {
-        headers: {
-          "User-Agent": `Hive/${currentVersion}`,
-          Accept: "application/vnd.github.v3+json",
-        },
-        signal: AbortSignal.timeout(6000),
-      });
-
-      if (!res.ok) {
-        return { hasUpdate: false, currentVersion };
-      }
-
-      const data = (await res.json()) as {
-        tag_name: string;
-        html_url: string;
-        body: string;
-        assets: Array<{
-          name: string;
-          browser_download_url: string;
-        }>;
-      };
-
-      const latestVersion = (data.tag_name || "").replace(/^v/, "");
-      const isNewer = compareVersions(latestVersion, currentVersion) > 0;
-
-      let downloadUrl = data.html_url;
-      if (process.platform === "win32") {
-        // Prefer the NSIS installer over the portable build.
-        const exeAsset =
-          data.assets?.find((a) => /setup.*\.exe$/i.test(a.name)) ?? data.assets?.find((a) => a.name.endsWith(".exe") && !/portable/i.test(a.name));
-        if (exeAsset) downloadUrl = exeAsset.browser_download_url;
-      } else if (process.platform === "darwin") {
-        const dmgAsset = data.assets?.find((a) => a.name.endsWith(".dmg") || a.name.endsWith(".zip"));
-        if (dmgAsset) downloadUrl = dmgAsset.browser_download_url;
-      } else {
-        const appImageAsset = data.assets?.find((a) => a.name.endsWith(".AppImage"));
-        if (appImageAsset) downloadUrl = appImageAsset.browser_download_url;
-      }
-
-      return {
-        hasUpdate: isNewer,
-        currentVersion,
-        latestVersion,
-        releaseUrl: data.html_url,
-        downloadUrl,
-        notes: data.body,
-      };
-    } catch {
-      return { hasUpdate: false, currentVersion };
-    }
+    return checkLatestRelease({ repo: this.repo, currentVersion: app.getVersion(), platform: process.platform });
   }
 
   async applyUpdate(
