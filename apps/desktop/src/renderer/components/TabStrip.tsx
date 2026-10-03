@@ -1,6 +1,6 @@
 /** Tabs across the top of the content card (sessions, files, diffs, usage). Middle-click closes. */
 import React from "react";
-import { BarChart3, FileCode, GitCompare, Globe, Loader2, MessageSquare, Moon, PenLine, Plus, Sparkles, X } from "lucide-react";
+import { BarChart3, ClipboardCheck, FileCode, GitCompare, Globe, Loader2, MessageSquare, Moon, PenLine, Plus, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { TabItem } from "@hive/protocol";
 import { hasDraft, useSessionStore } from "../store/session-store.ts";
@@ -143,6 +143,8 @@ const TabIcon: React.FC<{ tab: TabItem }> = ({ tab }) => {
       ) : (
         <Globe size={13} />
       );
+    case "plan":
+      return <ClipboardCheck size={13} />;
     default:
       return <MessageSquare size={13} />;
   }

@@ -27,14 +27,26 @@ export interface AppearanceState {
 const STORAGE_KEY = "hive.appearance.v2";
 const DEFAULT_EDITOR: EditorPrefs = { codeFontSize: 12.5, ligatures: true, wrapCode: false };
 
+function isLegacyDefaultTheme(theme: ArcTheme): boolean {
+  return (
+    theme.colors.length === 1 &&
+    theme.colors[0]?.hue === 265 &&
+    theme.colors[0]?.sat === 0.55 &&
+    theme.mode === "dark" &&
+    theme.intensity === 0.55 &&
+    theme.grain === 0.35
+  );
+}
+
 function load(): { theme: ArcTheme; editor: EditorPrefs } {
   try {
     const raw = getStoredItem(STORAGE_KEY);
     if (raw) {
       const data = JSON.parse(raw) as { theme?: unknown; editor?: Partial<EditorPrefs> };
       const fontSize = Number(data.editor?.codeFontSize);
+      const parsedTheme = sanitizeArcTheme(data.theme);
       return {
-        theme: sanitizeArcTheme(data.theme),
+        theme: isLegacyDefaultTheme(parsedTheme) ? DEFAULT_ARC_THEME : parsedTheme,
         editor: {
           codeFontSize: Number.isFinite(fontSize) ? Math.max(10, Math.min(18, fontSize)) : DEFAULT_EDITOR.codeFontSize,
           ligatures: data.editor?.ligatures ?? DEFAULT_EDITOR.ligatures,

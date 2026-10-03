@@ -31,7 +31,7 @@ export interface ArcTheme {
 export const MAX_ARC_COLORS = 3;
 
 export const DEFAULT_ARC_THEME: ArcTheme = {
-  colors: [{ hue: 265, sat: 0.55 }],
+  colors: [{ hue: 65, sat: 0.65 }],
   mode: "dark",
   intensity: 0.55,
   grain: 0.35,
@@ -50,6 +50,7 @@ const preset = (id: string, name: string, colors: ArcColor[], mode: ArcMode = "d
 });
 
 export const ARC_PRESETS: ArcPreset[] = [
+  preset("honey", "Honey", [{ hue: 65, sat: 0.65 }], "dark", 0.55, 0.35),
   preset("midnight", "Midnight", [{ hue: 265, sat: 0.55 }]),
   preset("ember", "Ember", [{ hue: 30, sat: 0.8 }, { hue: 350, sat: 0.7 }]),
   preset("lagoon", "Lagoon", [{ hue: 200, sat: 0.7 }, { hue: 170, sat: 0.6 }]),

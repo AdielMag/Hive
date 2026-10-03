@@ -7,9 +7,14 @@ import {
   Eye,
   CheckSquare,
   Square,
-  } from "lucide-react";
+  Sparkles,
+  GitCommit,
+  BarChart3,
+} from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
+import { useFeatureModelStore, resolveFeatureModel } from "../store/feature-models-store.ts";
+import { AiModelChip } from "./AiModelChip.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 
 function formatContext(tokens?: number): string {
@@ -20,7 +25,26 @@ function formatContext(tokens?: number): string {
 }
 
 export const ModelsSettingsContent: React.FC = () => {
-  const { allCatalogModels, models, enabledModelKeys, saveEnabledModels } = useSessionStore(useShallow((s) => ({ allCatalogModels: s.allCatalogModels, models: s.models, enabledModelKeys: s.enabledModelKeys, saveEnabledModels: s.saveEnabledModels })));
+  const { allCatalogModels, models, enabledModelKeys, saveEnabledModels, selectedModel, defaultModel, defaultProvider } =
+    useSessionStore(
+      useShallow((s) => ({
+        allCatalogModels: s.allCatalogModels,
+        models: s.models,
+        enabledModelKeys: s.enabledModelKeys,
+        saveEnabledModels: s.saveEnabledModels,
+        selectedModel: s.selectedModel,
+        defaultModel: s.defaultModel,
+        defaultProvider: s.defaultProvider,
+      })),
+    );
+
+  const { config, setGitCommitConfig, setUsageAnalysisConfig } = useFeatureModelStore(
+    useShallow((s) => ({
+      config: s.config,
+      setGitCommitConfig: s.setGitCommitConfig,
+      setUsageAnalysisConfig: s.setUsageAnalysisConfig,
+    })),
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<string>("all");
@@ -96,6 +120,18 @@ export const ModelsSettingsContent: React.FC = () => {
     }
     return groups;
   }, [filteredModels]);
+
+  const defaultCustomKey = combinedModels[0] ? `${combinedModels[0].provider}/${combinedModels[0].id}` : "";
+
+  const resolvedCommitModel = useMemo(
+    () => resolveFeatureModel(config.gitCommit, selectedModel, defaultModel, combinedModels, defaultProvider),
+    [config.gitCommit, selectedModel, defaultModel, combinedModels, defaultProvider],
+  );
+
+  const resolvedUsageModel = useMemo(
+    () => resolveFeatureModel(config.usageAnalysis, selectedModel, defaultModel, combinedModels, defaultProvider),
+    [config.usageAnalysis, selectedModel, defaultModel, combinedModels, defaultProvider],
+  );
 
   // Count active models
   const totalModelsCount = combinedModels.length;
@@ -184,6 +220,190 @@ export const ModelsSettingsContent: React.FC = () => {
           }}
         >
           {activeModelsCount} of {totalModelsCount} active
+        </div>
+      </div>
+
+      {/* Dedicated Auxiliary AI Models Card */}
+      <div
+        style={{
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-subtle)",
+          borderRadius: 8,
+          padding: "14px 16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Sparkles size={15} color="var(--accent-base)" />
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+              Auxiliary AI Models
+            </span>
+          </div>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            Configure models used for background and auxiliary AI features
+          </span>
+        </div>
+
+        {/* Feature 1: Git Commit Message */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            padding: "10px 12px",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 6,
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 220 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <GitCommit size={14} color="var(--accent-base)" />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                AI Git Commit Message
+              </span>
+              <AiModelChip model={resolvedCommitModel} clickable={false} />
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              Used when clicking "AI Message" on staged files in the Git sidebar
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <select
+              value={config.gitCommit.source}
+              onChange={(e) => {
+                const nextSource = e.target.value as any;
+                setGitCommitConfig({
+                  source: nextSource,
+                  modelId: nextSource === "custom" ? (config.gitCommit.modelId || defaultCustomKey) : config.gitCommit.modelId,
+                });
+              }}
+              style={{
+                background: "var(--bg-input)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 5,
+                padding: "4px 8px",
+                fontSize: 11,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="session">Active Session Model (Dynamic)</option>
+              <option value="pi-default">Pi CLI Default ({defaultModel || "Default"})</option>
+              <option value="custom">Specific Model...</option>
+            </select>
+
+            {config.gitCommit.source === "custom" && (
+              <select
+                value={config.gitCommit.modelId || defaultCustomKey}
+                onChange={(e) => setGitCommitConfig({ modelId: e.target.value })}
+                style={{
+                  background: "var(--bg-input)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 5,
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  maxWidth: 200,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                {combinedModels.map((m) => (
+                  <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+                    {m.name || m.id} ({m.provider})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
+        {/* Feature 2: AI Usage Insights */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            padding: "10px 12px",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 6,
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 220 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <BarChart3 size={14} color="var(--accent-base)" />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                AI Usage Insights
+              </span>
+              <AiModelChip model={resolvedUsageModel} clickable={false} />
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              Used when clicking "Analyze with AI" in the Usage & Analytics view
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <select
+              value={config.usageAnalysis.source}
+              onChange={(e) => {
+                const nextSource = e.target.value as any;
+                setUsageAnalysisConfig({
+                  source: nextSource,
+                  modelId: nextSource === "custom" ? (config.usageAnalysis.modelId || defaultCustomKey) : config.usageAnalysis.modelId,
+                });
+              }}
+              style={{
+                background: "var(--bg-input)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 5,
+                padding: "4px 8px",
+                fontSize: 11,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="session">Active Session Model (Dynamic)</option>
+              <option value="pi-default">Pi CLI Default ({defaultModel || "Default"})</option>
+              <option value="custom">Specific Model...</option>
+              <option value="heuristic">Fast Local Telemetry (Deterministic)</option>
+            </select>
+
+            {config.usageAnalysis.source === "custom" && (
+              <select
+                value={config.usageAnalysis.modelId || defaultCustomKey}
+                onChange={(e) => setUsageAnalysisConfig({ modelId: e.target.value })}
+                style={{
+                  background: "var(--bg-input)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 5,
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  maxWidth: 200,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                {combinedModels.map((m) => (
+                  <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+                    {m.name || m.id} ({m.provider})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
       </div>
 

@@ -127,3 +127,94 @@ describe("queued messages store actions", () => {
     expect(q.followUp).toEqual([]);
   });
 });
+
+describe("agent execution modes store actions", () => {
+  const rpcCalls: any[] = [];
+
+  beforeEach(() => {
+    rpcCalls.length = 0;
+    (globalThis as any).window = {
+      studio: {
+        rpc: async (_key: string, cmd: any) => {
+          rpcCalls.push(cmd);
+          return { ok: true };
+        },
+      },
+    };
+
+    useSessionStore.setState({
+      activeKey: "session_mode_test",
+      activeTabId: "tab_1",
+      tabs: [
+        {
+          id: "tab_1",
+          projectId: "p1",
+          title: "Session 1",
+          pinned: false,
+          mode: "auto-edit",
+        },
+        {
+          id: "tab_2",
+          projectId: "p1",
+          title: "Session 2",
+          pinned: false,
+          mode: "ask",
+        },
+      ],
+      selectedMode: "auto-edit",
+      promptText: "",
+      attachments: [],
+      transcript: {
+        ...useSessionStore.getState().transcript,
+        running: false,
+      },
+    });
+  });
+
+  it("updates selectedMode and active tab mode on setMode", () => {
+    useSessionStore.getState().setMode("ask");
+    expect(useSessionStore.getState().selectedMode).toBe("ask");
+    expect(useSessionStore.getState().tabs[0]?.mode).toBe("ask");
+  });
+
+  it("prefixes prompt with Ask mode steering message when sending prompt in ask mode", async () => {
+    useSessionStore.getState().setMode("ask");
+    useSessionStore.setState({ promptText: "How does the cache work?" });
+    await useSessionStore.getState().sendPrompt();
+
+    expect(rpcCalls.length).toBe(1);
+    expect(rpcCalls[0].type).toBe("prompt");
+    expect(rpcCalls[0].message).toBe(
+      "[Mode: Ask - Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.]\n\nHow does the cache work?",
+    );
+  });
+
+  it("does not prefix prompt when in default auto-edit mode", async () => {
+    useSessionStore.getState().setMode("auto-edit");
+    useSessionStore.setState({ promptText: "Fix the bug" });
+    await useSessionStore.getState().sendPrompt();
+
+    expect(rpcCalls.length).toBe(1);
+    expect(rpcCalls[0].type).toBe("prompt");
+    expect(rpcCalls[0].message).toBe("Fix the bug");
+  });
+
+  it("prefixes prompt with Plan, Manual, or Debug mode when appropriate", async () => {
+    useSessionStore.getState().setMode("plan");
+    useSessionStore.setState({ promptText: "Architect new system" });
+    await useSessionStore.getState().sendPrompt();
+    expect(rpcCalls[0].message).toContain("[Mode: Plan");
+
+    rpcCalls.length = 0;
+    useSessionStore.getState().setMode("manual");
+    useSessionStore.setState({ promptText: "Change the file" });
+    await useSessionStore.getState().sendPrompt();
+    expect(rpcCalls[0].message).toContain("[Mode: Manual");
+
+    rpcCalls.length = 0;
+    useSessionStore.getState().setMode("debug");
+    useSessionStore.setState({ promptText: "Why did it crash" });
+    await useSessionStore.getState().sendPrompt();
+    expect(rpcCalls[0].message).toContain("[Mode: Debug");
+  });
+});

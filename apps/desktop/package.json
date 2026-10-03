@@ -10,6 +10,9 @@
     "url": "https://github.com/AdielMag/pi-studio.git"
   },
   "main": "./out/main/index.js",
+  "bin": {
+    "plan-previewer": "./bin/plan-previewer.js"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build && node scripts/build-bridge.mjs",

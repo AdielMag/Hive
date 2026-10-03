@@ -49,4 +49,12 @@ describe("Arc theme tokens", () => {
     expect(c.sat).toBeGreaterThan(0.5);
     expect(arcColorFromCss("not a colour")).toBeNull();
   });
+
+  it("default theme matches Honey preset and icon color range", () => {
+    const honeyPreset = ARC_PRESETS.find((p) => p.id === "honey");
+    expect(honeyPreset).toBeDefined();
+    expect(DEFAULT_ARC_THEME).toEqual(honeyPreset!.theme);
+    expect(DEFAULT_ARC_THEME.colors[0]!.hue).toBeGreaterThanOrEqual(60);
+    expect(DEFAULT_ARC_THEME.colors[0]!.hue).toBeLessThanOrEqual(75);
+  });
 });

@@ -2,7 +2,7 @@
  * Usage analytics window: spend, tokens, requests, sessions and cache efficiency for Today / 7 / 30 / 90
  * days, with a stacked per-model chart and model / provider / project breakdowns.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   BarChart2,
@@ -38,6 +38,8 @@ import { RANGE_DAYS, buildStackedSeries, prettyModel, type UsageMetric, type Usa
 import { AiUsageInsightsModal } from "./AiUsageInsights.tsx";
 import { analyzeUsageTelemetry, type AiUsageAnalysisResult } from "./insights-analyzer.ts";
 import { getStoredItem, setStoredItem } from "../../lib/storage.ts";
+import { useFeatureModelStore, resolveFeatureModel } from "../../store/feature-models-store.ts";
+import { AiModelChip } from "../../components/AiModelChip.tsx";
 
 const RANGES: Array<[UsageRange, string]> = [
   ["today", "Today"],
@@ -56,6 +58,16 @@ export const UsageView: React.FC = () => {
   const focus = useInsights((s) => s.focusSession);
   const setFocus = useInsights((s) => s.setFocusSession);
   const allSessions = useSessionStore((s) => s.allSessions);
+  const selectedModel = useSessionStore((s) => s.selectedModel);
+  const defaultModel = useSessionStore((s) => s.defaultModel);
+  const allCatalogModels = useSessionStore((s) => s.allCatalogModels);
+  const usageAnalysisConfig = useFeatureModelStore((s) => s.config.usageAnalysis);
+
+  const resolvedUsageModel = useMemo(
+    () => resolveFeatureModel(usageAnalysisConfig, selectedModel, defaultModel, allCatalogModels),
+    [usageAnalysisConfig, selectedModel, defaultModel, allCatalogModels],
+  );
+
   const [range, setRange] = useState<UsageRange>(() => (getStoredItem("hive.usage.range") as UsageRange) || "7d");
   const [metric, setMetric] = useState<UsageMetric>("cost");
   const [chartType, setChartType] = useState<ChartType>(() => (getStoredItem("hive.usage.chartType") as ChartType) || "line");
@@ -63,6 +75,7 @@ export const UsageView: React.FC = () => {
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AiUsageAnalysisResult | null>(null);
+  const runIdRef = useRef(0);
 
   // A scoped view is usually opened for a session that just ran, so bypass the report's short cache.
   useEffect(() => {
@@ -130,23 +143,78 @@ export const UsageView: React.FC = () => {
           : summary.bySession
     : [];
 
-  const handleRunAiAnalysis = () => {
+  const handleRunAiAnalysis = async () => {
     if (!usage || !summary) return;
+    const currentRunId = ++runIdRef.current;
     setAiLoading(true);
     setAiModalOpen(true);
-    setTimeout(() => {
-      const res = analyzeUsageTelemetry(
-        usage,
-        summary.totals,
-        summary.byModel,
-        summary.byProvider,
-        summary.byProject,
-        summary.activeDays,
-        nDays,
+
+    const baseAnalysis = analyzeUsageTelemetry(
+      usage,
+      summary.totals,
+      summary.byModel,
+      summary.byProvider,
+      summary.byProject,
+      summary.activeDays,
+      nDays,
+    );
+    setAiAnalysis(baseAnalysis);
+
+    if (resolvedUsageModel.isHeuristic || !window.studio.generateUsageInsights) {
+      setTimeout(() => {
+        if (runIdRef.current === currentRunId) {
+          setAiLoading(false);
+        }
+      }, 300);
+      return;
+    }
+
+    try {
+      const summaryText = `Total Spend: $${summary.totals.cost.toFixed(2)}
+Total Tokens: ${summary.totals.tokens} (Input: ${summary.totals.input}, Output: ${summary.totals.output}, Cache Reads: ${summary.totals.cacheRead})
+Total Turns: ${summary.totals.turns}
+Active Days: ${summary.activeDays} / ${nDays} days
+Top Models: ${summary.byModel.slice(0, 4).map((m) => `${m.key}: $${m.cost.toFixed(2)} (${m.tokens} tokens)`).join(", ")}
+Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
+
+      const llmResult = await window.studio.generateUsageInsights(
+        summaryText,
+        resolvedUsageModel.id || undefined,
       );
-      setAiAnalysis(res);
-      setAiLoading(false);
-    }, 450);
+
+      if (runIdRef.current !== currentRunId) return;
+
+      if (llmResult && llmResult.trim()) {
+        const firstPara = llmResult.trim().split("\n\n")[0]?.replace(/^#+\s*/, "");
+        const bulletLines = llmResult
+          .split("\n")
+          .filter((l) => /^\s*[-*•\d\.]+\s+/.test(l))
+          .map((l) => l.replace(/^\s*[-*•\d\.]+\s+/, "").trim())
+          .filter(Boolean);
+
+        const newRecs = bulletLines.slice(0, 2).map((b, idx) => ({
+          id: `llm-rec-${idx}`,
+          title: `AI Recommendation ${idx + 1}`,
+          action: b,
+          difficulty: "Easy" as const,
+        }));
+
+        setAiAnalysis((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            summary: firstPara || prev.summary,
+            recommendations: newRecs.length > 0 ? [...newRecs, ...prev.recommendations] : prev.recommendations,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn("LLM usage insights generation failed, keeping telemetry heuristics:", err);
+    } finally {
+      if (runIdRef.current === currentRunId) {
+        setAiLoading(false);
+      }
+    }
   };
 
   return (
@@ -170,7 +238,11 @@ export const UsageView: React.FC = () => {
             className="ui-btn"
             onClick={handleRunAiAnalysis}
             disabled={!summary || scoped}
-            title={scoped ? "AI analysis covers all sessions" : "Generate deep AI telemetry insights & cost analysis"}
+            title={
+              scoped
+                ? "AI analysis covers all sessions"
+                : `Analyze telemetry with AI · Using ${resolvedUsageModel.name || resolvedUsageModel.id} (${resolvedUsageModel.sourceLabel})`
+            }
             style={{
               display: "flex",
               alignItems: "center",
@@ -186,6 +258,7 @@ export const UsageView: React.FC = () => {
           >
             <Sparkles size={13} />
             <span>Analyze with AI</span>
+            <AiModelChip model={resolvedUsageModel} clickable={false} />
           </button>
           {focus ? (
             <div className="usage__focus" title={focus}>
@@ -340,6 +413,7 @@ export const UsageView: React.FC = () => {
             analysis={aiAnalysis}
             onReanalyze={handleRunAiAnalysis}
             isLoading={aiLoading}
+            model={resolvedUsageModel}
           />
         </>
       )}

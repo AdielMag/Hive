@@ -11,9 +11,32 @@ import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { DiffView } from "./code/DiffView.tsx";
 import { languageFromPath } from "../lib/highlight/languages.ts";
+import { getShortModelName, type ResolvedFeatureModel } from "../store/feature-models-store.ts";
+import { AiModelChip } from "./AiModelChip.tsx";
 
 export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
-  const { setPromptText, closeTab, newSessionTab, activeProject } = useSessionStore(useShallow((s) => ({ setPromptText: s.setPromptText, closeTab: s.closeTab, newSessionTab: s.newSessionTab, activeProject: s.activeProject })));
+  const { setPromptText, closeTab, newSessionTab, activeProject, selectedModel, defaultModel } = useSessionStore(
+    useShallow((s) => ({
+      setPromptText: s.setPromptText,
+      closeTab: s.closeTab,
+      newSessionTab: s.newSessionTab,
+      activeProject: s.activeProject,
+      selectedModel: s.selectedModel,
+      defaultModel: s.defaultModel,
+    })),
+  );
+
+  const activeModel = useMemo<ResolvedFeatureModel>(() => {
+    const rawId = selectedModel?.id || defaultModel || "";
+    const rawName = selectedModel?.name || selectedModel?.id || defaultModel || "Pi Model";
+    return {
+      id: rawId,
+      name: rawName,
+      shortName: getShortModelName(rawId, rawName),
+      source: "session",
+      sourceLabel: "Active session",
+    };
+  }, [selectedModel, defaultModel]);
 
   const fileName = tab.title || tab.filePath?.split(/[/\\]/).pop() || "Diff";
   const content = tab.diffContent || "";
@@ -185,7 +208,7 @@ export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
           {/* Ask Pi about diff */}
           <button
             onClick={handleAskPi}
-            title="Ask Pi to explain these changes"
+            title={`Ask Pi to explain these changes · Model: ${activeModel.name || activeModel.id} (${activeModel.sourceLabel})`}
             style={{
               display: "flex",
               alignItems: "center",
@@ -202,6 +225,7 @@ export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
           >
             <Sparkles size={12} />
             <span>Ask Pi</span>
+            <AiModelChip model={activeModel} clickable={false} />
           </button>
 
           {/* Close Tab Button */}

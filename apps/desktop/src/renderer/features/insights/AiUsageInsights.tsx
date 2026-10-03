@@ -10,6 +10,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { AiUsageAnalysisResult } from "./insights-analyzer.ts";
+import type { ResolvedFeatureModel } from "../../store/feature-models-store.ts";
+import { AiModelChip } from "../../components/AiModelChip.tsx";
 
 interface Props {
   analysis: AiUsageAnalysisResult | null;
@@ -17,6 +19,7 @@ interface Props {
   onClose: () => void;
   onReanalyze: () => void;
   isLoading: boolean;
+  model?: ResolvedFeatureModel;
 }
 
 export const AiUsageInsightsModal: React.FC<Props> = ({
@@ -25,6 +28,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
   onClose,
   onReanalyze,
   isLoading,
+  model,
 }) => {
   if (!isOpen) return null;
 
@@ -86,8 +90,9 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
               <Sparkles size={18} />
             </div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
-                AI Usage Insights & Optimization
+              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 7 }}>
+                <span>AI Usage Insights & Optimization</span>
+                {model && <AiModelChip model={model} clickable={true} />}
               </div>
               <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                 Automated telemetry diagnosis and cost-saving recommendations
@@ -100,6 +105,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
               type="button"
               onClick={onReanalyze}
               disabled={isLoading}
+              title={model ? `Re-analyze usage telemetry using ${model.name || model.id} (${model.sourceLabel})` : "Refresh telemetry analysis"}
               style={{
                 display: "flex",
                 alignItems: "center",

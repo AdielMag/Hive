@@ -18,6 +18,7 @@ import { QuotaService } from "./services/quota/index.ts";
 import { UsageService } from "./services/usage.ts";
 import { PiInstallService } from "./services/pi-install.ts";
 import { terminalManager, type TerminalManager } from "./services/terminal.ts";
+import { PlanPreviewerService } from "./services/plan-previewer.ts";
 
 export interface AppContext {
   pi: PiLocateResult;
@@ -34,6 +35,7 @@ export interface AppContext {
   quota: QuotaService;
   usage: UsageService;
   terminals: TerminalManager;
+  planPreviewer: PlanPreviewerService;
 }
 
 export function createAppContext(getWindow: () => BrowserWindow | null): AppContext {
@@ -64,5 +66,6 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     quota: new QuotaService(info),
     usage: new UsageService(join(hiveDataDir, "usage-cache.json")),
     terminals: terminalManager,
+    planPreviewer: new PlanPreviewerService(getWindow),
   };
 }

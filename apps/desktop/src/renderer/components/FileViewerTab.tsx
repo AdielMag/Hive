@@ -10,11 +10,32 @@ import { useHighlight } from "./code/useHighlight.ts";
 import { languageFromPath, languageLabel, resolveLanguage } from "../lib/highlight/languages.ts";
 import { copyText } from "../lib/clipboard.ts";
 import { useAppearance } from "../features/appearance/appearance-store.ts";
+import { getShortModelName, type ResolvedFeatureModel } from "../store/feature-models-store.ts";
+import { AiModelChip } from "./AiModelChip.tsx";
 
 export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
-  const { setPromptText, closeTab, newSessionTab, activeProject } = useSessionStore(
-    useShallow((s) => ({ setPromptText: s.setPromptText, closeTab: s.closeTab, newSessionTab: s.newSessionTab, activeProject: s.activeProject })),
+  const { setPromptText, closeTab, newSessionTab, activeProject, selectedModel, defaultModel } = useSessionStore(
+    useShallow((s) => ({
+      setPromptText: s.setPromptText,
+      closeTab: s.closeTab,
+      newSessionTab: s.newSessionTab,
+      activeProject: s.activeProject,
+      selectedModel: s.selectedModel,
+      defaultModel: s.defaultModel,
+    })),
   );
+
+  const activeModel = useMemo<ResolvedFeatureModel>(() => {
+    const rawId = selectedModel?.id || defaultModel || "";
+    const rawName = selectedModel?.name || selectedModel?.id || defaultModel || "Pi Model";
+    return {
+      id: rawId,
+      name: rawName,
+      shortName: getShortModelName(rawId, rawName),
+      source: "session",
+      sourceLabel: "Active session",
+    };
+  }, [selectedModel, defaultModel]);
   const [copied, setCopied] = useState(false);
   const fileName = tab.title || tab.filePath?.split(/[/\\]/).pop() || "File";
   const content = tab.fileContent || "";
@@ -74,8 +95,15 @@ export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
         <button className="ui-btn ui-btn--sm" onClick={onCopy} title="Copy file contents">
           {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? "Copied" : "Copy"}
         </button>
-        <button className="ui-btn ui-btn--sm" onClick={() => void askPi()} title="Start a session asking Pi about this file" disabled={!activeProject}>
+        <button
+          className="ui-btn ui-btn--sm"
+          onClick={() => void askPi()}
+          title={`Start a session asking Pi about this file · Model: ${activeModel.name || activeModel.id} (${activeModel.sourceLabel})`}
+          disabled={!activeProject}
+          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+        >
           <Sparkles size={12} /> Ask Pi
+          <AiModelChip model={activeModel} clickable={false} />
         </button>
         <button className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" onClick={() => void closeTab(tab.id)} title="Close">
           <X size={14} />

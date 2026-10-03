@@ -87,6 +87,8 @@ export interface SessionStoreState {
   models: Array<Model<any>>;
   allCatalogModels: Array<Model<any>>;
   enabledModelKeys: string[];
+  defaultModel?: string;
+  defaultProvider?: string;
   selectedModel: Model<any> | null;
   thinkingLevels: string[];
   selectedThinkingLevel: string;
@@ -131,6 +133,8 @@ export interface SessionStoreState {
   openLibraryTab: () => void;
   /** Open (or focus) a Chromium browser tab inside Hive. */
   openBrowserTab: (url?: string, title?: string) => void;
+  /** Open (or focus) a Plan Previewer tab inside Hive. */
+  openPlanTab: (filePath: string, context?: string) => void;
   /** Update sleeping state of a browser tab to free/restore RAM. */
   setTabSleeping: (tabId: string, isSleeping: boolean) => void;
   /** Patch browser tab metadata (e.g. url, title, favicon). */
@@ -452,6 +456,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   models: [],
   allCatalogModels: [],
   enabledModelKeys: [],
+  defaultModel: undefined,
+  defaultProvider: undefined,
   selectedModel: null,
   thinkingLevels: [],
   selectedThinkingLevel: "medium",
@@ -595,6 +601,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         get().openBrowserTab(url, title);
       });
 
+      // Listen for open plan tab events from Electron main process
+      window.studio.onOpenPlanTab(({ filePath, context }) => {
+        get().openPlanTab(filePath, context);
+      });
+
       if (!memoryIntervalStarted) {
         memoryIntervalStarted = true;
         setInterval(() => {
@@ -675,6 +686,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         set({
           allCatalogModels: catalogModels,
           enabledModelKeys: enabledKeys,
+          defaultModel: catalog.defaultModel,
+          defaultProvider: catalog.defaultProvider,
         });
         // If models list is currently empty, seed from catalog
         if (get().models.length === 0 && catalogModels.length > 0) {
@@ -1001,6 +1014,36 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     runMemoryCheck();
   },
 
+  openPlanTab: (filePath: string, context?: string) => {
+    const { tabs, activeProject } = get();
+    const resolved = filePath.replace(/\\/g, "/");
+    const filename = resolved.split("/").pop() || "plan.md";
+
+    // Check if an existing plan tab has this file
+    const existing = tabs.find((t) => t.kind === "plan" && (t.planFile === filePath || t.filePath === filePath));
+    if (existing) {
+      void get().switchTab(existing.id);
+      return;
+    }
+
+    const tabId = `plan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const newTab: TabItem = {
+      id: tabId,
+      kind: "plan",
+      projectId: activeProject?.id ?? "",
+      title: filename,
+      planFile: filePath,
+      filePath,
+      planContext: context,
+      pinned: false,
+    };
+
+    set({
+      tabs: [...tabs, newTab],
+      activeTabId: tabId,
+    });
+  },
+
   setTabSleeping: (tabId: string, isSleeping: boolean) => {
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isSleeping, lastActiveAt: isSleeping ? t.lastActiveAt : Date.now() } : t)),
@@ -1153,6 +1196,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       message = `[Mode: Manual - Propose changes and request user confirmation before modifying files.]\n\n${message}`;
     } else if (selectedMode === "debug") {
       message = `[Mode: Debug - Prioritize root cause diagnosis, examining error traces, logs, and reproduction steps.]\n\n${message}`;
+    } else if (selectedMode === "ask") {
+      message = `[Mode: Ask - Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.]\n\n${message}`;
     }
 
     set({ promptText: "", attachments: [] });
@@ -1349,7 +1394,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   setMode: (mode: AgentMode) => {
     set({ selectedMode: mode });
-    const tabId = displayedSessionTabId;
+    const tabId = displayedSessionTabId ?? get().activeTabId;
     if (tabId) {
       set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, mode } : t)) }));
     }

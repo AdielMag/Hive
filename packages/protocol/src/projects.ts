@@ -58,11 +58,11 @@ export interface SessionCatalogItem {
   pending?: boolean;
 }
 
-export type AgentMode = "plan" | "auto-edit" | "manual" | "debug";
+export type AgentMode = "plan" | "auto-edit" | "manual" | "debug" | "ask";
 
 export interface TabItem {
   id: string; // tab identifier (usually sessionPath or temp id)
-  kind?: "session" | "file" | "diff" | "usage" | "library" | "browser";
+  kind?: "session" | "file" | "diff" | "usage" | "library" | "browser" | "plan";
   sessionPath?: string;
   projectId: string;
   title: string;
@@ -87,6 +87,11 @@ export interface TabItem {
   favicon?: string;
   isSleeping?: boolean;
   lastActiveAt?: number;
+
+  // Plan tab fields
+  planFile?: string;
+  planContext?: string;
+  planStatus?: "in_review" | "approved" | "changes_requested";
 }
 
 export interface UiStateFile {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Compass, Sparkles, CheckSquare, Bug, ChevronDown, Check } from "lucide-react";
+import { Compass, Sparkles, MessageCircleQuestion, CheckSquare, Bug, ChevronDown, Check } from "lucide-react";
 import type { AgentMode } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
 
@@ -14,20 +14,28 @@ export interface ModeMeta {
 
 export const MODES: ModeMeta[] = [
   {
-    id: "plan",
-    label: "Plan",
-    desc: "Architect and research without modifying files directly",
-    icon: <Compass size={13} />,
-    color: "#e3b341",
-    bgTint: "rgba(227, 179, 65, 0.15)",
-  },
-  {
     id: "auto-edit",
     label: "Auto Edit",
     desc: "Autonomous agent execution and file edits",
     icon: <Sparkles size={13} />,
     color: "#3fb950",
     bgTint: "rgba(63, 185, 80, 0.15)",
+  },
+  {
+    id: "ask",
+    label: "Ask",
+    desc: "Answer questions and explain code without modifying files",
+    icon: <MessageCircleQuestion size={13} />,
+    color: "#38bdf8",
+    bgTint: "rgba(56, 189, 248, 0.15)",
+  },
+  {
+    id: "plan",
+    label: "Plan",
+    desc: "Architect and research without modifying files directly",
+    icon: <Compass size={13} />,
+    color: "#e3b341",
+    bgTint: "rgba(227, 179, 65, 0.15)",
   },
   {
     id: "manual",
@@ -63,7 +71,7 @@ export const ModePicker: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleDown);
   }, [open]);
 
-  const activeMode = MODES.find((m) => m.id === selectedMode) ?? MODES[1]!;
+  const activeMode = MODES.find((m) => m.id === selectedMode) ?? MODES.find((m) => m.id === "auto-edit") ?? MODES[0]!;
 
   const handleSelect = (mode: AgentMode) => {
     setMode(mode);

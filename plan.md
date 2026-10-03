@@ -1,149 +1,105 @@
-# Implementation Plan: Integrated Chromium Hive Browser with Smart RAM Management
+# Feature Plan: Auxiliary AI Model Configuration & Compact Indicators
 
 <!-- SUMMARY -->
-### Executive Summary
+Add user-configurable AI model selection in Settings for auxiliary AI features (AI Commit Message generation, AI Usage Insights, and quick AI prompts), accompanied by an ultra-compact, space-saving model badge indicator and informative tooltips across all auxiliary AI touchpoints in Hive Studio.
 
-We will integrate an intelligent, Chromium-powered built-in browser into Hive ("Hive Browser") that seamlessly handles web browsing inside the IDE workbench while strictly guarding system RAM.
-
-#### Key Outcomes:
-1. **Integrated Chromium Browser Tabs**: Embedded `<webview>` tabs running inside Hive's content card with a sleek address bar (omnibox), navigation controls (back/forward/reload), security indicators, and external browser escape hatch.
-2. **Default Link Opening**: All links clicked inside Hive—markdown transcripts, app title bar help menus, release notes, documentation, settings, and webview popup links—open inside Hive browser tabs by default.
-3. **Smart RAM & Resource Guardian**:
-   - **Tab Hibernation (Sleeping)**: Background tabs automatically hibernate after inactivity (default 5 minutes), completely unmounting their guest webview to release 100% of guest renderer RAM to the OS.
-   - **LRU Concurrency Cap**: Strict limit on concurrent live background tabs (default: 2 live tabs). Oldest tabs automatically sleep when the budget is exceeded.
-   - **Background Throttling & Audio Muting**: Live background tabs are muted and throttled by Chromium to prevent background media or CPU drain.
-   - **Instant Sleep & Memory Controls**: One-click "Sleep tab" button, "Hibernate all background tabs" action, and configurable settings in Settings.
-
----
+### What is changing:
+1. **Settings > Models Tab**: Add a "Feature Models & Auxiliary AI" configuration section allowing users to choose the model for:
+   - **Git Commit Message generation** (Active Session Model, Pi CLI Default, or any enabled catalog model).
+   - **AI Usage Insights** (Active Session Model, Pi CLI Default, specific catalog model, or fast deterministic analyzer).
+2. **Persistent Store (`feature-models-store.ts`)**: Zustand store backed by `localStorage` (`hive.feature-models.v1`) to persist choices and resolve active/fallback models.
+3. **Ultra-Compact Model Indicator (`AiModelChip.tsx`)**: A tiny, 9px micro-badge with rich tooltip (`AI Model: <name> (<source>) · Configure in Settings`) designed specifically to take negligible horizontal space and prevent layout crowding.
+4. **GitPanel**: Show model chip on the "AI Message" button, include model in the button tooltip, and pass the configured model to the Pi CLI one-shot commit message generator.
+5. **UsageView & AI Usage Insights Modal**: Show model chip on "Analyze with AI" and in the insights modal header; optionally invoke Pi CLI for LLM-powered telemetry analysis when a model is selected.
+6. **Diff & File Viewers**: Display active model chip and tooltip on "Ask Pi" buttons.
 
 <!-- FULL -->
 
-## 1. Architecture & Design
-
-### 1.1 Webview vs WebContentsView
-In Electron 35, `<webview>` tags run in isolated guest renderer processes. When a `<webview>` element is unmounted from the DOM, Electron disposes of the guest WebContents and Chromium terminates the guest renderer process, releasing all allocated RAM immediately.
-
-Using `<webview>` with `webviewTag: true` in the main window allows the browser view to sit naturally within Hive's React card layout, respect window resizing, maintain clean z-ordering with modals and menus, and achieve true zero-RAM hibernation via React unmounting while preserving tab metadata in Zustand.
+## Architecture & Data Flow
 
 ```
-+-----------------------------------------------------------------------------------+
-| Hive Shell                                                                        |
-| +-------------------------------------------------------------------------------+ |
-| | TabStrip: [ Session 1 ] [ Session 2 ] [ (o) Pi Docs ] [ (zzz) GitHub (Sleep) ]| |
-| +-------------------------------------------------------------------------------+ |
-| | Content Card                                                                  | |
-| | +---------------------------------------------------------------------------+ | |
-| | | BrowserToolbar: [<-] [->] [R] [ https://pi.dev/docs ] [Sleep] [Popout]   | | |
-| | +---------------------------------------------------------------------------+ | |
-| | | <webview src="https://pi.dev/docs" partition="persist:hive-browser" />    | | |
-| | | (Or "Tab Sleeping to save RAM" card when hibernated - webview unmounted)  | | |
-| | +---------------------------------------------------------------------------+ | |
-| +-------------------------------------------------------------------------------+ |
-+-----------------------------------------------------------------------------------+
+┌────────────────────────────────────────────────────────┐
+│ Settings > Models (ModelsSettingsContent.tsx)          │
+│ - Configure Git Commit Model (Session / Default / Custom)│
+│ - Configure Usage Analysis Model (Session / Default / etc)│
+└──────────────────────────┬─────────────────────────────┘
+                           │ updates
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│ feature-models-store.ts (Zustand + localStorage)       │
+│ - Persists: gitCommit, usageAnalysis preferences       │
+│ - Resolves: active model ID, display name, short badge  │
+└──────┬───────────────────┬──────────────────────┬──────┘
+       │                   │                      │
+       ▼                   ▼                      ▼
+┌──────────────┐   ┌──────────────┐       ┌──────────────┐
+│ GitPanel.tsx │   │ UsageView &  │       │ Diff & File  │
+│ [AI Message] │   │ InsightsModal│       │ Viewers      │
+│  <Chip/>     │   │  <Chip/>     │       │ [Ask Pi]<Chip│
+└──────┬───────┘   └──────┬───────┘       └──────────────┘
+       │                   │
+       ▼                   ▼
+┌────────────────────────────────────────────────────────┐
+│ Main Process IPC (git.generateCommitMessage / Usage)    │
+│ - Runs Pi CLI with selected `--model <resolvedModelId>` │
+└────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 Smart Tab Lifecycle & RAM Saver State Machine
-Each browser tab has states:
-- `Active`: Currently viewed by user. `<webview>` mounted, audible if playing, active.
-- `Warm Background`: Not currently viewed, but recently active and within `maxLiveTabs` cap. Muted, background throttled.
-- `Sleeping`: Exceeded inactivity threshold or LRU budget, or manually put to sleep. `<webview>` unmounted, 0 MB guest RAM used. Tab strip shows sleeping indicator.
-- `Waking`: On user click, transitions back to `Active`, remounts webview, and restores URL/title.
+## Detailed Implementation Steps
 
-```
-[ New URL / Link Click ]
-         |
-         v
-     ( ACTIVE ) <-------------------------+
-         |                                |
-   Switch away                            | Click / Switch Tab
-         |                                |
-         v                                |
-( WARM BACKGROUND )                       |
-  Muted & Throttled                       |
-         |                                |
-   Inactivity timeout (>5m)               |
-   OR LRU budget exceeded                 |
-   OR User clicks "Sleep"                 |
-         |                                |
-         v                                |
-    ( SLEEPING ) -------------------------+
-  Unmounted: 0 RAM
-```
+### 1. Feature Models Store (`apps/desktop/src/renderer/store/feature-models-store.ts`)
+- Interface `FeatureModelConfig`: `{ source: "session" | "pi-default" | "custom"; modelId?: string }`
+- Interface `ResolvedFeatureModel`:
+  - `id: string` (e.g. `anthropic/claude-3-5-haiku` or `gemini-3.8-flash`)
+  - `name: string` (e.g. `Claude 3.5 Haiku`)
+  - `shortName: string` (e.g. `haiku`, `flash`, `opus`, `sonnet`, `pro`)
+  - `provider?: string`
+  - `sourceLabel: string` (e.g. `Active Session`, `Settings Override`, `Pi Default`)
+- Helper `getShortModelName(id, name)`: cleans long IDs into concise 4-8 char pills.
+- Helper `resolveFeatureModel(config, sessionModel, defaultModel, catalog)`: computes the active model and source description with zero flicker.
 
----
+### 2. Ultra-Compact Indicator Component (`apps/desktop/src/renderer/components/AiModelChip.tsx`)
+- Micro-pill design:
+  - Font size: `9px`
+  - Line height: `1`
+  - Padding: `1.5px 5px`
+  - Rounded: `3.5px`
+  - Color: `var(--accent-base)` with subtle background `rgba(var(--accent-rgb), 0.12)`
+  - Maximum width: `60px` (with ellipsis)
+- Tooltip: `title="Model: ${model.name || model.id} (${model.sourceLabel})\nClick to change in Settings > Models"`
+- Clicking the chip opens the Settings modal on the Models tab.
 
-## 2. Proposed Changes
+### 3. Settings UI: Feature Models Section (`apps/desktop/src/renderer/components/ModelsSettingsContent.tsx`)
+- Add a new section **"Dedicated Feature Models"**:
+  - Row for **Git Commit Message**:
+    - Mode selector: "Active Session Model" | "Pi Default Model" | "Choose Specific Model"
+    - If "Choose Specific Model", a clean select dropdown populated from all catalog/enabled models.
+    - Live preview chip showing the resulting indicator.
+  - Row for **AI Usage Insights**:
+    - Mode selector: "Active Session Model" | "Pi Default Model" | "Choose Specific Model" | "Fast Local Analyzer"
+    - Live preview chip showing the resulting indicator.
 
-### Phase 1: Protocol & IPC Layer
-- **`packages/protocol/src/projects.ts`**:
-  - Extend `TabItem` to include `kind?: "session" | "file" | "diff" | "usage" | "library" | "browser"`.
-  - Add browser metadata fields: `url?: string`, `favicon?: string`, `isSleeping?: boolean`, `lastActiveAt?: number`.
-- **`packages/protocol/src/ipc.ts`**:
-  - Add `IPC.openSystemBrowser` (`"shell:open-system-browser"`).
-  - Add `IPC.evtOpenBrowserTab` (`"browser:open-tab"`).
-  - Update `StudioApi` interface with `openSystemBrowser(url: string)` and `onOpenBrowserTab(listener: (data: { url: string; title?: string }) => void)`.
+### 4. Git Commit Message (`apps/desktop/src/renderer/components/GitPanel.tsx`)
+- Subscribe to `useFeatureModelStore` to resolve the commit message model.
+- Embed `<AiModelChip model={commitModel} />` inside the "AI Message" button.
+- Update button tooltip to clearly show the model being used.
+- Pass `commitModel.id` to `window.studio.generateCommitMessage(activeProject.path, commitModel.id)`.
 
-### Phase 2: Electron Main Process & Preload
-- **`apps/desktop/src/main/window.ts`**:
-  - Add `webviewTag: true` to `webPreferences`.
-  - Add `win.webContents.on("will-attach-webview", ...)` to enforce sandboxing (`sandbox: true`, `contextIsolation: true`, `nodeIntegration: false`, stripping preloads).
-  - Add `app.on("web-contents-created", ...)`: intercept webview popup requests (`setWindowOpenHandler`) so `<a target="_blank">` inside webviews opens as new Hive browser tabs.
-  - Intercept main window navigation & `setWindowOpenHandler` to route external links to `IPC.evtOpenBrowserTab`.
-- **`apps/desktop/src/main/ipc/app.ts`**:
-  - Handle `IPC.openSystemBrowser` via `shell.openExternal(url)`.
-  - Update `IPC.openExternal`: by default route to `win.webContents.send(IPC.evtOpenBrowserTab, { url })`, unless `{ external: true }` is specified.
-- **`apps/desktop/src/preload/index.ts`**:
-  - Implement and expose `openSystemBrowser` and `onOpenBrowserTab`.
+### 5. Usage Insights (`UsageView.tsx` & `AiUsageInsights.tsx`)
+- Subscribe to `useFeatureModelStore` to resolve the usage analysis model.
+- Embed `<AiModelChip model={usageModel} />` inside the "Analyze with AI" button.
+- Embed `<AiModelChip model={usageModel} />` in the `AiUsageInsightsModal` header.
+- Update tooltips to display model name and source.
+- Add IPC `window.studio.generateUsageInsights` (via `IPC.aiGenerateUsageInsights`) to allow LLM synthesis when an AI model is configured, with instant deterministic fallback.
 
-### Phase 3: Browser Tab Manager & Session Store (Renderer)
-- **`apps/desktop/src/renderer/lib/browser/browser-store.ts`**:
-  - Create browser settings store: `autoSleepMinutes` (default: 5), `maxLiveTabs` (default: 2), `autoWakeOnSelect` (default: true), `openExternalInHive` (default: true), `searchEngine` ("duckduckgo" | "google" | "bing").
-  - Implement smart LRU tab evaluator: scans tabs, calculates age since `lastActiveAt`, sleeps tabs that exceed timeout or LRU cap.
-  - URL normalizer: resolves bare domains (`localhost:3000`, `example.com`), protocols (`https://`), and web searches.
-- **`apps/desktop/src/renderer/store/session-store.ts`**:
-  - Add `openBrowserTab(url: string, title?: string): void`.
-  - Add `setTabSleeping(tabId: string, isSleeping: boolean): void`.
-  - Add `updateBrowserTab(tabId: string, patch: Partial<TabItem>): void`.
-  - In `init()`: subscribe to `window.studio.onOpenBrowserTab(...)`.
-  - In `switchTab()`: update `lastActiveAt`, wake target tab if sleeping, run LRU checks.
+### 6. Quick AI Actions in DiffViewer & FileViewer
+- In `DiffViewerTab.tsx` and `FileViewerTab.tsx`, show the active model tooltip and compact chip on the "Ask Pi" buttons so users immediately know which model will answer.
 
-### Phase 4: UI Components
-- **`apps/desktop/src/renderer/components/browser/BrowserTab.tsx`**:
-  - Omnibox address bar with lock icon, input submit, back/forward/reload/home buttons.
-  - Memory status pill ("Live" / "Sleeping") and manual "Put tab to sleep" button.
-  - Action buttons: Copy URL, Open in System Browser.
-  - Progress bar for loading state.
-  - Sleeping state card (rendered when sleeping, webview unmounted).
-  - Webview lifecycle events (`did-start-loading`, `did-stop-loading`, `page-title-updated`, `page-favicon-updated`, `did-fail-load`).
-- **`apps/desktop/src/renderer/components/browser/BrowserSettingsContent.tsx`**:
-  - Settings panel section for auto-sleep threshold, max concurrent tabs, manual "Hibernate all background tabs" button.
-- **`apps/desktop/src/renderer/components/TabStrip.tsx`**:
-  - Render Globe / Favicon icon for browser tabs.
-  - Render subtle sleep badge (Moon icon / tooltip: "Sleeping to save RAM").
-  - Middle click to close, click to switch/wake.
-  - Quick action to open new browser tab.
-- **`apps/desktop/src/renderer/components/WorkbenchLayout.tsx`**:
-  - Add Browser navigation rail button (`<Globe size={18} />`).
-  - Render `BrowserTab` when `activeTab?.kind === "browser"`.
-- **`apps/desktop/src/renderer/components/code/Markdown.tsx`**:
-  - Route all clicked links to `openBrowserTab(href)`.
-- **`apps/desktop/src/renderer/components/AppTitleBar.tsx`**:
-  - Add "New Browser Tab" (Ctrl+Shift+B) to File menu.
-  - Help menu links (Pi docs, GitHub, Release notes) open in Hive browser tabs.
-- **`apps/desktop/src/renderer/components/SettingsModal.tsx`**:
-  - Add "Browser" tab in settings.
-  - Changelog and release links open in Hive browser tabs.
-
-### Phase 5: Verification & Testing
-- Unit tests for:
-  - Smart LRU background tab eviction.
-  - Inactivity sleep timeout calculations.
-  - URL normalization and search engine routing.
-  - `openBrowserTab` and tab switching behavior in session store.
-- Typecheck (`npm run typecheck`).
-- Vitest suite (`npm test`).
-
----
-
-## 3. Plan Reviewer Status
-status: pending_approval
+## Verification Strategy
+- **Unit Tests**:
+  - Test `feature-models-store.ts` for default values, persistence, and resolution logic (session vs custom vs pi-default).
+  - Test `getShortModelName` edge cases (haiku, opus, flash, custom names, provider prefixes).
+- **Automated Suite**: Run full `npm test` across all 46 suites to ensure zero regressions.
+- **Manual Verification**:
+  - Verify GitPanel button layout: ensure commit button is not cramped on narrow sidebars.
+  - Verify Settings dropdown saves and updates badges immediately across all tabs.

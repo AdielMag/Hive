@@ -13,7 +13,7 @@ import type {
 export type { SessionStats } from "@earendil-works/pi-coding-agent";
 export type { Model } from "@earendil-works/pi-ai";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
-import type { ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
+import type { AgentMode, ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
 import type { QuotaSnapshot, UsageReport } from "./insights.ts";
 import type {
   McpServerInfo,
@@ -109,6 +109,63 @@ export interface UiRequestMessage {
 export interface BridgeMessage {
   key: string;
   message: BridgeToStudio;
+}
+
+export interface PlanAgentQuestionOption {
+  value: string;
+  label: string;
+  description?: string;
+  recommended?: boolean;
+}
+
+export interface PlanAgentQuestion {
+  id: string;
+  type?: "text" | "choice";
+  title?: string;
+  question: string;
+  options?: PlanAgentQuestionOption[];
+  allowOther?: boolean;
+}
+
+export interface PlanQuestionRound {
+  roundId: number;
+  status: "pending" | "answered";
+  fileVersion: number;
+  questions: PlanAgentQuestion[];
+  answers?: Array<{ id: string; selected?: string; answer?: string; title?: string }>;
+  timestamp: string;
+  answeredAt?: string;
+}
+
+export interface PlanAgentResponse {
+  text: string;
+  timestamp: string;
+  fileVersion: number;
+}
+
+export interface PlanPreviewData {
+  filename: string;
+  filePath: string;
+  content: string;
+  fileVersion: number;
+  createdAt: string;
+  updatedAt: string;
+  callerAgent?: { id: string; name: string };
+  sessionContext?: string;
+  agentResponses: PlanAgentResponse[];
+  agentQuestions: PlanQuestionRound[];
+  planApproved: boolean;
+}
+
+export interface PlanFeedbackPayload {
+  filePath: string;
+  status: "approved" | "changes_requested" | "answered";
+  comment?: string;
+  executionMode?: AgentMode; // "auto-edit" | "manual"
+  questions?: Array<{ id: string; question: string; answer?: string; selectedText?: string }>;
+  choices?: Array<{ id: string; title: string; selected?: string; answer?: string }>;
+  answers?: Array<{ id: string; roundId?: number; selected?: string; answer?: string; title?: string }>;
+  content?: string;
 }
 
 export interface StartSessionRequest {
@@ -218,6 +275,12 @@ export const IPC = {
   openExternal: "shell:open-external",
   openSystemBrowser: "shell:open-system-browser",
   evtOpenBrowserTab: "browser:open-tab",
+  // Plan Previewer
+  planGet: "plan:get",
+  planSubmitFeedback: "plan:submit-feedback",
+  planSave: "plan:save",
+  evtOpenPlanTab: "plan:open-tab",
+  evtPlanUpdated: "plan:updated",
   // Skills & agents library
   libraryList: "library:list",
   librarySetField: "library:set-field",
@@ -226,6 +289,7 @@ export const IPC = {
   // AI Registry, MCP, and Subagent output
   aiSessionRegistry: "ai:session-registry",
   aiMcpCatalog: "ai:mcp-catalog",
+  aiGenerateUsageInsights: "ai:usage:generate-insights",
   subagentLocate: "subagents:locate",
   subagentRead: "subagents:read",
 } as const;
@@ -331,6 +395,8 @@ export interface ModelCatalogItem {
 export interface ModelsCatalogResponse {
   models: ModelCatalogItem[];
   enabledModels: string[];
+  defaultModel?: string;
+  defaultProvider?: string;
 }
 
 /** API exposed on `window.studio` by the preload script. */
@@ -459,6 +525,7 @@ export interface StudioApi {
   getQuota(force?: boolean): Promise<QuotaSnapshot>;
   /** Aggregated token/cost usage parsed from Pi session files. */
   getUsage(force?: boolean): Promise<UsageReport>;
+  generateUsageInsights(summaryText: string, model?: string): Promise<string>;
 
   // Skills & agents library
   listLibrary(cwd?: string): Promise<LibrarySnapshot>;
@@ -480,4 +547,11 @@ export interface StudioApi {
   onOpenBrowserTab(listener: (data: { url: string; title?: string }) => void): () => void;
   /** Page zoom (Ctrl +/-/0). */
   zoom(direction: "in" | "out" | "reset"): void;
+
+  // Plan Previewer
+  getPlanData(filePath: string): Promise<PlanPreviewData | null>;
+  submitPlanFeedback(payload: PlanFeedbackPayload): Promise<{ success: boolean; error?: string }>;
+  savePlanContent(filePath: string, content: string): Promise<{ success: boolean; fileVersion: number; error?: string }>;
+  onOpenPlanTab(listener: (data: { filePath: string; context?: string }) => void): () => void;
+  onPlanUpdated(listener: (data: { filePath: string; fileVersion: number; content?: string }) => void): () => void;
 }

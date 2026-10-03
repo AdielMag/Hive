@@ -78,13 +78,21 @@ export class ModelsService {
   }
 
   getModelsCatalog(): ModelsCatalogResponse {
-    // 1. Load enabled models from settings.json
+    // 1. Load enabled models and defaults from settings.json
     let enabledModels: string[] = [];
+    let defaultModel: string | undefined;
+    let defaultProvider: string | undefined;
     if (existsSync(this.settingsPath)) {
       try {
         const settings = JSON.parse(readFileSync(this.settingsPath, "utf8"));
         if (Array.isArray(settings.enabledModels)) {
           enabledModels = settings.enabledModels;
+        }
+        if (typeof settings.defaultModel === "string") {
+          defaultModel = settings.defaultModel;
+        }
+        if (typeof settings.defaultProvider === "string") {
+          defaultProvider = settings.defaultProvider;
         }
       } catch (err) {
         console.error("Failed to read settings.json for enabledModels", err);
@@ -138,6 +146,8 @@ export class ModelsService {
     return {
       models,
       enabledModels,
+      defaultModel,
+      defaultProvider,
     };
   }
 

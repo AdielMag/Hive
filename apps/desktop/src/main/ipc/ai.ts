@@ -3,6 +3,7 @@ import { IPC, type SubagentLocateRequest } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import { getMcpCatalog } from "../services/mcp-catalog.ts";
 import { locateSubagentOutput, readChunk } from "../services/subagent-output.ts";
+import { generateAiUsageInsights } from "../services/usage-ai.ts";
 import { handle } from "./util.ts";
 
 export function registerAiIpc(ctx: AppContext): void {
@@ -52,5 +53,11 @@ export function registerAiIpc(ctx: AppContext): void {
   // Read subagent output chunk
   handle(IPC.subagentRead, ({ path, fromOffset }: { path: string; fromOffset?: number }) => {
     return readChunk(path, fromOffset ?? 0);
+  });
+
+  // AI Usage Insights generation
+  handle(IPC.aiGenerateUsageInsights, ({ summaryText, model }: { summaryText: string; model?: string }) => {
+    if (!ctx.pi.ok) throw new Error("Pi CLI not available to generate AI usage insights");
+    return generateAiUsageInsights(summaryText, ctx.pi.info, model);
   });
 }

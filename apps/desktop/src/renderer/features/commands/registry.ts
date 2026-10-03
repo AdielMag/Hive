@@ -87,6 +87,48 @@ export const COMMANDS: readonly Command[] = [
   { id: "tab.next", title: "Next Tab", category: "Tabs", defaultKeys: ["Mod+Tab"], allowInTerminal: true, when: () => useSessionStore.getState().tabs.length > 1, run: () => cycleTab(1) },
   { id: "tab.prev", title: "Previous Tab", category: "Tabs", defaultKeys: ["Mod+Shift+Tab"], allowInTerminal: true, when: () => useSessionStore.getState().tabs.length > 1, run: () => cycleTab(-1) },
 
+  // Agent Modes
+  {
+    id: "mode.auto-edit",
+    title: "Mode: Auto Edit",
+    category: "Agent",
+    keywords: "mode agent auto edit code autonomous",
+    when: () => !!useSessionStore.getState().activeTabId,
+    run: () => useSessionStore.getState().setMode("auto-edit"),
+  },
+  {
+    id: "mode.ask",
+    title: "Mode: Ask",
+    category: "Agent",
+    keywords: "mode ask question chat explain read only",
+    when: () => !!useSessionStore.getState().activeTabId,
+    run: () => useSessionStore.getState().setMode("ask"),
+  },
+  {
+    id: "mode.plan",
+    title: "Mode: Plan",
+    category: "Agent",
+    keywords: "mode plan architect research",
+    when: () => !!useSessionStore.getState().activeTabId,
+    run: () => useSessionStore.getState().setMode("plan"),
+  },
+  {
+    id: "mode.manual",
+    title: "Mode: Manual",
+    category: "Agent",
+    keywords: "mode manual confirm diff",
+    when: () => !!useSessionStore.getState().activeTabId,
+    run: () => useSessionStore.getState().setMode("manual"),
+  },
+  {
+    id: "mode.debug",
+    title: "Mode: Debug",
+    category: "Agent",
+    keywords: "mode debug diagnostics trace root cause",
+    when: () => !!useSessionStore.getState().activeTabId,
+    run: () => useSessionStore.getState().setMode("debug"),
+  },
+
   // Views
   left("view.projects", "Projects", "projects", ["Mod+B"]),
   left("view.files", "Files", "files", ["Mod+Shift+E"]),

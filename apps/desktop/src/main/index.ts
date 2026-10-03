@@ -65,6 +65,7 @@ app.on("will-quit", (event) => {
   if (shuttingDown || !ctx) return;
   shuttingDown = true;
   ctx.terminals.disposeAll();
+  ctx.planPreviewer.dispose();
   const sessions = ctx.sessions;
   if (!sessions) return;
   event.preventDefault();

@@ -5,6 +5,7 @@ import {
   type CompactionSettings,
   type LibrarySetFieldRequest,
   type PiLocateResult,
+  type PlanFeedbackPayload,
   type BridgeActionRequest,
   type BridgeActionResult,
   type BridgeMessage,
@@ -308,6 +309,9 @@ const api: StudioApi = {
   getUsage(force?: boolean) {
     return ipcRenderer.invoke(IPC.usageGet, { force });
   },
+  generateUsageInsights(summaryText: string, model?: string) {
+    return ipcRenderer.invoke(IPC.aiGenerateUsageInsights, { summaryText, model });
+  },
 
   // Skills & agents library
   listLibrary(cwd?: string) {
@@ -352,6 +356,27 @@ const api: StudioApi = {
   zoom(direction: "in" | "out" | "reset") {
     const level = direction === "reset" ? 0 : webFrame.getZoomLevel() + (direction === "in" ? 0.5 : -0.5);
     webFrame.setZoomLevel(Math.max(-3, Math.min(4, level)));
+  },
+
+  // Plan Previewer
+  getPlanData(filePath: string) {
+    return ipcRenderer.invoke(IPC.planGet, filePath);
+  },
+  submitPlanFeedback(payload: PlanFeedbackPayload) {
+    return ipcRenderer.invoke(IPC.planSubmitFeedback, payload);
+  },
+  savePlanContent(filePath: string, content: string) {
+    return ipcRenderer.invoke(IPC.planSave, filePath, content);
+  },
+  onOpenPlanTab(listener: (data: { filePath: string; context?: string }) => void): () => void {
+    const handler = (_event: Electron.IpcRendererEvent, data: { filePath: string; context?: string }) => listener(data);
+    ipcRenderer.on(IPC.evtOpenPlanTab, handler);
+    return () => ipcRenderer.removeListener(IPC.evtOpenPlanTab, handler);
+  },
+  onPlanUpdated(listener: (data: { filePath: string; fileVersion: number; content?: string }) => void): () => void {
+    const handler = (_event: Electron.IpcRendererEvent, data: { filePath: string; fileVersion: number; content?: string }) => listener(data);
+    ipcRenderer.on(IPC.evtPlanUpdated, handler);
+    return () => ipcRenderer.removeListener(IPC.evtPlanUpdated, handler);
   },
 };
 

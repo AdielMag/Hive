@@ -1,281 +1,306 @@
 <div align="center">
 
-<img src="apps/desktop/build/icon.png" width="96" alt="Hive icon" />
+<img src="apps/desktop/build/icon.png" width="96" height="96" alt="Hive icon" />
 
 # Hive
 
-**A fast, beautiful desktop workbench for the [Pi coding agent](https://pi.dev).**
-Multi-session tabs, IDE-grade code rendering, live subscription limits, usage analytics and an Arc-browser-style theme engine — all driving the Pi CLI you already have installed.
+**Desktop workbench for the [Pi coding agent](https://pi.dev).**  
+Multi-session tabs, per-project workspaces, live subscription limits, local cost analytics, and an adaptive color engine — driving your local Pi CLI.
 
 [![Release](https://github.com/AdielMag/pi-studio/actions/workflows/release.yml/badge.svg)](https://github.com/AdielMag/pi-studio/actions/workflows/release.yml)
 [![CI](https://github.com/AdielMag/pi-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/AdielMag/pi-studio/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/AdielMag/pi-studio?sort=semver)](https://github.com/AdielMag/pi-studio/releases/latest)
+[![Node version](https://img.shields.io/badge/node-%3E%3D22.19-blue.svg)](https://nodejs.org)
 
-![Hive workbench](docs/screenshots/workbench.png)
+<br />
+
+<a href="#workbench-overview">
+  <img src="docs/screenshots/hive-overview.gif" alt="Hive Workbench Overview" width="900" style="border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);" />
+</a>
+
+<p align="center">
+  <em>An interactive desktop environment built specifically for agentic coding workflows.</em>
+</p>
+
+[Quickstart](#quickstart) • [Workspaces](#workspaces--sessions) • [Transcript](#deep-transcript--agent-inspection) • [Limits](#live-subscription-limits) • [Analytics](#local-usage--cost-analytics) • [Workbench](#developer-workbench) • [Themes](#adaptive-palette--themes) • [Shortcuts](#keyboard-shortcuts)
 
 </div>
 
 ---
 
-## Contents
+## Highlights
 
-- [Features](#features)
-- [Install](#install)
-- [Using Hive](#using-hive)
-  - [Subscription limits](#subscription-limits)
-  - [Usage analytics](#usage-analytics)
-  - [Appearance (Arc-style themes)](#appearance-arc-style-themes)
-  - [Code rendering](#code-rendering)
-  - [Keyboard shortcuts](#keyboard-shortcuts)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Architecture](#architecture)
-- [Testing](#testing)
-- [Releases & CI/CD](#releases--cicd)
-- [Troubleshooting](#troubleshooting)
-- [Privacy & security](#privacy--security)
+- **Workspaces & Live Sessions** — Color-coded projects, all your Pi CLI sessions on disk grouped in one sidebar, resume any session instantly, and run concurrent sessions in tabs.
+- **Deep Execution Visibility** — Collapsible thinking, rich tool cards (read, edit, write, bash, grep), unified diff views, and dedicated subagent cards showing tool runs, token counts, and cost.
+- **Live Subscription Limits** — Real-time tracking of 5-hour and weekly rate limits across Claude, Google Antigravity, and Codex with precise countdowns and status-bar meters.
+- **Local Cost & Usage Analytics** — Offline dashboard computed from your local session files: spend, tokens, cache hits, model breakdown, and period-over-period trends.
+- **Developer Workbench** — Built-in Git panel with staging and AI commit messages, interactive context window meter, terminal, and MCP marketplace.
+- **Adaptive Color Engine** — Interactive 2D hue/saturation palette pad, gradient styling, film grain, light/dark/auto modes, and automated WCAG contrast verification.
+- **Native Local Performance** — Zero telemetry and zero cloud relay. Connects directly to your local `pi` CLI over high-speed JSON-RPC.
 
-## Features
+---
 
-| | |
-|---|---|
-| 🗂 **Projects & sessions** | Color-coded projects, every Pi session on disk in one sidebar, resume any CLI session, multiple live sessions in tabs. |
-| 💬 **Rich transcript** | GitHub-flavoured Markdown, collapsible thinking, tool cards (read / edit / write / bash / grep…) with highlighted output and edit diffs, per-turn model / token / cost footer, smart scroll-pinning. |
-| 🎨 **Rider-style code** | Every code block, file, diff and tool result is highlighted with JetBrains **Rider Dark / Light** colours, line numbers, soft-wrap toggle and exact one-click copy. |
-| 📈 **Subscription limits** | Live 5-hour and weekly windows for every connected subscription (Claude, Google Antigravity, ChatGPT/Codex), with precise reset countdowns. Mini meters in the status bar. |
-| 📊 **Usage analytics** | Spend, tokens, requests, sessions and cache-hit rate for Today / 7 / 30 / 90 days; stacked per-model chart; breakdowns by model, provider and project; period-over-period deltas. |
-| 🌈 **Arc-style themes** | Hue/saturation colour pad with up to 3 colours, light / dark / auto, intensity and film grain, 10 presets, live window preview. WCAG contrast is solved automatically. |
-| 🧰 **Workbench tools** | File explorer + viewer, Git panel (stage, commit, AI commit messages, branches, diffs), integrated terminal, context-window breakdown, model manager, extension & MCP marketplace. |
-| 🔄 **Auto-updates** | Checks GitHub Releases and installs new versions in one click. |
+## Feature Areas
+
+### Workspaces & Sessions
+
+Hive treats coding agent tasks as structured workspaces rather than ephemeral shell prompts.
+
+![Hive Workbench](docs/screenshots/workbench.png)
+
+- **Color-Coded Projects** — Assign unique color accents to each repository or codebase. Projects stay neatly partitioned in the sidebar with folder badges.
+- **Universal Session Catalog** — Hive automatically scans `~/.pi/agent/sessions/` on launch. Every conversation you started in the terminal is indexed and resumable with full history in one click.
+- **Multi-Session Tabs** — Switch between independent agent sessions, file viewers, Git diffs, and analytics tabs without losing execution state.
+- **Linked Projects** — Connect companion repositories, documentation folders, or design systems. Hive automatically injects sibling project references into the agent's system prompt context.
+
+---
+
+### Deep Transcript & Agent Inspection
+
+Inspect exactly what the model is thinking, what tools it runs, and how code changes are applied.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/limits.png" alt="Subscription limits" /></td>
-<td width="50%"><img src="docs/screenshots/usage.png" alt="Usage analytics" /></td>
+<td width="50%">
+  <strong>Tool Cards & Visual Diffs</strong>
+  <p>Tools render as interactive cards with syntax-highlighted inputs and outputs. File edits display clean, color-coded unified diffs showing exact deletions and additions.</p>
+</td>
+<td width="50%">
+  <strong>First-Class Subagent Cards</strong>
+  <p>Track delegated child agents (Scout, Worker, Reviewer, Verifier). See subagent status badges, turns, tool call counts, token consumption, duration, and final verdicts at a glance.</p>
+</td>
 </tr>
 <tr>
-<td align="center"><em>Subscription limits</em></td>
-<td align="center"><em>Usage analytics</em></td>
+<td width="50%">
+  <strong>Collapsible Thought Process</strong>
+  <p>Reasoning traces and extended thinking blocks fold away into clean summaries so the conversation stays readable while retaining complete auditability.</p>
+</td>
+<td width="50%">
+  <strong>Turn Telemetry & Smart Pinning</strong>
+  <p>Every message turn displays the executing model, token count, and dollar cost. Smart scroll tracking keeps you pinned to live output when streaming without jumping unexpectedly.</p>
+</td>
 </tr>
 </table>
 
-## Install
+---
 
-1. **Install Pi** (Hive drives your local Pi; it does not bundle one):
-   ```bash
-   npm install -g @earendil-works/pi-coding-agent
-   pi            # sign in to your providers once
-   ```
-   Pi needs Node.js **22.19+**.
-2. **Download Hive** from the [latest release](https://github.com/AdielMag/pi-studio/releases/latest):
+### Live Subscription Limits
 
-   | Platform | File |
-   |---|---|
-   | Windows | `Hive-Setup-<version>.exe` (installer) or `Hive-<version>-portable.exe` |
-   | macOS | `Hive-<version>-mac-<arch>.dmg` |
-   | Linux | `Hive-<version>-linux-x86_64.AppImage` |
+Never get caught off-guard by a sudden quota exhaustion mid-refactor.
 
-   Builds are currently **unsigned**: on Windows choose *More info → Run anyway*; on macOS right-click → *Open* the first time.
-3. Launch Hive, click **Open a Project Folder**, and start a session.
+<p align="center">
+  <img src="docs/screenshots/limits.png" alt="Subscription Limits Panel" width="820" />
+</p>
 
-## Using Hive
+- **Dual-Window Tracking** — Monitors both the rolling **5-hour** window and the **weekly** allocation for each connected account.
+- **Accurate Reset Timers** — Clear countdowns displaying exactly when quota will recover (e.g. *“resets in 2h 42m · Today 19:49”*).
+- **Status Bar Integration** — Glanceable mini-meters sit in the bottom status bar with color-coded severity: green (< 70%), amber (< 90%), and red (≥ 90%).
+- **Multi-Provider Support** — Connects to Anthropic Claude (OAuth Pro/Max), Google Antigravity (Gemini and Claude groups), and OpenAI/Codex.
+- **Zero Configuration** — Reuses existing credentials securely resolved by Pi in `~/.pi/agent/auth.json`. No extra login required.
 
-### Subscription limits
+---
 
-Open with the **gauge** icon on the right rail, `Ctrl+Shift+L`, or by clicking the meters in the status bar.
+### Local Usage & Cost Analytics
 
-For every account you are signed in to, Hive shows each rate-limit window — the rolling **5-hour** window and the **weekly** window (plus model-specific windows such as *Weekly · Opus* when the provider reports them) — with % used, % left, a live **"resets in 2h 14m · Today 17:00"** countdown, and colour-coded severity (green < 70 %, amber < 90 %, red ≥ 90 %).
+Full insight into your token consumption and spend across models, providers, and repositories.
 
-| Provider | Source |
+<p align="center">
+  <img src="docs/screenshots/usage.png" alt="Usage Analytics Dashboard" width="820" />
+</p>
+
+- **100% Offline & Private** — Aggregated directly on your machine from local session records (`.jsonl`). Zero data leaves your computer.
+- **Executive KPIs** — Track Spend, Token Volume, Total Requests, Active Sessions, Cache Hit Rate, and Top Model with period-over-period deltas.
+- **Interactive Multi-Model Charts** — Stacked visualizations showing consumption over time across Today (hourly), 7 days, 30 days, or 90 days.
+- **Detailed Token Breakdown** — Understand cache efficiency with separate metrics for input, output, cache-read, and cache-write tokens.
+- **Multi-Dimension Tables** — Group analytics by model, provider, or individual project to pinpoint where tokens are spent.
+- **Blazing Fast Rescans** — Cached incremental file indexer parses hundreds of megabytes of session history in under 100 milliseconds.
+
+---
+
+### Developer Workbench
+
+Everything you need to review and commit changes without context-switching away from the agent.
+
+<table>
+<tr>
+<td width="50%">
+  <img src="docs/screenshots/git.png" alt="Integrated Git Panel" />
+  <p align="center"><strong>Git & Source Control</strong><br />
+  Stage changes, discard edits, browse branches, and write commit messages — or click <em>AI Message</em> to let the agent generate commit notes from your diff.</p>
+</td>
+<td width="50%">
+  <img src="docs/screenshots/context.png" alt="Context Window Gauge" />
+  <p align="center"><strong>Context Window Inspector</strong><br />
+  Radial capacity gauge with breakdown by system prompt, active tools, project context, skills, and chat history. Compact context with one click.</p>
+</td>
+</tr>
+</table>
+
+- **Files Panel** — Tree-view file explorer with quick file viewing and diffing.
+- **Integrated Terminal** — Fast built-in terminal (accessible via ``Ctrl+` ``) scoped directly to the active project folder.
+- **Model & Thinking Controls** — Switch models, adjust reasoning depth (Off, Low, Medium, High), and toggle agent modes directly in the composer.
+- **Extension & MCP Marketplace** — Browse, install, and manage MCP servers and community extensions to expand Pi's capabilities.
+
+---
+
+### Adaptive Palette & Themes
+
+A customizable appearance system engineered for high contrast and visual calm.
+
+<p align="center">
+  <img src="docs/screenshots/appearance.png" alt="Appearance Theme Editor" width="820" />
+</p>
+
+- **2D Color Pad** — Intuitive circular palette picker: angle controls hue, radius controls saturation. Add up to 3 harmonious color stops for gentle gradients.
+- **Light, Dark & Auto Modes** — Seamlessly toggle modes or follow your operating system's theme preference.
+- **Intensity & Grain** — Dial in custom frame saturation and tactile film-grain texture.
+- **Contrast Enforced** — Every palette automatically passes WCAG AA/AAA contrast tests (≥ 7:1 for body copy), guaranteeing readability across all surfaces.
+- **Curated Presets** — Ships with 10 built-in presets: *Midnight, Ember, Lagoon, Matcha, Aurora, Rosé, Graphite, Sunrise, Glacier,* and *Paper*.
+- **Typography Settings** — Fine-tune code font size, programming ligatures, and soft-wrap preferences.
+
+---
+
+## Quickstart
+
+### 1. Prerequisites
+
+Hive connects to your existing Pi CLI installation. Ensure Node.js **22.19+** and Pi are installed:
+
+```bash
+# Install Pi globally
+npm install -g @earendil-works/pi-coding-agent
+
+# Sign in to your preferred model providers once in the terminal
+pi
+```
+
+### 2. Download Hive
+
+Download the binary for your platform from the [Latest Release](https://github.com/AdielMag/pi-studio/releases/latest):
+
+| Platform | Installer / Package |
 |---|---|
-| Anthropic (Claude Pro/Max OAuth) | `api.anthropic.com/api/oauth/usage` |
-| Google Antigravity | `cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary` (per model group: *Gemini* and *Claude & GPT*) |
-| ChatGPT / Codex | `chatgpt.com/backend-api/wham/usage` |
-| API-key providers | Listed as *pay-as-you-go* (no windows) |
+| **Windows** | `Hive-Setup-<version>.exe` (Installer) or `Hive-<version>-portable.exe` |
+| **macOS** | `Hive-<version>-mac-<arch>.dmg` |
+| **Linux** | `Hive-<version>-linux-x86_64.AppImage` |
 
-Credentials are resolved by Pi itself (including OAuth token refresh) through a tiny helper run under Pi's own Node runtime, so Hive never re-implements auth. If a live request fails (offline, `429`), the panel falls back to the last good value or the [`pi-quota-status`](https://github.com/hafiezul/pi-quota-status) cache and marks the card **cached**. Rate-limited providers back off for 5 minutes. Data refreshes every 2 minutes while visible.
+> *Note on code signing:* Release binaries are currently unsigned. On Windows, click *More info → Run anyway*. On macOS, right-click and select *Open* on initial launch.
 
-### Usage analytics
+### 3. Launch & Code
 
-Open with the **bar-chart** icon (left rail / status bar) or `Ctrl+Shift+U`. It opens as a tab.
+Launch Hive, click **Open a Project Folder**, and start giving instructions to your agent.
 
-Everything is computed locally from your Pi session files (`~/.pi/agent/sessions/**/*.jsonl`):
+---
 
-- **KPIs** – spend (API-equivalent USD as recorded by Pi), tokens (prompt vs. output), requests, sessions, cache-hit rate, top model — each with a delta vs. the previous period.
-- **Chart** – stacked per-model columns per day (or **per hour** for *Today*), switchable between cost and tokens, with a hover breakdown.
-- **Token mix** – input / output / cache-read / cache-write split.
-- **Breakdown table** – by model, provider or project, with requests, tokens, cost and share.
-
-Session files are parsed once and cached by modification time/size (`<userData>/hive/usage-cache.json`), so re-opening the view takes milliseconds even with hundreds of MB of history.
-
-### Appearance (Arc-style themes)
-
-**Settings → Appearance** (`Ctrl+,`).
-
-![Appearance settings](docs/screenshots/appearance.png)
-
-- **Colour pad** – angle = hue, distance from centre = saturation. Add up to **3** colours for a gradient; dragging the large dot moves the whole palette together (keeps the harmony), smaller dots move independently. Arrow keys work too.
-- **Mode** – Light, Dark, or Auto (follows the OS).
-- **Intensity** – from a soft tint to a deep, saturated frame.
-- **Grain** – film-grain texture over the window frame.
-- **Presets** – Midnight, Ember, Lagoon, Matcha, Aurora, Rosé, Graphite, Sunrise, Glacier, Paper.
-- **Code** – font size, ligatures, soft-wrap.
-
-Like Arc, the *frame* (title bar, rails, side panels, status bar) is painted with your gradient while the editor floats above it as a calm content card. Text colours are contrast-solved against both surfaces (≥ 7:1 for body text) for every preset and intensity — this is enforced by unit tests. Themes persist and are applied before first paint (no flash).
-
-### Code rendering
-
-- Highlighting uses [shiki](https://shiki.style) with custom **Rider Dark / Rider Light** TextMate themes (blue keywords, purple types, teal methods, cyan fields, tan strings, pink numbers, green comments). Theme switches are instant — tokens carry both palettes as CSS variables.
-- 40+ languages load lazily on first use (TypeScript, C#, Python, Rust, Go, C/C++, Java, Kotlin, Swift, shell, PowerShell, SQL, YAML, JSON, HTML/CSS, HLSL/GLSL, Razor, …).
-- **Copy** copies the exact source (no line numbers, no trailing whitespace changes). Code and messages are text-selectable.
-- Long blocks collapse with *Show all N lines*; long files render in chunks with `content-visibility` for smooth scrolling.
-
-### Keyboard shortcuts
+## Keyboard Shortcuts
 
 | Shortcut | Action |
 |---|---|
-| `Ctrl+N` | New session in the current project |
-| `Ctrl+O` | Open project folder |
-| `Ctrl+W` | Close tab |
-| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
-| `Ctrl+B` | Toggle projects sidebar |
-| `Ctrl+Shift+E` / `Ctrl+Shift+G` | Files / Source control |
-| `Ctrl+Shift+L` | Subscription limits |
-| ``Ctrl+` `` | Terminal |
-| `Ctrl+Shift+U` | Usage analytics |
-| `Ctrl+,` | Settings |
-| `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
-| `Enter` / `Shift+Enter` | Send / newline in the composer |
-| `Enter` / `Ctrl+Enter` while Pi is working | Queue a follow-up / steer immediately |
-| `Esc` while Pi is working | Stop the current turn |
+| <kbd>Ctrl</kbd> + <kbd>N</kbd> | New session in current project |
+| <kbd>Ctrl</kbd> + <kbd>O</kbd> | Open project directory |
+| <kbd>Ctrl</kbd> + <kbd>W</kbd> | Close active tab |
+| <kbd>Ctrl</kbd> + <kbd>Tab</kbd> / <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Tab</kbd> | Switch next / previous tab |
+| <kbd>Ctrl</kbd> + <kbd>B</kbd> | Toggle projects sidebar |
+| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | Toggle Files panel |
+| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd> | Toggle Source Control (Git) |
+| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd> | Open Subscription Limits |
+| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>U</kbd> | Open Usage Analytics |
+| <kbd>Ctrl</kbd> + <kbd>`</kbd> | Toggle integrated terminal |
+| <kbd>Ctrl</kbd> + <kbd>,</kbd> | Open Settings |
+| <kbd>Ctrl</kbd> + <kbd>=</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | Zoom in / out / reset |
+| <kbd>Enter</kbd> | Send prompt in composer |
+| <kbd>Shift</kbd> + <kbd>Enter</kbd> | Insert newline in composer |
+| <kbd>Enter</kbd> *(while agent works)* | Queue message as next turn |
+| <kbd>Ctrl</kbd> + <kbd>Enter</kbd> *(while agent works)* | Steer agent immediately mid-run |
+| <kbd>Esc</kbd> *(while agent works)* | Stop current agent turn |
 
-(`Cmd` instead of `Ctrl` on macOS.)
+*(Use <kbd>Cmd</kbd> instead of <kbd>Ctrl</kbd> on macOS.)*
+
+---
 
 ## Configuration
 
-| Variable | Purpose |
+Hive respects standard Pi environment variables and provides custom overrides when needed:
+
+| Variable | Description |
 |---|---|
-| `HIVE_PI_CLI` | Path to Pi's `cli.js`, package root or install dir (skip auto-detection). |
-| `HIVE_NODE` | Node.js binary used to run Pi (must be ≥ 22.19). |
-| `HIVE_PROJECT` | Folder to open on first launch. |
-| `PI_CODING_AGENT_DIR` | Pi's agent dir (default `~/.pi/agent`); honoured like Pi itself does. |
-| `HIVE_USER_DATA` | Use a separate profile directory (testing). |
-| `HIVE_CAPTURE`, `HIVE_CAPTURE_DELAY`, `HIVE_CAPTURE_SCRIPT` | Screenshot automation: write a PNG after load (optionally running a script first) and exit. |
+| `HIVE_PI_CLI` | Path to Pi's `cli.js`, package root, or binary (skips auto-detection). |
+| `HIVE_NODE` | Path to Node.js executable (must be ≥ 22.19). |
+| `HIVE_PROJECT` | Directory to automatically open on startup. |
+| `PI_CODING_AGENT_DIR` | Pi data directory (defaults to `~/.pi/agent`). |
+| `HIVE_USER_DATA` | Custom profile and settings directory for Hive. |
+| `HIVE_CAPTURE` | Automated screenshot output path (writes PNG and exits). |
 
-The legacy `PI_STUDIO_*` names are still accepted as fallbacks.
+**CLI Detection Order:**  
+`HIVE_PI_CLI` → `pi` on system `PATH` → standard installation directories (`%LOCALAPPDATA%\pi-node\current`, global npm, Homebrew, etc.).
 
-Pi auto-detection order: `HIVE_PI_CLI` → `pi` launchers on `PATH` → known install locations (`%LOCALAPPDATA%\pi-node\current`, global npm, Homebrew, …).
-
-Settings that belong to Pi (enabled models, default model, auth) are read from and written to Pi's own files, so the CLI and Studio stay in sync.
-
-## Development
-
-Requirements: Node.js 22.19+, npm 10+, Git, and Pi installed (for running sessions).
-
-```bash
-git clone https://github.com/AdielMag/pi-studio.git
-cd pi-studio
-npm ci --legacy-peer-deps
-npm run dev            # Electron + Vite with hot reload
-```
-
-| Script | What it does |
-|---|---|
-| `npm run dev` | Run the app in development mode. |
-| `npm run build` | Production build of main, preload and renderer into `apps/desktop/out`. |
-| `npm run typecheck` | Strict TypeScript over every package, main/preload and renderer. |
-| `npm test` | Unit tests (Vitest). |
-| `npm run test:contract` | Contract tests against a real Pi process. |
-| `npm run dist` | Build installers for the current OS into `apps/desktop/dist-release`. |
-| `npm run screenshots` | Regenerate `docs/screenshots` from the built app (account e-mails are blurred). |
-| `npm run release:preview` | Show the version and changelog the next merge to `main` would produce. |
+---
 
 ## Architecture
 
+Hive is designed around an architecture that keeps the GUI lean and fast while using Pi's runtime as the core agent engine:
+
 ```
 pi-studio/
-├─ apps/desktop/                 Electron app
-│  ├─ src/main/                  main process
-│  │  ├─ index.ts                lifecycle only (single instance, shutdown)
-│  │  ├─ context.ts              AppContext: owns every service
-│  │  ├─ window.ts               BrowserWindow, navigation guards, capture hooks
-│  │  ├─ paths.ts                resource paths (asar-unpacked aware)
-│  │  ├─ ipc/                    one module per domain: app, sessions, workspace, accounts
-│  │  ├─ services/               session-manager, catalog, git, files, terminal, auth,
-│  │  │  │                       models, marketplace, updater, usage
-│  │  │  └─ quota/               credentials helper, provider fetchers, pure parsers, service
-│  │  ├─ bridge-server/          local socket to the Studio bridge extension running inside Pi
-│  │  └─ store/                  GUI state (projects, session meta)
-│  ├─ src/preload/               the narrow `window.studio` API (contextIsolation)
-│  ├─ src/renderer/
-│  │  ├─ components/             workbench UI (shell, transcript, composer, panels…)
-│  │  │  └─ code/                CodeBlock, Markdown, DiffView, highlighted lines
-│  │  ├─ features/appearance/    Arc theme editor, colour pad, appearance store
-│  │  ├─ features/insights/      limits panel, usage view, charts, insights store
-│  │  ├─ lib/highlight/          shiki highlighter, Rider themes, language registry
-│  │  ├─ store/                  session store (Pi state) + UI/layout store
-│  │  ├─ hooks/                  global shortcuts
-│  │  └─ styles/                 tokens, primitives, shell, transcript, settings
-│  └─ resources/                 shipped to Pi: bridge extension, credential helper
-├─ packages/
-│  ├─ protocol/                  shared types: IPC contract, bridge protocol, insights
-│  ├─ pi-adapter/                the only coupling to Pi: RPC, locator, transcript, usage parsing
-│  ├─ theme-engine/              Arc theme tokens + WCAG contrast solver (pure)
-│  └─ test-provider/             deterministic fake model provider for tests
-└─ scripts/release/              conventional-commit versioning + changelog
+├── apps/
+│   └── desktop/                 # Frameless Electron desktop application
+│       ├── src/main/            # Process lifecycle, window controls, and IPC services
+│       │   ├── services/        # Session manager, git, terminal, quota, usage indexer
+│       │   └── bridge-server/   # Local socket bridge to Pi extensions
+│       ├── src/preload/         # Context-isolated window.studio contract
+│       └── src/renderer/        # React workbench UI, transcript, panels, stores
+├── packages/
+│   ├── protocol/                # Shared IPC schema and domain types
+│   ├── pi-adapter/              # RPC transport, locator, and JSONL usage parser
+│   └── theme-engine/            # Color space math & WCAG contrast solver
+└── scripts/                     # Release automation and screenshot tooling
 ```
 
-Key design points:
+### Core Principles
 
-- **Pi is the engine.** Each tab runs `pi --mode rpc` as a child process; Studio talks JSON-RPC over stdio and loads a small bridge extension for things RPC doesn't cover (linked projects, status). Nothing is re-implemented that Pi already does.
-- **Strict process boundary.** The renderer has no Node access; everything goes through the typed `StudioApi` in `@hive/protocol`, implemented by the preload and handled by `ipc/*` modules.
-- **Services are injectable.** `AppContext` constructs services once; IPC modules receive it. Pure logic (quota parsers, usage aggregation, theme tokens, release versioning) lives in side-effect-free modules with unit tests.
-- **Performance.** Store subscriptions use shallow selectors so streaming only re-renders what changed; settled transcript rows are memoized; highlighting is async, cached (LRU) and debounced while streaming; heavy views (terminal, settings, usage, viewers) are code-split; session events are batched every 50 ms in main.
+- **Pi is the Engine** — Every tab executes `pi --mode rpc` as an isolated child process over stdio. Hive never re-invents agent logic, file modification safety, or tool executions that Pi handles.
+- **Process Isolation** — The renderer runs with `nodeIntegration: false` and strict Content-Security-Policy. All file operations, git calls, and shell executions pass through typed IPC APIs.
+- **Reactive State & Streaming** — Store subscriptions utilize fine-grained selectors. Token streaming updates only the active message row without re-rendering the full transcript.
+- **Local Privacy** — All usage calculations and logs remain strictly local. Quota checks only communicate directly with each provider's usage API using Pi's stored OAuth tokens.
 
-## Testing
+---
+
+## Development
 
 ```bash
-npm test                 # 90+ unit tests: parsers, usage aggregation, theme contrast for every preset,
-                         # release versioning, asar path mapping, git/files/terminal/models services
-npm run test:contract    # spawns real Pi processes against the deterministic test provider
+# Clone the repository
+git clone https://github.com/AdielMag/pi-studio.git
+cd pi-studio
+
+# Install dependencies (Node 22.19+ required)
+npm ci --legacy-peer-deps
+
+# Start desktop app in development mode with hot reload
+npm run dev
 ```
 
-CI runs typecheck, tests and a production build on Ubuntu and Windows for every pull request.
+### Useful Scripts
 
-## Releases & CI/CD
-
-Releases are fully automatic. **Every merge to `main`** runs [`release.yml`](.github/workflows/release.yml):
-
-1. **Verify** – `npm ci`, typecheck, unit tests, production build.
-2. **Version & changelog** – [`scripts/release/prepare.mjs`](scripts/release/prepare.mjs) reads the commits since the last `v*` tag and picks the next [SemVer](https://semver.org):
-   - a breaking change (`feat!:` / `BREAKING CHANGE:`) → **major** (→ minor while < 1.0),
-   - any `feat:` → **minor**,
-   - anything else → **patch**.
-   It bumps `package.json` versions, prepends a grouped section to [`CHANGELOG.md`](CHANGELOG.md) (Features, Fixes, Performance, …, with commit links and a compare link), commits `chore(release): vX.Y.Z [skip ci]`, and pushes an annotated tag.
-3. **Package** – Windows (NSIS installer + portable), macOS (dmg + zip) and Linux (AppImage) are built in parallel from the tag.
-4. **Publish** – a GitHub Release is created with the changelog section as release notes and all installers attached. The in-app updater picks it up.
-
-Use [Conventional Commits](https://www.conventionalcommits.org) for PR titles / squash messages (`feat(insights): …`, `fix: …`) so the changelog reads well. Run `npm run release:preview` to see what the next release will contain.
-
-> If `main` is branch-protected against bot pushes, the version-bump commit push is skipped with a warning; the tag (and therefore the release) is still published.
-
-## Troubleshooting
-
-| Problem | Fix |
+| Command | Action |
 |---|---|
-| **"Pi CLI not found"** | Install Pi globally, or set `HIVE_PI_CLI`. The screen lists every path searched. |
-| **Session fails to start** | The error banner shows Pi's stderr. Run `pi` in a terminal in the same folder to see the same error; check Node ≥ 22.19. |
-| **Limits card says "cached"** | The provider rate-limited or was unreachable; Studio shows the last good data and retries automatically. Hover the badge for the reason. |
-| **No subscription windows for a provider** | API-key accounts are billed per token and have no windows; only OAuth subscriptions report limits. |
-| **Usage looks empty** | Usage is read from `~/.pi/agent/sessions` (or `PI_CODING_AGENT_DIR`). Press the refresh button to force a rescan. |
-| **Windows SmartScreen / macOS Gatekeeper warning** | Builds are unsigned; allow the app once as described in [Install](#install). |
+| `npm run dev` | Launch Electron + Vite in development mode |
+| `npm run build` | Bundle main process, preload, and renderer |
+| `npm run typecheck` | Run strict TypeScript checks across all packages |
+| `npm test` | Run test suite with Vitest |
+| `npm run test:contract` | Run contract tests against live Pi processes |
+| `npm run dist` | Package distributable installers for the current platform |
+| `npm run screenshots` | Regenerate documentation screenshots |
 
-## Privacy & security
+---
 
-- Everything runs locally. Usage analytics never leave your machine.
-- Subscription-limit requests go **only** to each provider's own usage endpoint, using the credentials Pi already stores in `~/.pi/agent/auth.json`.
-- The renderer is context-isolated with a strict Content-Security-Policy; external links open in your browser, and in-app navigation away from the app is blocked.
+## Privacy & Security
+
+- **Local Execution:** Your code, file contents, prompts, and analytical data never leave your local environment.
+- **Direct Authentication:** Credentials are read from `~/.pi/agent/auth.json` (as created by Pi). Hive never requests or stores provider credentials separately.
+- **Strict Isolation:** The desktop app prevents external browser navigation and blocks unsafe URL schemes.
+
+---
 
 ## License
 
-See the repository for license details. Pi and its SDK are © their respective authors.
+See the repository for license terms. Pi and its underlying tools are © their respective authors.

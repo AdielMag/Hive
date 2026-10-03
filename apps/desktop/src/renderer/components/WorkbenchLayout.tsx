@@ -53,6 +53,7 @@ const ToolsPanel = named(() => import("./ToolsPanel.tsx"), "ToolsPanel");
 const UsageView = named(() => import("../features/insights/UsageView.tsx"), "UsageView");
 const LibraryView = named(() => import("../features/library/LibraryView.tsx"), "LibraryView");
 const BrowserTab = named(() => import("./browser/BrowserTab.tsx"), "BrowserTab");
+const PlanPreviewerTab = named(() => import("../features/plan/PlanPreviewerTab.tsx"), "PlanPreviewerTab");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
 
@@ -184,6 +185,8 @@ export const WorkbenchLayout: React.FC = () => {
                 <DiffViewerTab tab={activeTab} />
               ) : activeTab?.kind === "browser" ? (
                 <BrowserTab tab={activeTab} />
+              ) : activeTab?.kind === "plan" ? (
+                <PlanPreviewerTab tab={activeTab} />
               ) : hasSession ? (
                 <SessionView />
               ) : (

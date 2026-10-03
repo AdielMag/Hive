@@ -4,6 +4,7 @@ import { sessionDisplayTitle, titleFromPrompt } from "./session-title.ts";
 describe("titleFromPrompt", () => {
   it("strips the Studio mode prefix and collapses whitespace", () => {
     expect(titleFromPrompt("[Mode: Plan - Analyze, research.]\n\nFix the   tab\ntitle")).toBe("Fix the tab title");
+    expect(titleFromPrompt("[Mode: Ask - Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.]\n\nExplain the architecture")).toBe("Explain the architecture");
   });
 
   it("drops attached file blocks", () => {

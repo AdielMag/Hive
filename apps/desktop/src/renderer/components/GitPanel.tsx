@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   GitBranch,
   Plus,
@@ -19,9 +19,26 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
+import { useFeatureModelStore, resolveFeatureModel } from "../store/feature-models-store.ts";
+import { AiModelChip } from "./AiModelChip.tsx";
 
 export const GitPanel: React.FC = () => {
-  const { activeProject, selectedModel, openDiffTab } = useSessionStore(useShallow((s) => ({ activeProject: s.activeProject, selectedModel: s.selectedModel, openDiffTab: s.openDiffTab })));
+  const { activeProject, selectedModel, defaultModel, allCatalogModels, openDiffTab } = useSessionStore(
+    useShallow((s) => ({
+      activeProject: s.activeProject,
+      selectedModel: s.selectedModel,
+      defaultModel: s.defaultModel,
+      allCatalogModels: s.allCatalogModels,
+      openDiffTab: s.openDiffTab,
+    })),
+  );
+  const gitCommitConfig = useFeatureModelStore((s) => s.config.gitCommit);
+
+  const resolvedCommitModel = useMemo(
+    () => resolveFeatureModel(gitCommitConfig, selectedModel, defaultModel, allCatalogModels),
+    [gitCommitConfig, selectedModel, defaultModel, allCatalogModels],
+  );
+
   const showLeft = useUi((s) => s.showLeft);
   const [status, setStatus] = useState<any>(null);
   const [branches, setBranches] = useState<string[]>([]);
@@ -195,7 +212,7 @@ export const GitPanel: React.FC = () => {
     try {
       const generated = await window.studio.generateCommitMessage(
         activeProject.path,
-        selectedModel?.id,
+        resolvedCommitModel.id || undefined,
       );
       if (generated) {
         setCommitMsg(generated);
@@ -1057,8 +1074,8 @@ export const GitPanel: React.FC = () => {
             disabled={stagedCount === 0 || isGeneratingAi}
             title={
               stagedCount === 0
-                ? "Stage files first to generate commit message with AI"
-                : "Generate conventional commit message with AI"
+                ? `Stage files first to generate commit message with AI (${resolvedCommitModel.name || resolvedCommitModel.id})`
+                : `Generate commit message with AI · Using ${resolvedCommitModel.name || resolvedCommitModel.id} (${resolvedCommitModel.sourceLabel})`
             }
             style={{
               padding: "5px 9px",
@@ -1085,6 +1102,7 @@ export const GitPanel: React.FC = () => {
               <>
                 <Sparkles size={12} />
                 <span>AI Message</span>
+                <AiModelChip model={resolvedCommitModel} clickable={false} />
               </>
             )}
           </button>
