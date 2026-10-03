@@ -2,6 +2,15 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.10.0 — 2026-10-03 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.9.0...v0.10.0)
+
+### ✨ Features
+
+- redesign README, add visual tour assets, and plan previewer workbench support ([`68775bf`](https://github.com/AdielMag/pi-studio/commit/68775bf83514a3065f7addd77ae87c578b254ece))
+- add session image preview lightbox, browser tabs, and command palette ([`c9be800`](https://github.com/AdielMag/pi-studio/commit/c9be80075ed7a67a1f635f7d42c7df211186a92c))
+- **statusbar:** add hover/pin session cost popover ([`ab81b58`](https://github.com/AdielMag/pi-studio/commit/ab81b5864fb5ad8bc222e19b86f866a775e3b128))
+- **git:** move fetch/pull/push into branch header row ([`95dbe0f`](https://github.com/AdielMag/pi-studio/commit/95dbe0f3e0bd53f8b286067e1f754ec1518ad263))
+
 ## v0.9.0 — 2026-10-02 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.8.0...v0.9.0)
 
 ### ✨ Features
