@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.11.1 — 2026-10-03 · [diff](https://github.com/AdielMag/Hive/compare/v0.11.0...v0.11.1)
+
+### 🐛 Fixes
+
+- **updater:** retry release lookup with page fallback and surface check failures ([`409f47e`](https://github.com/AdielMag/Hive/commit/409f47e9a52fed2f41ea754018a5481914072129))
+
+### 🧹 Other changes
+
+- point repository links and update source at AdielMag/Hive ([`660dffe`](https://github.com/AdielMag/Hive/commit/660dffe10f1ca49ebea9b2f3845cb70243766e7a))
+
 ## v0.11.0 — 2026-10-03 · [diff](https://github.com/AdielMag/pi-studio/compare/v0.10.0...v0.11.0)
 
 ### ✨ Features
