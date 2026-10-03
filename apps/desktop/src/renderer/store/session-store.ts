@@ -158,7 +158,11 @@ export interface SessionStoreState {
   deleteQueuedMessage: (type: "steering" | "followUp", index: number) => Promise<void>;
   /** Update the text of a specific queued message. */
   editQueuedMessage: (type: "steering" | "followUp", index: number, newText: string) => Promise<void>;
-  /** Steer a queued message immediately into the active run ("Do now"). */
+  /** Interrupt whatever is running and immediately prompt the LLM with this queued message ("Do now"). */
+  runQueuedNow: (type: "steering" | "followUp", index: number) => Promise<void>;
+  /** Steer a queued message for the next step without aborting the current step ("Next step"). */
+  steerQueuedNext: (type: "steering" | "followUp", index: number) => Promise<void>;
+  /** Steer/run a queued message immediately ("Do now"). Alias to runQueuedNow. */
   steerQueuedNow: (type: "steering" | "followUp", index: number) => Promise<void>;
   /** Clear all queued messages for the active session. */
   clearAllQueued: () => Promise<void>;
@@ -1498,30 +1502,88 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }));
   },
 
-  steerQueuedNow: async (type: "steering" | "followUp", index: number) => {
+  runQueuedNow: async (type: "steering" | "followUp", index: number) => {
+    const { activeKey, transcript } = get();
+    if (!activeKey) return;
+
+    const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
+    if (!res.ok) return;
+    const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
+    const steering = [...(current.steering ?? transcript.queue.steering ?? [])];
+    const followUp = [...(current.followUp ?? transcript.queue.followUp ?? [])];
+
+    let target: string | undefined;
+    if (type === "steering") {
+      if (index >= 0 && index < steering.length) {
+        [target] = steering.splice(index, 1);
+      }
+    } else {
+      if (index >= 0 && index < followUp.length) {
+        [target] = followUp.splice(index, 1);
+      }
+    }
+    if (!target) {
+      const fallbackList = type === "steering" ? transcript.queue.steering : transcript.queue.followUp;
+      target = fallbackList[index];
+    }
+    if (!target) return;
+
+    if (transcript.running) {
+      try {
+        await window.studio.rpc(activeKey, { type: "abort" });
+      } catch (err) {
+        console.warn("Abort failed while running queued message now:", err);
+      }
+    }
+
+    try {
+      await window.studio.rpc(activeKey, { type: "prompt", message: target });
+    } catch (err) {
+      console.error("Prompt failed while running queued message now:", err);
+    }
+
+    for (const msg of steering) {
+      await window.studio.rpc(activeKey, { type: "steer", message: msg });
+    }
+    for (const msg of followUp) {
+      await window.studio.rpc(activeKey, { type: "follow_up", message: msg });
+    }
+
+    set((s) => ({
+      transcript: {
+        ...s.transcript,
+        running: true,
+        queue: {
+          steering,
+          followUp,
+        },
+      },
+    }));
+  },
+
+  steerQueuedNext: async (type: "steering" | "followUp", index: number) => {
     const { activeKey, transcript } = get();
     if (!activeKey) return;
 
     if (!transcript.running) {
-      const list = type === "steering" ? transcript.queue.steering : transcript.queue.followUp;
-      const target = list[index];
-      if (!target) return;
-      await get().deleteQueuedMessage(type, index);
-      await window.studio.rpc(activeKey, { type: "prompt", message: target });
-      return;
+      return get().runQueuedNow(type, index);
     }
 
     const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
     if (!res.ok) return;
     const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
-    const steering = [...(current.steering ?? [])];
-    const followUp = [...(current.followUp ?? [])];
+    const steering = [...(current.steering ?? transcript.queue.steering ?? [])];
+    const followUp = [...(current.followUp ?? transcript.queue.followUp ?? [])];
 
     let target: string | undefined;
     if (type === "steering") {
-      [target] = steering.splice(index, 1);
+      if (index >= 0 && index < steering.length) {
+        [target] = steering.splice(index, 1);
+      }
     } else {
-      [target] = followUp.splice(index, 1);
+      if (index >= 0 && index < followUp.length) {
+        [target] = followUp.splice(index, 1);
+      }
     }
     if (!target) return;
 
@@ -1542,6 +1604,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         },
       },
     }));
+  },
+
+  steerQueuedNow: async (type: "steering" | "followUp", index: number) => {
+    return get().runQueuedNow(type, index);
   },
 
   clearAllQueued: async () => {

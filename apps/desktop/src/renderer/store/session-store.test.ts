@@ -106,12 +106,46 @@ describe("queued messages store actions", () => {
     expect(q.followUp).toEqual(["follow 1", "follow 2 updated"]);
   });
 
-  it("promotes a followUp message to steering on 'Do now'", async () => {
-    await useSessionStore.getState().steerQueuedNow("followUp", 0);
+  it("promotes a followUp message to steering on 'Next step'", async () => {
+    await useSessionStore.getState().steerQueuedNext("followUp", 0);
     const q = useSessionStore.getState().transcript.queue;
     expect(q.steering).toEqual(["follow 1", "steer 1"]);
     expect(q.followUp).toEqual(["follow 2"]);
     expect(rpcCalls.some((c) => c.type === "steer" && c.message === "follow 1")).toBe(true);
+  });
+
+  it("aborts active step and immediately prompts LLM on 'Do now' (runQueuedNow)", async () => {
+    await useSessionStore.getState().runQueuedNow("followUp", 0);
+    const q = useSessionStore.getState().transcript.queue;
+    expect(q.followUp).toEqual(["follow 2"]);
+    expect(q.steering).toEqual(["steer 1"]);
+    expect(rpcCalls.some((c) => c.type === "abort")).toBe(true);
+    expect(rpcCalls.some((c) => c.type === "prompt" && c.message === "follow 1")).toBe(true);
+    expect(rpcCalls.some((c) => c.type === "steer" && c.message === "steer 1")).toBe(true);
+    expect(rpcCalls.some((c) => c.type === "follow_up" && c.message === "follow 2")).toBe(true);
+  });
+
+  it("aborts active step and immediately prompts LLM on 'Do now' for a steering message", async () => {
+    await useSessionStore.getState().runQueuedNow("steering", 0);
+    const q = useSessionStore.getState().transcript.queue;
+    expect(q.steering).toEqual([]);
+    expect(q.followUp).toEqual(["follow 1", "follow 2"]);
+    expect(rpcCalls.some((c) => c.type === "abort")).toBe(true);
+    expect(rpcCalls.some((c) => c.type === "prompt" && c.message === "steer 1")).toBe(true);
+    expect(rpcCalls.some((c) => c.type === "follow_up" && c.message === "follow 1")).toBe(true);
+    expect(rpcCalls.some((c) => c.type === "follow_up" && c.message === "follow 2")).toBe(true);
+  });
+
+  it("prompts immediately without aborting if agent is not running", async () => {
+    useSessionStore.setState({
+      transcript: {
+        ...useSessionStore.getState().transcript,
+        running: false,
+      },
+    });
+    await useSessionStore.getState().runQueuedNow("followUp", 0);
+    expect(rpcCalls.some((c) => c.type === "abort")).toBe(false);
+    expect(rpcCalls.some((c) => c.type === "prompt" && c.message === "follow 1")).toBe(true);
   });
 
   it("pops a queued message into the composer editor", async () => {

@@ -457,6 +457,12 @@ div.msg-tool__head {
   border-color: var(--border-prominent);
 }
 
+.msg-queued__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .msg-queued__btn--primary {
   background: var(--accent-subtle);
   border-color: rgba(var(--accent-rgb), 0.35);

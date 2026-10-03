@@ -7,6 +7,7 @@ import {
   ArrowDownToLine,
   Clock,
   CornerDownLeft,
+  CornerDownRight,
   Pencil,
   Trash2,
   X,
@@ -78,17 +79,27 @@ interface CardProps {
 }
 
 const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
-  const { deleteQueuedMessage, editQueuedMessage, steerQueuedNow, popQueuedToEditor } = useSessionStore(
+  const {
+    deleteQueuedMessage,
+    editQueuedMessage,
+    runQueuedNow,
+    steerQueuedNext,
+    popQueuedToEditor,
+    running,
+  } = useSessionStore(
     useShallow((s) => ({
       deleteQueuedMessage: s.deleteQueuedMessage,
       editQueuedMessage: s.editQueuedMessage,
-      steerQueuedNow: s.steerQueuedNow,
+      runQueuedNow: s.runQueuedNow,
+      steerQueuedNext: s.steerQueuedNext,
       popQueuedToEditor: s.popQueuedToEditor,
+      running: s.transcript.running,
     })),
   );
 
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message);
+  const [busy, setBusy] = useState(false);
   const isSteering = type === "steering";
 
   const handleSave = async () => {
@@ -99,6 +110,26 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
   const handleCancel = () => {
     setIsEditing(false);
     setEditText(message);
+  };
+
+  const handleRunNow = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await runQueuedNow(type, index);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSteerNext = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await steerQueuedNext(type, index);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -119,21 +150,37 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
 
           {!isEditing && (
             <div className="msg-queued__actions">
+              <button
+                className="msg-queued__btn msg-queued__btn--primary"
+                onClick={() => void handleRunNow()}
+                disabled={busy}
+                title={
+                  running
+                    ? "Do now: stop current step immediately and send to LLM now"
+                    : "Do now: send this message to the LLM immediately"
+                }
+              >
+                <Zap size={11} /> Do now
+              </button>
+
               {!isSteering && (
                 <button
-                  className="msg-queued__btn msg-queued__btn--primary"
-                  onClick={() => void steerQueuedNow(type, index)}
-                  title="Do now: steer immediately into the running agent instead of waiting"
+                  className="msg-queued__btn"
+                  onClick={() => void handleSteerNext()}
+                  disabled={busy}
+                  title="Next step: wait for current step to finish, then send message (steer)"
                 >
-                  <Zap size={11} /> Do now
+                  <CornerDownRight size={11} /> Next step
                 </button>
               )}
+
               <button
                 className="msg-queued__btn"
                 onClick={() => {
                   setEditText(message);
                   setIsEditing(true);
                 }}
+                disabled={busy}
                 title="Edit this queued message"
               >
                 <Pencil size={11} /> Edit
@@ -141,6 +188,7 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
               <button
                 className="msg-queued__btn"
                 onClick={() => void popQueuedToEditor(type, index)}
+                disabled={busy}
                 title="Move back to composer input"
               >
                 <ArrowDownToLine size={11} /> To input
@@ -148,6 +196,7 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
               <button
                 className="msg-queued__btn msg-queued__btn--danger"
                 onClick={() => void deleteQueuedMessage(type, index)}
+                disabled={busy}
                 title="Cancel and remove from queue"
               >
                 <Trash2 size={11} />
