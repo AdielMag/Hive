@@ -51,7 +51,6 @@ export const AppTitleBar: React.FC = () => {
   const kbdFiles = useShortcut("view.files");
   const kbdGit = useShortcut("view.git");
   const kbdUsage = useShortcut("view.usage");
-  const kbdTerminal = useShortcut("view.terminal");
   const kbdZoomIn = useShortcut("zoom.in");
   const kbdZoomOut = useShortcut("zoom.out");
   const kbdZoomReset = useShortcut("zoom.reset");
@@ -104,7 +103,6 @@ export const AppTitleBar: React.FC = () => {
       { separator: true, label: "" },
       { label: "Tools Breakdown", action: () => ui.toggleRight("tools") },
       { label: "Usage Analytics", shortcut: kbdUsage, action: () => openUsageTab() },
-      { label: "Terminal", shortcut: kbdTerminal, action: () => ui.toggleRight("terminal") },
       { separator: true, label: "" },
       { label: "Appearance…", action: () => ui.openSettings("appearance") },
       { label: "Zoom In", shortcut: kbdZoomIn, action: () => window.studio.zoom("in") },

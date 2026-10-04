@@ -3,8 +3,8 @@ import { Terminal as TerminalIcon, Plus, X, Trash2, RotateCw, TerminalSquare } f
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { useShallow } from "zustand/react/shallow";
-import { useSessionStore } from "../store/session-store.ts";
+import type { ModuleHost } from "@hive/module-sdk/renderer";
+import { TerminalMethods, TerminalEvents, type TerminalSessionInfo } from "../shared.ts";
 
 interface TerminalTab {
   id: string;
@@ -14,8 +14,8 @@ interface TerminalTab {
 
 const TERMINAL_FONT = `"JetBrains Mono Variable", "JetBrains Mono", "Cascadia Mono", Consolas, monospace`;
 
-export const TerminalPanel: React.FC = () => {
-  const { activeProject } = useSessionStore(useShallow((s) => ({ activeProject: s.activeProject })));
+export const TerminalPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
+  const invoke = host.ipc.invoke;
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
@@ -28,8 +28,8 @@ export const TerminalPanel: React.FC = () => {
   // Create a new terminal session
   const createNewTab = useCallback(async () => {
     try {
-      const cwd = activeProject?.path;
-      const session = await window.studio.terminalCreate({ cwd });
+      const cwd = host.sessions.activeProject()?.path;
+      const session = await invoke<TerminalSessionInfo>(TerminalMethods.create, { cwd });
       const shellName = session.shell.split(/[/\\]/).pop() || session.shell;
       const tabTitle = `${shellName} (${session.id.split("_")[1] || "1"})`;
 
@@ -44,7 +44,7 @@ export const TerminalPanel: React.FC = () => {
     } catch (err) {
       console.error("[TerminalPanel] Failed to create terminal session:", err);
     }
-  }, [activeProject?.path]);
+  }, [host]);
 
   // Initial tab creation if none exists
   useEffect(() => {
@@ -55,14 +55,14 @@ export const TerminalPanel: React.FC = () => {
 
   // Setup listener for incoming terminal stream data
   useEffect(() => {
-    const unsubData = window.studio.onTerminalData(({ id, data }) => {
+    const unsubData = host.ipc.on<{ id: string; data: string }>(TerminalEvents.data, ({ id, data }) => {
       const entry = terminalsRef.current.get(id);
       if (entry) {
         entry.term.write(data);
       }
     });
 
-    const unsubExit = window.studio.onTerminalExit(({ id }) => {
+    const unsubExit = host.ipc.on<{ id: string }>(TerminalEvents.exit, ({ id }) => {
       const entry = terminalsRef.current.get(id);
       if (entry) {
         entry.term.write("\r\n\x1b[33m[Process completed]\x1b[0m\r\n");
@@ -126,7 +126,7 @@ export const TerminalPanel: React.FC = () => {
 
     try {
       fitAddon.fit();
-      void window.studio.terminalResize(tabId, term.cols, term.rows);
+      void invoke(TerminalMethods.resize, { id: tabId, cols: term.cols, rows: term.rows });
     } catch (e) {
       // fit error
     }
@@ -141,7 +141,7 @@ export const TerminalPanel: React.FC = () => {
     });
 
     term.onData((data) => {
-      void window.studio.terminalWrite(tabId, data);
+      void invoke(TerminalMethods.write, { id: tabId, data: data });
     });
 
     terminalsRef.current.set(tabId, { term, fitAddon, container: node });
@@ -150,7 +150,7 @@ export const TerminalPanel: React.FC = () => {
   // Close a terminal tab
   const closeTab = useCallback((tabId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    void window.studio.terminalKill(tabId);
+    void invoke(TerminalMethods.kill, { id: tabId });
 
     const entry = terminalsRef.current.get(tabId);
     if (entry) {
@@ -178,7 +178,7 @@ export const TerminalPanel: React.FC = () => {
     const timer = setTimeout(() => {
       try {
         entry.fitAddon.fit();
-        void window.studio.terminalResize(activeTabId, entry.term.cols, entry.term.rows);
+        void invoke(TerminalMethods.resize, { id: activeTabId, cols: entry.term.cols, rows: entry.term.rows });
         entry.term.focus();
       } catch (e) {
         // ignore
@@ -198,7 +198,7 @@ export const TerminalPanel: React.FC = () => {
       if (entry) {
         try {
           entry.fitAddon.fit();
-          void window.studio.terminalResize(activeTabId, entry.term.cols, entry.term.rows);
+          void invoke(TerminalMethods.resize, { id: activeTabId, cols: entry.term.cols, rows: entry.term.rows });
         } catch (e) {
           // ignore
         }
@@ -211,7 +211,7 @@ export const TerminalPanel: React.FC = () => {
 
   const sendCommand = (cmd: string) => {
     if (!activeTabId) return;
-    void window.studio.terminalWrite(activeTabId, cmd + "\r");
+    void invoke(TerminalMethods.write, { id: activeTabId, data: cmd + "\r" });
   };
 
   const clearTerminal = () => {
@@ -220,7 +220,7 @@ export const TerminalPanel: React.FC = () => {
     if (entry) {
       entry.term.clear();
       // On Windows PowerShell/cmd or bash send Ctrl+L
-      void window.studio.terminalWrite(activeTabId, "\x0c");
+      void invoke(TerminalMethods.write, { id: activeTabId, data: "\x0c" });
     }
   };
 

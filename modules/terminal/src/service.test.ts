@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { TerminalManager } from "./terminal.ts";
+import { TerminalManager } from "./service.ts";
 
 describe("TerminalManager", () => {
   const manager = new TerminalManager();

@@ -69,7 +69,6 @@ let shuttingDown = false;
 app.on("will-quit", (event) => {
   if (shuttingDown || !ctx) return;
   shuttingDown = true;
-  ctx.terminals.disposeAll();
   const sessions = ctx.sessions;
   event.preventDefault();
   // Give modules and Pi processes a bounded window to exit cleanly, then quit regardless.

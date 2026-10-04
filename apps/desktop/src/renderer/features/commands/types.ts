@@ -11,5 +11,5 @@ export interface Command {
   allowInTerminal?: boolean;
   /** When false the command is hidden from the palette and its shortcut is a no-op. */
   when?: () => boolean;
-  run: () => void | Promise<void>;
+  run: (args?: unknown) => void | Promise<void>;
 }

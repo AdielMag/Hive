@@ -11,7 +11,6 @@ import {
   GitCommit,
   PieChart,
   Settings,
-  Terminal as TerminalIcon,
   Wrench,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
@@ -46,7 +45,6 @@ const named = <T extends string>(loader: () => Promise<Record<T, React.Component
   lazy(() => loader().then((m) => ({ default: m[key] })));
 const FileViewerTab = named(() => import("./FileViewerTab.tsx"), "FileViewerTab");
 const DiffViewerTab = named(() => import("./DiffViewerTab.tsx"), "DiffViewerTab");
-const TerminalPanel = named(() => import("./TerminalPanel.tsx"), "TerminalPanel");
 const SettingsModal = named(() => import("./SettingsModal.tsx"), "SettingsModal");
 const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
 const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel");
@@ -62,7 +60,6 @@ export const WorkbenchLayout: React.FC = () => {
   const gitShortcut = useShortcut("view.git");
   const usageShortcut = useShortcut("view.usage");
   const settingsShortcut = useShortcut("settings.open");
-  const terminalShortcut = useShortcut("view.terminal");
 
   const { activeProject, tabs, activeTabId, error, openUsageTab } = useSessionStore(
     useShallow((s) => ({
@@ -200,12 +197,6 @@ export const WorkbenchLayout: React.FC = () => {
         <nav className="rail rail--right">
           <RailButton icon={<Wrench size={18} />} title="Tools breakdown" active={ui.right === "tools"} onClick={() => ui.toggleRight("tools")} />
           <RailButton icon={<PieChart size={18} />} title="Context breakdown" active={ui.right === "context"} onClick={() => ui.toggleRight("context")} />
-          <RailButton
-            icon={<TerminalIcon size={18} />}
-            title={terminalShortcut ? `Terminal (${terminalShortcut})` : "Terminal"}
-            active={ui.right === "terminal"}
-            onClick={() => ui.toggleRight("terminal")}
-          />
           {rightModulePanels.map((p) => (
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id} onClick={() => ui.toggleRight(p.id)} />
           ))}
@@ -232,7 +223,7 @@ const LeftPanelContent: React.FC<{ panel: LeftPanel; onClose(): void }> = ({ pan
   panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : panel === "branches" ? <BranchesPanel /> : panel === "git" ? <GitPanel /> : <ModulePanelView side="left" panelId={panel} onClose={onClose} />;
 
 const RightPanelContent: React.FC<{ panel: RightPanel; onClose(): void }> = ({ panel, onClose }) =>
-  panel === "tools" ? <ToolsPanel /> : panel === "context" ? <ContextBreakdownPanel /> : panel === "terminal" ? <TerminalPanel /> : <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
+  panel === "tools" ? <ToolsPanel /> : panel === "context" ? <ContextBreakdownPanel /> : <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
 
 const SessionView: React.FC = () => {
   const composerHeight = useUi((s) => s.composerHeight);

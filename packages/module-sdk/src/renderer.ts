@@ -77,7 +77,10 @@ export interface ModuleHost {
   };
   toast(options: string | ToastOptions): void;
   commands: {
-    run(commandId: string): Promise<void>;
+    /** Run any registered command (core or another module's) by id. No-op when it is not registered. */
+    run(commandId: string, args?: unknown): Promise<void>;
+    /** True while a command is registered (i.e. its module is enabled). */
+    has(commandId: string): boolean;
   };
   settings: {
     open(tabId?: string): void;
@@ -159,7 +162,8 @@ export interface CommandContribution {
   defaultKeys?: string[];
   allowInTerminal?: boolean;
   when?: (host: ModuleHost) => boolean;
-  run: (host: ModuleHost) => void | Promise<void>;
+  /** `args` is whatever the caller passed to `host.commands.run(id, args)` (undefined for palette / shortcuts). */
+  run: (host: ModuleHost, args?: unknown) => void | Promise<void>;
 }
 
 export interface StatusBarContribution extends ContributionBase {

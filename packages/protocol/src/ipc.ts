@@ -200,14 +200,6 @@ export const IPC = {
   updaterCheck: "updater:check",
   updaterApply: "updater:apply",
   evtUpdaterProgress: "updater:progress",
-  // Terminal
-  terminalCreate: "terminal:create",
-  terminalWrite: "terminal:write",
-  terminalResize: "terminal:resize",
-  terminalKill: "terminal:kill",
-  terminalList: "terminal:list",
-  evtTerminalData: "terminal:data",
-  evtTerminalExit: "terminal:exit",
   // Models
   modelsGetCatalog: "models:get-catalog",
   modelsSaveEnabled: "models:save-enabled",
@@ -446,14 +438,6 @@ export interface StudioApi {
   applyUpdate(downloadUrl?: string): Promise<{ success: boolean; message: string }>;
   onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void;
 
-  // Terminal
-  terminalCreate(options?: { cwd?: string; shell?: string; cols?: number; rows?: number }): Promise<{ id: string; shell: string; cwd: string }>;
-  terminalWrite(id: string, data: string): Promise<void>;
-  terminalResize(id: string, cols: number, rows: number): Promise<void>;
-  terminalKill(id: string): Promise<void>;
-  terminalList(): Promise<{ id: string; shell: string; cwd: string }[]>;
-  onTerminalData(listener: (event: { id: string; data: string }) => void): () => void;
-  onTerminalExit(listener: (event: { id: string; exitCode: number }) => void): () => void;
 
   // Models
   getModelsCatalog(): Promise<ModelsCatalogResponse>;

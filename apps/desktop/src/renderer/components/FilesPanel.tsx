@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Folder, FileText, ChevronRight, ChevronDown, RefreshCw, Play } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
-import { useUi } from "../store/ui-store.ts";
+import { COMMANDS_BY_ID, useCommandsVersion } from "../features/commands/registry.ts";
 
 export const FilesPanel: React.FC = () => {
   const { activeProject, openFileTab } = useSessionStore(useShallow((s) => ({ activeProject: s.activeProject, openFileTab: s.openFileTab })));
@@ -118,7 +118,10 @@ const FileTreeNode: React.FC<{
   const [hovered, setHovered] = useState(false);
 
   const ext = node.name.slice(node.name.lastIndexOf(".")).toLowerCase();
-  const isRunnable = [".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".sh", ".bash", ".ps1"].includes(ext);
+  // "Run in terminal" exists only while a module provides the `terminal.run` command.
+  useCommandsVersion((v) => v.version);
+  const hasTerminal = COMMANDS_BY_ID.has("terminal.run");
+  const isRunnable = hasTerminal && [".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".sh", ".bash", ".ps1"].includes(ext);
 
   const handleRunInTerminal = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -130,14 +133,8 @@ const FileTreeNode: React.FC<{
     else if (ext === ".ps1") cmd = `powershell -NoProfile -File "${node.path}"`;
     if (!cmd) return;
 
-    useUi.getState().showRight("terminal");
-    const terms = await window.studio.terminalList();
-    let termId = terms[0]?.id;
-    if (!termId) {
-      const created = await window.studio.terminalCreate({ cwd: node.path.substring(0, node.path.lastIndexOf(/[/\\]/)) });
-      termId = created.id;
-    }
-    await window.studio.terminalWrite(termId, cmd + "\r");
+    const cwd = node.path.replace(/[/\\][^/\\]*$/, "");
+    await COMMANDS_BY_ID.get("terminal.run")?.run({ command: cmd, cwd });
   };
 
   return (

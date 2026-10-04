@@ -16,7 +16,6 @@ import { ModelsService } from "./services/models.ts";
 import { QuotaService } from "./services/quota/index.ts";
 import { UsageService } from "./services/usage.ts";
 import { PiInstallService } from "./services/pi-install.ts";
-import { terminalManager, type TerminalManager } from "./services/terminal.ts";
 import { IPC } from "@hive/protocol";
 import { MainModuleHost } from "./modules/host.ts";
 import { MAIN_MODULE_LOADERS, MODULE_MANIFESTS } from "./modules.generated.ts";
@@ -35,7 +34,6 @@ export interface AppContext {
   models: ModelsService;
   quota: QuotaService;
   usage: UsageService;
-  terminals: TerminalManager;
   /** Installable feature modules (enabled set, lifecycle, scoped IPC). Started in index.ts. */
   modules: MainModuleHost;
 }
@@ -66,7 +64,6 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     models: new ModelsService(undefined, hiveDataDir),
     quota: new QuotaService(info),
     usage: new UsageService(join(hiveDataDir, "usage-cache.json")),
-    terminals: terminalManager,
     modules: new MainModuleHost({
       manifests: MODULE_MANIFESTS,
       loaders: MAIN_MODULE_LOADERS,

@@ -65,7 +65,7 @@ const toCommand = (c: CommandContribution, host: ModuleHost): Command => ({
   defaultKeys: c.defaultKeys,
   allowInTerminal: c.allowInTerminal,
   when: c.when ? () => c.when!(host) : undefined,
-  run: () => c.run(host),
+  run: (args) => c.run(host, args),
 });
 
 export const useModules = create<ModulesState>((set, get) => {

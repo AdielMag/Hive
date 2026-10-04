@@ -104,6 +104,31 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     },
     "hasMain": true,
     "hasRenderer": true
+  },
+  {
+    "id": "terminal",
+    "title": "Terminal",
+    "description": "Integrated terminal in the right panel (PowerShell / bash / zsh) rooted at your project folder.",
+    "tier": "recommended",
+    "icon": "terminal",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "terminal"
+      ],
+      "commands": [
+        {
+          "id": "view.terminal",
+          "title": "Toggle Terminal Panel",
+          "category": "View",
+          "keys": [
+            "Mod+`"
+          ]
+        }
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
   }
 ];
 
@@ -113,4 +138,5 @@ export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ defaul
   "library": () => import("@hive-module/library/main"),
   "marketplace": () => import("@hive-module/marketplace/main"),
   "plan-previewer": () => import("@hive-module/plan-previewer/main"),
+  "terminal": () => import("@hive-module/terminal/main"),
 };

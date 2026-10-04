@@ -66,9 +66,10 @@ export function createModuleHost(moduleId: string): ModuleHost {
     },
     toast: (options) => void toast(options),
     commands: {
-      run: async (commandId) => {
-        await COMMANDS_BY_ID.get(commandId)?.run();
+      run: async (commandId, args) => {
+        await COMMANDS_BY_ID.get(commandId)?.run(args);
       },
+      has: (commandId) => COMMANDS_BY_ID.has(commandId),
     },
     settings: { open: (tabId) => useUi.getState().openSettings(tabId ? `${moduleId}:${tabId}` : undefined) },
     openExternal: (url: string) => window.studio.openSystemBrowser(url),
