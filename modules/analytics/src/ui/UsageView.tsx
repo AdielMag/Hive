@@ -29,17 +29,14 @@ import {
   type UsageGroupRow,
   type UsageTotals,
 } from "@hive/pi-adapter";
-import { ProviderIcon } from "../../components/ProviderIcon.tsx";
-import { formatCost, formatDayLabel, formatTokens } from "../../lib/format.ts";
-import { useSessionStore } from "../../store/session-store.ts";
+import { formatCost, formatDayLabel, formatTokens } from "@hive/module-sdk/format";
+import { AnalyticsMethods } from "../shared.ts";
+import { analyticsHost } from "./analytics-host.ts";
 import { useInsights } from "./insights-store.ts";
 import { UsageChart, type ChartType } from "./UsageChart.tsx";
 import { RANGE_DAYS, buildStackedSeries, prettyModel, type UsageMetric, type UsageRange } from "./usage-series.ts";
 import { AiUsageInsightsModal } from "./AiUsageInsights.tsx";
 import { analyzeUsageTelemetry, type AiUsageAnalysisResult } from "./insights-analyzer.ts";
-import { getStoredItem, setStoredItem } from "../../lib/storage.ts";
-import { useFeatureModelStore, resolveFeatureModel } from "../../store/feature-models-store.ts";
-import { AiModelChip } from "../../components/AiModelChip.tsx";
 
 const RANGES: Array<[UsageRange, string]> = [
   ["today", "Today"],
@@ -57,20 +54,12 @@ export const UsageView: React.FC = () => {
   const refresh = useInsights((s) => s.refreshUsage);
   const focus = useInsights((s) => s.focusSession);
   const setFocus = useInsights((s) => s.setFocusSession);
-  const allSessions = useSessionStore((s) => s.allSessions);
-  const selectedModel = useSessionStore((s) => s.selectedModel);
-  const defaultModel = useSessionStore((s) => s.defaultModel);
-  const allCatalogModels = useSessionStore((s) => s.allCatalogModels);
-  const usageAnalysisConfig = useFeatureModelStore((s) => s.config.usageAnalysis);
+  const allSessions = analyticsHost().hooks.useSessionCatalog();
+  const resolvedUsageModel = analyticsHost().hooks.useFeatureModel("usageAnalysis");
 
-  const resolvedUsageModel = useMemo(
-    () => resolveFeatureModel(usageAnalysisConfig, selectedModel, defaultModel, allCatalogModels),
-    [usageAnalysisConfig, selectedModel, defaultModel, allCatalogModels],
-  );
-
-  const [range, setRange] = useState<UsageRange>(() => (getStoredItem("hive.usage.range") as UsageRange) || "7d");
+  const [range, setRange] = useState<UsageRange>(() => (analyticsHost().storage.get("hive.usage.range") as UsageRange) || "7d");
   const [metric, setMetric] = useState<UsageMetric>("cost");
-  const [chartType, setChartType] = useState<ChartType>(() => (getStoredItem("hive.usage.chartType") as ChartType) || "line");
+  const [chartType, setChartType] = useState<ChartType>(() => (analyticsHost().storage.get("hive.usage.chartType") as ChartType) || "line");
   const [table, setTable] = useState<UsageTable>("model");
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -81,8 +70,8 @@ export const UsageView: React.FC = () => {
   useEffect(() => {
     void refresh(focus !== null);
   }, [refresh, focus]);
-  useEffect(() => setStoredItem("hive.usage.range", range), [range]);
-  useEffect(() => setStoredItem("hive.usage.chartType", chartType), [chartType]);
+  useEffect(() => analyticsHost().storage.set("hive.usage.range", range), [range]);
+  useEffect(() => analyticsHost().storage.set("hive.usage.chartType", chartType), [chartType]);
 
   const scoped = focus !== null;
   const focusBuckets = useMemo(() => (usage && focus ? filterBucketsBySession(usage.buckets, focus) : null), [usage, focus]);
@@ -160,7 +149,7 @@ export const UsageView: React.FC = () => {
     );
     setAiAnalysis(baseAnalysis);
 
-    if (resolvedUsageModel.isHeuristic || !window.studio.generateUsageInsights) {
+    if (resolvedUsageModel.isHeuristic) {
       setTimeout(() => {
         if (runIdRef.current === currentRunId) {
           setAiLoading(false);
@@ -177,9 +166,9 @@ Active Days: ${summary.activeDays} / ${nDays} days
 Top Models: ${summary.byModel.slice(0, 4).map((m) => `${m.key}: $${m.cost.toFixed(2)} (${m.tokens} tokens)`).join(", ")}
 Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
 
-      const llmResult = await window.studio.generateUsageInsights(
-        summaryText,
-        resolvedUsageModel.id || undefined,
+      const llmResult = await analyticsHost().ipc.invoke<string>(
+        AnalyticsMethods.generateInsights,
+        { summaryText, model: resolvedUsageModel.id || undefined },
       );
 
       if (runIdRef.current !== currentRunId) return;
@@ -258,7 +247,7 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
           >
             <Sparkles size={13} />
             <span>Analyze with AI</span>
-            <AiModelChip model={resolvedUsageModel} clickable={false} feature="usageAnalysis" />
+            {React.createElement(analyticsHost().ui.AiModelChip, { model: resolvedUsageModel, clickable: false, feature: "usageAnalysis" })}
           </button>
           {focus ? (
             <div className="usage__focus" title={focus}>
@@ -372,7 +361,7 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
                 {summary.byProvider.length === 0 && <div className="ui-empty">No activity</div>}
                 {summary.byProvider.map((p) => (
                   <div key={p.key} className="usage__provider">
-                    <ProviderIcon provider={p.key} size={16} />
+                    {React.createElement(analyticsHost().ui.ProviderIcon, { provider: p.key, size: 16 })}
                     <span className="usage__provider-name">{p.key}</span>
                     <span className="usage__provider-bar">
                       <i style={{ width: `${(p.cost / Math.max(summary.totals.cost, 1e-9)) * 100}%` }} />
@@ -512,7 +501,7 @@ const BreakdownTable: React.FC<{
               >
                 <td>
                   <div className="usage-table__name">
-                    {r.provider && kind !== "project" && kind !== "session" && <ProviderIcon provider={r.provider} size={14} />}
+                    {r.provider && kind !== "project" && kind !== "session" && React.createElement(analyticsHost().ui.ProviderIcon, { provider: r.provider, size: 14 })}
                     <span title={r.key}>{name}</span>
                     {kind === "session" && (
                       <em className="usage-table__sub">

@@ -9,7 +9,6 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { UsageBucket, UsageReport } from "@hive/protocol";
 import { SessionUsageParser } from "@hive/pi-adapter";
-import { piAgentDir } from "../paths.ts";
 
 interface FileEntry {
   mtimeMs: number;
@@ -34,7 +33,7 @@ export class UsageService {
 
   constructor(
     private readonly cachePath: string,
-    private readonly sessionsDir: string = join(piAgentDir(), "sessions"),
+    private readonly sessionsDir: string,
   ) {
     this.cache = this.loadCache();
   }

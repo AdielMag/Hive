@@ -1,6 +1,6 @@
 /** Tabs across the top of the content card (sessions, files, diffs, usage). Middle-click closes. */
 import React from "react";
-import { BarChart3, FileCode, GitCompare, Loader2, MessageSquare, Moon, PenLine, Plus, X } from "lucide-react";
+import { FileCode, GitCompare, Loader2, MessageSquare, Moon, PenLine, Plus, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { TabItem } from "@hive/protocol";
 import { hasDraft, useSessionStore } from "../store/session-store.ts";
@@ -121,8 +121,6 @@ const TabIcon: React.FC<{ tab: TabItem }> = ({ tab }) => {
       return <FileCode size={13} />;
     case "diff":
       return <GitCompare size={13} />;
-    case "usage":
-      return <BarChart3 size={13} />;
 
     default:
       return isCoreTabKind(tab.kind) ? <MessageSquare size={13} /> : <ModuleTabIcon tab={tab} />;

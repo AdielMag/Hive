@@ -2,6 +2,8 @@
  * Insights state: the usage report. (Subscription quota lives in the `limits` module.)
  */
 import { create } from "zustand";
+import { AnalyticsMethods } from "../shared.ts";
+import { analyticsHost } from "./analytics-host.ts";
 import type { UsageReport } from "@hive/protocol";
 
 interface InsightsState {
@@ -27,7 +29,7 @@ export const useInsights = create<InsightsState>((set, get) => ({
     if (get().usageLoading) return;
     set({ usageLoading: true, usageError: null });
     try {
-      set({ usage: await window.studio.getUsage(force) });
+      set({ usage: await analyticsHost().ipc.invoke<UsageReport>(AnalyticsMethods.get, { force }) });
     } catch (err) {
       set({ usageError: message(err) });
     } finally {

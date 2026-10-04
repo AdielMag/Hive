@@ -59,6 +59,26 @@ export interface ModuleHostIpc {
   on<T = unknown>(event: string, listener: (payload: T) => void): () => void;
 }
 
+/** A Pi session known to Hive (subset of core's catalog item). */
+export interface SessionCatalogLite {
+  path: string;
+  title?: string;
+  name?: string;
+  firstMessage?: string;
+}
+
+/** The model a core "AI feature" resolves to under the user's Settings → Models preference. */
+export interface ResolvedFeatureModelLite {
+  id: string;
+  name: string;
+  shortName: string;
+  provider?: string;
+  source: "session" | "pi-default" | "custom" | "heuristic";
+  sourceLabel: string;
+  /** True when the user chose deterministic local rules instead of an LLM. */
+  isHeuristic?: boolean;
+}
+
 export interface ModuleHost {
   moduleId: string;
   tabs: {
@@ -86,6 +106,17 @@ export interface ModuleHost {
     open(tabId?: string): void;
   };
   openExternal(url: string): Promise<void>;
+  /** Persistent key/value storage (localStorage with Hive's legacy-key migration). Keys are used verbatim. */
+  storage: {
+    get(key: string): string | null;
+    set(key: string, value: string): void;
+  };
+  /** React hooks bound to core state (call only during render). */
+  hooks: {
+    useSessionCatalog(): SessionCatalogLite[];
+    /** Resolve an AI feature (declared via `aiFeatures`) to the model chosen in Settings → Models. */
+    useFeatureModel(featureId: string): ResolvedFeatureModelLite;
+  };
   links: {
     /** Claim clicked external links (otherwise they open in the system browser). Returns a disposer. */
     setHandler(handler: (url: string, title?: string) => void): () => void;
@@ -93,7 +124,7 @@ export interface ModuleHost {
   ui: {
     Markdown: ComponentType<{ text: string; className?: string }>;
     /** Core model chip; `model` is the resolved feature model (see host.ai). */
-    AiModelChip: ComponentType<{ model: any; className?: string; clickable?: boolean; title?: string }>;
+    AiModelChip: ComponentType<{ model: any; className?: string; clickable?: boolean; title?: string; feature?: string }>;
     CodeBlock: ComponentType<{ code: string; language?: string | null; fileName?: string; collapseAfter?: number; [key: string]: any }>;
     ProviderIcon: ComponentType<{ provider: string; size?: number; className?: string; style?: React.CSSProperties }>;
   };

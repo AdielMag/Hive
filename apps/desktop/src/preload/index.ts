@@ -270,12 +270,6 @@ const api: StudioApi = {
   },
 
   // Insights
-  getUsage(force?: boolean) {
-    return ipcRenderer.invoke(IPC.usageGet, { force });
-  },
-  generateUsageInsights(summaryText: string, model?: string) {
-    return ipcRenderer.invoke(IPC.aiGenerateUsageInsights, { summaryText, model });
-  },
 
   // AI Registry, MCP, and Subagent output
   getSessionRegistry(key?: string) {

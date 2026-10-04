@@ -1,7 +1,7 @@
 /** Stacked column & animated spline line chart (SVG) with gridlines, axis labels and interactive tooltip. */
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { niceScale, type Series, type StackedColumn, type UsageMetric } from "./usage-series.ts";
-import { formatCost, formatTokens } from "../../lib/format.ts";
+import { formatCost, formatTokens } from "@hive/module-sdk/format";
 
 export type ChartType = "bars" | "line";
 

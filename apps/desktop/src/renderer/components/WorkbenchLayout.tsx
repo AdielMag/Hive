@@ -4,7 +4,6 @@
  */
 import React, { Suspense, lazy, useCallback, useRef, useState } from "react";
 import {
-  BarChart3,
   Files,
   FolderKanban,
   GitBranch,
@@ -49,7 +48,6 @@ const SettingsModal = named(() => import("./SettingsModal.tsx"), "SettingsModal"
 const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
 const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel");
 const ToolsPanel = named(() => import("./ToolsPanel.tsx"), "ToolsPanel");
-const UsageView = named(() => import("../features/insights/UsageView.tsx"), "UsageView");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
 
@@ -58,16 +56,14 @@ export const WorkbenchLayout: React.FC = () => {
   const projectsShortcut = useShortcut("view.projects");
   const filesShortcut = useShortcut("view.files");
   const gitShortcut = useShortcut("view.git");
-  const usageShortcut = useShortcut("view.usage");
   const settingsShortcut = useShortcut("settings.open");
 
-  const { activeProject, tabs, activeTabId, error, openUsageTab } = useSessionStore(
+  const { activeProject, tabs, activeTabId, error } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       tabs: s.tabs,
       activeTabId: s.activeTabId,
       error: s.error,
-      openUsageTab: s.openUsageTab,
     })),
   );
   const ui = useUi(
@@ -135,12 +131,6 @@ export const WorkbenchLayout: React.FC = () => {
             <ModuleRailItemButton key={`${item.moduleId}:${item.id}`} item={item} />
           ))}
           <RailButton
-            icon={<BarChart3 size={18} />}
-            title={usageShortcut ? `Usage analytics (${usageShortcut})` : "Usage analytics"}
-            active={activeTab?.kind === "usage"}
-            onClick={openUsageTab}
-          />
-          <RailButton
             icon={<Settings size={18} />}
             title={settingsShortcut ? `Settings (${settingsShortcut})` : "Settings"}
             active={ui.settingsOpen}
@@ -165,9 +155,7 @@ export const WorkbenchLayout: React.FC = () => {
           <div className="card__content">
             <ErrorBoundary label="Editor" resetKey={activeTabId ?? ""}>
               <Suspense fallback={<Loading />}>
-              {activeTab?.kind === "usage" ? (
-                <UsageView />
-              ) : activeTab?.kind === "file" ? (
+              {activeTab?.kind === "file" ? (
                 <FileViewerTab tab={activeTab} />
               ) : activeTab?.kind === "diff" ? (
                 <DiffViewerTab tab={activeTab} />

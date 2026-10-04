@@ -27,7 +27,6 @@ import {
   createTranscript,
   type TranscriptState,
 } from "@hive/pi-adapter";
-import { useInsights } from "../features/insights/insights-store.ts";
 import { emitSessionEvents } from "../modules/session-bus.ts";
 import { openLink } from "../modules/link-bus.ts";
 import type { OpenTabSpec } from "@hive/module-sdk/renderer";
@@ -133,8 +132,6 @@ export interface SessionStoreState {
   newSessionTab: (projectId: string) => Promise<void>;
   openFileTab: (filePath: string, projectId: string, title?: string) => Promise<void>;
   openDiffTab: (filePath: string, staged: boolean, projectId: string) => Promise<void>;
-  /** Open (or focus) the singleton Usage analytics tab. */
-  openUsageTab: () => void;
   /** Open (or focus) the singleton Skills & Agents library tab. */
   openLibraryTab: () => void;
   openModuleTab: (spec: OpenTabSpec) => string;
@@ -613,7 +610,6 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
     if (isDisplayed(tabId)) set({ isLoadingModels: false });
   }
 }
-export const USAGE_TAB_ID = "studio:usage";
 export const LIBRARY_TAB_ID = "studio:library";
 
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
@@ -1132,17 +1128,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     });
   },
 
-  openUsageTab: () => {
-    // Every entry point opens the all-sessions view; callers wanting one session set the focus afterwards.
-    useInsights.getState().setFocusSession(null);
-    const { tabs } = get();
-    if (!tabs.some((t) => t.id === USAGE_TAB_ID)) {
-      const tab: TabItem = { id: USAGE_TAB_ID, kind: "usage", projectId: "", title: "Usage", pinned: false };
-      set({ tabs: [...tabs, tab] });
-    }
-    set({ activeTabId: USAGE_TAB_ID });
-  },
-
   openLibraryTab: () => {
     const { tabs } = get();
     if (!tabs.some((t) => t.id === LIBRARY_TAB_ID)) {
@@ -1205,8 +1190,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
-    // Module-contributed tab kinds are plain views, like usage/file/diff.
-    if (tab.kind === "usage" || (tab.kind && !isCoreTabKind(tab.kind))) {
+    // Module-contributed tab kinds are plain views, like file/diff.
+    if (tab.kind && !isCoreTabKind(tab.kind)) {
       set({ activeTabId: tabId });
       return;
     }

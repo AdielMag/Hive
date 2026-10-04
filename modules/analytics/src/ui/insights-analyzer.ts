@@ -1,6 +1,6 @@
 import type { UsageReport } from "@hive/protocol";
 import type { UsageGroupRow, UsageTotals } from "@hive/pi-adapter";
-import { formatCost, formatTokens } from "../../lib/format.ts";
+import { formatCost, formatTokens } from "@hive/module-sdk/format";
 
 export interface AiInsightItem {
   id: string;

@@ -5,6 +5,31 @@ import type { MainModule } from "@hive/module-sdk/main";
 /** Metadata of every module in the repo (enabled or not). */
 export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   {
+    "id": "analytics",
+    "title": "Usage & Cost Analytics",
+    "description": "Comprehensive spend velocity, token telemetry, cost breakdown by model/project/day, and AI-driven efficiency analysis.",
+    "tier": "bonus",
+    "icon": "bar-chart-3",
+    "category": "Insights",
+    "contributes": {
+      "tabKinds": [
+        "usage"
+      ],
+      "commands": [
+        {
+          "id": "view.usage",
+          "title": "Open Usage Analytics",
+          "category": "View",
+          "keys": [
+            "Mod+Shift+U"
+          ]
+        }
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
     "id": "browser",
     "title": "Hive Browser",
     "description": "Integrated Chromium web browser with automatic background tab hibernation (RAM Saver) and web search.",
@@ -144,6 +169,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
 
 /** Lazy entry points; only called for enabled modules. */
 export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ default: MainModule }>>> = {
+  "analytics": () => import("@hive-module/analytics/main"),
   "browser": () => import("@hive-module/browser/main"),
   "library": () => import("@hive-module/library/main"),
   "limits": () => import("@hive-module/limits/main"),

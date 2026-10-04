@@ -10,8 +10,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { AiUsageAnalysisResult } from "./insights-analyzer.ts";
-import type { ResolvedFeatureModel } from "../../store/feature-models-store.ts";
-import { AiModelChip } from "../../components/AiModelChip.tsx";
+import type { ResolvedFeatureModelLite as ResolvedFeatureModel } from "@hive/module-sdk/renderer";
+import { analyticsHost } from "./analytics-host.ts";
 
 interface Props {
   analysis: AiUsageAnalysisResult | null;
@@ -92,7 +92,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 7 }}>
                 <span>AI Usage Insights & Optimization</span>
-                {model && <AiModelChip model={model} clickable={true} feature="usageAnalysis" />}
+                {model && React.createElement(analyticsHost().ui.AiModelChip, { model, clickable: true, feature: "usageAnalysis" })}
               </div>
               <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                 Automated telemetry diagnosis and cost-saving recommendations

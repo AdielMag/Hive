@@ -1,11 +1,11 @@
 /** Bottom status bar on the window frame: Pi version, run state, extension statuses, live quota meters. */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BarChart3, Coins, ExternalLink, X } from "lucide-react";
+import { Coins, ExternalLink, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { parseAnsi } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
-import { useInsights } from "../features/insights/insights-store.ts";
+import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useContributions, useModules } from "../modules/registry.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
 
@@ -79,9 +79,7 @@ export const StatusBar: React.FC = () => {
   );
   const isRunning = running || isSessionActive;
   const cost = stats?.cost ?? 0;
-  const openUsageTab = useSessionStore((s) => s.openUsageTab);
   const activeSessionPath = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId)?.sessionPath);
-  const setFocusSession = useInsights((s) => s.setFocusSession);
   const piVersion = bootstrap?.pi.ok ? bootstrap.pi.info.version : "not found";
 
   const costPop = useHoverPopover();
@@ -127,14 +125,6 @@ export const StatusBar: React.FC = () => {
           {formatCost(cost)}
         </button>
       )}
-      <button
-        className="statusbar__btn"
-        onClick={openUsageTab}
-        title="Usage analytics (all sessions)"
-      >
-        <BarChart3 size={12} />
-      </button>
-
       {costPop.open &&
         stats &&
         typeof document !== "undefined" &&
@@ -182,19 +172,20 @@ export const StatusBar: React.FC = () => {
               </dl>
             </div>
 
-            <div className="quota-popover__foot">
-              <button
-                className="ui-btn ui-btn--sm ui-btn--ghost"
-                disabled={!activeSessionPath}
-                onClick={() => {
-                  costPop.close();
-                  openUsageTab();
-                  setFocusSession(activeSessionPath ?? null);
-                }}
-              >
-                <ExternalLink size={12} /> Full usage breakdown
-              </button>
-            </div>
+            {COMMANDS_BY_ID.has("view.usage") && (
+              <div className="quota-popover__foot">
+                <button
+                  className="ui-btn ui-btn--sm ui-btn--ghost"
+                  disabled={!activeSessionPath}
+                  onClick={() => {
+                    costPop.close();
+                    void COMMANDS_BY_ID.get("view.usage")?.run({ focusSession: activeSessionPath ?? null });
+                  }}
+                >
+                  <ExternalLink size={12} /> Full usage breakdown
+                </button>
+              </div>
+            )}
           </div>,
           document.body,
         )}
