@@ -24,6 +24,7 @@ import { QueuedMessagesBar } from "./transcript/QueuedMessages.tsx";
 import { ModelSwitchCacheBar } from "./ModelSwitchCacheBar.tsx";
 import { AttachmentTray } from "./AttachmentTray.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
+import { Slot } from "../modules/ModuleViews.tsx";
 import type { AttachedItem } from "@hive/protocol";
 
 interface ComposerProps {
@@ -31,7 +32,7 @@ interface ComposerProps {
 }
 
 export const Composer: React.FC<ComposerProps> = ({ height }) => {
-  const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets })));
+  const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets, pendingUiDialog, respondDialog } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets, pendingUiDialog: s.pendingUiDialog, respondDialog: s.respondDialog })));
 
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [modelFilter, setModelFilter] = useState("");
@@ -332,6 +333,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
 
       {/* Queued messages banner if any */}
       <QueuedMessagesBar />
+
+      {/* Module slots above composer (e.g. bash-guard approval card) */}
+      <Slot name="composer.above" props={{ pendingUiDialog, respondDialog }} />
 
       {/* Editor Box (Droppable area) */}
       <div

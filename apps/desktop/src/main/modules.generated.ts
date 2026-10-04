@@ -5,6 +5,47 @@ import type { MainModule } from "@hive/module-sdk/main";
 /** Metadata of every module in the repo (enabled or not). */
 export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   {
+    "id": "analytics",
+    "title": "Usage & Cost Analytics",
+    "description": "Comprehensive spend velocity, token telemetry, cost breakdown by model/project/day, and AI-driven efficiency analysis.",
+    "tier": "bonus",
+    "icon": "bar-chart-3",
+    "category": "Insights",
+    "contributes": {
+      "tabKinds": [
+        "usage"
+      ],
+      "commands": [
+        {
+          "id": "view.usage",
+          "title": "Open Usage Analytics",
+          "category": "View",
+          "keys": [
+            "Mod+Shift+U"
+          ]
+        }
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
+    "id": "bash-guard",
+    "title": "Bash Guard",
+    "description": "Intercepts potentially dangerous bash commands (rm -rf, git reset --hard, disk operations, sudo) and prompts for confirmation with an inline approval card above the composer.",
+    "tier": "bonus",
+    "recommended": true,
+    "icon": "shield-alert",
+    "category": "Security",
+    "agent": {
+      "extensions": [
+        "agent/extensions/bash-guard.ts"
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
     "id": "browser",
     "title": "Hive Browser",
     "description": "Integrated Chromium web browser with automatic background tab hibernation (RAM Saver) and web search.",
@@ -35,6 +76,28 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     "hasRenderer": true
   },
   {
+    "id": "context-breakdown",
+    "title": "Context Window Breakdown",
+    "description": "Token usage inspector showing exact model-reported and estimated tokens across instructions, tools, skills and conversation turns.",
+    "tier": "bonus",
+    "icon": "pie-chart",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "context"
+      ],
+      "commands": [
+        {
+          "id": "view.context",
+          "title": "Toggle Context Window Panel",
+          "category": "View"
+        }
+      ]
+    },
+    "hasMain": false,
+    "hasRenderer": true
+  },
+  {
     "id": "library",
     "title": "Skills & Agents Library",
     "description": "Browse, inspect, and configure your coding agent skills, system prompts, and custom subagents with a dedicated editor.",
@@ -56,6 +119,16 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
         }
       ]
     },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
+    "id": "limits",
+    "title": "Live limits",
+    "description": "Status-bar meters and a hover popover showing your 5-hour and weekly subscription limits for Claude, Codex and Antigravity.",
+    "tier": "recommended",
+    "icon": "gauge",
+    "category": "Agent",
     "hasMain": true,
     "hasRenderer": true
   },
@@ -129,14 +202,50 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     },
     "hasMain": true,
     "hasRenderer": true
+  },
+  {
+    "id": "theme-studio",
+    "title": "Arc Theme Studio",
+    "description": "Interactive color pad, grain texture, gradient styling, custom color presets, and real-time palette tuner.",
+    "tier": "bonus",
+    "icon": "palette",
+    "category": "Appearance",
+    "hasMain": false,
+    "hasRenderer": true
+  },
+  {
+    "id": "tools",
+    "title": "Tools Inspector",
+    "description": "Inspect skills, subagents, MCP servers, and tools used by the active session with one-click jump to tool calls.",
+    "tier": "bonus",
+    "icon": "wrench",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "tools"
+      ],
+      "commands": [
+        {
+          "id": "view.tools",
+          "title": "Toggle Tools Panel",
+          "category": "View"
+        }
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
   }
 ];
 
 /** Lazy entry points; only called for enabled modules. */
 export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ default: MainModule }>>> = {
+  "analytics": () => import("@hive-module/analytics/main"),
+  "bash-guard": () => import("@hive-module/bash-guard/main"),
   "browser": () => import("@hive-module/browser/main"),
   "library": () => import("@hive-module/library/main"),
+  "limits": () => import("@hive-module/limits/main"),
   "marketplace": () => import("@hive-module/marketplace/main"),
   "plan-previewer": () => import("@hive-module/plan-previewer/main"),
   "terminal": () => import("@hive-module/terminal/main"),
+  "tools": () => import("@hive-module/tools/main"),
 };

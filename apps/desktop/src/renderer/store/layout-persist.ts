@@ -1,5 +1,5 @@
 export type CoreLeftPanel = "projects" | "files" | "git" | "branches";
-export type CoreRightPanel = "context" | "tools";
+export type CoreRightPanel = "context";
 /** Core panel id, or a module-contributed panel id (resolved through the module registry). */
 export type LeftPanel = CoreLeftPanel | (string & {});
 export type RightPanel = CoreRightPanel | (string & {});
@@ -13,7 +13,7 @@ export interface PersistedLayout {
 }
 
 const VALID_LEFT_PANELS = new Set<string>(["projects", "files", "git", "branches"]);
-const VALID_RIGHT_PANELS = new Set<string>(["context", "tools"]);
+const VALID_RIGHT_PANELS = new Set<string>(["context"]);
 
 /** Panel ids contributed by modules, known statically from their manifests (enabled or not). */
 export interface ExtraPanelIds {

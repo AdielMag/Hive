@@ -1,0 +1,27 @@
+{
+  "name": "@hive-module/limits",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: live subscription limit meters (Claude / Codex / Antigravity) in the status bar",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "limits",
+    "title": "Live limits",
+    "description": "Status-bar meters and a hover popover showing your 5-hour and weekly subscription limits for Claude, Codex and Antigravity.",
+    "tier": "recommended",
+    "icon": "gauge",
+    "category": "Agent"
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "@hive/protocol": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0",
+    "zustand": "^5.0.0"
+  }
+}

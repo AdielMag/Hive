@@ -4,7 +4,7 @@
  */
 import { create } from "zustand";
 import { useSessionStore } from "../../store/session-store.ts";
-import { useUi, type LeftPanel, type RightPanel } from "../../store/ui-store.ts";
+import { useUi, type LeftPanel } from "../../store/ui-store.ts";
 import { useUpdates } from "../../store/update-store.ts";
 import { usePalette } from "./palette-store.ts";
 import type { Command } from "./types.ts";
@@ -32,16 +32,6 @@ const left = (id: string, title: string, panel: LeftPanel, defaultKeys?: string[
   defaultKeys,
   allowInTerminal: !!defaultKeys,
   run: () => useUi.getState().toggleLeft(panel),
-});
-
-const right = (id: string, title: string, panel: RightPanel, defaultKeys?: string[]): Command => ({
-  id,
-  title: `Toggle ${title} Panel`,
-  category: "View",
-  keywords: `show hide ${panel}`,
-  defaultKeys,
-  allowInTerminal: !!defaultKeys,
-  run: () => useUi.getState().toggleRight(panel),
 });
 
 const CORE_COMMANDS: readonly Command[] = [
@@ -126,9 +116,6 @@ const CORE_COMMANDS: readonly Command[] = [
   left("view.files", "Files", "files", ["Mod+Shift+E"]),
   left("view.git", "Git", "git", ["Mod+Shift+G"]),
   left("view.branches", "Branches", "branches"),
-  right("view.tools", "Tools", "tools"),
-  right("view.context", "Context", "context"),
-  { id: "view.usage", title: "Open Usage Analytics", category: "View", keywords: "cost tokens quota", defaultKeys: ["Mod+Shift+U"], allowInTerminal: true, run: () => useSessionStore.getState().openUsageTab() },
 
   // Window
   { id: "zoom.in", title: "Zoom In", category: "Window", defaultKeys: ["Mod+=", "Mod+Shift+="], allowInTerminal: true, run: () => void window.studio.zoom("in") },

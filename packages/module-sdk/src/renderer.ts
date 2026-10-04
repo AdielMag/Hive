@@ -3,6 +3,9 @@
  * to core only through the `ModuleHost` it receives — never through `apps/desktop/src/renderer/**` internals.
  */
 import type { ComponentType, ReactNode } from "react";
+import type { TranscriptState } from "@hive/pi-adapter";
+import type { SessionRegistry } from "@hive/protocol";
+import type { ArcTheme } from "@hive/theme-engine";
 
 /** The subset of a workbench tab a module sees. `data` carries module-specific state. */
 export interface ModuleTab {
@@ -59,6 +62,32 @@ export interface ModuleHostIpc {
   on<T = unknown>(event: string, listener: (payload: T) => void): () => void;
 }
 
+/** A Pi session known to Hive (subset of core's catalog item). */
+export interface SessionCatalogLite {
+  path: string;
+  title?: string;
+  name?: string;
+  firstMessage?: string;
+}
+
+/** The model a core "AI feature" resolves to under the user's Settings → Models preference. */
+export interface ActiveSessionContext {
+  project: { id: string; name: string; path: string } | null;
+  transcript: TranscriptState;
+  registry: SessionRegistry | null;
+}
+
+export interface ResolvedFeatureModelLite {
+  id: string;
+  name: string;
+  shortName: string;
+  provider?: string;
+  source: "session" | "pi-default" | "custom" | "heuristic";
+  sourceLabel: string;
+  /** True when the user chose deterministic local rules instead of an LLM. */
+  isHeuristic?: boolean;
+}
+
 export interface ModuleHost {
   moduleId: string;
   tabs: {
@@ -86,6 +115,28 @@ export interface ModuleHost {
     open(tabId?: string): void;
   };
   openExternal(url: string): Promise<void>;
+  /** Persistent key/value storage (localStorage with Hive's legacy-key migration). Keys are used verbatim. */
+  storage: {
+    get(key: string): string | null;
+    set(key: string, value: string): void;
+  };
+  /** React hooks bound to core state (call only during render). */
+  hooks: {
+    useSessionCatalog(): SessionCatalogLite[];
+    /** Resolve an AI feature (declared via `aiFeatures`) to the model chosen in Settings → Models. */
+    useFeatureModel(featureId: string): ResolvedFeatureModelLite;
+    /** Active project, live transcript state and session registry. */
+    useActiveSession(): ActiveSessionContext;
+    /** Current Arc theme & editor preferences with reactive setters. */
+    useTheme(): {
+      theme: ArcTheme;
+      editor: { codeFontSize: number; ligatures: boolean; wrapCode: boolean };
+      setTheme(patch: Partial<ArcTheme>): void;
+      replaceTheme(theme: ArcTheme): void;
+      setEditor(patch: Partial<{ codeFontSize: number; ligatures: boolean; wrapCode: boolean }>): void;
+      reset(): void;
+    };
+  };
   links: {
     /** Claim clicked external links (otherwise they open in the system browser). Returns a disposer. */
     setHandler(handler: (url: string, title?: string) => void): () => void;
@@ -93,9 +144,10 @@ export interface ModuleHost {
   ui: {
     Markdown: ComponentType<{ text: string; className?: string }>;
     /** Core model chip; `model` is the resolved feature model (see host.ai). */
-    AiModelChip: ComponentType<{ model: any; className?: string; clickable?: boolean; title?: string }>;
+    AiModelChip: ComponentType<{ model: any; className?: string; clickable?: boolean; title?: string; feature?: string }>;
     CodeBlock: ComponentType<{ code: string; language?: string | null; fileName?: string; collapseAfter?: number; [key: string]: any }>;
     ProviderIcon: ComponentType<{ provider: string; size?: number; className?: string; style?: React.CSSProperties }>;
+    ContextBreakdownPanel: ComponentType<{ host: ModuleHost }>;
   };
   models: {
     catalog(): any[];
@@ -116,6 +168,8 @@ export interface ModuleHost {
     setMode(mode: string): void;
     /** Stage text in the active composer prompt. */
     setPrompt(text: string): void;
+    /** Scroll the transcript view to a tool call or message block by id. */
+    scrollToToolCall(id: string): void;
   };
   ipc: ModuleHostIpc;
 }
@@ -168,6 +222,11 @@ export interface CommandContribution {
 
 export interface StatusBarContribution extends ContributionBase {
   id: string;
+  /**
+   * Pi extension status keys this item replaces (e.g. a built-in quota meter hides the extension's own).
+   * Core hides them only while the contribution is active.
+   */
+  hideExtensionStatuses?: string[];
   component: ComponentType<{ host: ModuleHost }>;
 }
 

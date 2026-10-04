@@ -4,7 +4,7 @@
  *  - settled rows are memoized on a cheap signature, so streaming re-renders just the live message,
  *  - auto-scroll only pins to the bottom when the user is already there (no fighting manual scrolling).
  */
-import React, { createContext, memo, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowDown,
@@ -25,6 +25,7 @@ import {
   Terminal,
   Wrench,
 } from "lucide-react";
+import { createTranscript } from "@hive/pi-adapter";
 import { buildTimeline, type AssistantBlock, type Timeline, type TimelineItem, type ToolResultView, type ToolRun } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
 import { useActiveRegistry } from "../store/ai-registry-store.ts";
@@ -39,6 +40,8 @@ import { languageFromPath } from "../lib/highlight/languages.ts";
 import { copyText } from "../lib/clipboard.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
 import { QueuedMessagesList } from "./transcript/QueuedMessages.tsx";
+import { AuthErrorActions } from "./AuthErrorActions.tsx";
+import { detectAuthError } from "../lib/auth-errors.ts";
 
 export function scrollToToolCall(id: string): void {
   const sel = CSS.escape(id);
@@ -74,9 +77,30 @@ const TranscriptContext = createContext<{
   sessionRunning: boolean;
 } | null>(null);
 
-export const Transcript: React.FC = () => {
-  const transcript = useSessionStore((s) => s.transcript);
-  const activeProject = useSessionStore((s) => s.activeProject);
+const EMPTY_TRANSCRIPT = createTranscript();
+
+export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
+  const activeTabId = useSessionStore((s) => s.activeTabId);
+  const displayedTabId = useSessionStore((s) => s.displayedTabId);
+  const targetTabId = tabId ?? displayedTabId ?? activeTabId;
+  const storeTranscript = useSessionStore((s) => s.transcript);
+  const transcriptsByTab = useSessionStore((s) => s.transcriptsByTab);
+  const targetTab = useSessionStore((s) => s.tabs.find((t) => t.id === targetTabId));
+  const projects = useSessionStore((s) => s.projects);
+  const storeProject = useSessionStore((s) => s.activeProject);
+  const activeProject = targetTab ? projects.find((p) => p.id === targetTab.projectId) ?? storeProject : storeProject;
+
+  // The displayed session lives in the top-level store fields; every other session is read from its cache.
+  const isDisplayed = !targetTabId || targetTabId === displayedTabId;
+  const tabTranscript = targetTabId ? transcriptsByTab[targetTabId] : undefined;
+  const transcript = isDisplayed ? storeTranscript : tabTranscript ?? EMPTY_TRANSCRIPT;
+
+  useEffect(() => {
+    if (!isDisplayed && targetTabId && !tabTranscript && targetTab?.sessionPath) {
+      void useSessionStore.getState().ensureTabTranscriptLoaded(targetTabId);
+    }
+  }, [isDisplayed, targetTabId, tabTranscript, targetTab?.sessionPath]);
+
   const registry = useActiveRegistry();
 
   const timeline = useMemo(() => buildTimeline(transcript), [transcript]);
@@ -166,18 +190,31 @@ export const Transcript: React.FC = () => {
   );
 };
 
-const NestedTimeline: React.FC<{ timeline: Timeline }> = ({ timeline }) => {
+export const NestedTimeline: React.FC<{ timeline: Timeline; sessionRunning?: boolean }> = ({ timeline, sessionRunning = false }) => {
+  const outerCtx = useContext(TranscriptContext);
+  const fallbackRender = useCallback((t: Timeline) => <NestedTimeline timeline={t} sessionRunning={sessionRunning} />, [sessionRunning]);
+  const effectiveCtx = useMemo(() => outerCtx ?? {
+    annotations: {
+      skills: { loads: new Map(), usedBy: new Map() },
+      subagents: { notifications: new Map(), results: new Map(), cards: new Map() },
+    },
+    renderNested: fallbackRender,
+    sessionRunning,
+  }, [outerCtx, fallbackRender, sessionRunning]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {timeline.items.map((item) => (
-        <TimelineRow
-          key={item.key}
-          item={item}
-          results={resultsFor(item, timeline.toolResults)}
-          tools={{}}
-        />
-      ))}
-    </div>
+    <TranscriptContext.Provider value={effectiveCtx}>
+      <div className="nested-timeline" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {timeline.items.map((item) => (
+          <TimelineRow
+            key={item.key}
+            item={item}
+            results={resultsFor(item, timeline.toolResults)}
+            tools={{}}
+          />
+        ))}
+      </div>
+    </TranscriptContext.Provider>
   );
 };
 
@@ -380,6 +417,10 @@ const AssistantMessage: React.FC<{
         <div className="msg-error">
           <AlertCircle size={14} />
           <span className="selectable">{item.errorMessage}</span>
+          {(() => {
+            const auth = detectAuthError(item.errorMessage, item.provider);
+            return auth ? <AuthErrorActions auth={auth} /> : null;
+          })()}
         </div>
       )}
 

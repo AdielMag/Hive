@@ -22,13 +22,12 @@ interface MenuItem {
 }
 
 export const AppTitleBar: React.FC = () => {
-  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab } = useSessionStore(
+  const { activeProject, activeTabId, closeTab, newSessionTab } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       activeTabId: s.activeTabId,
       closeTab: s.closeTab,
       newSessionTab: s.newSessionTab,
-      openUsageTab: s.openUsageTab,
     })),
   );
   const ui = useUi(useShallow((s) => ({ openSettings: s.openSettings, toggleLeft: s.toggleLeft, toggleRight: s.toggleRight })));
@@ -50,7 +49,6 @@ export const AppTitleBar: React.FC = () => {
   const kbdProjects = useShortcut("view.projects");
   const kbdFiles = useShortcut("view.files");
   const kbdGit = useShortcut("view.git");
-  const kbdUsage = useShortcut("view.usage");
   const kbdZoomIn = useShortcut("zoom.in");
   const kbdZoomOut = useShortcut("zoom.out");
   const kbdZoomReset = useShortcut("zoom.reset");
@@ -100,9 +98,6 @@ export const AppTitleBar: React.FC = () => {
       { label: "Projects", shortcut: kbdProjects, action: () => ui.toggleLeft("projects") },
       { label: "Files", shortcut: kbdFiles, action: () => ui.toggleLeft("files") },
       { label: "Source Control", shortcut: kbdGit, action: () => ui.toggleLeft("git") },
-      { separator: true, label: "" },
-      { label: "Tools Breakdown", action: () => ui.toggleRight("tools") },
-      { label: "Usage Analytics", shortcut: kbdUsage, action: () => openUsageTab() },
       { separator: true, label: "" },
       { label: "Appearance…", action: () => ui.openSettings("appearance") },
       { label: "Zoom In", shortcut: kbdZoomIn, action: () => window.studio.zoom("in") },

@@ -241,6 +241,9 @@ const api: StudioApi = {
   loginOAuth(providerId: string) {
     return ipcRenderer.invoke(IPC.authLoginOAuth, { providerId });
   },
+  refreshOAuth(providerId: string) {
+    return ipcRenderer.invoke(IPC.authRefresh, { providerId });
+  },
 
   // Updater
   checkForUpdates() {
@@ -270,22 +273,10 @@ const api: StudioApi = {
   },
 
   // Insights
-  getQuota(force?: boolean) {
-    return ipcRenderer.invoke(IPC.quotaGet, { force });
-  },
-  getUsage(force?: boolean) {
-    return ipcRenderer.invoke(IPC.usageGet, { force });
-  },
-  generateUsageInsights(summaryText: string, model?: string) {
-    return ipcRenderer.invoke(IPC.aiGenerateUsageInsights, { summaryText, model });
-  },
 
   // AI Registry, MCP, and Subagent output
   getSessionRegistry(key?: string) {
     return ipcRenderer.invoke(IPC.aiSessionRegistry, { key });
-  },
-  getMcpCatalog() {
-    return ipcRenderer.invoke(IPC.aiMcpCatalog);
   },
   getContextFiles(cwd?: string) {
     return ipcRenderer.invoke(IPC.aiContextFiles, { cwd });

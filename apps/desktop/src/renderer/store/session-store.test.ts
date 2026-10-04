@@ -395,6 +395,73 @@ describe("subagent activity tracking across tabs", () => {
     // Parked tab must reflect "error"
     expect(useSessionStore.getState().sessionActivity[tabId]).toBe("error");
   });
+
+  it("opens and closes subagent popup modal", () => {
+    const subView = {
+      toolCallId: "call_sub_1",
+      agentId: "agent_sub_1",
+      type: "scout",
+      description: "Search for files",
+      prompt: "Find all tsx files",
+      tags: [],
+      background: true,
+      status: "running" as const,
+    };
+
+    useSessionStore.getState().openSubagentModal({
+      view: subView,
+      parentSessionPath: "/path/to/session.jsonl",
+      parentActiveKey: sessionKey,
+      projectId: "p1",
+    });
+
+    expect(useSessionStore.getState().subagentModal).toEqual({
+      view: subView,
+      parentSessionPath: "/path/to/session.jsonl",
+      parentActiveKey: sessionKey,
+      projectId: "p1",
+    });
+
+    useSessionStore.getState().closeSubagentModal();
+    expect(useSessionStore.getState().subagentModal).toBeNull();
+  });
+
+  it("opens subagent tab, updates it, and switches to it", async () => {
+    const subView = {
+      toolCallId: "call_sub_2",
+      agentId: "agent_sub_2",
+      type: "worker",
+      description: "Implement feature",
+      prompt: "Write unit tests",
+      tags: [],
+      background: false,
+      status: "running" as const,
+    };
+
+    useSessionStore.getState().openSubagentTab(subView, {
+      parentSessionPath: "/path/to/session.jsonl",
+      parentActiveKey: sessionKey,
+      projectId: "p1",
+    });
+
+    const tabs = useSessionStore.getState().tabs;
+    const subTab = tabs.find((t) => t.id === "subagent:call_sub_2");
+    expect(subTab).toBeDefined();
+    expect(subTab?.kind).toBe("subagent");
+    expect(subTab?.title).toBe("worker: Implement feature");
+    expect(useSessionStore.getState().activeTabId).toBe("subagent:call_sub_2");
+
+    // Calling again reuses the tab and updates it
+    const updatedView = { ...subView, status: "completed" as const, durationMs: 1200 };
+    useSessionStore.getState().openSubagentTab(updatedView);
+    expect(useSessionStore.getState().tabs.filter((t) => t.id === "subagent:call_sub_2").length).toBe(1);
+    const refreshedTab = useSessionStore.getState().tabs.find((t) => t.id === "subagent:call_sub_2");
+    expect(refreshedTab?.subagentView?.status).toBe("completed");
+
+    // Switching tab to subagent doesn't reset live session
+    await useSessionStore.getState().switchTab("subagent:call_sub_2");
+    expect(useSessionStore.getState().activeTabId).toBe("subagent:call_sub_2");
+  });
 });
 
 describe("compaction result", () => {

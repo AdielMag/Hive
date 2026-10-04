@@ -14,11 +14,9 @@ export type { SessionStats } from "@earendil-works/pi-coding-agent";
 export type { Model } from "@earendil-works/pi-ai";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
 import type { ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
-import type { QuotaSnapshot, UsageReport } from "./insights.ts";
 import type { ModulesSnapshot, SetModulesEnabledResult } from "@hive/module-sdk";
 import type {
   ContextFileInfo,
-  McpServerInfo,
   SessionRegistry,
   SubagentLocateRequest,
   SubagentOutputChunk,
@@ -196,6 +194,7 @@ export const IPC = {
   authSaveApiKey: "auth:save-api-key",
   authLogout: "auth:logout",
   authLoginOAuth: "auth:login-oauth",
+  authRefresh: "auth:refresh",
   // Updater
   updaterCheck: "updater:check",
   updaterApply: "updater:apply",
@@ -204,8 +203,6 @@ export const IPC = {
   modelsGetCatalog: "models:get-catalog",
   modelsSaveEnabled: "models:save-enabled",
   // Insights
-  quotaGet: "insights:quota",
-  usageGet: "insights:usage",
   // Shell
   openExternal: "shell:open-external",
   openSystemBrowser: "shell:open-system-browser",
@@ -219,9 +216,7 @@ export const IPC = {
   evtModuleEvent: "modules:event",
   // AI Registry, MCP, and Subagent output
   aiSessionRegistry: "ai:session-registry",
-  aiMcpCatalog: "ai:mcp-catalog",
   aiContextFiles: "ai:context-files",
-  aiGenerateUsageInsights: "ai:usage:generate-insights",
   subagentLocate: "subagents:locate",
   subagentRead: "subagents:read",
 } as const;
@@ -306,6 +301,15 @@ export interface LibrarySetFieldRequest {
 export type LibrarySetFieldResult =
   | { ok: true; entry: LibraryEntry }
   | { ok: false; code: "conflict" | "not-allowed" | "io" | "invalid"; error: string };
+
+export interface LibraryDeleteRequest {
+  cwd?: string;
+  path: string;
+}
+
+export type LibraryDeleteResult =
+  | { ok: true }
+  | { ok: false; error: string };
 
 export interface ModelCatalogItem {
   id: string;
@@ -432,6 +436,8 @@ export interface StudioApi {
   saveApiKey(providerId: string, apiKey: string): Promise<void>;
   logoutAccount(providerId: string): Promise<void>;
   loginOAuth(providerId: string): Promise<{ success: boolean; error?: string }>;
+  /** Silently refresh an OAuth token (no browser). `success: false` means the user must reconnect. */
+  refreshOAuth(providerId: string): Promise<{ success: boolean; error?: string }>;
 
   // Updater
   checkForUpdates(): Promise<any>;
@@ -445,15 +451,11 @@ export interface StudioApi {
 
   // Insights
   /** Subscription limits for every connected account. `force` bypasses the short-lived cache. */
-  getQuota(force?: boolean): Promise<QuotaSnapshot>;
   /** Aggregated token/cost usage parsed from Pi session files. */
-  getUsage(force?: boolean): Promise<UsageReport>;
-  generateUsageInsights(summaryText: string, model?: string): Promise<string>;
 
 
   // AI Registry, MCP, and Subagent output
   getSessionRegistry(key?: string): Promise<SessionRegistry | null>;
-  getMcpCatalog(): Promise<McpServerInfo[]>;
   /** Sizes of AGENTS.md / SYSTEM.md style files that feed the system prompt for `cwd`. */
   getContextFiles(cwd?: string): Promise<ContextFileInfo[]>;
   locateSubagentOutput(req: SubagentLocateRequest): Promise<SubagentOutputRef | null>;

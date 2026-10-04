@@ -1,0 +1,25 @@
+{
+  "name": "@hive-module/theme-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: Arc Theme Studio (interactive color pad, grain texture, gradient styling, custom color presets)",
+  "exports": {
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "theme-studio",
+    "title": "Arc Theme Studio",
+    "description": "Interactive color pad, grain texture, gradient styling, custom color presets, and real-time palette tuner.",
+    "tier": "bonus",
+    "icon": "palette",
+    "category": "Appearance"
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "@hive/theme-engine": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0"
+  }
+}

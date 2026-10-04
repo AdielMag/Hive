@@ -7,11 +7,12 @@
  * lookup. Settings-declared `skills` paths and Pi packages are not scanned.
  */
 import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parse as parseYaml, parseDocument, stringify as stringifyYaml } from "yaml";
 import type {
+  LibraryDeleteResult,
   LibraryEntry,
   LibraryKind,
   LibraryScope,
@@ -572,5 +573,60 @@ export async function setFrontmatterField(
   } catch (err) {
     if (err instanceof FrontmatterError) return { ok: false, code: err.code, error: err.message };
     return { ok: false, code: "io", error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export interface DeleteLibraryOptions extends LibraryRootOptions {
+  trashItem?: (targetPath: string) => Promise<void>;
+}
+
+/**
+ * Deletes a skill or agent from disk.
+ *
+ * For agents or flat skills, deletes the `.md` file.
+ * For directory skills (where path points to a `SKILL.md` inside a dedicated skill folder),
+ * deletes the entire skill directory so supporting files and folders are cleaned up.
+ *
+ * Rejects any paths outside known library roots for security.
+ */
+export async function deleteLibraryEntry(
+  req: { cwd?: string; path: string },
+  opts: DeleteLibraryOptions = {},
+): Promise<LibraryDeleteResult> {
+  const { path } = req;
+  const cwd = req.cwd || undefined;
+  if (!path || typeof path !== "string") {
+    return { ok: false, error: "Missing or invalid file path." };
+  }
+  if (!isEditableLibraryPath(path, cwd, opts)) {
+    return { ok: false, error: "Path is not a skill or agent file in a known location." };
+  }
+  if (!existsSync(path)) {
+    return { ok: false, error: "File does not exist." };
+  }
+
+  let targetPath = path;
+  if (basename(path) === "SKILL.md") {
+    const dir = dirname(path);
+    const roots = libraryRoots(cwd, opts);
+    const parentRoot = roots.find((r) => isInside(path, r.dir) && isInside(realOrResolved(path), realOrResolved(r.dir)));
+    if (parentRoot && isInside(dir, parentRoot.dir)) {
+      targetPath = dir;
+    }
+  }
+
+  try {
+    if (opts.trashItem) {
+      try {
+        await opts.trashItem(targetPath);
+        return { ok: true };
+      } catch {
+        // Fall back to rm if trash fails (e.g. headless tests or filesystems without trash)
+      }
+    }
+    await rm(targetPath, { recursive: true, force: true });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `Could not delete ${targetPath}: ${err instanceof Error ? err.message : String(err)}` };
   }
 }

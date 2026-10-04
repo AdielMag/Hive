@@ -2,7 +2,7 @@
  * AppContext: the single object that owns every main-process service. IPC modules receive it instead of
  * reaching for module-level globals, which keeps each domain independently testable and replaceable.
  */
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, type BrowserWindow } from "electron";
 import type { PiLocateResult } from "@hive/protocol";
@@ -13,8 +13,6 @@ import { MainSessionManager } from "./services/session-manager.ts";
 import { AuthService } from "./services/auth.ts";
 import { AppUpdaterService } from "./services/updater.ts";
 import { ModelsService } from "./services/models.ts";
-import { QuotaService } from "./services/quota/index.ts";
-import { UsageService } from "./services/usage.ts";
 import { PiInstallService } from "./services/pi-install.ts";
 import { IPC } from "@hive/protocol";
 import { MainModuleHost } from "./modules/host.ts";
@@ -32,8 +30,6 @@ export interface AppContext {
   auth: AuthService | null;
   updater: AppUpdaterService;
   models: ModelsService;
-  quota: QuotaService;
-  usage: UsageService;
   /** Installable feature modules (enabled set, lifecycle, scoped IPC). Started in index.ts. */
   modules: MainModuleHost;
 }
@@ -62,13 +58,12 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     auth: info ? new AuthService(info.packageRoot) : null,
     updater: new AppUpdaterService(),
     models: new ModelsService(undefined, hiveDataDir),
-    quota: new QuotaService(info),
-    usage: new UsageService(join(hiveDataDir, "usage-cache.json")),
     modules: new MainModuleHost({
       manifests: MODULE_MANIFESTS,
       loaders: MAIN_MODULE_LOADERS,
       hiveDataDir,
       piAgentDir,
+      pi: () => info,
       moduleRoot: moduleRootPath,
       // Test runs must never touch the real ~/.pi/agent.
       manageAgentAssets: !testMode || !!process.env.PI_CODING_AGENT_DIR,

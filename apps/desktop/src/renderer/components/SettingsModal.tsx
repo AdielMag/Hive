@@ -1,12 +1,14 @@
 /** Settings dialog: Appearance, Models, AI providers, Updates, About. */
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, X } from "lucide-react";
-import { ArcThemeEditor } from "../features/appearance/ArcThemeEditor.tsx";
+import { AppearanceSettingsContent } from "./AppearanceSettingsContent.tsx";
 import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
 import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
 import { KeyboardSettings } from "../features/commands/KeyboardSettings.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useSessionStore } from "../store/session-store.ts";
+import { useUi } from "../store/ui-store.ts";
+import { toast } from "../modules/toast-store.ts";
 import { type UpdateInfo, isInstalling, useUpdates } from "../store/update-store.ts";
 import { UpdateProgressBar } from "./UpdateProgressBar.tsx";
 import { ModulesSettings } from "../features/modules/ModulesSettings.tsx";
@@ -28,6 +30,7 @@ interface Account {
   type: "oauth" | "api_key" | "none";
   connected: boolean;
   email?: string;
+  needsAttention?: boolean;
 }
 
 const TABS: Array<{ id: CoreSettingsTabId; label: string; icon: React.ReactNode; title: string }> = [
@@ -93,7 +96,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             </button>
           </header>
           <div className="settings__body">
-            {tab === "appearance" && <ArcThemeEditor />}
+            {tab === "appearance" && <AppearanceSettingsContent />}
             {tab === "models" && <ModelsSettingsContent />}
             {tab === "compaction" && <CompactionSettingsContent />}
             {tab === "accounts" && <AccountsTab />}
@@ -119,6 +122,9 @@ const AccountsTab: React.FC = () => {
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const focus = useUi((s) => s.settingsFocus);
+  const focusRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -129,12 +135,41 @@ const AccountsTab: React.FC = () => {
   }, []);
   useEffect(() => void load(), [load]);
 
-  const oauth = async (id: string) => {
+  // Opened from a failed session: bring the affected account into view.
+  useEffect(() => {
+    if (accounts && focus) focusRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [accounts, focus]);
+
+  /** A working login makes any stale auth error in the session banner obsolete. */
+  const reconnected = (name: string, message: string) => {
+    useSessionStore.getState().clearError();
+    useUi.setState({ settingsFocus: null });
+    toast({ kind: "success", message: `${name} ${message} — send your message again.` });
+  };
+
+  const oauth = async (acc: Account) => {
     setError(null);
-    setBusy(id);
-    const res = await window.studio.loginOAuth(id);
+    setBusy(`login:${acc.providerId}`);
+    const res = await window.studio.loginOAuth(acc.providerId);
     setBusy(null);
-    if (!res.success) setError(res.error || "Sign-in failed");
+    if (res.success) {
+      setNotes((n) => ({ ...n, [acc.providerId]: "" }));
+      reconnected(acc.name, "reconnected");
+    } else setError(res.error || "Sign-in failed");
+    await load();
+  };
+  const refresh = async (acc: Account) => {
+    setError(null);
+    setBusy(`refresh:${acc.providerId}`);
+    const res = await window.studio.refreshOAuth(acc.providerId);
+    setBusy(null);
+    if (res.success) {
+      setNotes((n) => ({ ...n, [acc.providerId]: "Token refreshed. If you still see errors, use Reconnect." }));
+      reconnected(acc.name, "token refreshed");
+    } else {
+      setNotes((n) => ({ ...n, [acc.providerId]: "" }));
+      setError(`Couldn't refresh ${acc.name}: ${res.error || "unknown error"}. Use Reconnect to sign in again.`);
+    }
     await load();
   };
   const saveKey = async (id: string) => {
@@ -154,60 +189,96 @@ const AccountsTab: React.FC = () => {
     <div className="settings__stack">
       {error && <div className="settings__alert">{error}</div>}
       {!accounts && <div className="ui-skeleton" style={{ height: 120 }} />}
-      {accounts?.map((acc) => (
-        <div key={acc.providerId} className="ui-card settings__account">
-          <div className="settings__account-head">
-            <div className="quota-card__logo">
-              <ProviderIcon provider={acc.providerId} size={18} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="ui-row__title">{acc.name}</div>
-              <div className="ui-row__hint">{acc.connected ? acc.email : acc.providerId}</div>
+      {accounts?.map((acc) => {
+        const isFocus = focus?.providerId === acc.providerId;
+        const canOAuth = acc.providerId === "antigravity" || acc.providerId === "anthropic";
+        const reconnecting = busy === `login:${acc.providerId}`;
+        const refreshing = busy === `refresh:${acc.providerId}`;
+        return (
+          <div key={acc.providerId} ref={isFocus ? focusRef : undefined} className={`ui-card settings__account${isFocus ? " is-focus" : ""}`}>
+            {isFocus && (
+              <div className="settings__notice">
+                <AlertCircle size={14} />
+                <span>{focus?.reason || `${acc.name} needs to be reconnected.`}</span>
+              </div>
+            )}
+            <div className="settings__account-head">
+              <div className="quota-card__logo">
+                <ProviderIcon provider={acc.providerId} size={18} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="ui-row__title">{acc.name}</div>
+                <div className="ui-row__hint">{acc.connected ? acc.email : acc.providerId}</div>
+              </div>
+              {acc.connected && acc.needsAttention ? (
+                <span className="ui-chip ui-chip--warn" title="The access token expired a while ago and may not be refreshing">
+                  <AlertCircle size={11} /> May need refresh
+                </span>
+              ) : acc.connected ? (
+                <span className="ui-chip ui-chip--ok">
+                  <CheckCircle2 size={11} /> Connected
+                </span>
+              ) : (
+                <span className="ui-chip">
+                  <AlertCircle size={11} /> Not connected
+                </span>
+              )}
             </div>
             {acc.connected ? (
-              <span className="ui-chip ui-chip--ok">
-                <CheckCircle2 size={11} /> Connected
-              </span>
-            ) : (
-              <span className="ui-chip">
-                <AlertCircle size={11} /> Not connected
-              </span>
-            )}
-          </div>
-          {acc.connected ? (
-            <div className="settings__account-actions">
-              <span className="ui-row__hint">{acc.type === "oauth" ? "Signed in with OAuth (subscription)" : "Using an API key"}</span>
-              <button className="ui-btn ui-btn--sm" onClick={() => void logout(acc.providerId, acc.name)}>
-                <LogOut size={12} /> Disconnect
-              </button>
-            </div>
-          ) : (
-            <div className="settings__account-actions settings__account-actions--col">
-              {(acc.providerId === "antigravity" || acc.providerId === "anthropic") && (
-                <button className="ui-btn ui-btn--primary" disabled={busy === acc.providerId} onClick={() => void oauth(acc.providerId)}>
-                  {busy === acc.providerId ? <RefreshCw size={13} className="spin" /> : <ExternalLink size={13} />}
-                  Sign in with {acc.name}
-                </button>
-              )}
-              {(acc.providerId === "anthropic" || acc.providerId === "openai") && (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    className="settings__input"
-                    type="password"
-                    placeholder={`${acc.name} API key`}
-                    value={keys[acc.providerId] ?? ""}
-                    onChange={(e) => setKeys({ ...keys, [acc.providerId]: e.target.value })}
-                    onKeyDown={(e) => e.key === "Enter" && void saveKey(acc.providerId)}
-                  />
-                  <button className="ui-btn" onClick={() => void saveKey(acc.providerId)}>
-                    Save key
+              <div className="settings__account-actions">
+                <span className="ui-row__hint">
+                  {notes[acc.providerId] ||
+                    (acc.type === "oauth" ? "Signed in with OAuth (subscription)" : "Using an API key")}
+                </span>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  {acc.type === "oauth" && (
+                    <button className="ui-btn ui-btn--sm" disabled={!!busy} onClick={() => void refresh(acc)} title="Refresh the token without opening a browser">
+                      <RefreshCw size={12} className={refreshing ? "spin" : undefined} /> Refresh
+                    </button>
+                  )}
+                  {acc.type === "oauth" && canOAuth && (
+                    <button
+                      className={`ui-btn ui-btn--sm${isFocus ? " ui-btn--primary" : ""}`}
+                      disabled={!!busy}
+                      onClick={() => void oauth(acc)}
+                      title="Sign in again in your browser"
+                    >
+                      {reconnecting ? <RefreshCw size={12} className="spin" /> : <ExternalLink size={12} />} Reconnect
+                    </button>
+                  )}
+                  <button className="ui-btn ui-btn--sm" disabled={!!busy} onClick={() => void logout(acc.providerId, acc.name)}>
+                    <LogOut size={12} /> Disconnect
                   </button>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
+              </div>
+            ) : (
+              <div className="settings__account-actions settings__account-actions--col">
+                {canOAuth && (
+                  <button className="ui-btn ui-btn--primary" disabled={!!busy} onClick={() => void oauth(acc)}>
+                    {reconnecting ? <RefreshCw size={13} className="spin" /> : <ExternalLink size={13} />}
+                    Sign in with {acc.name}
+                  </button>
+                )}
+                {(acc.providerId === "anthropic" || acc.providerId === "openai") && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      className="settings__input"
+                      type="password"
+                      placeholder={`${acc.name} API key`}
+                      value={keys[acc.providerId] ?? ""}
+                      onChange={(e) => setKeys({ ...keys, [acc.providerId]: e.target.value })}
+                      onKeyDown={(e) => e.key === "Enter" && void saveKey(acc.providerId)}
+                    />
+                    <button className="ui-btn" onClick={() => void saveKey(acc.providerId)}>
+                      Save key
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };

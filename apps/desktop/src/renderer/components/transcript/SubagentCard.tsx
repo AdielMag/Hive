@@ -7,7 +7,9 @@ import {
   Clock,
   Coins,
   Cpu,
+  ExternalLink,
   Loader2,
+  Maximize2,
   Square,
   Terminal,
   Wrench,
@@ -56,6 +58,30 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
     : undefined;
 
   const promptText = view.prompt || outputPrompt;
+
+  const openSubagentTab = useSessionStore((s) => s.openSubagentTab);
+  const openSubagentModal = useSessionStore((s) => s.openSubagentModal);
+  const activeTab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const activeKey = useSessionStore((s) => s.activeKey);
+
+  const handleOpenTab = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openSubagentTab(view, {
+      parentSessionPath: activeTab?.sessionPath,
+      parentActiveKey: activeTab?.activeKey ?? activeKey ?? undefined,
+      projectId: activeTab?.projectId,
+    });
+  };
+
+  const handleOpenModal = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openSubagentModal({
+      view,
+      parentSessionPath: activeTab?.sessionPath,
+      parentActiveKey: activeTab?.activeKey ?? activeKey ?? undefined,
+      projectId: activeTab?.projectId,
+    });
+  };
 
   const toneClass =
     view.status === "completed"
@@ -117,12 +143,44 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
           </div>
 
           {/* Live activity line */}
-          {isRunning && (
-            <div className="msg-agent-card__activity">
+          {isRunning ? (
+            <div
+              className="msg-agent-card__activity"
+              onClick={handleOpenModal}
+              title="Click to inspect live activity in popup modal"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  handleOpenModal(e as any);
+                }
+              }}
+            >
               <span className="pulse-dot" />
-              <span>{view.activity || (view.status === "queued" ? "Queued in runner..." : "Working...")}</span>
+              <span className="msg-agent-card__activity-text">
+                {view.activity || (view.status === "queued" ? "Queued in runner..." : "Working...")}
+              </span>
+              <span className="msg-agent-card__activity-action">Inspect</span>
             </div>
-          )}
+          ) : view.resultText ? (
+            <div
+              className="msg-agent-card__activity msg-agent-card__activity--done"
+              onClick={handleOpenModal}
+              title="Click to inspect execution transcript & result in popup"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  handleOpenModal(e as any);
+                }
+              }}
+            >
+              <span className="msg-agent-card__activity-text">Execution complete &bull; Inspect transcript & result</span>
+              <span className="msg-agent-card__activity-action">View</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="msg-agent-card__right">
@@ -153,6 +211,24 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
               {stopping ? <Loader2 size={13} className="spin" /> : <Square size={12} fill="currentColor" />}
             </button>
           )}
+          <button
+            type="button"
+            className="ui-btn ui-btn--ghost ui-btn--icon"
+            title="Inspect in popup modal"
+            aria-label={`Inspect subagent ${view.description} in popup modal`}
+            onClick={handleOpenModal}
+          >
+            <Maximize2 size={13} />
+          </button>
+          <button
+            type="button"
+            className="ui-btn ui-btn--ghost ui-btn--icon"
+            title="Open in dedicated tab"
+            aria-label={`Open subagent ${view.description} in dedicated tab`}
+            onClick={handleOpenTab}
+          >
+            <ExternalLink size={13} />
+          </button>
           <button
             type="button"
             className="ui-btn ui-btn--ghost ui-btn--icon"

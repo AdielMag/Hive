@@ -1,0 +1,36 @@
+{
+  "name": "@hive-module/context-breakdown",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: context window breakdown panel (exact vs estimated tokens by category)",
+  "exports": {
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "context-breakdown",
+    "title": "Context Window Breakdown",
+    "description": "Token usage inspector showing exact model-reported and estimated tokens across instructions, tools, skills and conversation turns.",
+    "tier": "bonus",
+    "icon": "pie-chart",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "context"
+      ],
+      "commands": [
+        {
+          "id": "view.context",
+          "title": "Toggle Context Window Panel",
+          "category": "View"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0"
+  }
+}

@@ -2,16 +2,23 @@
  * The `ModuleHost` handed to each renderer module. Everything here delegates to existing core stores so
  * modules never reach into `renderer/store/*` themselves.
  */
-import type { ModuleHost, ModuleTab, OpenTabSpec } from "@hive/module-sdk/renderer";
+import { useMemo } from "react";
+import type { ActiveSessionContext, ModuleHost, ModuleTab, OpenTabSpec, ResolvedFeatureModelLite, SessionCatalogLite } from "@hive/module-sdk/renderer";
 import type { AgentMode, TabItem } from "@hive/protocol";
 import { Markdown } from "../components/code/Markdown.tsx";
 import { CodeBlock } from "../components/code/CodeBlock.tsx";
 import { ProviderIcon } from "../components/ProviderIcon.tsx";
 import { copyText } from "../lib/clipboard.ts";
+import { scrollToToolCall } from "../components/Transcript.tsx";
+import { useActiveRegistry } from "../store/ai-registry-store.ts";
+import { getStoredItem, setStoredItem } from "../lib/storage.ts";
+import { useFeatureModelStore, resolveFeatureModel, type FeatureModelsConfig } from "../store/feature-models-store.ts";
 import { setLinkHandler } from "./link-bus.ts";
 import { AiModelChip } from "../components/AiModelChip.tsx";
+import { ContextBreakdownPanel } from "../components/ContextBreakdownPanel.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useSessionStore } from "../store/session-store.ts";
+import { useAppearance } from "../features/appearance/appearance-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { subscribeSessionEvents } from "./session-bus.ts";
 import { setModuleHostFactory } from "./registry.ts";
@@ -31,9 +38,39 @@ const toModuleTab = (t: TabItem): ModuleTab => ({
 });
 
 const HostMarkdown: ModuleHost["ui"]["Markdown"] = ({ text, className }) => <Markdown text={text} className={className} />;
-const HostAiModelChip: ModuleHost["ui"]["AiModelChip"] = (props) => <AiModelChip {...props} />;
+const HostAiModelChip: ModuleHost["ui"]["AiModelChip"] = ({ feature, ...props }) => (
+  <AiModelChip {...props} feature={feature as React.ComponentProps<typeof AiModelChip>["feature"]} />
+);
+
+function useFeatureModel(featureId: string): ResolvedFeatureModelLite {
+  const pref = useFeatureModelStore((s) => s.config[featureId as keyof FeatureModelsConfig]);
+  const selectedModel = useSessionStore((s) => s.selectedModel);
+  const defaultModel = useSessionStore((s) => s.defaultModel);
+  const catalog = useSessionStore((s) => s.allCatalogModels);
+  return useMemo(() => resolveFeatureModel(pref, selectedModel, defaultModel, catalog), [pref, selectedModel, defaultModel, catalog]);
+}
+
+const useSessionCatalog = (): SessionCatalogLite[] => useSessionStore((s) => s.allSessions);
+
+function useTheme() {
+  const theme = useAppearance((s) => s.theme);
+  const editor = useAppearance((s) => s.editor);
+  const setTheme = useAppearance((s) => s.setTheme);
+  const replaceTheme = useAppearance((s) => s.replaceTheme);
+  const setEditor = useAppearance((s) => s.setEditor);
+  const reset = useAppearance((s) => s.reset);
+  return { theme, editor, setTheme, replaceTheme, setEditor, reset };
+}
+
+function useActiveSession(): ActiveSessionContext {
+  const activeProject = useSessionStore((s) => s.activeProject);
+  const transcript = useSessionStore((s) => s.transcript);
+  const registry = useActiveRegistry();
+  return { project: activeProject, transcript, registry };
+}
 const HostCodeBlock: ModuleHost["ui"]["CodeBlock"] = (props) => <CodeBlock {...props} />;
 const HostProviderIcon: ModuleHost["ui"]["ProviderIcon"] = (props) => <ProviderIcon {...props} />;
+const HostContextBreakdown: ModuleHost["ui"]["ContextBreakdownPanel"] = (props) => <ContextBreakdownPanel {...props} />;
 
 const isDark = (): boolean => document.documentElement.dataset.theme !== "light";
 
@@ -74,12 +111,14 @@ export function createModuleHost(moduleId: string): ModuleHost {
     settings: { open: (tabId) => useUi.getState().openSettings(tabId ? `${moduleId}:${tabId}` : undefined) },
     openExternal: (url: string) => window.studio.openSystemBrowser(url),
     links: { setHandler: (handler) => setLinkHandler(moduleId, handler) },
-    ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, ProviderIcon: HostProviderIcon },
+    ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, ProviderIcon: HostProviderIcon, ContextBreakdownPanel: HostContextBreakdown },
     models: {
       catalog: () => useSessionStore.getState().allCatalogModels,
       enabledKeys: () => useSessionStore.getState().enabledModelKeys,
       loadCatalog: () => useSessionStore.getState().loadModelsCatalog(),
     },
+    storage: { get: (key) => getStoredItem(key), set: (key, value) => setStoredItem(key, value) },
+    hooks: { useSessionCatalog, useFeatureModel, useActiveSession, useTheme },
     clipboard: {
       copy: copyText,
     },
@@ -99,6 +138,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
       },
       setMode: (mode) => useSessionStore.getState().setMode(mode as AgentMode),
       setPrompt: (text) => useSessionStore.getState().setPromptText(text),
+    scrollToToolCall: (id) => scrollToToolCall(id),
     },
     ipc: {
       invoke: (method, ...args) => window.studio.modules.invoke(moduleId, method, ...args) as Promise<never>,

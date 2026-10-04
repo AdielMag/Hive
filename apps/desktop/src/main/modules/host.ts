@@ -15,7 +15,14 @@ import {
   type ModulesSnapshot,
   type SetModulesEnabledResult,
 } from "@hive/module-sdk";
-import { moduleChannel, type Disposer, type MainModule, type MainModuleContext, type ModuleLogger } from "@hive/module-sdk/main";
+import {
+  moduleChannel,
+  type Disposer,
+  type MainModule,
+  type MainModuleContext,
+  type ModuleLogger,
+  type PiRuntimeInfo,
+} from "@hive/module-sdk/main";
 import { hasAgentAssets, installAgentAssets, removeAgentAssets, type InstalledAssets } from "./agent-assets.ts";
 
 export const MODULES_FILE = "modules.json";
@@ -38,6 +45,8 @@ export interface MainModuleHostOptions {
   loaders: Readonly<Record<string, () => Promise<{ default: MainModule }>>>;
   hiveDataDir: string;
   piAgentDir: () => string;
+  /** Pi install (lazy). */
+  pi?: () => PiRuntimeInfo | null;
   /** Folder of a module's shipped files (agent assets, bin). */
   moduleRoot: (id: string) => string;
   send: (msg: ModuleEventOut) => void;
@@ -276,6 +285,7 @@ export class MainModuleHost {
     const entry: ActiveModule = { handlers: new Map(), disposers: [], disposed: false };
     const ctx: MainModuleContext = {
       moduleId: id,
+      pi: () => this.opts.pi?.() ?? null,
       ipc: {
         handle: (method, fn) => {
           entry.handlers.set(moduleChannel(id, method), fn as Handler);

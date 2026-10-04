@@ -24,8 +24,16 @@ export interface InstalledSkill {
   hash: string;
 }
 
+export interface InstalledExtension {
+  name: string;
+  path: string;
+  /** Content hash Hive wrote (also stored in the marker). */
+  hash: string;
+}
+
 export interface InstalledAssets {
   skills?: InstalledSkill[];
+  extensions?: InstalledExtension[];
   /** AGENTS.md that holds this module's managed block. */
   agentsMd?: string;
   bin?: string[];
@@ -52,6 +60,12 @@ const beginMarker = (id: string) => `<!-- BEGIN ${id} managed block -->`;
 const endMarker = (id: string) => `<!-- END ${id} managed block -->`;
 
 /** Line endings are normalized so a CRLF git checkout hashes the same as an LF copy. */
+export function hashFile(file: string): string {
+  const h = createHash("sha256");
+  h.update(readFileSync(file).toString("binary").replace(/\r\n/g, "\n"));
+  return h.digest("hex");
+}
+
 export function hashDir(dir: string): string {
   const h = createHash("sha256");
   const walk = (d: string) => {
@@ -211,6 +225,65 @@ export function installAgentAssets(
     if (!record.skills?.some((s) => s.path === old.path)) notices.push(...removeSkill(old, id));
   }
 
+  // Extensions
+  if (agent.extensions?.length) {
+    const extensions: InstalledExtension[] = [];
+    const extDir = join(opts.piAgentDir, "extensions");
+    for (const rel of agent.extensions) {
+      const src = resolve(moduleRoot, rel);
+      if (!existsSync(src)) {
+        notices.push(`Extension source missing: ${src}`);
+        continue;
+      }
+      const name = basename(src);
+      const dest = join(extDir, name);
+      const markerPath = join(extDir, `.${name}.hive-managed`);
+      const srcHash = hashFile(src);
+
+      if (!existsSync(dest)) {
+        mkdirSync(extDir, { recursive: true });
+        cpSync(src, dest);
+        writeFileSync(markerPath, JSON.stringify({ managedBy: "hive", module: id, hash: srcHash }), "utf8");
+        extensions.push({ name, path: dest, hash: srcHash });
+        continue;
+      }
+
+      let marker: Marker | null = null;
+      if (existsSync(markerPath)) {
+        try {
+          marker = JSON.parse(readFileSync(markerPath, "utf8")) as Marker;
+        } catch {
+          // ignore corrupted marker
+        }
+      }
+      const destHash = hashFile(dest);
+
+      if (marker && marker.module !== id) {
+        notices.push(`Extension "${name}" is managed by the "${marker.module}" module; left untouched.`);
+      } else if (marker) {
+        if (destHash !== marker.hash) {
+          notices.push(`Extension "${name}" was edited outside Hive; kept your version (${dest}).`);
+          extensions.push({ name, path: dest, hash: marker.hash });
+        } else {
+          if (destHash !== srcHash) {
+            cpSync(src, dest);
+            writeFileSync(markerPath, JSON.stringify({ managedBy: "hive", module: id, hash: srcHash }), "utf8");
+          }
+          extensions.push({ name, path: dest, hash: srcHash });
+        }
+      } else if (destHash === srcHash) {
+        writeFileSync(markerPath, JSON.stringify({ managedBy: "hive", module: id, hash: srcHash }), "utf8");
+        extensions.push({ name, path: dest, hash: srcHash });
+      } else {
+        notices.push(`Extension "${name}" already exists and isn't managed by Hive; left untouched (${dest}).`);
+      }
+    }
+    if (extensions.length) record.extensions = extensions;
+  }
+  for (const old of previous?.extensions ?? []) {
+    if (!record.extensions?.some((e) => e.path === old.path)) notices.push(...removeExtension(old, id));
+  }
+
   // AGENTS.md managed block
   const agentsPath = join(opts.piAgentDir, "AGENTS.md");
   if (agent.agentsMd) {
@@ -261,6 +334,27 @@ function removeSkill(skill: InstalledSkill, moduleId: string): string[] {
   return [];
 }
 
+function removeExtension(ext: InstalledExtension, moduleId: string): string[] {
+  if (!existsSync(ext.path)) return [];
+  const extDir = dirname(ext.path);
+  const markerPath = join(extDir, `.${basename(ext.path)}.hive-managed`);
+  let marker: Marker | null = null;
+  if (existsSync(markerPath)) {
+    try {
+      marker = JSON.parse(readFileSync(markerPath, "utf8")) as Marker;
+    } catch {
+      // ignore corrupted marker
+    }
+  }
+  if (!marker || marker.module !== moduleId) return [`Extension "${ext.name}" is no longer managed by Hive; left in place.`];
+  if (hashFile(ext.path) !== ext.hash) {
+    return [`Kept extension "${ext.name}" because it was edited outside Hive (${ext.path}).`];
+  }
+  safeUnlink(ext.path);
+  safeUnlink(markerPath);
+  return [];
+}
+
 function removeBlockFrom(agentsPath: string, id: string): void {
   if (!existsSync(agentsPath)) return;
   const current = readFileSync(agentsPath, "utf8");
@@ -281,6 +375,7 @@ export function removeAgentAssets(moduleId: string, record: InstalledAssets | un
   if (!record) return [];
   const notices: string[] = [];
   for (const skill of record.skills ?? []) notices.push(...removeSkill(skill, moduleId));
+  for (const ext of record.extensions ?? []) notices.push(...removeExtension(ext, moduleId));
   if (record.agentsMd) removeBlockFrom(record.agentsMd, moduleId);
   for (const path of record.bin ?? []) safeUnlink(path);
   return notices;
@@ -288,5 +383,5 @@ export function removeAgentAssets(moduleId: string, record: InstalledAssets | un
 
 export function hasAgentAssets(manifest: ModuleManifest): boolean {
   const a = manifest.agent;
-  return !!a && (!!a.skills?.length || !!a.agentsMd || Object.keys(a.bin ?? {}).length > 0);
+  return !!a && (!!a.skills?.length || !!a.agentsMd || Object.keys(a.bin ?? {}).length > 0 || !!a.extensions?.length);
 }
