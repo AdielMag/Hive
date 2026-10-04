@@ -534,6 +534,17 @@ export function buildTimeline(state: TranscriptState): Timeline {
   const items: TimelineItem[] = [];
   const toolResults: Record<string, ToolResultView> = {};
   let sawSystem = false;
+  // Model / thinking-level changes are only shown once a message is actually sent after them.
+  // Only the latest change of each kind is kept.
+  const pendingChanges = new Map<"model" | "thinking", TimelineItem>();
+  const flushPendingChanges = () => {
+    for (const item of pendingChanges.values()) items.push(item);
+    pendingChanges.clear();
+  };
+  const setPendingChange = (kind: "model" | "thinking", item: TimelineItem) => {
+    pendingChanges.delete(kind); // re-insert so ordering follows the latest change
+    pendingChanges.set(kind, item);
+  };
 
   for (const entry of activePath(state)) {
     const key = entry.id;
@@ -544,14 +555,17 @@ export function buildTimeline(state: TranscriptState): Timeline {
         const isFirstSystem = message.role === "system" && !sawSystem;
         if (message.role === "system") sawSystem = true;
         const item = messageItem(message, key, isFirstSystem);
-        if (item) items.push(item);
+        if (item) {
+          flushPendingChanges();
+          items.push(item);
+        }
         break;
       }
       case "model_change":
-        items.push({ kind: "marker", key, text: `Model → ${entry.provider}/${entry.modelId}` });
+        setPendingChange("model", { kind: "marker", key, text: `Model → ${entry.provider}/${entry.modelId}` });
         break;
       case "thinking_level_change":
-        items.push({ kind: "marker", key, text: `Thinking → ${entry.thinkingLevel}` });
+        setPendingChange("thinking", { kind: "marker", key, text: `Thinking → ${entry.thinkingLevel}` });
         break;
       case "compaction":
         items.push({
@@ -580,10 +594,14 @@ export function buildTimeline(state: TranscriptState): Timeline {
   for (const message of state.live) {
     if (message.role === "toolResult") toolResults[String(message.toolCallId)] = toolResultView(message);
     const item = messageItem(message, `live:${messageKey(message)}`, false);
-    if (item) items.push(item);
+    if (item) {
+      flushPendingChanges();
+      items.push(item);
+    }
   }
 
   if (state.streaming) {
+    flushPendingChanges();
     const m = state.streaming.message;
     items.push({
       kind: "assistant",

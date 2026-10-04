@@ -14,6 +14,7 @@ import {
   type LinkedProject,
   type RegistrySkill,
   type RegistryTool,
+  type StudioSubagentActivity,
   type StudioSubagentStopResult,
   type StudioToBridge,
   renderLinkedProjectsSection,
@@ -141,8 +142,84 @@ export default function studioBridge(pi: ExtensionAPI): void {
   };
 
   let unsubFromGui: (() => void) | undefined;
+  let unsubTracking: Array<() => void> = [];
 
-  const stopSubagent = (id: string, agentId: string) => {
+  /** Top-level subagents the runner has started/created and not yet finished, learned from its lifecycle events. */
+  const liveSubagents = new Map<string, { type: string; description: string; seq: number }>();
+  let subagentSeq = 0;
+
+  const broadcastSubagentActivity = () => {
+    const list = Array.from(liveSubagents.entries()).map(([id, a]) => ({
+      id,
+      type: a.type,
+      description: a.description,
+    }));
+    const payload: StudioSubagentActivity = {
+      kind: "subagent_activity",
+      runningCount: list.length,
+      hasRunning: list.length > 0,
+      agents: list,
+    };
+    pi.events.emit(BRIDGE_TOPICS.toGui, payload);
+  };
+
+  const trackSubagents = () => {
+    for (const u of unsubTracking) u();
+    liveSubagents.clear();
+    const remember = (data: unknown) => {
+      const d = data as { id?: unknown; type?: unknown; description?: unknown } | null;
+      if (!d || typeof d.id !== "string") return;
+      if (!liveSubagents.has(d.id)) {
+        liveSubagents.set(d.id, {
+          type: typeof d.type === "string" ? d.type : "",
+          description: typeof d.description === "string" ? d.description : "",
+          seq: subagentSeq++,
+        });
+        broadcastSubagentActivity();
+      }
+    };
+    const forget = (data: unknown) => {
+      const d = data as { id?: unknown } | null;
+      if (d && typeof d.id === "string") {
+        if (liveSubagents.delete(d.id)) {
+          broadcastSubagentActivity();
+        }
+      }
+    };
+    unsubTracking = [
+      pi.events.on("subagents:created", remember),
+      pi.events.on("subagents:started", remember),
+      pi.events.on("subagents:completed", forget),
+      pi.events.on("subagents:failed", forget),
+    ];
+  };
+
+  /** Resolve which agent a stop request targets: the explicit id, else the oldest live agent matching type + description. */
+  const resolveSubagentId = (req: { agentId?: string; type?: string; description?: string }): string | undefined => {
+    if (req.agentId) return req.agentId;
+    if (!req.description) return undefined;
+    let best: { id: string; seq: number } | undefined;
+    for (const [id, a] of liveSubagents) {
+      if (a.description !== req.description) continue;
+      if (req.type && a.type && a.type !== req.type) continue;
+      if (!best || a.seq < best.seq) best = { id, seq: a.seq };
+    }
+    return best?.id;
+  };
+
+  const stopSubagent = (id: string, req: { agentId?: string; type?: string; description?: string }) => {
+    const agentId = resolveSubagentId(req);
+    if (!agentId) {
+      const payload: StudioSubagentStopResult = {
+        kind: "subagent_stop_result",
+        id,
+        agentId: "",
+        ok: false,
+        error: "No running subagent matches (it may have already finished)",
+      };
+      pi.events.emit(BRIDGE_TOPICS.toGui, payload);
+      return;
+    }
     const channel = "subagents:rpc:stop";
     const requestId = `studio-stop-${id}`;
     let settled = false;
@@ -151,6 +228,12 @@ export default function studioBridge(pi: ExtensionAPI): void {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      // A stopped queued agent never gets a completion event; don't keep matching it.
+      if (result.ok || /not running|not found/i.test(result.error ?? "")) {
+        if (liveSubagents.delete(agentId)) {
+          broadcastSubagentActivity();
+        }
+      }
       unsubReply?.();
       const payload: StudioSubagentStopResult = { kind: "subagent_stop_result", id, agentId, ...result };
       pi.events.emit(BRIDGE_TOPICS.toGui, payload);
@@ -195,6 +278,7 @@ export default function studioBridge(pi: ExtensionAPI): void {
         capabilities: BRIDGE_CAPABILITIES,
       });
       buildAndSendRegistry(ctx);
+      broadcastSubagentActivity();
     });
 
     s.on("data", (chunk: string) => {
@@ -234,10 +318,12 @@ export default function studioBridge(pi: ExtensionAPI): void {
     // Subagent termination: relay to the pi-subagents extension's cross-extension RPC and report back.
     unsubFromGui?.();
     unsubFromGui = pi.events.on(BRIDGE_TOPICS.fromGui, (data) => {
-      const req = data as { kind?: unknown; id?: unknown; agentId?: unknown } | null;
-      if (!req || req.kind !== "subagent_stop" || typeof req.id !== "string" || typeof req.agentId !== "string") return;
-      stopSubagent(req.id, req.agentId);
+      const req = data as { kind?: unknown; id?: unknown; agentId?: unknown; type?: unknown; description?: unknown } | null;
+      if (!req || req.kind !== "subagent_stop" || typeof req.id !== "string") return;
+      const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+      stopSubagent(req.id, { agentId: str(req.agentId), type: str(req.type), description: str(req.description) });
     });
+    trackSubagents();
   });
 
   pi.on("before_agent_start", async (event) => {
@@ -265,6 +351,38 @@ export default function studioBridge(pi: ExtensionAPI): void {
       sections,
     });
     buildAndSendRegistry(undefined, (opts as any).skills);
+  });
+
+  pi.on("tool_execution_end", async (event) => {
+    if (event.toolName === "SubagentWorkflow") {
+      const res = event.result as { details?: { taskId?: string }; text?: string; content?: Array<{ text?: string }> } | undefined;
+      const details = res?.details;
+      const text = res?.text ?? (Array.isArray(res?.content) ? res.content.map((c) => c.text ?? "").join("\n") : "");
+      const taskId = (typeof details?.taskId === "string" ? details.taskId : undefined) ||
+        text.match(/Task ID:\s*(\S+)/i)?.[1]?.trim();
+      if (taskId && !liveSubagents.has(taskId)) {
+        liveSubagents.set(taskId, {
+          type: "SubagentWorkflow",
+          description: "Workflow",
+          seq: subagentSeq++,
+        });
+        broadcastSubagentActivity();
+      }
+    }
+  });
+
+  pi.on("message_end", async (event) => {
+    const msg = event.message as { customType?: string; details?: { id?: string; others?: Array<{ id?: string }> } } | undefined;
+    if (msg?.customType === "subagent-notification") {
+      let changed = false;
+      if (msg.details?.id && liveSubagents.delete(msg.details.id)) changed = true;
+      if (Array.isArray(msg.details?.others)) {
+        for (const o of msg.details.others) {
+          if (o.id && liveSubagents.delete(o.id)) changed = true;
+        }
+      }
+      if (changed) broadcastSubagentActivity();
+    }
   });
 
   // Checkpoint boundaries
@@ -295,6 +413,7 @@ export default function studioBridge(pi: ExtensionAPI): void {
       leafEntryId: ctx.sessionManager.getLeafId?.() ?? null,
     });
     buildAndSendRegistry(ctx);
+    broadcastSubagentActivity();
   });
 
   // Hidden command for command-context actions
@@ -385,6 +504,10 @@ export default function studioBridge(pi: ExtensionAPI): void {
   pi.on("session_shutdown", async () => {
     unsubFromGui?.();
     unsubFromGui = undefined;
+    for (const u of unsubTracking) u();
+    unsubTracking = [];
+    liveSubagents.clear();
+    broadcastSubagentActivity();
     socket?.end();
     socket = null;
   });

@@ -1,5 +1,13 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { hasDraft } from "./session-store.ts";
+import { describe, expect, it, beforeEach, vi } from "vitest";
+import {
+  applyCompactionResult,
+  hasDraft,
+  readCompactionOutcome,
+  useSessionStore,
+  withCompactionEstimate,
+  __resetCompactionEstimates,
+  __test,
+} from "./session-store.ts";
 
 describe("hasDraft", () => {
   it("returns false for undefined or empty tab UI", () => {
@@ -53,8 +61,6 @@ describe("hasDraft", () => {
     ).toBe(true);
   });
 });
-
-import { useSessionStore } from "./session-store.ts";
 
 describe("queued messages store actions", () => {
   const rpcCalls: any[] = [];
@@ -250,5 +256,182 @@ describe("agent execution modes store actions", () => {
     useSessionStore.setState({ promptText: "Why did it crash" });
     await useSessionStore.getState().sendPrompt();
     expect(rpcCalls[0].message).toContain("[Mode: Debug");
+  });
+});
+
+describe("subagent activity tracking across tabs", () => {
+  const tabId = "tab_subagent_test";
+  const sessionKey = "key_subagent_test";
+
+  beforeEach(() => {
+    __test.clearActivity(tabId);
+    useSessionStore.setState({
+      activeTabId: tabId,
+      tabs: [
+        {
+          id: tabId,
+          title: "Session with subagent",
+          kind: "session",
+          activeKey: sessionKey,
+          projectId: "p1",
+        } as any,
+      ],
+      sessionActivity: {},
+    });
+  });
+
+  it("keeps tab running when main thread settles but subagent is still executing in background", () => {
+    // 1. Main agent turn starts
+    __test.trackActivity(sessionKey, [{ type: "agent_start" }]);
+    expect(useSessionStore.getState().sessionActivity[tabId]).toBe("running");
+
+    // 2. Subagent is spawned in background
+    __test.trackActivity(sessionKey, [
+      {
+        type: "tool_execution_end",
+        toolName: "Agent",
+        result: {
+          text: "Agent started in background.\nAgent ID: sub_123",
+          details: { status: "background", agentId: "sub_123" },
+        },
+      },
+    ]);
+    expect(__test.hasRunningWork(tabId)).toBe(true);
+    expect(useSessionStore.getState().sessionActivity[tabId]).toBe("running");
+
+    // 3. Main thread finishes and settles
+    __test.trackActivity(sessionKey, [{ type: "agent_settled" }]);
+
+    // CRITICAL: Tab must still be marked as "running" because subagent sub_123 is alive!
+    expect(__test.hasRunningWork(tabId)).toBe(true);
+    expect(useSessionStore.getState().sessionActivity[tabId]).toBe("running");
+
+    // 4. Subagent completes in background via subagent-notification
+    __test.trackActivity(sessionKey, [
+      {
+        type: "message_end",
+        message: {
+          role: "custom",
+          customType: "subagent-notification",
+          details: { id: "sub_123", status: "completed" },
+        },
+      },
+    ]);
+
+    // Subagent done and main thread settled: tab in view transitions to null (idle)
+    expect(__test.hasRunningWork(tabId)).toBe(false);
+    expect(useSessionStore.getState().sessionActivity[tabId]).toBeUndefined();
+  });
+
+  it("marks parked tab as done when subagent finishes while user is on another tab", () => {
+    // 1. Subagent running, main thread settled
+    __test.trackActivity(sessionKey, [
+      { type: "agent_start" },
+      {
+        type: "tool_execution_end",
+        toolName: "Agent",
+        result: {
+          text: "Agent started in background.\nAgent ID: sub_456",
+          details: { status: "background", agentId: "sub_456" },
+        },
+      },
+      { type: "agent_settled" },
+    ]);
+    expect(useSessionStore.getState().sessionActivity[tabId]).toBe("running");
+
+    // 2. User switches to a different tab
+    useSessionStore.setState({ activeTabId: "other_tab" });
+
+    // 3. Subagent finishes while tab is parked
+    __test.trackActivity(sessionKey, [
+      {
+        type: "message_end",
+        message: {
+          role: "custom",
+          customType: "subagent-notification",
+          details: { id: "sub_456", status: "completed" },
+        },
+      },
+    ]);
+
+    // Parked tab must now have "done" activity badge!
+    expect(__test.hasRunningWork(tabId)).toBe(false);
+    expect(useSessionStore.getState().sessionActivity[tabId]).toBe("done");
+  });
+
+  it("tracks SubagentWorkflow background tasks and marks error on failure", () => {
+    // User is on another tab
+    useSessionStore.setState({ activeTabId: "other_tab" });
+
+    // Workflow started in background
+    __test.trackActivity(sessionKey, [
+      { type: "agent_start" },
+      {
+        type: "tool_execution_end",
+        toolName: "SubagentWorkflow",
+        result: {
+          text: 'Workflow "audit" started in the background.\nTask ID: wf_789',
+          details: { taskId: "wf_789" },
+        },
+      },
+      { type: "agent_settled" },
+    ]);
+
+    // Main thread is settled, but workflow is running
+    expect(useSessionStore.getState().sessionActivity[tabId]).toBe("running");
+
+    // Workflow fails
+    __test.trackActivity(sessionKey, [
+      {
+        type: "entry_appended",
+        entry: {
+          type: "custom_message",
+          customType: "subagent-notification",
+          details: { id: "wf_789", status: "error", error: "Failed to run workflow" },
+        },
+      },
+    ]);
+
+    // Parked tab must reflect "error"
+    expect(useSessionStore.getState().sessionActivity[tabId]).toBe("error");
+  });
+});
+
+describe("compaction result", () => {
+  const stats = (tokens: number | null) =>
+    ({
+      contextUsage: { tokens, contextWindow: 200_000, percent: tokens === null ? null : (tokens / 200_000) * 100 },
+    }) as never;
+
+  beforeEach(() => __resetCompactionEstimates());
+
+  it("reads tokensBefore / estimatedTokensAfter from Pi's result", () => {
+    expect(readCompactionOutcome({ tokensBefore: 150_000, estimatedTokensAfter: 30_000 })).toEqual({
+      tokensBefore: 150_000,
+      tokensAfter: 30_000,
+    });
+    expect(readCompactionOutcome({ tokensBefore: 1 })).toEqual({ tokensBefore: 1, tokensAfter: null });
+    expect(readCompactionOutcome(undefined)).toBeNull();
+    expect(readCompactionOutcome({ summary: "x" })).toBeNull();
+  });
+
+  it("applyCompactionResult fills the null context size Pi reports until the next response", async () => {
+    const getStats = vi.fn(async () => ({ ok: true, data: stats(null) }));
+    vi.stubGlobal("window", {
+      studio: { rpc: getStats, readSessionFile: vi.fn(async () => ({ entries: [], leafId: null })) },
+    });
+    useSessionStore.setState({ activeKey: "k1", tabs: [], stats: stats(150_000) } as never);
+
+    const outcome = await applyCompactionResult("k1", { tokensBefore: 150_000, estimatedTokensAfter: 30_000 });
+
+    expect(outcome).toEqual({ tokensBefore: 150_000, tokensAfter: 30_000 });
+    const usage = useSessionStore.getState().stats?.contextUsage;
+    expect(usage?.tokens).toBe(30_000);
+    expect(usage?.percent).toBeCloseTo(15);
+    // Pi's own stats say "unknown" -> the estimate stays; a real number takes over and clears it.
+    expect(withCompactionEstimate("k1", stats(null)).contextUsage?.tokens).toBe(30_000);
+    expect(withCompactionEstimate("k1", stats(42_000)).contextUsage?.tokens).toBe(42_000);
+    expect(withCompactionEstimate("k1", stats(null)).contextUsage?.tokens).toBeNull();
+    vi.unstubAllGlobals();
   });
 });

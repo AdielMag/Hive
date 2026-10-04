@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTranscript, type TranscriptState } from "@hive/pi-adapter";
-import { estimateSwitchSavings, isRecent, isWorthCompacting, lastResponse, RECENT_RESPONSE_MS, SUMMARY_TOKENS_ESTIMATE } from "./cache-switch.ts";
+import { CACHE_TTL_MS, estimateSwitchSavings, isCacheExpired, isRecent, isWorthCompacting, lastResponse, RECENT_RESPONSE_MS, SUMMARY_TOKENS_ESTIMATE } from "./cache-switch.ts";
 
 const usage = (input: number, cacheRead = 0, cacheWrite = 0) => ({ input, output: 100, cacheRead, cacheWrite, totalTokens: input + cacheRead + cacheWrite + 100 });
 
@@ -32,6 +32,13 @@ describe("lastResponse", () => {
     const last = lastResponse(transcriptOf([user(1), asst(1_000, "opus")]))!;
     expect(isRecent(last, 1_000 + RECENT_RESPONSE_MS - 1)).toBe(true);
     expect(isRecent(last, 1_000 + RECENT_RESPONSE_MS)).toBe(false);
+  });
+
+  it("treats the cache as cold once the 5-minute TTL has passed since the last response", () => {
+    const last = lastResponse(transcriptOf([user(1), asst(1_000, "opus")]))!;
+    expect(CACHE_TTL_MS).toBe(5 * 60_000);
+    expect(isCacheExpired(last, 1_000 + CACHE_TTL_MS - 1)).toBe(false);
+    expect(isCacheExpired(last, 1_000 + CACHE_TTL_MS)).toBe(true);
   });
 
   it("ignores aborted/errored responses", () => {

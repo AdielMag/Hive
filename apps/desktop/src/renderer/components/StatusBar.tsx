@@ -72,9 +72,16 @@ function useHoverPopover() {
 
 export const StatusBar: React.FC = () => {
   useQuotaPolling();
-  const { bootstrap, extensionStatus, running, stats } = useSessionStore(
-    useShallow((s) => ({ bootstrap: s.bootstrap, extensionStatus: s.extensionStatus, running: s.transcript.running, stats: s.stats })),
+  const { bootstrap, extensionStatus, running, stats, isSessionActive } = useSessionStore(
+    useShallow((s) => ({
+      bootstrap: s.bootstrap,
+      extensionStatus: s.extensionStatus,
+      running: s.transcript.running,
+      stats: s.stats,
+      isSessionActive: !!s.activeTabId && s.sessionActivity[s.activeTabId] === "running",
+    })),
   );
+  const isRunning = running || isSessionActive;
   const cost = stats?.cost ?? 0;
   const quota = useInsights((s) => s.quota);
   const quotaLoading = useInsights((s) => s.quotaLoading);
@@ -109,7 +116,7 @@ export const StatusBar: React.FC = () => {
   return (
     <footer className="statusbar">
       <span className="statusbar__item">pi {piVersion}</span>
-      {running && (
+      {isRunning && (
         <span className="statusbar__item statusbar__running">
           <span className="pulse-dot" /> running
         </span>

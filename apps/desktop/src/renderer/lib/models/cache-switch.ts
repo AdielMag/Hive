@@ -19,6 +19,13 @@ export const SUMMARY_TOKENS_ESTIMATE = 2_000;
 export const MIN_SAVED_TOKENS = 15_000;
 /** Only advise when the conversation was last sent within this window (a switch "mid-session", not on reopening an old one). */
 export const RECENT_RESPONSE_MS = 60 * 60_000;
+/**
+ * Anthropic's default prompt-cache lifetime (5 minutes, refreshed on every cache hit; the 1-hour TTL is opt-in).
+ * Measured from the start of the request that last wrote/read the cache, which is what a Pi assistant
+ * message's `timestamp` records. Past it the cache is cold and the next message re-reads everything uncached.
+ * See https://platform.claude.com/docs/en/build-with-claude/prompt-caching#cache-lifetime.
+ */
+export const CACHE_TTL_MS = 5 * 60_000;
 /** Hive's default `keepRecentPercent` (share of the window Pi keeps verbatim after compaction). */
 export const DEFAULT_KEEP_RECENT_PERCENT = 10;
 
@@ -86,6 +93,9 @@ export function estimateSwitchSavings(args: { contextTokens: number; baselineTok
 export const isWorthCompacting = (advice: SwitchAdvice): boolean => advice.savedTokens >= MIN_SAVED_TOKENS;
 
 export const isRecent = (last: LastResponse, now = Date.now()): boolean => last.at === undefined || now - last.at < RECENT_RESPONSE_MS;
+
+/** True once more than {@link CACHE_TTL_MS} has passed since the conversation was last sent to the model. */
+export const isCacheExpired = (last: LastResponse, now = Date.now()): boolean => last.at !== undefined && now - last.at >= CACHE_TTL_MS;
 
 export const sameModel = (a: { provider: string; id: string } | null | undefined, provider: string, id: string) =>
   !!a && a.provider === provider && a.id === id;

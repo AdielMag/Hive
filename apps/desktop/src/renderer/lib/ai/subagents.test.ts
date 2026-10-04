@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasActiveSubagents,
   indexSubagents,
   parseAgentResultText,
   parseGetResultText,
@@ -188,5 +189,89 @@ Execution summary here...`;
     expect(parsed.messages).toHaveLength(2);
     expect(parsed.messages[0]?.role).toBe("user");
     expect(parsed.messages[1]?.role).toBe("assistant");
+  });
+
+  it("parses Task ID from workflow result text and resolves SubagentWorkflow", () => {
+    const text = `Workflow "test-flow" started in the background.\nTask ID: wf_123456\nScript: /tmp/test.js`;
+    const parsed = parseAgentResultText(text);
+    expect(parsed.agentId).toBe("wf_123456");
+
+    const block: AssistantBlock & { type: "toolCall" } = {
+      type: "toolCall",
+      id: "call_wf",
+      name: "SubagentWorkflow",
+      arguments: { script: "phase('Test'); await agent('hello');" },
+      complete: true,
+    };
+    const result = {
+      toolCallId: "call_wf",
+      toolName: "SubagentWorkflow",
+      isError: false,
+      text,
+      details: { taskId: "wf_123456" },
+      images: [],
+    };
+
+    // Before notification arrives, it stays in background status
+    const pendingView = resolveSubagentView({ block, result, subagentIndex: { notifications: new Map(), results: new Map(), cards: new Map() } });
+    expect(pendingView.agentId).toBe("wf_123456");
+    expect(pendingView.status).toBe("background");
+
+    // After notification arrives, it completes
+    const completedIndex = {
+      notifications: new Map([
+        ["wf_123456", { details: { id: "wf_123456", description: "Workflow test-flow", status: "completed" }, itemKey: "c_wf" }],
+      ]),
+      results: new Map(),
+      cards: new Map([["wf_123456", "call_wf"]]),
+    };
+    const completedView = resolveSubagentView({ block, result, subagentIndex: completedIndex });
+    expect(completedView.status).toBe("completed");
+  });
+
+  it("determines whether timeline has active subagents", () => {
+    const timeline: Timeline = {
+      items: [
+        {
+          kind: "assistant",
+          key: "a1",
+          streaming: false,
+          blocks: [
+            {
+              type: "toolCall",
+              id: "call_bg",
+              name: "Agent",
+              arguments: { description: "Scout task", run_in_background: true },
+              complete: true,
+            },
+          ],
+        },
+      ],
+      toolResults: {
+        call_bg: {
+          toolCallId: "call_bg",
+          toolName: "Agent",
+          isError: false,
+          text: "Agent started in background.\nAgent ID: bg_999",
+          details: { status: "background", agentId: "bg_999" },
+          images: [],
+        },
+      },
+    };
+
+    // Initially active because no completion notification exists
+    expect(hasActiveSubagents(timeline)).toBe(true);
+
+    // After notification item is added to timeline
+    timeline.items.push({
+      kind: "custom",
+      key: "c_notif",
+      customType: "subagent-notification",
+      text: "Finished",
+      images: [],
+      details: { id: "bg_999", description: "Scout task", status: "completed" },
+    });
+
+    expect(hasActiveSubagents(timeline)).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Minimize2, Loader2, CheckCircle2, Info, Brain, ChevronRight, Sparkles } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { useSessionStore } from "../store/session-store.ts";
+import { applyCompactionResult, useSessionStore, type CompactionOutcome } from "../store/session-store.ts";
 import {
   estimateContextBreakdown,
   type ContextBreakdownNode,
@@ -337,6 +337,7 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
   const { breakdown, contextTokens, contextWindow, percent } = data;
   const [compacting, setCompacting] = useState(false);
   const [compactDone, setCompactDone] = useState(false);
+  const [compactResult, setCompactResult] = useState<CompactionOutcome | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [showItems, setShowItems] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -386,8 +387,9 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
     try {
       const res = await window.studio.rpc(activeKey, { type: "compact" });
       if (res.ok) {
+        setCompactResult(await applyCompactionResult(activeKey, res.data));
         setCompactDone(true);
-        setTimeout(() => setCompactDone(false), 3000);
+        setTimeout(() => setCompactDone(false), 8000);
       }
     } catch (err) {
       console.error("Compaction failed:", err);
@@ -447,6 +449,8 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
           ) : compactDone ? (
             <>
               <CheckCircle2 size={14} /> Compacted
+              {compactResult &&
+                ` · ${fmtK(compactResult.tokensBefore)} → ${compactResult.tokensAfter != null ? `~${fmtK(compactResult.tokensAfter)}` : "?"}`}
             </>
           ) : (
             <>

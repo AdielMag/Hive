@@ -65,8 +65,8 @@ export interface SubagentView {
  */
 export function parseAgentResultText(text: string): { agentId?: string; outputFile?: string } {
   if (!text || typeof text !== "string") return {};
-  const idMatch = text.match(/Agent ID:\s*(\S+)/i);
-  const outMatch = text.match(/Output file:\s*(.+)/i);
+  const idMatch = text.match(/(?:Agent ID|Task ID):\s*(\S+)/i);
+  const outMatch = text.match(/(?:Output file|Script):\s*(.+)/i);
   return {
     agentId: idMatch?.[1]?.trim(),
     outputFile: outMatch?.[1]?.trim(),
@@ -127,8 +127,11 @@ export function indexSubagents(timeline: Timeline): SubagentIndex {
           const res = timeline.toolResults[block.id];
           if (block.name === "Agent" || block.name === "SubagentWorkflow") {
             const parsed = parseAgentResultText(res?.text ?? "");
-            const details = res?.details as AgentDetails | undefined;
-            const agentId = details?.agentId || parsed.agentId;
+            const details = res?.details as AgentDetails | { taskId?: string } | undefined;
+            const agentId =
+              (details && "agentId" in details && typeof details.agentId === "string" ? details.agentId : undefined) ||
+              (details && "taskId" in details && typeof details.taskId === "string" ? details.taskId : undefined) ||
+              parsed.agentId;
             if (agentId) {
               cards.set(agentId, block.id);
             }
@@ -169,14 +172,22 @@ export function resolveSubagentView(params: {
     ((run?.partial as { details?: AgentDetails } | undefined)?.details);
 
   const parsed = parseAgentResultText(result?.text ?? "");
-  const stopId = details?.agentId || parsed.agentId;
+  const taskId = typeof (result?.details as { taskId?: unknown } | undefined)?.taskId === "string"
+    ? (result?.details as { taskId: string }).taskId
+    : undefined;
+  const stopId = details?.agentId || taskId || parsed.agentId;
   const agentId = stopId || (typeof args.name === "string" ? args.name : undefined);
   const outputFile = parsed.outputFile;
 
   const subagentType = (details?.subagentType || args.subagent_type || block.name) as string;
-  const description = (details?.description || args.description || "Subagent") as string;
-  const prompt = (args.prompt as string) || "";
-  const background = args.run_in_background === true;
+  const description = (details?.description || args.description || (block.name === "SubagentWorkflow" ? "Workflow" : "Subagent")) as string;
+  const prompt = (args.prompt as string) || (typeof args.script === "string" ? args.script : "");
+  const isWorkflow = block.name === "SubagentWorkflow";
+  const isBackgroundSpawn =
+    isWorkflow ||
+    args.run_in_background === true ||
+    (args.run_in_background === undefined && (details?.status === "background" || /in background/i.test(result?.text ?? "")));
+  const background = isBackgroundSpawn;
 
   // Model & thinking
   const model = details?.modelName || (args.model as string | undefined);
@@ -193,11 +204,18 @@ export function resolveSubagentView(params: {
   const tags = allTags.filter((t) => !isThinkingTag(t));
 
   // Without a result yet, the call is still streaming/pending — never default to "completed".
+  // For background runs (including SubagentWorkflow), a completed tool call means the agent was spawned;
+  // it stays in "background" status until a completion notification or result is indexed.
   // No result and no live run: if the session is executing, the call is in flight but we missed its start
   // (e.g. the transcript was rebuilt from disk); if the session is idle nothing is running it any more
   // (interrupted / crashed), so don't claim it is "queued" forever.
+  const hasFinished = !!(agentId && (subagentIndex?.notifications.has(agentId) || subagentIndex?.results.has(agentId)));
   const fallbackStatus: SubagentView["status"] = result
-    ? result.isError ? "error" : "completed"
+    ? result.isError
+      ? "error"
+      : isBackgroundSpawn && !hasFinished
+        ? "background"
+        : "completed"
     : run
       ? run.status === "running" ? "running" : run.status === "error" ? "error" : "completed"
       : sessionRunning === false && block.complete !== false
@@ -283,4 +301,26 @@ export function parseOutputLines(lines: unknown[]): { prompt?: string; messages:
   }
 
   return { prompt, messages };
+}
+
+/**
+ * Determines whether any subagents or workflows in the timeline are currently running in the background.
+ */
+export function hasActiveSubagents(timeline: Timeline): boolean {
+  const index = indexSubagents(timeline);
+  for (const item of timeline.items) {
+    if (item.kind !== "assistant") continue;
+    for (const block of item.blocks) {
+      if (block.type !== "toolCall") continue;
+      if (block.name !== "Agent" && block.name !== "SubagentWorkflow") continue;
+      const res = timeline.toolResults[block.id];
+      if (!res) return true;
+      if (res.isError) continue;
+      const view = resolveSubagentView({ block, result: res, subagentIndex: index });
+      if (view.status === "running" || view.status === "queued" || view.status === "background") {
+        return true;
+      }
+    }
+  }
+  return false;
 }

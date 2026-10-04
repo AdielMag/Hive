@@ -48,6 +48,7 @@ export const BRIDGE_CAPABILITIES = [
   "actions:refresh_models",
   "ui:form",
   "subagents:stop",
+  "subagents:activity",
 ] as const;
 export type BridgeCapability = (typeof BRIDGE_CAPABILITIES)[number];
 
@@ -117,12 +118,20 @@ export interface StudioSubagentStop {
   kind: "subagent_stop";
   /** Correlates the request with its result. */
   id: string;
-  agentId: string;
+  /**
+   * The runner's agent id, when Studio knows it. A running *foreground* subagent never exposes its id in
+   * tool updates, so Studio can instead identify it by `type` + `description` and the bridge resolves the id
+   * from the `subagents:started` events it has seen.
+   */
+  agentId?: string;
+  type?: string;
+  description?: string;
 }
 
 export interface StudioSubagentStopResult {
   kind: "subagent_stop_result";
   id: string;
+  /** The agent that was targeted ("" when none could be resolved). */
   agentId: string;
   ok: boolean;
   error?: string;
@@ -136,6 +145,23 @@ export function isStudioSubagentStopResult(value: unknown): value is StudioSubag
     typeof (value as { id?: unknown }).id === "string" &&
     typeof (value as { agentId?: unknown }).agentId === "string" &&
     typeof (value as { ok?: unknown }).ok === "boolean"
+  );
+}
+
+export interface StudioSubagentActivity {
+  kind: "subagent_activity";
+  runningCount: number;
+  hasRunning: boolean;
+  agents: Array<{ id: string; type: string; description: string }>;
+}
+
+export function isStudioSubagentActivity(value: unknown): value is StudioSubagentActivity {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === "subagent_activity" &&
+    typeof (value as { runningCount?: unknown }).runningCount === "number" &&
+    typeof (value as { hasRunning?: unknown }).hasRunning === "boolean"
   );
 }
 

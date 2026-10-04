@@ -36,7 +36,8 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
   const isRunning =
     view.status === "running" || view.status === "queued" || view.status === "background";
 
-  // Stop is only possible once the runner has assigned an id (a foreground agent parked on a slot has none yet).
+  // Background agents expose their runner id; a running foreground agent does not, so the bridge
+  // resolves it from type + description.
   const stopSubagent = useSessionStore((s) => s.stopSubagent);
   const [stopping, setStopping] = useState(false);
   useEffect(() => {
@@ -48,7 +49,7 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
     const t = setTimeout(() => setStopping(false), 6000);
     return () => clearTimeout(t);
   }, [stopping]);
-  const canStop = isRunning && !!view.stopId;
+  const canStop = isRunning;
 
   const effectiveDuration = view.durationMs
     ? formatDuration(view.durationMs)
@@ -145,7 +146,7 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
               onClick={(e) => {
                 e.stopPropagation();
                 setStopping(true);
-                void stopSubagent(view.stopId!);
+                void stopSubagent({ agentId: view.stopId, type: view.type, description: view.description });
               }}
               onKeyDown={(e) => e.stopPropagation()}
             >
