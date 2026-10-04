@@ -2,6 +2,31 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.13.0 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.12.1...v0.13.0)
+
+### ✨ Features
+
+- **sessions:** subagent activity bridge, deferred model/thinking change markers, cache-switch bar updates ([`68e1223`](https://github.com/AdielMag/Hive/commit/68e1223ad61e3756763f4433f577130ae8c08ba7))
+- **modules:** extract terminal module; commands accept args so modules can call each other ([`e15ba6d`](https://github.com/AdielMag/Hive/commit/e15ba6d8397269d57f4b2d9d7e3fec8d3d7bfd43))
+- **modules:** extract browser module into modules/browser ([`1efa1e9`](https://github.com/AdielMag/Hive/commit/1efa1e9d6ee1b43ad125737f5287892818f44232))
+- **modules:** extract library module into modules/library ([`4775b8a`](https://github.com/AdielMag/Hive/commit/4775b8af6d7eeca43e7603835eafba4e72c0081b))
+- **modules:** extract marketplace module into modules/marketplace ([`52b1c70`](https://github.com/AdielMag/Hive/commit/52b1c70807f240222c41787218b8138ac667c826))
+- **modules:** renderer registry, module host, shell wiring, Modules settings and first-run picker ([`0e540da`](https://github.com/AdielMag/Hive/commit/0e540daa89e28a50a767f6f1d964f898fa8a07e9))
+- **modules:** wire main module host, generic module IPC and preload bridge ([`d61b30a`](https://github.com/AdielMag/Hive/commit/d61b30a7fd494c5f7b0b9c5218488a46ad8d5018))
+
+### 🐛 Fixes
+
+- **modules:** route links through core link-bus and move browser RAM-saver logic into the module ([`cf1cba0`](https://github.com/AdielMag/Hive/commit/cf1cba0ed6d344c6fafbbc76d8434e62504abf77))
+- **modules:** repair protocol import and plan service test path ([`5aee047`](https://github.com/AdielMag/Hive/commit/5aee04777fef5f6a5f84ca3297903dd05022eb61))
+
+### 🧹 Other changes
+
+- Merge feat/modules: lean core + module system (plan-previewer, marketplace, library, browser, terminal) ([`77738b7`](https://github.com/AdielMag/Hive/commit/77738b79079b76e1a0a880e7e7ebcc01b5dbf42e))
+- Merge origin/main (v0.12.1) ([`5b5f3f9`](https://github.com/AdielMag/Hive/commit/5b5f3f918237c8604fdc7e194e69af7fce7bbbba))
+- **modules:** add unit tests for host, agent-assets, presets, registry, codegen and boundaries ([`b192a65`](https://github.com/AdielMag/Hive/commit/b192a65efe275d8f17a909d6f2e0025a3b5f4806))
+- Merge branch 'main' into feat/modules ([`54fd2d1`](https://github.com/AdielMag/Hive/commit/54fd2d1290013afe41b6551191e7699bc8d4c5d3))
+- pi-agent: Milestone 1 module foundation ([`334acdc`](https://github.com/AdielMag/Hive/commit/334acdc6ed9cf3e3e9520f9150fd9e2368d4e90f))
+
 ## v0.12.1 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.12.0...v0.12.1)
 
 ### 🧹 Other changes
