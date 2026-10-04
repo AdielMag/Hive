@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.16.0 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.15.1...v0.16.0)
+
+### ✨ Features
+
+- **desktop:** add settings accounts slot and Jev provider support ([`39ec98e`](https://github.com/AdielMag/Hive/commit/39ec98ec564b2f139e3b3085e614f652d1d5aeee))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`df2d98a`](https://github.com/AdielMag/Hive/commit/df2d98aeae400b786747407c75529c493fc76b04))
+
 ## v0.15.1 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.15.0...v0.15.1)
 
 ### 🧹 Other changes
