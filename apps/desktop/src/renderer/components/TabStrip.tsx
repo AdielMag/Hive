@@ -1,15 +1,15 @@
 /** Tabs across the top of the content card (sessions, files, diffs, usage). Middle-click closes. */
 import React from "react";
-import { BarChart3, FileCode, GitCompare, Globe, Loader2, MessageSquare, Moon, PenLine, Plus, X } from "lucide-react";
+import { BarChart3, FileCode, GitCompare, Loader2, MessageSquare, Moon, PenLine, Plus, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { TabItem } from "@hive/protocol";
 import { hasDraft, useSessionStore } from "../store/session-store.ts";
 import { isCoreTabKind } from "@hive/protocol";
-import { ModuleTabIcon, useModuleTabTitle } from "../modules/ModuleViews.tsx";
+import { ModuleTabIcon, Slot, useModuleTabTitle } from "../modules/ModuleViews.tsx";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 
 export const TabStrip: React.FC = () => {
-  const { tabs, activeTabId, projects, switchTab, closeTab, newSessionTab, openBrowserTab, activeProject, running, sessionActivity, tabUi } = useSessionStore(
+  const { tabs, activeTabId, projects, switchTab, closeTab, newSessionTab, activeProject, running, sessionActivity, tabUi } = useSessionStore(
     useShallow((s) => ({
       tabs: s.tabs,
       activeTabId: s.activeTabId,
@@ -111,13 +111,7 @@ export const TabStrip: React.FC = () => {
           <Plus size={14} />
         </button>
       )}
-      <button
-        className="tabstrip__new"
-        onClick={() => void openBrowserTab("https://pi.dev")}
-        title="Open Hive Browser Tab (Ctrl+Shift+B)"
-      >
-        <Globe size={13} />
-      </button>
+      <Slot name="tabstrip.actions" />
     </div>
   );
 };
@@ -130,19 +124,7 @@ const TabIcon: React.FC<{ tab: TabItem }> = ({ tab }) => {
       return <GitCompare size={13} />;
     case "usage":
       return <BarChart3 size={13} />;
-    case "browser":
-      return tab.favicon ? (
-        <img
-          src={tab.favicon}
-          alt=""
-          className="browser-tab-favicon"
-          onError={(e) => {
-            (e.currentTarget as HTMLElement).style.display = "none";
-          }}
-        />
-      ) : (
-        <Globe size={13} />
-      );
+
     default:
       return isCoreTabKind(tab.kind) ? <MessageSquare size={13} /> : <ModuleTabIcon tab={tab} />;
   }

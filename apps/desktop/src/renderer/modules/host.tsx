@@ -16,7 +16,18 @@ import { subscribeSessionEvents } from "./session-bus.ts";
 import { setModuleHostFactory } from "./registry.ts";
 import { toast } from "./toast-store.ts";
 
-const toModuleTab = (t: TabItem): ModuleTab => ({ id: t.id, kind: t.kind, title: t.title, projectId: t.projectId, filePath: t.filePath, data: t.data });
+const toModuleTab = (t: TabItem): ModuleTab => ({
+  id: t.id,
+  kind: t.kind,
+  title: t.title,
+  projectId: t.projectId,
+  filePath: t.filePath,
+  url: t.url,
+  favicon: t.favicon,
+  isSleeping: t.isSleeping,
+  lastActiveAt: t.lastActiveAt,
+  data: t.data,
+});
 
 const HostMarkdown: ModuleHost["ui"]["Markdown"] = ({ text, className }) => <Markdown text={text} className={className} />;
 const HostAiModelChip: ModuleHost["ui"]["AiModelChip"] = (props) => <AiModelChip {...props} />;
@@ -44,6 +55,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
         const tab = s.tabs.find((t) => t.id === s.activeTabId);
         return tab ? toModuleTab(tab) : undefined;
       },
+      list: () => useSessionStore.getState().tabs.map(toModuleTab),
     },
     panels: {
       open: (side, panelId) => (side === "left" ? useUi.getState().showLeft(panelId) : useUi.getState().showRight(panelId)),
@@ -57,6 +69,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
       },
     },
     settings: { open: (tabId) => useUi.getState().openSettings(tabId ? `${moduleId}:${tabId}` : undefined) },
+    openExternal: (url: string) => window.studio.openSystemBrowser(url),
     ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, ProviderIcon: HostProviderIcon },
     models: {
       catalog: () => useSessionStore.getState().allCatalogModels,

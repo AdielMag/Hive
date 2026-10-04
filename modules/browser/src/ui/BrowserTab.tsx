@@ -17,11 +17,11 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { TabItem } from "@hive/protocol";
-import { useSessionStore } from "../../store/session-store.ts";
-import { formatUrlOrSearch, useBrowserStore } from "../../lib/browser/browser-store.ts";
+import type { ModuleTab } from "@hive/module-sdk/renderer";
+import { formatUrlOrSearch, useBrowserStore } from "./browser-store.ts";
+import { browserHost } from "./browser-host.ts";
 
-export const BrowserTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
+export const BrowserTab: React.FC<{ tab: ModuleTab }> = ({ tab }) => {
   const currentUrl = tab.url || "https://pi.dev";
   const [urlInput, setUrlInput] = useState(currentUrl);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -31,7 +31,9 @@ export const BrowserTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
   const [copied, setCopied] = useState(false);
 
   const webviewRef = useRef<any>(null);
-  const { updateBrowserTab, setTabSleeping } = useSessionStore();
+  const host = browserHost();
+  const updateBrowserTab = (id: string, patch: any) => host.tabs.update(id, patch);
+  const setTabSleeping = (id: string, isSleeping: boolean) => host.tabs.update(id, { isSleeping });
   const settings = useBrowserStore((s) => s.settings);
 
   // Keep input in sync when tab URL changes externally
@@ -175,7 +177,7 @@ export const BrowserTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
 
   const handleCopyUrl = async () => {
     try {
-      await navigator.clipboard.writeText(currentUrl);
+      await host.clipboard.copy(currentUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -184,7 +186,7 @@ export const BrowserTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
   };
 
   const handleOpenSystemBrowser = () => {
-    void window.studio.openSystemBrowser(currentUrl);
+    void host.openExternal(currentUrl);
   };
 
   const isHttps = /^https:\/\//i.test(currentUrl);

@@ -63,15 +63,6 @@ const CORE_COMMANDS: readonly Command[] = [
       if (p) return useSessionStore.getState().newSessionTab(p.id);
     },
   },
-  {
-    id: "browser.new",
-    title: "New Browser Tab",
-    category: "Browser",
-    keywords: "web chromium url link search",
-    defaultKeys: ["Mod+Shift+B"],
-    allowInTerminal: true,
-    run: () => useSessionStore.getState().openBrowserTab("https://pi.dev"),
-  },
   { id: "project.open", title: "Open Project Folder…", category: "Project", keywords: "add folder workspace", defaultKeys: ["Mod+O"], allowInTerminal: true, run: () => openProjectFolder() },
   {
     id: "tab.close",
@@ -150,7 +141,6 @@ const CORE_COMMANDS: readonly Command[] = [
   { id: "settings.keyboard", title: "Keyboard Shortcuts", category: "App", keywords: "keybindings hotkeys rebind", run: () => useUi.getState().openSettings() },
   { id: "settings.models", title: "Settings: Models", category: "App", keywords: "providers", run: () => useUi.getState().openSettings("models") },
   { id: "settings.appearance", title: "Settings: Appearance", category: "App", keywords: "theme colors font", run: () => useUi.getState().openSettings("appearance") },
-  { id: "settings.browser", title: "Settings: Browser & RAM", category: "App", keywords: "browser ram memory saver chromium", run: () => useUi.getState().openSettings("browser") },
   { id: "app.checkUpdates", title: "Check for Updates", category: "App", keywords: "upgrade version", run: () => void useUpdates.getState().check() },
 ];
 

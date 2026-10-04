@@ -3,8 +3,8 @@
  */
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Compass, MemoryStick, Zap } from "lucide-react";
-import { useBrowserStore, type SearchEngine } from "../../lib/browser/browser-store.ts";
-import { useSessionStore } from "../../store/session-store.ts";
+import { useBrowserStore, type SearchEngine } from "./browser-store.ts";
+import { browserHost } from "./browser-host.ts";
 import "./browser-settings.css";
 
 const SLEEP_OPTIONS = [
@@ -81,7 +81,8 @@ const Row: React.FC<{ id: string; title: string; hint: string; children: React.R
 
 export const BrowserSettingsContent: React.FC = () => {
   const { settings, updateSettings } = useBrowserStore();
-  const { tabs, sleepAllBackgroundTabs } = useSessionStore();
+  const host = browserHost();
+  const tabs = host.tabs.list();
   const [notice, setNotice] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -99,7 +100,12 @@ export const BrowserSettingsContent: React.FC = () => {
   const sleepPct = total ? (sleepingCount / total) * 100 : 0;
 
   const handleHibernateAll = () => {
-    sleepAllBackgroundTabs();
+    const active = host.tabs.active();
+    for (const t of tabs) {
+      if (t.kind === "browser" && t.id !== active?.id) {
+        host.tabs.update(t.id, { isSleeping: true });
+      }
+    }
     setNotice(`${plural(liveCount, "tab")} hibernated. Memory released.`);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setNotice(null), 3000);

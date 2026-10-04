@@ -11,6 +11,10 @@ export interface ModuleTab {
   title: string;
   projectId: string;
   filePath?: string;
+  url?: string;
+  favicon?: string;
+  isSleeping?: boolean;
+  lastActiveAt?: number;
   data?: Record<string, unknown>;
 }
 
@@ -20,6 +24,9 @@ export interface OpenTabSpec {
   /** Explicit id; defaults to `<kind>-<random>`. */
   id?: string;
   filePath?: string;
+  url?: string;
+  isSleeping?: boolean;
+  lastActiveAt?: number;
   data?: Record<string, unknown>;
   /**
    * Reuse an existing tab of the same kind instead of opening a duplicate. Defaults to matching `filePath`
@@ -57,8 +64,9 @@ export interface ModuleHost {
   tabs: {
     open(spec: OpenTabSpec): string;
     close(tabId: string): void;
-    update(tabId: string, patch: { title?: string; data?: Record<string, unknown> }): void;
+    update(tabId: string, patch: Partial<ModuleTab> & Record<string, unknown>): void;
     active(): ModuleTab | undefined;
+    list(): ModuleTab[];
   };
   panels: {
     open(side: PanelSide, panelId: string): void;
@@ -72,6 +80,7 @@ export interface ModuleHost {
   settings: {
     open(tabId?: string): void;
   };
+  openExternal(url: string): Promise<void>;
   ui: {
     Markdown: ComponentType<{ text: string; className?: string }>;
     /** Core model chip; `model` is the resolved feature model (see host.ai). */

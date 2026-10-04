@@ -52,7 +52,6 @@ const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
 const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel");
 const ToolsPanel = named(() => import("./ToolsPanel.tsx"), "ToolsPanel");
 const UsageView = named(() => import("../features/insights/UsageView.tsx"), "UsageView");
-const BrowserTab = named(() => import("./browser/BrowserTab.tsx"), "BrowserTab");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
 
@@ -175,8 +174,6 @@ export const WorkbenchLayout: React.FC = () => {
                 <FileViewerTab tab={activeTab} />
               ) : activeTab?.kind === "diff" ? (
                 <DiffViewerTab tab={activeTab} />
-              ) : activeTab?.kind === "browser" ? (
-                <BrowserTab tab={activeTab} />
               ) : activeTab && !isCoreTabKind(activeTab.kind) ? (
                 <ModuleTabView tab={activeTab} onClose={() => void useSessionStore.getState().closeTab(activeTab.id)} />
               ) : hasSession ? (

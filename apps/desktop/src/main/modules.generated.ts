@@ -5,6 +5,36 @@ import type { MainModule } from "@hive/module-sdk/main";
 /** Metadata of every module in the repo (enabled or not). */
 export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   {
+    "id": "browser",
+    "title": "Hive Browser",
+    "description": "Integrated Chromium web browser with automatic background tab hibernation (RAM Saver) and web search.",
+    "tier": "bonus",
+    "icon": "globe",
+    "category": "Workbench",
+    "contributes": {
+      "tabKinds": [
+        "browser"
+      ],
+      "commands": [
+        {
+          "id": "browser.new",
+          "title": "New Browser Tab",
+          "category": "Browser",
+          "keys": [
+            "Mod+Shift+B"
+          ]
+        },
+        {
+          "id": "settings.browser",
+          "title": "Settings: Browser & RAM",
+          "category": "App"
+        }
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
     "id": "library",
     "title": "Skills & Agents Library",
     "description": "Browse, inspect, and configure your coding agent skills, system prompts, and custom subagents with a dedicated editor.",
@@ -79,6 +109,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
 
 /** Lazy entry points; only called for enabled modules. */
 export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ default: MainModule }>>> = {
+  "browser": () => import("@hive-module/browser/main"),
   "library": () => import("@hive-module/library/main"),
   "marketplace": () => import("@hive-module/marketplace/main"),
   "plan-previewer": () => import("@hive-module/plan-previewer/main"),

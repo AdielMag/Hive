@@ -43,7 +43,6 @@ export const AppTitleBar: React.FC = () => {
 
   // Dynamic shortcut hints
   const kbdNewSession = useShortcut("session.new");
-  const kbdNewBrowser = useShortcut("browser.new");
   const kbdOpenProject = useShortcut("project.open");
   const kbdCloseTab = useShortcut("tab.close");
   const kbdSettings = useShortcut("settings.open");
@@ -81,7 +80,6 @@ export const AppTitleBar: React.FC = () => {
   const menus: Record<string, MenuItem[]> = {
     File: [
       { label: "New Session", shortcut: kbdNewSession, disabled: !activeProject, action: () => activeProject && void newSessionTab(activeProject.id) },
-      { label: "New Browser Tab", shortcut: kbdNewBrowser, action: () => openBrowserTab("https://pi.dev") },
       { label: "Open Project Folder…", shortcut: kbdOpenProject, action: () => void openProjectFolder() },
       { label: "Close Tab", shortcut: kbdCloseTab, disabled: !activeTabId, action: () => activeTabId && void closeTab(activeTabId) },
       { separator: true, label: "" },

@@ -25,7 +25,6 @@ import {
   createTranscript,
   type TranscriptState,
 } from "@hive/pi-adapter";
-import { evaluateTabsForMemory, formatUrlOrSearch, useBrowserStore } from "../lib/browser/browser-store.ts";
 import { useInsights } from "../features/insights/insights-store.ts";
 import { emitSessionEvents } from "../modules/session-bus.ts";
 import type { OpenTabSpec } from "@hive/module-sdk/renderer";
@@ -434,24 +433,6 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
 export const USAGE_TAB_ID = "studio:usage";
 export const LIBRARY_TAB_ID = "studio:library";
 
-let memoryIntervalStarted = false;
-
-export function runMemoryCheck(): void {
-  const state = useSessionStore.getState();
-  const { tabs, activeTabId } = state;
-  const settings = useBrowserStore.getState().settings;
-  const { tabsToSleep, tabsToWake } = evaluateTabsForMemory(tabs, activeTabId, settings);
-  if (tabsToSleep.length > 0 || tabsToWake.length > 0) {
-    useSessionStore.setState((s) => ({
-      tabs: s.tabs.map((tab) => {
-        if (tabsToSleep.includes(tab.id)) return { ...tab, isSleeping: true };
-        if (tabsToWake.includes(tab.id)) return { ...tab, isSleeping: false, lastActiveAt: Date.now() };
-        return tab;
-      }),
-    }));
-  }
-}
-
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   bootstrap: null,
   projects: [],
@@ -613,13 +594,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       window.studio.onOpenBrowserTab(({ url, title }) => {
         get().openBrowserTab(url, title);
       });
-
-      if (!memoryIntervalStarted) {
-        memoryIntervalStarted = true;
-        setInterval(() => {
-          runMemoryCheck();
-        }, 15000);
-      }
 
       // Initial projects and catalog load
       await Promise.all([get().refreshCatalog(), get().loadModelsCatalog()]);
@@ -982,11 +956,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   openBrowserTab: (rawUrl = "https://pi.dev", title) => {
-    const settings = useBrowserStore.getState().settings;
-    const url = formatUrlOrSearch(rawUrl, settings.searchEngine);
+    const url = (rawUrl || "https://pi.dev").trim();
     const { tabs, activeProject } = get();
 
-    // Check if an existing browser tab already has this URL
     const existing = tabs.find((t) => t.kind === "browser" && t.url === url);
     if (existing) {
       void get().switchTab(existing.id);
@@ -1018,13 +990,22 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       tabs: [...tabs, newTab],
       activeTabId: tabId,
     });
-
-    runMemoryCheck();
   },
 
   openModuleTab: (spec: OpenTabSpec) => {
     const { tabs, activeProject } = get();
-    const asModuleTab = (t: TabItem) => ({ id: t.id, kind: t.kind, title: t.title, projectId: t.projectId, filePath: t.filePath, data: t.data });
+    const asModuleTab = (t: TabItem) => ({
+      id: t.id,
+      kind: t.kind,
+      title: t.title,
+      projectId: t.projectId,
+      filePath: t.filePath,
+      url: t.url,
+      favicon: t.favicon,
+      isSleeping: t.isSleeping,
+      lastActiveAt: t.lastActiveAt,
+      data: t.data,
+    });
     const existing = tabs.find((t) => {
       if (t.kind !== spec.kind) return false;
       if (spec.reuse) return spec.reuse(asModuleTab(t));
@@ -1043,6 +1024,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       projectId: activeProject?.id ?? "",
       title: spec.title,
       filePath: spec.filePath,
+      url: spec.url,
+      isSleeping: spec.isSleeping ?? false,
+      lastActiveAt: spec.lastActiveAt ?? Date.now(),
       data: spec.data,
       pinned: false,
     };
@@ -1084,18 +1068,15 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         activeTabId: tabId,
         tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isSleeping: false, lastActiveAt: Date.now() } : t)),
       }));
-      runMemoryCheck();
       return;
     }
     if (tab.kind === "usage" || tab.kind === "library") {
       set({ activeTabId: tabId });
-      runMemoryCheck();
       return;
     }
     // File / diff tabs are views; they must not tear down the live session's transcript.
     if (tab.kind === "file" || tab.kind === "diff") {
       set({ activeTabId: tabId, activeProject: get().projects.find((p) => p.id === tab.projectId) ?? get().activeProject });
-      runMemoryCheck();
       return;
     }
     // Leaving a non-session tab back to the same live session: nothing to reload.
@@ -1157,7 +1138,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     } else if (remaining.length === 0) {
       set({ activeTabId: null, activeProject: null, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });
     }
-    runMemoryCheck();
   },
 
   setPromptText: (text: string) => set({ promptText: text }),

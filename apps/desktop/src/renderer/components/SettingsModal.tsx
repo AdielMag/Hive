@@ -1,6 +1,6 @@
 /** Settings dialog: Appearance, Models, AI providers, Updates, About. */
 import React, { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Globe, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, X } from "lucide-react";
 import { ArcThemeEditor } from "../features/appearance/ArcThemeEditor.tsx";
 import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
 import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
@@ -9,11 +9,10 @@ import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { type UpdateInfo, isInstalling, useUpdates } from "../store/update-store.ts";
 import { UpdateProgressBar } from "./UpdateProgressBar.tsx";
-import { BrowserSettingsContent } from "./browser/BrowserSettingsContent.tsx";
 import { ModulesSettings } from "../features/modules/ModulesSettings.tsx";
 import { useContributions, useModuleHost } from "../modules/registry.ts";
 
-export type CoreSettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "keyboard" | "browser" | "modules" | "updates" | "about";
+export type CoreSettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "keyboard" | "modules" | "updates" | "about";
 /** Core tab, or `<moduleId>:<tabId>` for a settings page contributed by a module. */
 export type SettingsTabId = CoreSettingsTabId | (string & {});
 
@@ -37,7 +36,6 @@ const TABS: Array<{ id: CoreSettingsTabId; label: string; icon: React.ReactNode;
   { id: "compaction", label: "Compaction", icon: <Minimize2 size={15} />, title: "Auto-Compaction & Context" },
   { id: "accounts", label: "AI Providers", icon: <Key size={15} />, title: "AI providers & accounts" },
   { id: "keyboard", label: "Keyboard", icon: <Keyboard size={15} />, title: "Keyboard Shortcuts" },
-  { id: "browser", label: "Browser & RAM", icon: <Globe size={15} />, title: "Hive Browser & Memory Management" },
   { id: "modules", label: "Modules", icon: <Puzzle size={15} />, title: "Modules" },
   { id: "updates", label: "Updates", icon: <Download size={15} />, title: "Updates" },
   { id: "about", label: "About", icon: <Info size={15} />, title: "About Hive" },
@@ -102,7 +100,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             {tab === "keyboard" && <KeyboardSettings />}
             {tab === "updates" && <UpdatesTab info={update} checking={checking} onCheck={checkUpdate} />}
             {tab === "about" && <AboutTab />}
-            {tab === "browser" && <BrowserSettingsContent />}
             {tab === "modules" && <ModulesSettings />}
             {moduleTab && <ModuleSettingsPage moduleId={moduleTab.moduleId} Component={moduleTab.component} />}
           </div>
