@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   GitBranch,
   Plus,
@@ -17,31 +17,15 @@ import {
   FileCode,
   Search,
 } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-import { useSessionStore } from "../store/session-store.ts";
-import { useUi } from "../store/ui-store.ts";
-import { useFeatureModelStore, resolveFeatureModel } from "../store/feature-models-store.ts";
-import { useGitStore } from "../store/git-store.ts";
-import { AiModelChip } from "./AiModelChip.tsx";
+import type { ModuleHost } from "@hive/module-sdk/renderer";
+import { useGitStore } from "./git-store.ts";
+import { gitApi } from "./git-host.ts";
+import { openDiffTab } from "./open-diff.ts";
 
-export const GitPanel: React.FC = () => {
-  const { activeProject, selectedModel, defaultModel, allCatalogModels, openDiffTab } = useSessionStore(
-    useShallow((s) => ({
-      activeProject: s.activeProject,
-      selectedModel: s.selectedModel,
-      defaultModel: s.defaultModel,
-      allCatalogModels: s.allCatalogModels,
-      openDiffTab: s.openDiffTab,
-    })),
-  );
-  const gitCommitConfig = useFeatureModelStore((s) => s.config.gitCommit);
-
-  const resolvedCommitModel = useMemo(
-    () => resolveFeatureModel(gitCommitConfig, selectedModel, defaultModel, allCatalogModels),
-    [gitCommitConfig, selectedModel, defaultModel, allCatalogModels],
-  );
-
-  const showLeft = useUi((s) => s.showLeft);
+export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
+  const { project: activeProject } = host.hooks.useActiveSession();
+  const resolvedCommitModel = host.hooks.useFeatureModel("gitCommit");
+  const AiModelChip = host.ui.AiModelChip;
   const [status, setStatus] = useState<any>(null);
   const [branches, setBranches] = useState<string[]>([]);
   const [commitMsg, setCommitMsg] = useState("");
@@ -81,8 +65,8 @@ export const GitPanel: React.FC = () => {
     setErrorMessage(null);
     try {
       const [s, b] = await Promise.all([
-        window.studio.getGitStatus(activeProject.path),
-        window.studio.getGitBranches(activeProject.path).catch(() => []),
+        gitApi().getGitStatus(activeProject.path),
+        gitApi().getGitBranches(activeProject.path).catch(() => []),
       ]);
       setStatus(s);
       setBranches(b);
@@ -128,7 +112,7 @@ export const GitPanel: React.FC = () => {
   const handleStage = async (file: string) => {
     if (!activeProject) return;
     try {
-      await window.studio.stageFile(activeProject.path, file);
+      await gitApi().stageFile(activeProject.path, file);
       await refreshGit();
     } catch (err: any) {
       setErrorMessage(`Stage failed: ${err.message || String(err)}`);
@@ -138,7 +122,7 @@ export const GitPanel: React.FC = () => {
   const handleStageAll = async () => {
     if (!activeProject) return;
     try {
-      await window.studio.stageAll(activeProject.path);
+      await gitApi().stageAll(activeProject.path);
       await refreshGit();
     } catch (err: any) {
       setErrorMessage(`Stage all failed: ${err.message || String(err)}`);
@@ -148,7 +132,7 @@ export const GitPanel: React.FC = () => {
   const handleUnstage = async (file: string) => {
     if (!activeProject) return;
     try {
-      await window.studio.unstageFile(activeProject.path, file);
+      await gitApi().unstageFile(activeProject.path, file);
       await refreshGit();
     } catch (err: any) {
       setErrorMessage(`Unstage failed: ${err.message || String(err)}`);
@@ -158,7 +142,7 @@ export const GitPanel: React.FC = () => {
   const handleUnstageAll = async () => {
     if (!activeProject) return;
     try {
-      await window.studio.unstageAll(activeProject.path);
+      await gitApi().unstageAll(activeProject.path);
       await refreshGit();
     } catch (err: any) {
       setErrorMessage(`Unstage all failed: ${err.message || String(err)}`);
@@ -169,7 +153,7 @@ export const GitPanel: React.FC = () => {
     if (!activeProject) return;
     if (confirm(`Discard changes in ${file}?`)) {
       try {
-        await window.studio.discardFile(activeProject.path, file);
+        await gitApi().discardFile(activeProject.path, file);
         await refreshGit();
       } catch (err: any) {
         setErrorMessage(`Discard failed: ${err.message || String(err)}`);
@@ -181,7 +165,7 @@ export const GitPanel: React.FC = () => {
     if (!activeProject) return;
     if (confirm("Discard all unstaged changes? This cannot be undone.")) {
       try {
-        await window.studio.discardAll(activeProject.path);
+        await gitApi().discardAll(activeProject.path);
         await refreshGit();
       } catch (err: any) {
         setErrorMessage(`Discard all failed: ${err.message || String(err)}`);
@@ -197,7 +181,7 @@ export const GitPanel: React.FC = () => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      await window.studio.gitCheckout(activeProject.path, branch);
+      await gitApi().gitCheckout(activeProject.path, branch);
       setBranchDropdownOpen(false);
       setBranchFilter("");
       await refreshGit();
@@ -214,7 +198,7 @@ export const GitPanel: React.FC = () => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      await window.studio.gitCreateBranch(activeProject.path, trimmed);
+      await gitApi().gitCreateBranch(activeProject.path, trimmed);
       setBranchDropdownOpen(false);
       setBranchFilter("");
       await refreshGit();
@@ -227,7 +211,7 @@ export const GitPanel: React.FC = () => {
 
   const handleViewDiff = (filePath: string, staged: boolean) => {
     if (!activeProject) return;
-    void openDiffTab(filePath, staged, activeProject.id);
+    void openDiffTab(host, activeProject, filePath, staged);
   };
 
   const handleGenerateAiCommitMessage = async () => {
@@ -235,7 +219,7 @@ export const GitPanel: React.FC = () => {
     setIsGeneratingAi(true);
     setErrorMessage(null);
     try {
-      const generated = await window.studio.generateCommitMessage(
+      const generated = await gitApi().generateCommitMessage(
         activeProject.path,
         resolvedCommitModel.id || undefined,
       );
@@ -254,9 +238,9 @@ export const GitPanel: React.FC = () => {
     setSyncOp(op);
     setErrorMessage(null);
     try {
-      if (op === "fetch") await window.studio.gitFetch(activeProject.path);
-      else if (op === "pull") await window.studio.gitPull(activeProject.path);
-      else await window.studio.gitPush(activeProject.path);
+      if (op === "fetch") await gitApi().gitFetch(activeProject.path);
+      else if (op === "pull") await gitApi().gitPull(activeProject.path);
+      else await gitApi().gitPush(activeProject.path);
       await refreshGit();
     } catch (err: any) {
       const label = op.charAt(0).toUpperCase() + op.slice(1);
@@ -271,7 +255,7 @@ export const GitPanel: React.FC = () => {
     setIsCommitting(true);
     setErrorMessage(null);
     try {
-      await window.studio.gitCommit(activeProject.path, commitMsg.trim());
+      await gitApi().gitCommit(activeProject.path, commitMsg.trim());
       setCommitMsg("");
       await refreshGit();
     } catch (err: any) {
@@ -532,7 +516,7 @@ export const GitPanel: React.FC = () => {
                     onClick={() => {
                       setSyncMenuOpen(false);
                       if (sync) void handleSync(sync);
-                      else showLeft("branches");
+                      else void host.commands.run("view.branches");
                     }}
                     style={{
                       display: "flex",

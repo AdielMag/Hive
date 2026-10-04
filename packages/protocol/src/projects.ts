@@ -60,10 +60,10 @@ export interface SessionCatalogItem {
 
 export type AgentMode = "plan" | "auto-edit" | "manual" | "debug" | "ask";
 
-/** Tab kinds implemented by core. Modules add their own kinds (any string), e.g. "plan", "library", "browser". */
-export type CoreTabKind = "session" | "file" | "diff" | "subagent";
+/** Tab kinds implemented by core. Modules add their own kinds (any string), e.g. "file", "diff", "plan", "library", "browser". */
+export type CoreTabKind = "session" | "subagent";
 
-export const CORE_TAB_KINDS: readonly CoreTabKind[] = ["session", "file", "diff", "subagent"];
+export const CORE_TAB_KINDS: readonly CoreTabKind[] = ["session", "subagent"];
 
 /** True for core kinds (and a missing kind, which means "session"). */
 export function isCoreTabKind(kind: string | undefined): boolean {
@@ -84,14 +84,8 @@ export interface TabItem {
   thinkingLevel?: string;
   mode?: AgentMode;
 
-  // File tab fields
+  /** File the tab shows (module tab kinds such as "file" / "diff"; their payload lives in `data`). */
   filePath?: string;
-  fileContent?: string;
-  fileLanguage?: string;
-
-  // Diff tab fields
-  diffStaged?: boolean;
-  diffContent?: string;
 
   // Browser tab fields
   url?: string;

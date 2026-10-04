@@ -104,11 +104,22 @@ export const ModulePanelView: React.FC<{ side: "left" | "right"; panelId: string
 /** Rail button for a contributed panel (own component so the shortcut hook runs per button). */
 export const ModuleRailButton: React.FC<{ panel: PanelContribution & { moduleId: string }; active: boolean; onClick(): void }> = ({ panel, active, onClick }) => {
   const shortcut = useShortcut(panel.commandId ?? "");
+  const host = useModuleHost(panel.moduleId);
   const Icon = panel.icon;
-  const title = shortcut ? `${panel.title} (${shortcut})` : panel.title;
+  const baseTitle = shortcut ? `${panel.title} (${shortcut})` : panel.title;
+  // `useTitle` is a hook, but a panel only exists once its module (and so its host) is loaded, so the call is stable per button.
+  const title = host && panel.useTitle ? panel.useTitle(host, baseTitle) : baseTitle;
+  const Badge = panel.badge;
   return (
     <button className={`rail__btn${active ? " is-active" : ""}`} onClick={onClick} title={title} aria-label={title} aria-pressed={active}>
-      <Icon size={18} />
+      {host && Badge ? (
+        <span className="rail__icon-wrap">
+          <Icon size={18} />
+          <Badge host={host} />
+        </span>
+      ) : (
+        <Icon size={18} />
+      )}
     </button>
   );
 };

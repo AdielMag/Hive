@@ -1,0 +1,46 @@
+{
+  "name": "@hive-module/files",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: project file tree in the left panel",
+  "exports": {
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "files",
+    "title": "Files",
+    "description": "Browse the project file tree, open files in the viewer and run scripts in the terminal.",
+    "tier": "recommended",
+    "icon": "files",
+    "category": "Workbench",
+    "requires": [
+      "diff-viewer"
+    ],
+    "optionalDeps": [
+      "terminal"
+    ],
+    "contributes": {
+      "leftPanels": [
+        "files"
+      ],
+      "commands": [
+        {
+          "id": "view.files",
+          "title": "Toggle Files Panel",
+          "category": "View",
+          "keys": [
+            "Mod+Shift+E"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive-module/diff-viewer": "0.1.0",
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0"
+  }
+}

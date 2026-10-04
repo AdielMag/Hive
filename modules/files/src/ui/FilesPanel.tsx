@@ -1,18 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { Folder, FileText, ChevronRight, ChevronDown, RefreshCw, Play } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-import { useSessionStore } from "../store/session-store.ts";
-import { COMMANDS_BY_ID, useCommandsVersion } from "../features/commands/registry.ts";
+import type { FileTreeNode as TreeNode, ModuleHost } from "@hive/module-sdk/renderer";
+import { FILE_OPEN_COMMAND, type FileOpenArgs } from "@hive-module/diff-viewer/shared";
 
-export const FilesPanel: React.FC = () => {
-  const { activeProject, openFileTab } = useSessionStore(useShallow((s) => ({ activeProject: s.activeProject, openFileTab: s.openFileTab })));
-  const [files, setFiles] = useState<any[]>([]);
+export const FilesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
+  const { project: activeProject } = host.hooks.useActiveSession();
+  const [files, setFiles] = useState<TreeNode[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const loadFiles = async () => {
     if (!activeProject?.path) return;
     try {
-      const tree = await window.studio.listFiles(activeProject.path);
+      const tree = await host.files.list(activeProject.path);
       setFiles(tree);
     } catch (e) {
       console.error("Failed to load files", e);
@@ -27,9 +26,10 @@ export const FilesPanel: React.FC = () => {
     setExpanded((s) => ({ ...s, [path]: !(s[path] ?? false) }));
   };
 
-  const handleOpenFile = (file: any) => {
+  const handleOpenFile = (file: TreeNode) => {
     if (!activeProject) return;
-    void openFileTab(file.path, activeProject.id, file.name || file.relativePath);
+    const args: FileOpenArgs = { path: file.path, projectId: activeProject.id, name: file.name || file.relativePath };
+    void host.commands.run(FILE_OPEN_COMMAND, args);
   };
 
   if (!activeProject) {
@@ -66,6 +66,7 @@ export const FilesPanel: React.FC = () => {
           <FileTreeNode
             key={node.path}
             node={node}
+            host={host}
             expanded={expanded}
             onToggle={toggleFolder}
             onOpen={handleOpenFile}
@@ -77,11 +78,12 @@ export const FilesPanel: React.FC = () => {
 };
 
 const FileTreeNode: React.FC<{
-  node: any;
+  node: TreeNode;
+  host: ModuleHost;
   expanded: Record<string, boolean>;
   onToggle: (path: string) => void;
-  onOpen: (file: any) => void;
-}> = ({ node, expanded, onToggle, onOpen }) => {
+  onOpen: (file: TreeNode) => void;
+}> = ({ node, host, expanded, onToggle, onOpen }) => {
   if (node.isDirectory) {
     const isExp = expanded[node.path] ?? false;
     return (
@@ -106,8 +108,8 @@ const FileTreeNode: React.FC<{
         </div>
         {isExp && node.children && (
           <div style={{ paddingLeft: 14 }}>
-            {node.children.map((c: any) => (
-              <FileTreeNode key={c.path} node={c} expanded={expanded} onToggle={onToggle} onOpen={onOpen} />
+            {node.children.map((c) => (
+              <FileTreeNode key={c.path} node={c} host={host} expanded={expanded} onToggle={onToggle} onOpen={onOpen} />
             ))}
           </div>
         )}
@@ -119,8 +121,7 @@ const FileTreeNode: React.FC<{
 
   const ext = node.name.slice(node.name.lastIndexOf(".")).toLowerCase();
   // "Run in terminal" exists only while a module provides the `terminal.run` command.
-  useCommandsVersion((v) => v.version);
-  const hasTerminal = COMMANDS_BY_ID.has("terminal.run");
+  const hasTerminal = host.commands.has("terminal.run");
   const isRunnable = hasTerminal && [".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".sh", ".bash", ".ps1"].includes(ext);
 
   const handleRunInTerminal = async (e: React.MouseEvent) => {
@@ -134,7 +135,7 @@ const FileTreeNode: React.FC<{
     if (!cmd) return;
 
     const cwd = node.path.replace(/[/\\][^/\\]*$/, "");
-    await COMMANDS_BY_ID.get("terminal.run")?.run({ command: cmd, cwd });
+    await host.commands.run("terminal.run", { command: cmd, cwd });
   };
 
   return (

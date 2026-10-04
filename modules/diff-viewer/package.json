@@ -1,0 +1,37 @@
+{
+  "name": "@hive-module/diff-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: read-only file viewer and diff viewer tabs",
+  "exports": {
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "diff-viewer",
+    "title": "File & Diff Viewer",
+    "description": "Open files and diffs as tabs: highlighted source, rendered Markdown/JSON/HTML/SVG previews, and a line-by-line diff view with Ask Pi.",
+    "tier": "recommended",
+    "icon": "file-diff",
+    "category": "Editor",
+    "contributes": {
+      "tabKinds": [
+        "file",
+        "diff"
+      ],
+      "commands": [
+        {
+          "id": "file.open",
+          "title": "Open File in Viewer",
+          "category": "File"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0"
+  }
+}

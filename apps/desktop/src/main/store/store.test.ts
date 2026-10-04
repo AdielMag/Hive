@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { GuiStore } from "./index.ts";
+import { GuiStore, migrateLegacyTab } from "./index.ts";
 
 describe("GuiStore", () => {
   let tmpBase: string;
@@ -88,5 +88,20 @@ describe("GuiStore", () => {
     const store2 = new GuiStore(tmpBase);
     expect(store2.getProjects().length).toBeGreaterThan(0);
     expect(store2.getProjects()[0]?.name).toBe("RepoA");
+  });
+});
+
+describe("migrateLegacyTab", () => {
+  it("folds legacy file/diff fields into tab.data", () => {
+    const file = migrateLegacyTab({ id: "f", kind: "file", projectId: "p", title: "a.ts", pinned: false, fileContent: "x", fileLanguage: "ts" } as never);
+    expect(file.data).toEqual({ content: "x", language: "ts" });
+    expect((file as unknown as Record<string, unknown>).fileContent).toBeUndefined();
+    const diff = migrateLegacyTab({ id: "d", kind: "diff", projectId: "p", title: "d", pinned: false, diffContent: "@@", diffStaged: true } as never);
+    expect(diff.data).toEqual({ content: "@@", staged: true });
+  });
+
+  it("leaves modern tabs untouched", () => {
+    const tab = { id: "s", projectId: "p", title: "t", pinned: false };
+    expect(migrateLegacyTab(tab)).toBe(tab);
   });
 });

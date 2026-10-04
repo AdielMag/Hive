@@ -1,0 +1,40 @@
+{
+  "name": "@hive-module/branches",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: branches list and commit graph",
+  "exports": {
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "branches",
+    "title": "Branches & History",
+    "description": "Browse local and remote branches, check out, create and delete them, and explore the commit graph.",
+    "tier": "bonus",
+    "icon": "git-branch",
+    "category": "Workbench",
+    "requires": [
+      "git"
+    ],
+    "contributes": {
+      "leftPanels": [
+        "branches"
+      ],
+      "commands": [
+        {
+          "id": "view.branches",
+          "title": "Toggle Branches Panel",
+          "category": "View"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive-module/git": "0.1.0",
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0"
+  }
+}

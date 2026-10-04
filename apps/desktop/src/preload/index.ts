@@ -136,68 +136,6 @@ const api: StudioApi = {
     return ipcRenderer.invoke(IPC.trustSet, { path, trusted });
   },
 
-  // Git
-  getGitStatus(cwd: string) {
-    return ipcRenderer.invoke(IPC.gitStatus, { cwd });
-  },
-  stageFile(cwd: string, filePath: string) {
-    return ipcRenderer.invoke(IPC.gitStage, { cwd, filePath });
-  },
-  stageAll(cwd: string) {
-    return ipcRenderer.invoke(IPC.gitStageAll, { cwd });
-  },
-  unstageFile(cwd: string, filePath: string) {
-    return ipcRenderer.invoke(IPC.gitUnstage, { cwd, filePath });
-  },
-  unstageAll(cwd: string) {
-    return ipcRenderer.invoke(IPC.gitUnstageAll, { cwd });
-  },
-  discardFile(cwd: string, filePath: string) {
-    return ipcRenderer.invoke(IPC.gitDiscard, { cwd, filePath });
-  },
-  discardAll(cwd: string) {
-    return ipcRenderer.invoke(IPC.gitDiscardAll, { cwd });
-  },
-  gitCommit(cwd: string, message: string, amend?: boolean) {
-    return ipcRenderer.invoke(IPC.gitCommit, { cwd, message, amend });
-  },
-  getGitBranches(cwd: string) {
-    return ipcRenderer.invoke(IPC.gitBranches, { cwd });
-  },
-  gitCheckout(cwd: string, branch: string) {
-    return ipcRenderer.invoke(IPC.gitCheckout, { cwd, branch });
-  },
-  gitCreateBranch(cwd: string, branch: string) {
-    return ipcRenderer.invoke(IPC.gitCreateBranch, { cwd, branch });
-  },
-  gitDeleteBranch(cwd: string, branch: string, force?: boolean) {
-    return ipcRenderer.invoke(IPC.gitDeleteBranch, { cwd, branch, force });
-  },
-  getGitLog(cwd: string, maxCount?: number) {
-    return ipcRenderer.invoke(IPC.gitLog, { cwd, maxCount });
-  },
-  getGitBranchDetails(cwd: string) {
-    return ipcRenderer.invoke(IPC.gitBranchDetails, { cwd });
-  },
-  getGitGraph(cwd: string, maxCount?: number) {
-    return ipcRenderer.invoke(IPC.gitGraph, { cwd, maxCount });
-  },
-  getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }) {
-    return ipcRenderer.invoke(IPC.gitDiff, { cwd, options });
-  },
-  generateCommitMessage(cwd: string, model?: string) {
-    return ipcRenderer.invoke(IPC.gitGenerateCommitMessage, { cwd, model });
-  },
-  gitFetch(cwd: string) {
-    return ipcRenderer.invoke(IPC.gitFetch, { cwd });
-  },
-  gitPull(cwd: string) {
-    return ipcRenderer.invoke(IPC.gitPull, { cwd });
-  },
-  gitPush(cwd: string) {
-    return ipcRenderer.invoke(IPC.gitPush, { cwd });
-  },
-
   // Files
   listFiles(dirPath: string) {
     return ipcRenderer.invoke(IPC.filesList, { dirPath });
@@ -210,9 +148,6 @@ const api: StudioApi = {
   },
   pickFiles(options?: { allowImagesOnly?: boolean }) {
     return ipcRenderer.invoke(IPC.pickFiles, options);
-  },
-  runFile(filePath: string, cwd: string) {
-    return ipcRenderer.invoke(IPC.filesRun, { filePath, cwd });
   },
 
   // Window Controls

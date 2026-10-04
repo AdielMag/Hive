@@ -1,9 +1,10 @@
 /**
  * Git repository sync status store.
- * Tracks ahead/behind counts for push and pull indicators across the workbench shell.
+ * Tracks ahead/behind counts for the rail badge (and the panels that refresh it).
  */
 import { create } from "zustand";
-import { useSessionStore } from "./session-store.ts";
+import type { ModuleHost } from "@hive/module-sdk/renderer";
+import { gitApi, gitHostOrNull } from "./git-host.ts";
 
 export interface GitSyncInfo {
   ahead: number;
@@ -27,15 +28,15 @@ export const useGitStore = create<GitState>((set, get) => ({
   lastCheckedAt: 0,
   setStatus: (status) => set({ status, lastCheckedAt: Date.now() }),
   refreshGit: async () => {
-    const activeProject = useSessionStore.getState().activeProject;
-    if (!activeProject?.path || typeof window === "undefined" || !window.studio?.getGitStatus) {
+    const project = gitHostOrNull()?.sessions.activeProject();
+    if (!project?.path) {
       set({ status: null, loading: false });
       return;
     }
     if (get().loading) return;
     set({ loading: true });
     try {
-      const res = await window.studio.getGitStatus(activeProject.path);
+      const res = await gitApi().getGitStatus(project.path);
       if (res && res.isRepo) {
         set({
           status: {
@@ -62,28 +63,27 @@ let checkTimer: ReturnType<typeof setInterval> | undefined;
 
 /**
  * Start background Git status tracking.
- * Refreshes when active project changes, window gains focus, or on interval.
+ * Refreshes when the active project changes, the window gains focus, or on an interval.
  */
-export function startGitStatusWatcher(): () => void {
+export function startGitStatusWatcher(host: ModuleHost): () => void {
   if (watcherStarted || typeof window === "undefined") return () => {};
   watcherStarted = true;
 
-  // Immediate check
   void useGitStore.getState().refreshGit();
 
-  // Project switch listener
-  const unsubSession = useSessionStore.subscribe((state, prev) => {
-    if (state.activeProject?.path !== prev.activeProject?.path) {
+  let lastPath = host.sessions.activeProject()?.path;
+  const offTabs = host.tabs.onChange(() => {
+    const path = host.sessions.activeProject()?.path;
+    if (path !== lastPath) {
+      lastPath = path;
       void useGitStore.getState().refreshGit();
     }
   });
 
-  // Background interval polling (every 20s)
   checkTimer = setInterval(() => {
     void useGitStore.getState().refreshGit();
   }, 20_000);
 
-  // Focus listener
   const onFocus = () => {
     if (Date.now() - useGitStore.getState().lastCheckedAt >= 3_000) {
       void useGitStore.getState().refreshGit();
@@ -93,8 +93,10 @@ export function startGitStatusWatcher(): () => void {
 
   return () => {
     watcherStarted = false;
-    unsubSession();
+    offTabs();
     if (checkTimer) clearInterval(checkTimer);
+    checkTimer = undefined;
     window.removeEventListener("focus", onFocus);
+    useGitStore.setState({ status: null, loading: false });
   };
 }

@@ -64,6 +64,13 @@ export default defineRendererModule({
       },
     ],
     titleMenu: [{ menu: "View", label: "Usage Analytics", command: "view.usage" }],
+    aiFeatures: [
+      {
+        id: "usageAnalysis",
+        label: "AI usage insights",
+        description: "Model used by \"Analyze with AI\" in the Usage & Analytics view.",
+      },
+    ],
   },
   activate(host) {
     setAnalyticsHost(host);

@@ -1,0 +1,45 @@
+{
+  "name": "@hive-module/git",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: Source Control panel (stage, commit, push/pull, AI commit messages)",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "git",
+    "title": "Source Control",
+    "description": "Stage, commit, fetch/pull/push and generate AI commit messages; shows ahead/behind in the sidebar.",
+    "tier": "recommended",
+    "icon": "git-commit",
+    "category": "Workbench",
+    "requires": [
+      "diff-viewer"
+    ],
+    "contributes": {
+      "leftPanels": [
+        "git"
+      ],
+      "commands": [
+        {
+          "id": "view.git",
+          "title": "Toggle Git Panel",
+          "category": "View",
+          "keys": [
+            "Mod+Shift+G"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive-module/diff-viewer": "0.1.0",
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0",
+    "zustand": "^5.0.0"
+  }
+}
