@@ -20,6 +20,7 @@ import {
   Globe,
   Loader2,
   PencilLine,
+  RotateCcw,
   Search,
   Sparkles,
   Terminal,
@@ -321,6 +322,7 @@ const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; da
   itemKey,
 }) => {
   const [copied, setCopied] = useState(false);
+  const rewind = useSessionStore((s) => s.rewindToUserMessage);
   const parsedSkill = useMemo(() => parseSkillBlock(text), [text]);
 
   return (
@@ -355,6 +357,21 @@ const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; da
             {(parsedSkill?.rest || text) && <div className="msg-user__text">{parsedSkill?.rest || text}</div>}
           </div>
           {(parsedSkill?.rest || text) && (
+            <div className="msg-actions">
+            <button
+              className="msg-action"
+              title="Edit and resend (rewinds the conversation to here)"
+              onClick={() => void rewind(itemKey, "edit")}
+            >
+              <PencilLine size={12} />
+            </button>
+            <button
+              className="msg-action"
+              title="Retry (rewind and run this message again)"
+              onClick={() => void rewind(itemKey, "resend")}
+            >
+              <RotateCcw size={12} />
+            </button>
             <button
               className="msg-action"
               title="Copy message"
@@ -368,6 +385,7 @@ const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; da
             >
               {copied ? <Check size={12} /> : <Copy size={12} />}
             </button>
+            </div>
           )}
         </div>
       )}
@@ -382,6 +400,7 @@ const AssistantMessage: React.FC<{
   itemKey: string;
 }> = ({ item, results, tools, itemKey }) => {
   const [copied, setCopied] = useState(false);
+  const rewind = useSessionStore((s) => s.rewindToUserMessage);
   const text = item.blocks
     .filter((b): b is Extract<AssistantBlock, { type: "text" }> => b.type === "text")
     .map((b) => b.text)
@@ -433,6 +452,26 @@ const AssistantMessage: React.FC<{
             </span>
           )}
           {item.usage?.cost?.total ? <span>{formatCost(item.usage.cost.total)}</span> : null}
+          <button
+            className="msg-action msg-action--inline"
+            title="Regenerate response"
+            onClick={() => {
+              // Find the user message this response answers, then rewind to it and run it again.
+              const { byId } = useSessionStore.getState().transcript;
+              let id = byId[itemKey]?.parentId ?? null;
+              while (id) {
+                const e = byId[id];
+                if (!e) return;
+                if (e.type === "message" && (e.message as unknown as { role?: string }).role === "user") {
+                  void rewind(e.id, "resend");
+                  return;
+                }
+                id = e.parentId;
+              }
+            }}
+          >
+            <RotateCcw size={12} />
+          </button>
           {text && (
             <button
               className="msg-action msg-action--inline"

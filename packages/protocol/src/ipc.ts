@@ -86,6 +86,13 @@ export interface UpdateProgress {
   message?: string;
 }
 
+export interface PiUpdateInfo {
+  hasUpdate: boolean;
+  currentVersion?: string;
+  latestVersion?: string;
+  error?: string;
+}
+
 export interface SessionStatusUpdate {
   key: string;
   phase: SessionPhase;
@@ -169,6 +176,8 @@ export const IPC = {
   gitCreateBranch: "git:create-branch",
   gitDeleteBranch: "git:delete-branch",
   gitLog: "git:log",
+  gitBranchDetails: "git:branch-details",
+  gitGraph: "git:graph",
   gitDiff: "git:diff",
   gitGenerateCommitMessage: "git:generate-commit-message",
   gitFetch: "git:fetch",
@@ -199,6 +208,8 @@ export const IPC = {
   updaterCheck: "updater:check",
   updaterApply: "updater:apply",
   evtUpdaterProgress: "updater:progress",
+  piUpdateCheck: "pi-updater:check",
+  piUpdateApply: "pi-updater:apply",
   // Models
   modelsGetCatalog: "models:get-catalog",
   modelsSaveEnabled: "models:save-enabled",
@@ -412,6 +423,8 @@ export interface StudioApi {
   gitCreateBranch(cwd: string, branch: string): Promise<string>;
   gitDeleteBranch(cwd: string, branch: string, force?: boolean): Promise<string>;
   getGitLog(cwd: string, maxCount?: number): Promise<Array<{ hash: string; author: string; relativeDate: string; message: string }>>;
+  getGitBranchDetails(cwd: string): Promise<GitBranchDetail[]>;
+  getGitGraph(cwd: string, maxCount?: number): Promise<GitGraphCommit[]>;
   getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }): Promise<string>;
   generateCommitMessage(cwd: string, model?: string): Promise<string>;
   gitFetch(cwd: string): Promise<string>;
@@ -448,6 +461,8 @@ export interface StudioApi {
   checkForUpdates(): Promise<any>;
   applyUpdate(downloadUrl?: string): Promise<{ success: boolean; message: string }>;
   onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void;
+  checkPiUpdate(): Promise<PiUpdateInfo>;
+  applyPiUpdate(): Promise<{ success: boolean; message: string }>;
 
 
   // Models
@@ -494,4 +509,32 @@ export interface ModulesApi {
   /** Calls a method the module registered with `ctx.ipc.handle`. Rejects while the module is disabled. */
   invoke<T = unknown>(moduleId: string, method: string, ...args: unknown[]): Promise<T>;
   on<T = unknown>(moduleId: string, event: string, listener: (payload: T) => void): () => void;
+}
+
+export interface GitBranchDetail {
+  /** Short name: "main" or "origin/main". */
+  name: string;
+  isRemote: boolean;
+  /** Remote name for remote branches, e.g. "origin". */
+  remote?: string;
+  isCurrent: boolean;
+  hash: string;
+  subject: string;
+  relativeDate: string;
+  upstream?: string;
+  ahead: number;
+  behind: number;
+  /** Upstream is configured but the remote branch no longer exists. */
+  gone: boolean;
+}
+
+export interface GitGraphCommit {
+  hash: string;
+  shortHash: string;
+  parents: string[];
+  author: string;
+  relativeDate: string;
+  message: string;
+  /** Decorations, e.g. ["HEAD -> main", "origin/main", "tag: v1"]. */
+  refs: string[];
 }

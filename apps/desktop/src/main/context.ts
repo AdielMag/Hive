@@ -12,6 +12,7 @@ import { SessionCatalogService } from "./services/catalog.ts";
 import { MainSessionManager } from "./services/session-manager.ts";
 import { AuthService } from "./services/auth.ts";
 import { AppUpdaterService } from "./services/updater.ts";
+import { PiUpdaterService } from "./services/pi-updater.ts";
 import { ModelsService } from "./services/models.ts";
 import { PiInstallService } from "./services/pi-install.ts";
 import { IPC } from "@hive/protocol";
@@ -29,6 +30,7 @@ export interface AppContext {
   sessions: MainSessionManager | null;
   auth: AuthService | null;
   updater: AppUpdaterService;
+  piUpdater: PiUpdaterService;
   models: ModelsService;
   /** Installable feature modules (enabled set, lifecycle, scoped IPC). Started in index.ts. */
   modules: MainModuleHost;
@@ -57,6 +59,7 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     sessions: info ? new MainSessionManager(info, getWindow, testProviderPath) : null,
     auth: info ? new AuthService(info.packageRoot) : null,
     updater: new AppUpdaterService(),
+    piUpdater: new PiUpdaterService(() => info?.packageRoot),
     models: new ModelsService(undefined, hiveDataDir),
     modules: new MainModuleHost({
       manifests: MODULE_MANIFESTS,

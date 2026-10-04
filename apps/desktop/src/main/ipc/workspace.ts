@@ -18,6 +18,8 @@ export function registerWorkspaceIpc(ctx: AppContext): void {
     git.gitDeleteBranch(cwd, branch, force),
   );
   handle(IPC.gitLog, ({ cwd, maxCount }: Cwd & { maxCount?: number }) => git.getGitLog(cwd, maxCount));
+  handle(IPC.gitBranchDetails, ({ cwd }: Cwd) => git.getGitBranchDetails(cwd));
+  handle(IPC.gitGraph, ({ cwd, maxCount }: Cwd & { maxCount?: number }) => git.getGitGraph(cwd, maxCount));
   handle(IPC.gitStage, ({ cwd, filePath }: CwdFile) => git.stageFile(cwd, filePath));
   handle(IPC.gitStageAll, ({ cwd }: Cwd) => git.stageAll(cwd));
   handle(IPC.gitUnstage, ({ cwd, filePath }: CwdFile) => git.unstageFile(cwd, filePath));

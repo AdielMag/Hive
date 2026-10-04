@@ -672,6 +672,13 @@ div.msg-tool__head {
   border-color: transparent;
 }
 
+/* hover action row beside a user message (edit / retry / copy) */
+.msg-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 /* "Reconnect <provider>" button on auth-failure errors (transcript row + session banner). */
 .auth-error-action {
   display: inline-flex;

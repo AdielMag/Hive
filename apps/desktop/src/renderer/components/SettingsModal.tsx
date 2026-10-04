@@ -51,15 +51,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   const update = useUpdates((s) => s.info);
   const checking = useUpdates((s) => s.checking);
   const checkUpdate = useUpdates((s) => s.check);
+  const checkPi = useUpdates((s) => s.checkPi);
+  const piHasUpdate = useUpdates((s) => s.piInfo?.hasUpdate);
 
   useEffect(() => {
     if (!isOpen) return;
     setTab(initialTab);
     void checkUpdate();
+    void checkPi();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, initialTab, checkUpdate, onClose]);
+  }, [isOpen, initialTab, checkUpdate, checkPi, onClose]);
 
   if (!isOpen) return null;
   const moduleTab = moduleSettings.find((t) => `${t.moduleId}:${t.id}` === tab);
@@ -74,7 +77,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             <button key={t.id} className={`settings__nav-btn${tab === t.id ? " is-active" : ""}`} onClick={() => setTab(t.id)}>
               {t.icon}
               <span>{t.label}</span>
-              {t.id === "updates" && update?.hasUpdate && <span className="ui-chip ui-chip--accent">New</span>}
+              {t.id === "updates" && (update?.hasUpdate || piHasUpdate) && <span className="ui-chip ui-chip--accent">New</span>}
             </button>
           ))}
           {moduleSettings.map((t) => {
@@ -101,7 +104,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             {tab === "compaction" && <CompactionSettingsContent />}
             {tab === "accounts" && <AccountsTab />}
             {tab === "keyboard" && <KeyboardSettings />}
-            {tab === "updates" && <UpdatesTab info={update} checking={checking} onCheck={checkUpdate} />}
+            {tab === "updates" && <UpdatesTab info={update} checking={checking} onCheck={() => { void checkUpdate(); void checkPi(); }} />}
             {tab === "about" && <AboutTab />}
             {tab === "modules" && <ModulesSettings />}
             {moduleTab && <ModuleSettingsPage moduleId={moduleTab.moduleId} Component={moduleTab.component} />}
@@ -328,6 +331,52 @@ const UpdatesTab: React.FC<{ info: UpdateInfo | null; checking: boolean; onCheck
         {info?.hasUpdate && install && <UpdateProgressBar progress={install} />}
         {info?.hasUpdate && info.notes && <pre className="settings__notes selectable">{info.notes}</pre>}
       </div>
+      <PiUpdateCard />
+    </div>
+  );
+};
+
+const PiUpdateCard: React.FC = () => {
+  const pi = useSessionStore((s) => s.bootstrap?.pi);
+  const info = useUpdates((s) => s.piInfo);
+  const checking = useUpdates((s) => s.piChecking);
+  const installing = useUpdates((s) => s.piInstalling);
+  const result = useUpdates((s) => s.piResult);
+  const checkPi = useUpdates((s) => s.checkPi);
+  const applyPi = useUpdates((s) => s.applyPiUpdate);
+  const current = info?.currentVersion ?? (pi?.ok ? pi.info.version : undefined);
+  return (
+    <div className="ui-card" style={{ padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <div>
+          <div className="ui-row__title">Pi CLI {current ? `v${current}` : ""}</div>
+          <div className="ui-row__hint">
+            {installing
+              ? "Installing with npm…"
+              : info?.hasUpdate
+                ? `Version ${info.latestVersion} is available`
+                : checking
+                  ? "Checking npm…"
+                  : info?.error
+                    ? `${info.error}. Try again in a moment.`
+                    : info
+                      ? "You're on the latest version"
+                      : "Not checked yet"}
+          </div>
+        </div>
+        <button className="ui-btn" onClick={() => void checkPi()} disabled={checking || installing}>
+          <RefreshCw size={13} className={checking ? "spin" : undefined} /> Check now
+        </button>
+      </div>
+      {info?.hasUpdate && (
+        <div className="settings__update">
+          <div className="ui-row__title">v{info.latestVersion} is ready</div>
+          <button className="ui-btn ui-btn--primary" onClick={() => void applyPi()} disabled={installing}>
+            {installing ? <RefreshCw size={13} className="spin" /> : <Download size={13} />} {installing ? "Installing…" : "Update Pi"}
+          </button>
+        </div>
+      )}
+      {result && <pre className="settings__notes selectable">{result.message}</pre>}
     </div>
   );
 };

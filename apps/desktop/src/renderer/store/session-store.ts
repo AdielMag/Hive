@@ -160,6 +160,11 @@ export interface SessionStoreState {
   setPromptText: (text: string) => void;
   sendPrompt: (streamingBehavior?: "steer" | "followUp") => Promise<void>;
   abort: () => Promise<void>;
+  /**
+   * Cursor-style "edit / retry": rewind the conversation to just before a user message.
+   * `edit` puts its text (and images) back in the composer; `resend` runs it again immediately.
+   */
+  rewindToUserMessage: (entryId: string, mode: "edit" | "resend") => Promise<void>;
   setModel: (provider: string, modelId: string) => Promise<void>;
   setThinkingLevel: (level: string) => Promise<void>;
   setMode: (mode: AgentMode) => void;
@@ -1523,6 +1528,56 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         ...(transcript.running ? { streamingBehavior: "steer" } : {}),
       });
     }
+  },
+
+  rewindToUserMessage: async (entryId, mode) => {
+    const { activeKey, transcript } = get();
+    if (!activeKey) return;
+    const entry = transcript.byId[entryId];
+    if (!entry || entry.type !== "message") return;
+    const msg = entry.message as unknown as { role?: string; content?: unknown };
+    if (msg.role !== "user") return;
+
+    const parts =
+      typeof msg.content === "string"
+        ? [{ type: "text", text: msg.content } as Record<string, unknown>]
+        : Array.isArray(msg.content)
+          ? (msg.content as Array<Record<string, unknown>>)
+          : [];
+    // Drop the "[Mode: …]" steering prefix that sendPrompt adds; the composer re-applies the current mode.
+    const text = parts
+      .filter((p) => p.type === "text")
+      .map((p) => String(p.text ?? ""))
+      .join("\n")
+      .replace(/^\[Mode: [^\]]*\]\n\n/, "");
+    const images: AttachedItem[] = parts
+      .filter((p) => p.type === "image" && typeof p.data === "string")
+      .map((p, i) => {
+        const mimeType = String(p.mimeType ?? "image/png");
+        return {
+          id: `rewind-${entryId}-${i}`,
+          name: `image-${i + 1}`,
+          kind: "image" as const,
+          mimeType,
+          dataBase64: p.data as string,
+          previewUrl: `data:${mimeType};base64,${p.data as string}`,
+        };
+      });
+
+    if (transcript.running) await get().abort();
+
+    const res = await window.studio.bridgeAction(activeKey, { action: "navigate_tree", entryId });
+    if (!res.ok) {
+      set({ error: res.error || "Could not rewind the conversation." });
+      return;
+    }
+    // Pi moved its leaf to the parent of this message; mirror that so the view (and appends) follow.
+    set((s) => ({
+      transcript: applyEntries(s.transcript, [], entry.parentId ?? null, "append"),
+      promptText: text,
+      attachments: images,
+    }));
+    if (mode === "resend") await get().sendPrompt();
   },
 
   abort: async () => {
