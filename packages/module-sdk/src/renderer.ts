@@ -199,6 +199,10 @@ export interface TabKindContribution {
 }
 
 export interface SettingsContribution extends ContributionBase {
+    /** Custom records the session's Pi extensions publish on the bridge (core's `studio:to-gui` topic). */
+    onBridgeEvent(listener: (evt: { key: string; data: unknown }) => void): () => void;
+    /** Send a custom record to a session's Pi extensions over the bridge (`studio:from-gui`). */
+    emitToBridge(key: string, data: unknown): Promise<void>;
   id: string;
   /** Nav label. */
   label: string;

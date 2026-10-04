@@ -98,6 +98,22 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     "hasRenderer": true
   },
   {
+    "id": "jev",
+    "title": "Jev",
+    "description": "Typed yes/no, choice and score decisions from TypeSafe's Jev model. Suggests the right moment to compact the context (task boundaries, cold prompt cache) and gives the agent an ask_jev tool. Paste your TypeSafe API key in Settings → Jev.",
+    "tier": "bonus",
+    "recommended": false,
+    "icon": "gauge",
+    "category": "AI",
+    "agent": {
+      "extensions": [
+        "agent/extensions/jev.ts"
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
     "id": "library",
     "title": "Skills & Agents Library",
     "description": "Browse, inspect, and configure your coding agent skills, system prompts, and custom subagents with a dedicated editor.",
@@ -242,6 +258,7 @@ export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ defaul
   "analytics": () => import("@hive-module/analytics/main"),
   "bash-guard": () => import("@hive-module/bash-guard/main"),
   "browser": () => import("@hive-module/browser/main"),
+  "jev": () => import("@hive-module/jev/main"),
   "library": () => import("@hive-module/library/main"),
   "limits": () => import("@hive-module/limits/main"),
   "marketplace": () => import("@hive-module/marketplace/main"),

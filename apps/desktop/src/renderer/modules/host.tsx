@@ -4,7 +4,7 @@
  */
 import { useMemo } from "react";
 import type { ActiveSessionContext, ModuleHost, ModuleTab, OpenTabSpec, ResolvedFeatureModelLite, SessionCatalogLite } from "@hive/module-sdk/renderer";
-import type { AgentMode, TabItem } from "@hive/protocol";
+import { BRIDGE_TOPICS, type AgentMode, type TabItem } from "@hive/protocol";
 import { Markdown } from "../components/code/Markdown.tsx";
 import { CodeBlock } from "../components/code/CodeBlock.tsx";
 import { ProviderIcon } from "../components/ProviderIcon.tsx";
@@ -144,6 +144,11 @@ export function createModuleHost(moduleId: string): ModuleHost {
       invoke: (method, ...args) => window.studio.modules.invoke(moduleId, method, ...args) as Promise<never>,
       on: (event, listener) => window.studio.modules.on(moduleId, event, listener as (payload: unknown) => void),
     },
+      onBridgeEvent: (listener) =>
+        window.studio.onBridgeMessage(({ key, message }) => {
+          if (message.type === "event" && message.topic === BRIDGE_TOPICS.toGui) listener({ key, data: message.data });
+        }),
+      emitToBridge: (key, data) => window.studio.bridgeEmit(key, BRIDGE_TOPICS.fromGui, data),
   };
 }
 
