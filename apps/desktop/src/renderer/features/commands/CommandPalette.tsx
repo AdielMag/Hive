@@ -7,7 +7,7 @@ import {
   Zap,
 } from "lucide-react";
 import { usePalette } from "./palette-store.ts";
-import { COMMANDS } from "./registry.ts";
+import { COMMANDS, useCommandsVersion } from "./registry.ts";
 import { getShortcutLabel } from "./useShortcut.ts";
 import { fuzzyMatch } from "./fuzzy.ts";
 import { useSessionStore } from "../../store/session-store.ts";
@@ -55,6 +55,7 @@ const Highlighted: React.FC<{ text: string; ranges: Array<[number, number]> }> =
 };
 
 export const CommandPalette: React.FC = () => {
+  const commandsVersion = useCommandsVersion((s) => s.version);
   const { open, query, close, setQuery, pushRecent, recents } = usePalette();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [files, setFiles] = useState<FlatFile[]>([]);
@@ -244,6 +245,7 @@ export const CommandPalette: React.FC = () => {
     // Hard cap total
     return list.slice(0, 35);
   }, [
+    commandsVersion,
     open,
     actualSearch,
     isActionsMode,

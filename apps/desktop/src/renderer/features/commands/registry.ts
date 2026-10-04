@@ -2,6 +2,7 @@
  * The single source of truth for app commands. Actions read stores lazily (`getState()` at run time) so this
  * module has no React coupling. Default chords here reproduce the previous hard-coded shortcuts exactly.
  */
+import { create } from "zustand";
 import { useSessionStore } from "../../store/session-store.ts";
 import { useUi, type LeftPanel, type RightPanel } from "../../store/ui-store.ts";
 import { useUpdates } from "../../store/update-store.ts";
@@ -43,7 +44,7 @@ const right = (id: string, title: string, panel: RightPanel, defaultKeys?: strin
   run: () => useUi.getState().toggleRight(panel),
 });
 
-export const COMMANDS: readonly Command[] = [
+const CORE_COMMANDS: readonly Command[] = [
   // Palette
   { id: "palette.open", title: "Search Everything…", category: "Navigate", keywords: "quick open command palette find", defaultKeys: ["Mod+K"], run: () => usePalette.getState().toggle() },
   { id: "palette.actions", title: "Show All Actions…", category: "Navigate", keywords: "command palette", defaultKeys: ["Mod+Shift+P"], allowInTerminal: true, run: () => usePalette.getState().toggle(">") },
@@ -155,5 +156,53 @@ export const COMMANDS: readonly Command[] = [
   { id: "app.checkUpdates", title: "Check for Updates", category: "App", keywords: "upgrade version", run: () => void useUpdates.getState().check() },
 ];
 
-export const COMMANDS_BY_ID: ReadonlyMap<string, Command> = new Map(COMMANDS.map((c) => [c.id, c]));
-export const COMMAND_IDS: ReadonlySet<string> = new Set(COMMANDS.map((c) => c.id));
+/**
+ * Live command list. Core commands are fixed; modules add (and remove) theirs through `registerCommands`.
+ * The array / map / set are mutated in place so existing importers always see the current commands; React
+ * consumers that must re-render on change subscribe to `useCommandsVersion`.
+ */
+export const COMMANDS: readonly Command[] = [...CORE_COMMANDS];
+export const COMMANDS_BY_ID: ReadonlyMap<string, Command> = new Map(CORE_COMMANDS.map((c) => [c.id, c]));
+export const COMMAND_IDS: ReadonlySet<string> = new Set(CORE_COMMANDS.map((c) => c.id));
+
+const mutable = {
+  list: COMMANDS as Command[],
+  byId: COMMANDS_BY_ID as Map<string, Command>,
+  ids: COMMAND_IDS as Set<string>,
+};
+const CORE_IDS: ReadonlySet<string> = new Set(CORE_COMMANDS.map((c) => c.id));
+
+export const useCommandsVersion = create<{ version: number }>(() => ({ version: 0 }));
+const bump = () => useCommandsVersion.setState((s) => ({ version: s.version + 1 }));
+
+/**
+ * Adds commands (replacing any non-core command with the same id, e.g. a disabled-module stub). Returns an
+ * unregister function that only removes the commands it added. Core command ids can't be overridden.
+ */
+export function registerCommands(commands: readonly Command[]): () => void {
+  const added: Command[] = [];
+  for (const cmd of commands) {
+    if (CORE_IDS.has(cmd.id)) {
+      console.warn(`[commands] ignoring attempt to override core command ${cmd.id}`);
+      continue;
+    }
+    const prev = mutable.byId.get(cmd.id);
+    if (prev) mutable.list.splice(mutable.list.indexOf(prev), 1);
+    mutable.list.push(cmd);
+    mutable.byId.set(cmd.id, cmd);
+    mutable.ids.add(cmd.id);
+    added.push(cmd);
+  }
+  if (added.length) bump();
+  return () => {
+    let changed = false;
+    for (const cmd of added) {
+      if (mutable.byId.get(cmd.id) !== cmd) continue; // already replaced
+      mutable.list.splice(mutable.list.indexOf(cmd), 1);
+      mutable.byId.delete(cmd.id);
+      mutable.ids.delete(cmd.id);
+      changed = true;
+    }
+    if (changed) bump();
+  };
+}

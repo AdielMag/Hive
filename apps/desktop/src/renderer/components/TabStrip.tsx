@@ -1,9 +1,11 @@
 /** Tabs across the top of the content card (sessions, files, diffs, usage). Middle-click closes. */
 import React from "react";
-import { BarChart3, ClipboardCheck, FileCode, GitCompare, Globe, Loader2, MessageSquare, Moon, PenLine, Plus, Sparkles, X } from "lucide-react";
+import { BarChart3, FileCode, GitCompare, Globe, Loader2, MessageSquare, Moon, PenLine, Plus, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { TabItem } from "@hive/protocol";
 import { hasDraft, useSessionStore } from "../store/session-store.ts";
+import { isCoreTabKind } from "@hive/protocol";
+import { ModuleTabIcon, useModuleTabTitle } from "../modules/ModuleViews.tsx";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 
 export const TabStrip: React.FC = () => {
@@ -69,7 +71,7 @@ export const TabStrip: React.FC = () => {
             <span className="tab__icon">
               <TabIcon tab={tab} />
             </span>
-            <span className="tab__title">{tab.title}</span>
+            <TabTitle tab={tab} />
             {tab.kind === "browser" && tab.isSleeping && (
               <span className="tab__sleep-badge" title="Sleeping to save RAM">
                 <Moon size={10} />
@@ -143,9 +145,12 @@ const TabIcon: React.FC<{ tab: TabItem }> = ({ tab }) => {
       ) : (
         <Globe size={13} />
       );
-    case "plan":
-      return <ClipboardCheck size={13} />;
     default:
-      return <MessageSquare size={13} />;
+      return isCoreTabKind(tab.kind) ? <MessageSquare size={13} /> : <ModuleTabIcon tab={tab} />;
   }
+};
+
+const TabTitle: React.FC<{ tab: TabItem }> = ({ tab }) => {
+  const title = useModuleTabTitle(tab);
+  return <span className="tab__title">{isCoreTabKind(tab.kind) ? tab.title : title}</span>;
 };

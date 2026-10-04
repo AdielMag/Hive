@@ -4,6 +4,8 @@ import type { PiLocateResult } from "@hive/protocol";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "./store/session-store.ts";
 import { WorkbenchLayout } from "./components/WorkbenchLayout.tsx";
+import "./modules/host.tsx";
+import { useModules } from "./modules/registry.ts";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { copyText } from "./lib/clipboard.ts";
 import hiveIcon from "./assets/hive-icon.png";
@@ -18,6 +20,11 @@ export const App: React.FC = () => {
   useEffect(() => {
     void init();
   }, [init]);
+
+  const bootstrapped = !isInitializing && !!bootstrap?.pi?.ok;
+  useEffect(() => {
+    if (bootstrapped) void useModules.getState().init();
+  }, [bootstrapped]);
 
   if (isInitializing) {
     return (

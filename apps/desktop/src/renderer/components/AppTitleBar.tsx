@@ -5,7 +5,9 @@ import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { openProjectFolder } from "../features/commands/registry.ts";
-import { useShortcut } from "../features/commands/useShortcut.ts";
+import { getShortcutLabel, useShortcut } from "../features/commands/useShortcut.ts";
+import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
+import { useContributions } from "../modules/registry.ts";
 import { usePalette } from "../features/commands/palette-store.ts";
 import { isInstalling, startUpdateChecks, useUpdates } from "../store/update-store.ts";
 import { updatePercent } from "./UpdateProgressBar.tsx";
@@ -32,6 +34,7 @@ export const AppTitleBar: React.FC = () => {
   );
   const ui = useUi(useShallow((s) => ({ openSettings: s.openSettings, toggleLeft: s.toggleLeft, toggleRight: s.toggleRight })));
   const [menu, setMenu] = useState<string | null>(null);
+  const moduleMenuItems = useContributions("titleMenu");
   const [maximized, setMaximized] = useState(false);
   const update = useUpdates((s) => s.info);
   const install = useUpdates((s) => s.install);
@@ -121,6 +124,15 @@ export const AppTitleBar: React.FC = () => {
       { label: "About Hive", action: () => ui.openSettings("about") },
     ],
   };
+
+  // Module menu entries are appended to the matching built-in menu (File / View / Help).
+  for (const item of moduleMenuItems) {
+    const items = menus[item.menu];
+    if (!items) continue;
+    if (!items.some((it) => it.label === item.label)) {
+      items.push({ label: item.label, shortcut: getShortcutLabel(item.command), action: () => void COMMANDS_BY_ID.get(item.command)?.run() });
+    }
+  }
 
   return (
     <div ref={barRef} className="titlebar">

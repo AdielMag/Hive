@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import type { SettingsTabId } from "../components/SettingsModal.tsx";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
+import { staticPanelIds } from "../modules/manifests.ts";
 import {
   clamp,
   LIMITS,
@@ -35,7 +36,7 @@ function load(): Persisted {
   const fallback: Persisted = { left: "projects", right: null, leftWidth: 268, rightWidth: 360, composerHeight: 150 };
   try {
     const raw = JSON.parse(getStoredItem(KEY) ?? "null") as Partial<Persisted> | null;
-    return sanitizeLayout(raw, fallback);
+    return sanitizeLayout(raw, fallback, staticPanelIds());
   } catch {
     return fallback;
   }

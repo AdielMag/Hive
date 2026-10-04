@@ -3,13 +3,15 @@ import { create } from "zustand";
 import { getStoredItem, setStoredItem } from "../../lib/storage.ts";
 import { sanitizeOverrides, withBinding, type Overrides } from "./bindings.ts";
 import { COMMANDS, COMMAND_IDS } from "./registry.ts";
+import { staticCommandIds } from "../../modules/manifests.ts";
 
 const KEY = "hive.keybindings.v1";
 
 function load(): Overrides {
   try {
     const raw = JSON.parse(getStoredItem(KEY) ?? "null") as { overrides?: unknown } | null;
-    return sanitizeOverrides(raw?.overrides, COMMAND_IDS);
+    // Module commands aren't registered yet at load time; keep overrides for ids their manifests declare.
+    return sanitizeOverrides(raw?.overrides, new Set([...COMMAND_IDS, ...staticCommandIds()]));
   } catch {
     return {};
   }

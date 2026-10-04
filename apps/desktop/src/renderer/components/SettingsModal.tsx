@@ -1,6 +1,6 @@
 /** Settings dialog: Appearance, Models, AI providers, Updates, About. */
 import React, { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Globe, Info, Key, Keyboard, LogOut, Minimize2, Palette, RefreshCw, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Globe, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, X } from "lucide-react";
 import { ArcThemeEditor } from "../features/appearance/ArcThemeEditor.tsx";
 import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
 import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
@@ -10,8 +10,12 @@ import { useSessionStore } from "../store/session-store.ts";
 import { type UpdateInfo, isInstalling, useUpdates } from "../store/update-store.ts";
 import { UpdateProgressBar } from "./UpdateProgressBar.tsx";
 import { BrowserSettingsContent } from "./browser/BrowserSettingsContent.tsx";
+import { ModulesSettings } from "../features/modules/ModulesSettings.tsx";
+import { useContributions, useModuleHost } from "../modules/registry.ts";
 
-export type SettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "keyboard" | "browser" | "updates" | "about";
+export type CoreSettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "keyboard" | "browser" | "modules" | "updates" | "about";
+/** Core tab, or `<moduleId>:<tabId>` for a settings page contributed by a module. */
+export type SettingsTabId = CoreSettingsTabId | (string & {});
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -27,19 +31,21 @@ interface Account {
   email?: string;
 }
 
-const TABS: Array<{ id: SettingsTabId; label: string; icon: React.ReactNode; title: string }> = [
+const TABS: Array<{ id: CoreSettingsTabId; label: string; icon: React.ReactNode; title: string }> = [
   { id: "appearance", label: "Appearance", icon: <Palette size={15} />, title: "Appearance" },
   { id: "models", label: "Models", icon: <Cpu size={15} />, title: "Models" },
   { id: "compaction", label: "Compaction", icon: <Minimize2 size={15} />, title: "Auto-Compaction & Context" },
   { id: "accounts", label: "AI Providers", icon: <Key size={15} />, title: "AI providers & accounts" },
   { id: "keyboard", label: "Keyboard", icon: <Keyboard size={15} />, title: "Keyboard Shortcuts" },
   { id: "browser", label: "Browser & RAM", icon: <Globe size={15} />, title: "Hive Browser & Memory Management" },
+  { id: "modules", label: "Modules", icon: <Puzzle size={15} />, title: "Modules" },
   { id: "updates", label: "Updates", icon: <Download size={15} />, title: "Updates" },
   { id: "about", label: "About", icon: <Info size={15} />, title: "About Hive" },
 ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialTab = "appearance" }) => {
   const [tab, setTab] = useState<SettingsTabId>(initialTab);
+  const moduleSettings = useContributions("settings");
   // Shared with the title-bar badge: a check here also lights up the badge, and vice versa.
   const update = useUpdates((s) => s.info);
   const checking = useUpdates((s) => s.checking);
@@ -55,7 +61,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   }, [isOpen, initialTab, checkUpdate, onClose]);
 
   if (!isOpen) return null;
-  const current = TABS.find((t) => t.id === tab)!;
+  const moduleTab = moduleSettings.find((t) => `${t.moduleId}:${t.id}` === tab);
+  const current = TABS.find((t) => t.id === tab) ?? (moduleTab ? { title: moduleTab.title ?? moduleTab.label } : TABS[0]!);
 
   return (
     <div className="modal-scrim" onMouseDown={onClose}>
@@ -69,6 +76,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
               {t.id === "updates" && update?.hasUpdate && <span className="ui-chip ui-chip--accent">New</span>}
             </button>
           ))}
+          {moduleSettings.map((t) => {
+            const key = `${t.moduleId}:${t.id}`;
+            const Icon = t.icon;
+            return (
+              <button key={key} className={`settings__nav-btn${tab === key ? " is-active" : ""}`} onClick={() => setTab(key)}>
+                {Icon ? <Icon size={15} /> : <Puzzle size={15} />}
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
         </nav>
         <section className="settings__main">
           <header className="settings__header">
@@ -86,11 +103,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             {tab === "updates" && <UpdatesTab info={update} checking={checking} onCheck={checkUpdate} />}
             {tab === "about" && <AboutTab />}
             {tab === "browser" && <BrowserSettingsContent />}
+            {tab === "modules" && <ModulesSettings />}
+            {moduleTab && <ModuleSettingsPage moduleId={moduleTab.moduleId} Component={moduleTab.component} />}
           </div>
         </section>
       </div>
     </div>
   );
+};
+
+const ModuleSettingsPage: React.FC<{ moduleId: string; Component: React.ComponentType<{ host: import("@hive/module-sdk/renderer").ModuleHost }> }> = ({ moduleId, Component }) => {
+  const host = useModuleHost(moduleId);
+  return host ? <Component host={host} /> : null;
 };
 
 const AccountsTab: React.FC = () => {

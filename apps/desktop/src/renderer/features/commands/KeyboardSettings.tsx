@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Edit2, RotateCcw, Search, Trash2, X } from "lucide-react";
-import { COMMANDS, COMMANDS_BY_ID } from "./registry.ts";
+import { COMMANDS, COMMANDS_BY_ID, useCommandsVersion } from "./registry.ts";
 import { useKeybindingStore } from "./keybindings-store.ts";
 import { effectiveKeys, findConflicts, isCustomised } from "./bindings.ts";
 import { chordFromEvent, formatChord, validateGlobalChord } from "./keybinding.ts";
@@ -15,6 +15,7 @@ interface ConflictInfo {
 }
 
 export const KeyboardSettings: React.FC = () => {
+  const commandsVersion = useCommandsVersion((s) => s.version);
   const { overrides, setBinding, assign, resetBinding, resetAll, setRecording } = useKeybindingStore();
   const [search, setSearch] = useState("");
   const [recordingId, setRecordingId] = useState<string | null>(null);
@@ -109,7 +110,7 @@ export const KeyboardSettings: React.FC = () => {
     }
 
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [search, overrides, platform]);
+  }, [search, overrides, platform, commandsVersion]);
 
   const customCount = Object.keys(overrides).length;
 

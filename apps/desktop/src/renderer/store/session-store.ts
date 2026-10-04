@@ -27,6 +27,8 @@ import {
 } from "@hive/pi-adapter";
 import { evaluateTabsForMemory, formatUrlOrSearch, useBrowserStore } from "../lib/browser/browser-store.ts";
 import { useInsights } from "../features/insights/insights-store.ts";
+import { emitSessionEvents } from "../modules/session-bus.ts";
+import type { OpenTabSpec } from "@hive/module-sdk/renderer";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 
@@ -135,7 +137,8 @@ export interface SessionStoreState {
   /** Open (or focus) a Chromium browser tab inside Hive. */
   openBrowserTab: (url?: string, title?: string) => void;
   /** Open (or focus) a Plan Previewer tab inside Hive. */
-  openPlanTab: (filePath: string, context?: string) => void;
+  /** Opens (or focuses) a tab owned by a module. Returns the tab id. */
+  openModuleTab: (spec: OpenTabSpec) => string;
   /** Update sleeping state of a browser tab to free/restore RAM. */
   setTabSleeping: (tabId: string, isSleeping: boolean) => void;
   /** Patch browser tab metadata (e.g. url, title, favicon). */
@@ -496,6 +499,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       // Listen for session streaming events
       window.studio.onSessionEvents((batch) => {
         trackActivity(batch.key, batch.events);
+        emitSessionEvents(batch.key, batch.key === get().activeKey, batch.events as Array<{ type: string }>);
         if (batch.key !== get().activeKey) {
           // A background tab finishing a turn may have just created / updated its session file.
           if (batch.events.some((e) => e.type === "agent_settled")) void get().refreshCatalog();
@@ -608,11 +612,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       // Listen for open browser tab events from Electron main process
       window.studio.onOpenBrowserTab(({ url, title }) => {
         get().openBrowserTab(url, title);
-      });
-
-      // Listen for open plan tab events from Electron main process
-      window.studio.onOpenPlanTab(({ filePath, context }) => {
-        get().openPlanTab(filePath, context);
       });
 
       if (!memoryIntervalStarted) {
@@ -1023,34 +1022,32 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     runMemoryCheck();
   },
 
-  openPlanTab: (filePath: string, context?: string) => {
+  openModuleTab: (spec: OpenTabSpec) => {
     const { tabs, activeProject } = get();
-    const resolved = filePath.replace(/\\/g, "/");
-    const filename = resolved.split("/").pop() || "plan.md";
-
-    // Check if an existing plan tab has this file
-    const existing = tabs.find((t) => t.kind === "plan" && (t.planFile === filePath || t.filePath === filePath));
+    const asModuleTab = (t: TabItem) => ({ id: t.id, kind: t.kind, title: t.title, projectId: t.projectId, filePath: t.filePath, data: t.data });
+    const existing = tabs.find((t) => {
+      if (t.kind !== spec.kind) return false;
+      if (spec.reuse) return spec.reuse(asModuleTab(t));
+      if (spec.filePath) return t.filePath === spec.filePath;
+      return !!spec.id && t.id === spec.id;
+    });
     if (existing) {
       void get().switchTab(existing.id);
-      return;
+      return existing.id;
     }
 
-    const tabId = `plan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const tabId = spec.id ?? `${spec.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const newTab: TabItem = {
       id: tabId,
-      kind: "plan",
+      kind: spec.kind,
       projectId: activeProject?.id ?? "",
-      title: filename,
-      planFile: filePath,
-      filePath,
-      planContext: context,
+      title: spec.title,
+      filePath: spec.filePath,
+      data: spec.data,
       pinned: false,
     };
-
-    set({
-      tabs: [...tabs, newTab],
-      activeTabId: tabId,
-    });
+    set({ tabs: [...tabs, newTab], activeTabId: tabId });
+    return tabId;
   },
 
   setTabSleeping: (tabId: string, isSleeping: boolean) => {
