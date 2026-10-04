@@ -3,7 +3,6 @@
  * the window reopens the way it was left.
  */
 import { create } from "zustand";
-import type { SettingsTabId } from "../components/SettingsModal.tsx";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import { staticPanelIds } from "../modules/manifests.ts";
 import {
@@ -14,6 +13,10 @@ import {
   type RightPanel,
   type PersistedLayout as Persisted,
 } from "./layout-persist.ts";
+
+export type CoreSettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "keyboard" | "modules" | "updates" | "about";
+/** Core tab, or `<moduleId>:<tabId>` for a settings page contributed by a module. */
+export type SettingsTabId = CoreSettingsTabId | (string & {});
 
 export type { LeftPanel, RightPanel };
 export { LIMITS };

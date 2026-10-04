@@ -1,5 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, CircleAlert, Eye, EyeOff, Gauge, Loader2, Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  CircleAlert,
+  Eye,
+  EyeOff,
+  Gauge,
+  Loader2,
+  Trash2,
+} from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import {
   JevMethods,
@@ -77,15 +87,31 @@ const Stat: React.FC<{ label: string; bucket: UsageBucket }> = ({ label, bucket 
   </div>
 );
 
-export const JevSettings: React.FC<{ host: ModuleHost }> = ({ host }) => {
+export interface JevSettingsProps {
+  host: ModuleHost;
+  focus?: { providerId: string; reason?: string } | null;
+}
+
+export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
   const [settings, setSettings] = useState<JevSettingsView | null>(null);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [keyDraft, setKeyDraft] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [test, setTest] = useState<TestKeyResult | "testing" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const alive = useRef(true);
   useEffect(() => () => void (alive.current = false), []);
+
+  const isFocus = focus?.providerId === "jev";
+
+  useEffect(() => {
+    if (isFocus) {
+      setExpanded(true);
+      cardRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [isFocus]);
 
   const refreshUsage = useCallback(() => {
     host.ipc.invoke<UsageSummary>(JevMethods.getUsage).then((u) => alive.current && setUsage(u), () => {});
@@ -129,128 +155,235 @@ export const JevSettings: React.FC<{ host: ModuleHost }> = ({ host }) => {
     if (alive.current) setTest(r);
   };
 
-  if (!settings) return <div className="jev">{error ? <p className="jev-error">{error}</p> : <Loader2 className="jev-spin" size={16} />}</div>;
+  if (!settings) {
+    return (
+      <div className="ui-card settings__account jev-account-card">
+        <div className="settings__account-head">
+          <div className="quota-card__logo">
+            <Gauge size={18} color="var(--accent-base)" />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="ui-row__title">Jev</div>
+            <div className="ui-row__hint">Loading decision model settings…</div>
+          </div>
+          <Loader2 className="jev-spin" size={14} />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="jev">
-      <section className="jev-card jev-card--hero">
-        <div className="jev-card__head">
-          <span className="jev-icon">
-            <Gauge size={18} />
+    <div
+      ref={cardRef}
+      className={`ui-card settings__account jev-account-card${isFocus ? " is-focus" : ""}${expanded ? " is-expanded" : ""}`}
+    >
+      {isFocus && (
+        <div className="settings__notice">
+          <CircleAlert size={14} />
+          <span>{focus?.reason || "TypeSafe Jev decision model settings"}</span>
+        </div>
+      )}
+
+      <div
+        className="settings__account-head jev-account-head"
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setExpanded((v) => !v))}
+      >
+        <div className="quota-card__logo">
+          <Gauge size={18} color="var(--accent-base)" />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="ui-row__title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Jev</span>
+            <span className="ui-chip jev-chip-tag">TypeSafe</span>
+          </div>
+          <div className="ui-row__hint">
+            {settings.hasKey ? `Key saved (${settings.keyHint}) · Fast decision model` : "Fast decision model · api.typesafe.ai"}
+          </div>
+        </div>
+        {settings.hasKey ? (
+          <span className="ui-chip ui-chip--ok">
+            <CheckCircle2 size={11} /> Connected
           </span>
-          <div>
-            <h3 className="jev-card__title">Jev</h3>
-            <p className="jev-card__desc">
-              TypeSafe's fast decision model. Hive uses it to suggest when to compact and to give the agent an <code>ask_jev</code> tool. Requests go
-              straight from your machine to <code>api.typesafe.ai</code> with your key; nothing passes through Hive servers.
-            </p>
-          </div>
-        </div>
-
-        <div className="jev-keyrow">
-          <input
-            className="jev-input jev-input--key"
-            type={showKey ? "text" : "password"}
-            autoComplete="off"
-            spellCheck={false}
-            aria-label="TypeSafe API key"
-            placeholder={settings.hasKey ? `Key saved (${settings.keyHint}). Paste a new one to replace it` : "Paste your TypeSafe API key"}
-            value={keyDraft}
-            onChange={(e) => setKeyDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void saveKey()}
-          />
-          <button className="jev-btn jev-btn--ghost" type="button" onClick={() => setShowKey((v) => !v)} title={showKey ? "Hide" : "Show"} aria-label={showKey ? "Hide key" : "Show key"}>
-            {showKey ? <EyeOff size={13} /> : <Eye size={13} />}
-          </button>
-          <button className="jev-btn" type="button" disabled={!keyDraft.trim()} onClick={() => void saveKey()}>
-            Save key
-          </button>
-          <button className="jev-btn jev-btn--ghost" type="button" disabled={!settings.hasKey || test === "testing"} onClick={() => void runTest()}>
-            Test
-          </button>
-          {settings.hasKey && (
-            <button className="jev-btn jev-btn--ghost" type="button" onClick={() => void save({ apiKey: "" }).then(() => setTest(null))} title="Remove the saved key">
-              <Trash2 size={13} />
-            </button>
-          )}
-        </div>
-
-        <div className="jev-status" role="status">
-          {test === "testing" && (
-            <>
-              <Loader2 size={13} className="jev-spin" /> Checking key…
-            </>
-          )}
-          {test && test !== "testing" && test.ok && (
-            <span className="jev-ok">
-              <CheckCircle2 size={13} /> Key works{test.models?.length ? ` · models: ${test.models.join(", ")}` : ""}
-            </span>
-          )}
-          {test && test !== "testing" && !test.ok && (
-            <span className="jev-bad">
-              <CircleAlert size={13} /> {test.error}
-            </span>
-          )}
-          {!test && !settings.hasKey && <span className="jev-muted">No key yet. Jev features stay off until you save one.</span>}
-          {error && <span className="jev-bad">{error}</span>}
-        </div>
-        {test && test !== "testing" && test.ok && test.balanceHeaders && (
-          <div className="jev-muted">Balance info reported by the API: {Object.entries(test.balanceHeaders).map(([k, v]) => `${k}: ${v}`).join(", ")}</div>
+        ) : (
+          <span className="ui-chip">
+            <CircleAlert size={11} /> Not connected
+          </span>
         )}
-      </section>
-
-      <section className="jev-card">
-        <h4 className="jev-card__sub">Spend</h4>
-        <p className="jev-card__desc">
-          TypeSafe's API doesn't expose your balance or pricing, so Hive counts the input tokens each call reports (output tokens are free) and prices them with the rate you enter.
-          Enter your loaded credit to see an estimate of what's left.
-        </p>
-        {usage && (
-          <div className="jev-stats">
-            <Stat label="Today" bucket={usage.today} />
-            <Stat label="Last 7 days" bucket={usage.last7d} />
-            <Stat label="All time" bucket={usage.total} />
-            <div className="jev-stat jev-stat--remaining">
-              <div className="jev-stat__label">Credit left (est.)</div>
-              <div className="jev-stat__value">{usd(usage.remainingUsd, 2)}</div>
-              <div className="jev-stat__sub">{usage.remainingUsd === null ? "set price and credit below" : "from the credit you entered"}</div>
-            </div>
-          </div>
-        )}
-        {usage?.lastError && <div className="jev-bad jev-lasterr">Last error: {usage.lastError.message}</div>}
-        <Row title="Price per 1M input tokens" hint="From your TypeSafe plan. Used only for the estimates above.">
-          <NumberField label="Price per million input tokens" prefix="$" placeholder="e.g. 0.10" step={0.01} value={settings.pricePerMTokUsd} onCommit={(v) => void save({ pricePerMTokUsd: v })} />
-        </Row>
-        <Row title="Credit you loaded" hint="Spend is counted from the moment you change this figure.">
-          <NumberField label="Credit in USD" prefix="$" placeholder="e.g. 5" step={1} value={settings.creditUsd} onCommit={(v) => void save({ creditUsd: v })} />
-        </Row>
-        <Row title="Daily call limit" hint="Stops Jev calls for the rest of the day once reached (all sessions). 0 means unlimited.">
-          <NumberField label="Calls per day" value={settings.maxCallsPerDay} onCommit={(v) => void save({ maxCallsPerDay: v ?? 0 })} />
-        </Row>
-        {usage && usage.total.calls > 0 && (
-          <div className="jev-actions">
-            <button className="jev-btn jev-btn--ghost" type="button" onClick={() => void host.ipc.invoke<UsageSummary>(JevMethods.clearUsage).then(setUsage)}>
-              Reset usage log
-            </button>
-          </div>
-        )}
-      </section>
-
-      <section className="jev-card">
-        <h4 className="jev-card__sub">Features</h4>
-        <Row
-          title="Smart compaction hint"
-          hint="After a finished turn, Jev checks whether this is a natural stopping point. Hive then shows a hint above the composer (never mid-task) with a one-click Compact button. Pi's own auto-compaction stays as the safety net. Takes effect on the next turn."
+        <button
+          type="button"
+          className="ui-btn ui-btn--ghost ui-btn--icon jev-expand-btn"
+          aria-label={expanded ? "Collapse Jev settings" : "Expand Jev settings"}
+          title={expanded ? "Collapse settings" : "Expand settings"}
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
         >
-          <Switch label="Smart compaction hint" checked={settings.compact.enabled} onChange={(v) => void save({ compact: { enabled: v } })} />
-        </Row>
-        <Row title="Only check above" hint="Below this share of the context window Jev is not called at all, which saves cost.">
-          <NumberField label="Context percentage floor" value={settings.compact.floorPct} max={95} onCommit={(v) => void save({ compact: { floorPct: v ?? 40 } })} prefix="%" />
-        </Row>
-        <Row title="ask_jev tool" hint="Lets the agent ask Jev typed yes/no, choice or score questions about files or read-only command output without loading them into its own context. Applies to new sessions.">
-          <Switch label="ask_jev tool" checked={settings.askJev.enabled} onChange={(v) => void save({ askJev: { enabled: v } })} />
-        </Row>
-      </section>
+          {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+        </button>
+      </div>
+
+      {!expanded && (
+        <div className="settings__account-actions">
+          <span className="ui-row__hint">
+            {settings.hasKey
+              ? `${settings.compact.enabled ? "Compaction hints on" : "Compaction off"} · ${settings.askJev.enabled ? "ask_jev on" : "ask_jev off"}${usage?.remainingUsd !== null && usage?.remainingUsd !== undefined ? ` · Est. credit: ${usd(usage.remainingUsd, 2)}` : ""}`
+              : "Fast typed decisions for smart compaction and ask_jev tool (requires TypeSafe key)"}
+          </span>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            {settings.hasKey && (
+              <button
+                className="ui-btn ui-btn--sm"
+                type="button"
+                disabled={test === "testing"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void runTest();
+                }}
+                title="Test saved TypeSafe API key"
+              >
+                {test === "testing" ? <Loader2 size={12} className="jev-spin" /> : null} Test
+              </button>
+            )}
+            <button
+              className="ui-btn ui-btn--sm ui-btn--primary"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded(true);
+              }}
+            >
+              {settings.hasKey ? "Configure" : "Set up key"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {expanded && (
+        <div className="jev-account-body">
+          <section className="jev-card jev-card--hero">
+            <div className="jev-card__head">
+              <span className="jev-icon">
+                <Gauge size={18} />
+              </span>
+              <div>
+                <h3 className="jev-card__title">Decision Model & API Key</h3>
+                <p className="jev-card__desc">
+                  TypeSafe's fast decision model. Hive uses it to suggest when to compact and to give the agent an <code>ask_jev</code> tool. Requests go
+                  straight from your machine to <code>api.typesafe.ai</code> with your key; nothing passes through Hive servers.
+                </p>
+              </div>
+            </div>
+
+            <div className="jev-keyrow">
+              <input
+                className="jev-input jev-input--key"
+                type={showKey ? "text" : "password"}
+                autoComplete="off"
+                spellCheck={false}
+                aria-label="TypeSafe API key"
+                placeholder={settings.hasKey ? `Key saved (${settings.keyHint}). Paste a new one to replace it` : "Paste your TypeSafe API key"}
+                value={keyDraft}
+                onChange={(e) => setKeyDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void saveKey()}
+              />
+              <button className="jev-btn jev-btn--ghost" type="button" onClick={() => setShowKey((v) => !v)} title={showKey ? "Hide" : "Show"} aria-label={showKey ? "Hide key" : "Show key"}>
+                {showKey ? <EyeOff size={13} /> : <Eye size={13} />}
+              </button>
+              <button className="jev-btn" type="button" disabled={!keyDraft.trim()} onClick={() => void saveKey()}>
+                Save key
+              </button>
+              <button className="jev-btn jev-btn--ghost" type="button" disabled={!settings.hasKey || test === "testing"} onClick={() => void runTest()}>
+                Test
+              </button>
+              {settings.hasKey && (
+                <button className="jev-btn jev-btn--ghost" type="button" onClick={() => void save({ apiKey: "" }).then(() => setTest(null))} title="Remove the saved key">
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+
+            <div className="jev-status" role="status">
+              {test === "testing" && (
+                <>
+                  <Loader2 size={13} className="jev-spin" /> Checking key…
+                </>
+              )}
+              {test && test !== "testing" && test.ok && (
+                <span className="jev-ok">
+                  <CheckCircle2 size={13} /> Key works{test.models?.length ? ` · models: ${test.models.join(", ")}` : ""}
+                </span>
+              )}
+              {test && test !== "testing" && !test.ok && (
+                <span className="jev-bad">
+                  <CircleAlert size={13} /> {test.error}
+                </span>
+              )}
+              {!test && !settings.hasKey && <span className="jev-muted">No key yet. Jev features stay off until you save one.</span>}
+              {error && <span className="jev-bad">{error}</span>}
+            </div>
+            {test && test !== "testing" && test.ok && test.balanceHeaders && (
+              <div className="jev-muted">Balance info reported by the API: {Object.entries(test.balanceHeaders).map(([k, v]) => `${k}: ${v}`).join(", ")}</div>
+            )}
+          </section>
+
+          <section className="jev-card">
+            <h4 className="jev-card__sub">Spend</h4>
+            <p className="jev-card__desc">
+              TypeSafe's API doesn't expose your balance or pricing, so Hive counts the input tokens each call reports (output tokens are free) and prices them with the rate you enter.
+              Enter your loaded credit to see an estimate of what's left.
+            </p>
+            {usage && (
+              <div className="jev-stats">
+                <Stat label="Today" bucket={usage.today} />
+                <Stat label="Last 7 days" bucket={usage.last7d} />
+                <Stat label="All time" bucket={usage.total} />
+                <div className="jev-stat jev-stat--remaining">
+                  <div className="jev-stat__label">Credit left (est.)</div>
+                  <div className="jev-stat__value">{usd(usage.remainingUsd, 2)}</div>
+                  <div className="jev-stat__sub">{usage.remainingUsd === null ? "set price and credit below" : "from the credit you entered"}</div>
+                </div>
+              </div>
+            )}
+            {usage?.lastError && <div className="jev-bad jev-lasterr">Last error: {usage.lastError.message}</div>}
+            <Row title="Price per 1M input tokens" hint="From your TypeSafe plan. Used only for the estimates above.">
+              <NumberField label="Price per million input tokens" prefix="$" placeholder="e.g. 0.10" step={0.01} value={settings.pricePerMTokUsd} onCommit={(v) => void save({ pricePerMTokUsd: v })} />
+            </Row>
+            <Row title="Credit you loaded" hint="Spend is counted from the moment you change this figure.">
+              <NumberField label="Credit in USD" prefix="$" placeholder="e.g. 5" step={1} value={settings.creditUsd} onCommit={(v) => void save({ creditUsd: v })} />
+            </Row>
+            <Row title="Daily call limit" hint="Stops Jev calls for the rest of the day once reached (all sessions). 0 means unlimited.">
+              <NumberField label="Calls per day" value={settings.maxCallsPerDay} onCommit={(v) => void save({ maxCallsPerDay: v ?? 0 })} />
+            </Row>
+            {usage && usage.total.calls > 0 && (
+              <div className="jev-actions">
+                <button className="jev-btn jev-btn--ghost" type="button" onClick={() => void host.ipc.invoke<UsageSummary>(JevMethods.clearUsage).then(setUsage)}>
+                  Reset usage log
+                </button>
+              </div>
+            )}
+          </section>
+
+          <section className="jev-card">
+            <h4 className="jev-card__sub">Features</h4>
+            <Row
+              title="Smart compaction hint"
+              hint="After a finished turn, Jev checks whether this is a natural stopping point. Hive then shows a hint above the composer (never mid-task) with a one-click Compact button. Pi's own auto-compaction stays as the safety net. Takes effect on the next turn."
+            >
+              <Switch label="Smart compaction hint" checked={settings.compact.enabled} onChange={(v) => void save({ compact: { enabled: v } })} />
+            </Row>
+            <Row title="Only check above" hint="Below this share of the context window Jev is not called at all, which saves cost.">
+              <NumberField label="Context percentage floor" value={settings.compact.floorPct} max={95} onCommit={(v) => void save({ compact: { floorPct: v ?? 40 } })} prefix="%" />
+            </Row>
+            <Row title="ask_jev tool" hint="Lets the agent ask Jev typed yes/no, choice or score questions about files or read-only command output without loading them into its own context. Applies to new sessions.">
+              <Switch label="ask_jev tool" checked={settings.askJev.enabled} onChange={(v) => void save({ askJev: { enabled: v } })} />
+            </Row>
+          </section>
+        </div>
+      )}
     </div>
   );
 };

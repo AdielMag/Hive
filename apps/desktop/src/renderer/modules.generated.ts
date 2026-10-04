@@ -207,7 +207,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   {
     "id": "jev",
     "title": "Jev",
-    "description": "Typed yes/no, choice and score decisions from TypeSafe's Jev model. Suggests the right moment to compact the context (task boundaries, cold prompt cache) and gives the agent an ask_jev tool. Paste your TypeSafe API key in Settings → Jev.",
+    "description": "Typed yes/no, choice and score decisions from TypeSafe's Jev model. Suggests the right moment to compact the context (task boundaries, cold prompt cache) and gives the agent an ask_jev tool. Paste your TypeSafe API key in Settings → AI Providers.",
     "tier": "bonus",
     "recommended": false,
     "icon": "gauge",

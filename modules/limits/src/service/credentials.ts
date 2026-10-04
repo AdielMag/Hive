@@ -1,5 +1,6 @@
 /** Resolves fresh provider credentials by running a helper under the user's Pi Node runtime. */
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import type { PiInstallInfo } from "@hive/protocol";
 
 export interface ProviderCredential {
@@ -30,6 +31,9 @@ export function parseCredentialsOutput(stdout: string): ProviderCredential[] {
 
 /** `helper` is the absolute path of pi-credentials.mjs (shipped in the module folder). */
 export function resolveCredentials(pi: Pick<PiInstallInfo, "nodePath" | "packageRoot">, helper: string): Promise<ProviderCredential[]> {
+  if (!helper || !existsSync(helper)) {
+    return Promise.reject(new Error(`Credential helper script not found at ${helper || "(empty)"}`));
+  }
   return new Promise((resolvePromise, reject) => {
     execFile(
       pi.nodePath,

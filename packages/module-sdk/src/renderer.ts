@@ -126,7 +126,7 @@ export interface ModuleHost {
     has(commandId: string): boolean;
   };
   settings: {
-    open(tabId?: string): void;
+    open(tabId?: string, focus?: { providerId: string; reason?: string }): void;
   };
   openExternal(url: string): Promise<void>;
   /** Persistent key/value storage (localStorage with Hive's legacy-key migration). Keys are used verbatim. */

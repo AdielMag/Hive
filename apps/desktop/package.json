@@ -85,7 +85,8 @@
         "filter": [
           "*/package.json",
           "*/agent/**",
-          "*/bin/**"
+          "*/bin/**",
+          "*/helpers/**"
         ]
       }
     ]

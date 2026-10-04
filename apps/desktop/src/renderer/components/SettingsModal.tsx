@@ -13,10 +13,10 @@ import { type UpdateInfo, isInstalling, useUpdates } from "../store/update-store
 import { UpdateProgressBar } from "./UpdateProgressBar.tsx";
 import { ModulesSettings } from "../features/modules/ModulesSettings.tsx";
 import { useContributions, useModuleHost } from "../modules/registry.ts";
+import { Slot } from "../modules/ModuleViews.tsx";
+import type { CoreSettingsTabId, SettingsTabId } from "../store/ui-store.ts";
 
-export type CoreSettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "keyboard" | "modules" | "updates" | "about";
-/** Core tab, or `<moduleId>:<tabId>` for a settings page contributed by a module. */
-export type SettingsTabId = CoreSettingsTabId | (string & {});
+export type { CoreSettingsTabId, SettingsTabId };
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -282,6 +282,7 @@ const AccountsTab: React.FC = () => {
           </div>
         );
       })}
+      <Slot name="settings.accounts" props={{ focus }} />
     </div>
   );
 };

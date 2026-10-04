@@ -527,7 +527,7 @@ export default function (pi: ExtensionAPI) {
       async execute(_id: string, params: any, signal: AbortSignal | undefined, _onUpdate: unknown, ctx: any) {
         const fail = (text: string): any => ({ content: [{ type: "text" as const, text }], details: { error: text }, isError: true });
         const settings = loadSettings();
-        if (!settings?.askJev.enabled) return fail("ask_jev is disabled or no Jev API key is configured (Hive → Settings → Jev).");
+        if (!settings?.askJev.enabled) return fail("ask_jev is disabled or no Jev API key is configured (Hive → Settings → AI Providers).");
         let questions: Record<string, Question>;
         try {
           questions = toApiQuestions(params.questions);

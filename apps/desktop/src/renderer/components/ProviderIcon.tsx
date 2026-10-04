@@ -1,5 +1,5 @@
 import React from "react";
-import { Cpu } from "lucide-react";
+import { Cpu, Gauge } from "lucide-react";
 
 export interface ProviderIconProps {
   provider: string;
@@ -159,6 +159,11 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
         <rect x="18" y="18" width="4" height="4" />
       </svg>
     );
+  }
+
+  // 8. Jev / TypeSafe
+  if (normalized === "jev" || normalized === "typesafe") {
+    return <Gauge size={size} color="var(--accent-base)" className={className} style={{ flexShrink: 0, ...style }} />;
   }
 
   // Default Fallback

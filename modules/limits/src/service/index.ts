@@ -38,6 +38,7 @@ export interface QuotaServiceDeps {
   resolveCredentials?: (pi: PiInstallInfo) => Promise<ProviderCredential[]>;
   fetchers?: Record<string, Fetcher>;
   readAccounts?: () => Record<string, string | undefined>;
+  readStoredAuth?: () => Record<string, StoredAuthEntry>;
   readCache?: CacheReader;
   now?: () => number;
 }
@@ -61,6 +62,7 @@ export class QuotaService {
       resolveCredentials: deps.resolveCredentials ?? ((p) => resolveCredentials(p, helperPath)),
       fetchers: deps.fetchers ?? QUOTA_FETCHERS,
       readAccounts: deps.readAccounts ?? (() => readAccountLabels(agentDir())),
+      readStoredAuth: deps.readStoredAuth ?? (() => readStoredAuth(agentDir())),
       readCache: deps.readCache ?? (() => readQuotaStatusCache(agentDir())),
       now: deps.now ?? Date.now,
     };
@@ -78,6 +80,7 @@ export class QuotaService {
   private async build(): Promise<QuotaSnapshot> {
     const fetchedAt = this.deps.now();
     const accounts = this.deps.readAccounts();
+    const storedAuth = this.deps.readStoredAuth();
     let credentials: ProviderCredential[] = [];
     let credentialError: string | undefined;
     if (this.pi) {
@@ -87,9 +90,31 @@ export class QuotaService {
         credentialError = err instanceof Error ? err.message : String(err);
       }
     }
-    // If the helper failed, still list the providers that have stored credentials.
+    // If the helper failed, fall back to credentials stored directly in auth.json.
     if (!credentials.length) {
-      credentials = Object.keys(accounts).map((providerId) => ({ providerId, type: "oauth", apiKey: null }));
+      const providerIds = Array.from(new Set([...Object.keys(storedAuth), ...Object.keys(accounts)]));
+      credentials = providerIds.map((providerId) => {
+        const entry = storedAuth[providerId];
+        const apiKey = entry ? apiKeyFromStoredAuth(providerId, entry) : null;
+        return {
+          providerId,
+          type: entry?.type ?? "oauth",
+          apiKey,
+          error: apiKey ? undefined : credentialError,
+        };
+      });
+    } else {
+      // If any credential was returned without an apiKey, check stored auth as fallback.
+      for (const cred of credentials) {
+        const entry = storedAuth[cred.providerId];
+        if (!cred.apiKey && entry) {
+          const fallbackKey = apiKeyFromStoredAuth(cred.providerId, entry);
+          if (fallbackKey) {
+            cred.apiKey = fallbackKey;
+            delete cred.error;
+          }
+        }
+      }
     }
 
     const fallback = this.deps.readCache();
@@ -133,6 +158,37 @@ export class QuotaService {
     const rank = (p: ProviderQuota) => (p.status === "ok" ? 0 : p.status === "error" ? 1 : 2);
     providers.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
     return { providers, fetchedAt };
+  }
+}
+
+export interface StoredAuthEntry {
+  type?: string;
+  access?: string;
+  token?: string;
+  apiKey?: string;
+  projectId?: string;
+  email?: string;
+  expires?: number;
+  [key: string]: unknown;
+}
+
+export function apiKeyFromStoredAuth(providerId: string, entry: StoredAuthEntry): string | null {
+  if (providerId === "antigravity") {
+    const token = entry.access ?? entry.token;
+    if (!token) return null;
+    return JSON.stringify({ token, projectId: entry.projectId ?? "aicode-consumers" });
+  }
+  return entry.access ?? entry.apiKey ?? entry.token ?? null;
+}
+
+export function readStoredAuth(agentDir: string): Record<string, StoredAuthEntry> {
+  if (!agentDir) return {};
+  const path = join(agentDir, "auth.json");
+  if (!existsSync(path)) return {};
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as Record<string, StoredAuthEntry>;
+  } catch {
+    return {};
   }
 }
 

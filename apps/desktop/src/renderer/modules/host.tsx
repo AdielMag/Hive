@@ -23,7 +23,7 @@ import { ContextBreakdownPanel } from "../components/ContextBreakdownPanel.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useSessionStore } from "../store/session-store.ts";
 import { useAppearance } from "../features/appearance/appearance-store.ts";
-import { useUi } from "../store/ui-store.ts";
+import { useUi, type SettingsTabId } from "../store/ui-store.ts";
 import { subscribeSessionEvents } from "./session-bus.ts";
 import { setModuleHostFactory } from "./registry.ts";
 import { toast } from "./toast-store.ts";
@@ -119,7 +119,17 @@ export function createModuleHost(moduleId: string): ModuleHost {
       },
       has: (commandId) => COMMANDS_BY_ID.has(commandId),
     },
-    settings: { open: (tabId) => useUi.getState().openSettings(tabId ? `${moduleId}:${tabId}` : undefined) },
+    settings: {
+      open: (tabId, focus) => {
+        if (!tabId) {
+          useUi.getState().openSettings(undefined, focus);
+          return;
+        }
+        const coreTabs = ["appearance", "models", "compaction", "accounts", "keyboard", "modules", "updates", "about"];
+        const resolvedTab = coreTabs.includes(tabId) || tabId.includes(":") ? (tabId as SettingsTabId) : `${moduleId}:${tabId}`;
+        useUi.getState().openSettings(resolvedTab, focus);
+      },
+    },
     openExternal: (url: string) => window.studio.openSystemBrowser(url),
     links: { setHandler: (handler) => setLinkHandler(moduleId, handler) },
     ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, HighlightedSource: HostHighlightedSource, DiffView: HostDiffView, ProviderIcon: HostProviderIcon, ContextBreakdownPanel: HostContextBreakdown, Slot },

@@ -8,10 +8,10 @@ import {
   parseCodexUsage,
   parseQuotaStatusCache,
 } from "./parsers.ts";
-import { parseCredentialsOutput, SENTINEL } from "./credentials.ts";
+import { parseCredentialsOutput, resolveCredentials, SENTINEL } from "./credentials.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-import { QuotaService } from "./index.ts";
+import { apiKeyFromStoredAuth, QuotaService } from "./index.ts";
 import { UnsupportedError } from "./fetchers.ts";
 import type { PiInstallInfo } from "@hive/protocol";
 
@@ -104,6 +104,23 @@ describe("credential helper output", () => {
     const helper = readFileSync(resolve(__dirname, "../../helpers/pi-credentials.mjs"), "utf8");
     expect(helper).toContain(`"${SENTINEL}"`);
   });
+
+  it("rejects quickly if the helper script does not exist", async () => {
+    await expect(
+      resolveCredentials({ nodePath: "node", packageRoot: "/pi" }, "/non/existent/helper.mjs"),
+    ).rejects.toThrow(/helper script not found/i);
+  });
+});
+
+describe("stored auth mapping", () => {
+  it("formats antigravity apiKey payload as JSON with token and projectId", () => {
+    const key = apiKeyFromStoredAuth("antigravity", { access: "ya29.test", projectId: "my-project" });
+    expect(JSON.parse(key!)).toEqual({ token: "ya29.test", projectId: "my-project" });
+  });
+
+  it("extracts access token for anthropic", () => {
+    expect(apiKeyFromStoredAuth("anthropic", { access: "sk-ant-oat-test" })).toBe("sk-ant-oat-test");
+  });
 });
 
 describe("QuotaService", () => {
@@ -157,5 +174,34 @@ describe("QuotaService", () => {
     expect(calls).toBe(1);
     await svc.getSnapshot(true);
     expect(calls).toBe(2);
+  });
+
+  it("falls back to stored auth.json credentials when helper fails", async () => {
+    let antigravityApiKey: string | null = null;
+    const svc = new QuotaService(pi, {
+      resolveCredentials: async () => {
+        throw new Error("Command failed: node helper.mjs (Cannot find module)");
+      },
+      readStoredAuth: () => ({
+        antigravity: { access: "ya29.stored", projectId: "test-proj", email: "user@example.com" },
+      }),
+      readAccounts: () => ({ antigravity: "user@example.com" }),
+      fetchers: {
+        antigravity: async (apiKey) => {
+          antigravityApiKey = apiKey;
+          return [{ id: "g", label: "Gemini", windows: [window] }];
+        },
+      },
+      readCache: () => new Map(),
+      now: () => NOW,
+    });
+    const snap = await svc.getSnapshot();
+    const agy = snap.providers.find((p) => p.providerId === "antigravity");
+    expect(agy).toMatchObject({
+      status: "ok",
+      source: "live",
+      account: "user@example.com",
+    });
+    expect(JSON.parse(antigravityApiKey!)).toEqual({ token: "ya29.stored", projectId: "test-proj" });
   });
 });

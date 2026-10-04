@@ -73,6 +73,63 @@
 }
 
 /* ---------- Settings page ---------- */
+.jev-account-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.jev-account-card.is-expanded {
+  border-color: rgba(var(--accent-rgb), 0.35);
+}
+.jev-account-head {
+  cursor: pointer;
+  user-select: none;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+.jev-chip-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  height: auto;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+.jev-expand-btn {
+  margin-left: 4px;
+  color: var(--text-secondary);
+}
+.jev-expand-btn:hover {
+  color: var(--text-primary);
+}
+.jev-account-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  animation: jev-fade-in 0.18s ease-out;
+}
+@keyframes jev-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.jev-account-body .jev-card {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.jev-account-body .jev-card--hero {
+  border-color: rgba(var(--accent-rgb), 0.22);
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(var(--accent-rgb), 0.1), transparent 60%),
+    rgba(0, 0, 0, 0.15);
+}
+
 .jev {
   display: flex;
   flex-direction: column;

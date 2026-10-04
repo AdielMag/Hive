@@ -2,36 +2,26 @@
  * Renderer half: the compaction hint above the composer and the Settings → Jev page. Advice arrives from the
  * Pi extension as `jev_advice` bridge events; stream events tell us when it goes stale.
  */
-import React from "react";
-import { Gauge } from "lucide-react";
-import { defineRendererModule, type ModuleHost } from "@hive/module-sdk/renderer";
+import { defineRendererModule } from "@hive/module-sdk/renderer";
 import { isJevAdvice, MODULE_ID } from "./shared.ts";
 import { JevAdviceBar } from "./ui/JevAdviceBar.tsx";
 import { JevSettings } from "./ui/JevSettings.tsx";
 import { jevStore } from "./ui/jev-store.ts";
 
-const Settings: React.FC<{ host: ModuleHost }> = ({ host }) => <JevSettings host={host} />;
-
 export default defineRendererModule({
   id: MODULE_ID,
   contributes: {
-    slots: { "composer.above": [JevAdviceBar as never] },
-    settings: [
-      {
-        id: "jev",
-        label: "Jev",
-        title: "Jev",
-        icon: ({ size }) => <Gauge size={size} />,
-        component: Settings,
-      },
-    ],
+    slots: {
+      "composer.above": [JevAdviceBar as never],
+      "settings.accounts": [JevSettings as never],
+    },
     commands: [
       {
         id: "settings.jev",
         title: "Settings: Jev",
         category: "App",
         keywords: "jev typesafe compaction compact api key ask_jev",
-        run: (host) => host.settings.open("jev"),
+        run: (host) => host.settings.open("accounts", { providerId: "jev" }),
       },
     ],
   },
