@@ -20,6 +20,14 @@ export interface RegistrySkill {
   scope?: string;
 }
 
+/** Size of an instruction file Pi injects into the system prompt (contents stay in the main process). */
+export interface ContextFileInfo {
+  label: string;
+  path: string;
+  chars: number;
+  scope: "global" | "project";
+}
+
 export interface SessionRegistry {
   sessionId: string | null;
   cwd: string;

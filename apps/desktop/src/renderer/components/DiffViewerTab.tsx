@@ -225,7 +225,7 @@ export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
           >
             <Sparkles size={12} />
             <span>Ask Pi</span>
-            <AiModelChip model={activeModel} clickable={false} />
+            <AiModelChip model={activeModel} clickable={false} feature="session" />
           </button>
 
           {/* Close Tab Button */}

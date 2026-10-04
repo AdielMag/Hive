@@ -92,6 +92,21 @@ describe("transcript reducer", () => {
     expect(state.tools["call_1"]?.status).toBe("done");
   });
 
+  it("adopts an unknown run from a tool_execution_update (transcript rebuilt mid-execution)", () => {
+    let state = createTranscript();
+    state = applyEvent(state, {
+      type: "tool_execution_update",
+      toolCallId: "call_9",
+      toolName: "Agent",
+      args: { prompt: "x" },
+      partialResult: { details: { agentId: "abc", status: "running" } },
+    } as PiStreamEvent);
+
+    expect(state.tools["call_9"]?.status).toBe("running");
+    expect(state.tools["call_9"]?.toolName).toBe("Agent");
+    expect(state.tools["call_9"]?.partial).toEqual({ details: { agentId: "abc", status: "running" } });
+  });
+
   it("builds timeline from active branch and filters first system message", () => {
     let state = createTranscript();
     const entries: SessionEntry[] = [

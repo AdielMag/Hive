@@ -103,7 +103,7 @@ export const AppTitleBar: React.FC = () => {
       { label: "Files", shortcut: kbdFiles, action: () => ui.toggleLeft("files") },
       { label: "Source Control", shortcut: kbdGit, action: () => ui.toggleLeft("git") },
       { separator: true, label: "" },
-      { label: "AI Tools", action: () => ui.toggleRight("tools") },
+      { label: "Tools Breakdown", action: () => ui.toggleRight("tools") },
       { label: "Skills & Agents", shortcut: kbdLibrary, action: () => openLibraryTab() },
       { label: "Usage Analytics", shortcut: kbdUsage, action: () => openUsageTab() },
       { label: "Terminal", shortcut: kbdTerminal, action: () => ui.toggleRight("terminal") },

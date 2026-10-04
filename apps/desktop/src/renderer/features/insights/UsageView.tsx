@@ -258,7 +258,7 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
           >
             <Sparkles size={13} />
             <span>Analyze with AI</span>
-            <AiModelChip model={resolvedUsageModel} clickable={false} />
+            <AiModelChip model={resolvedUsageModel} clickable={false} feature="usageAnalysis" />
           </button>
           {focus ? (
             <div className="usage__focus" title={focus}>

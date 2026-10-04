@@ -354,6 +354,77 @@ button.ctx-section__head:hover {
   animation-delay: calc(0.12s + var(--i, 0) * 35ms);
 }
 
+/* Expandable rows + nested sub-breakdown */
+.ctx-row.is-expandable {
+  cursor: pointer;
+}
+.ctx-row.is-expandable:focus-visible,
+.ctx-subrow.is-expandable:focus-visible {
+  outline: 1px solid var(--accent-base);
+  outline-offset: -1px;
+}
+.ctx-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 4px calc(20px + var(--depth, 0) * 14px);
+  padding-left: 8px;
+  border-left: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
+}
+.ctx-subrow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  transition: background 0.15s ease;
+}
+.ctx-subrow:hover {
+  background: var(--ctx-surface-hover);
+}
+.ctx-subrow.is-expandable {
+  cursor: pointer;
+}
+.ctx-subrow__label {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.ctx-subrow__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ctx-subrow__spacer {
+  width: 11px;
+  flex-shrink: 0;
+}
+.ctx-subrow .ctx-row__tokens {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.ctx-subrow .ctx-row__pct {
+  font-size: 10.5px;
+}
+.ctx-subrow__bar {
+  grid-column: 1 / -1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ctx-track);
+  overflow: hidden;
+}
+.ctx-subrow__bar > div {
+  height: 100%;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--c) 70%, transparent);
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Largest items */
 .ctx-items {
   display: flex;

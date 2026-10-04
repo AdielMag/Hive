@@ -2,7 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Minimize2, Loader2, CheckCircle2, Info, Brain, ChevronRight, Sparkles } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
-import { estimateContextBreakdown, type ContextCategory, type ContextBreakdownResult } from "@hive/pi-adapter";
+import {
+  estimateContextBreakdown,
+  type ContextBreakdownNode,
+  type ContextBreakdownResult,
+  type ContextCategory,
+  type ContextSystemParts,
+} from "@hive/pi-adapter";
+import type { ContextFileInfo } from "@hive/protocol";
+import { useActiveRegistry } from "../store/ai-registry-store.ts";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import "../styles/context-panel.css";
@@ -20,7 +28,7 @@ export const CATEGORY_COLORS: Record<ContextCategory, string> = {
 const TOOL_SHADES = ["#fbbf24", "#fb923c", "#f59e0b", "#facc15", "#fdba74", "#eab308"];
 const AUTO_COMPACT_PCT = 85;
 const SYSTEM_NOTE =
-  "Instructions, tool definitions and context files (AGENTS.md, skills). They aren't in the transcript, so their size is the total minus the estimated message sizes.";
+  "Instructions, tool definitions and context files (AGENTS.md, skills). They aren't in the transcript, so their size is the total minus the estimated message sizes. Expand the row for an estimated split; \"Base prompt & other\" is whatever the known parts don't explain.";
 
 const fmtK = (n: number) => {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
@@ -37,14 +45,83 @@ export interface ContextBreakdownData {
   percent: number;
 }
 
+/** Sizes of AGENTS.md / SYSTEM.md style files for `cwd`; fetched once per cwd (they rarely change). */
+const contextFilesCache = new Map<string, { at: number; files: ContextFileInfo[] }>();
+const CONTEXT_FILES_TTL_MS = 15_000;
+
+const NO_CONTEXT_FILES: ContextFileInfo[] = [];
+const contextFilesInFlight = new Map<string, Promise<ContextFileInfo[]>>();
+
+function fetchContextFiles(cwd: string | undefined, cacheKey: string): Promise<ContextFileInfo[]> {
+  const pending = contextFilesInFlight.get(cacheKey);
+  if (pending) return pending;
+  const p = window
+    .studio!.getContextFiles(cwd)
+    .then((res) => {
+      contextFilesCache.set(cacheKey, { at: Date.now(), files: res });
+      return res;
+    })
+    .finally(() => contextFilesInFlight.delete(cacheKey));
+  contextFilesInFlight.set(cacheKey, p);
+  return p;
+}
+
+function useContextFiles(cwd: string | undefined, refreshToken: unknown): ContextFileInfo[] {
+  const cacheKey = cwd ?? "";
+  const [files, setFiles] = useState<ContextFileInfo[]>(
+    () => contextFilesCache.get(cacheKey)?.files ?? NO_CONTEXT_FILES,
+  );
+  useEffect(() => {
+    const cached = contextFilesCache.get(cacheKey);
+    setFiles(cached?.files ?? NO_CONTEXT_FILES);
+    if (cached && Date.now() - cached.at < CONTEXT_FILES_TTL_MS) return;
+    if (!window.studio?.getContextFiles) return;
+    let cancelled = false;
+    fetchContextFiles(cwd, cacheKey)
+      .then((res) => {
+        if (!cancelled) setFiles(res);
+      })
+      .catch(() => {
+        /* The breakdown still works without the file sizes. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cacheKey, cwd, refreshToken]);
+  return files;
+}
+
 /** Shared data source so the composer ring and the side panel agree on the same numbers. */
 export function useContextBreakdown(): ContextBreakdownData {
   const { transcript, stats, selectedModel } = useSessionStore(
-    useShallow((s) => ({ transcript: s.transcript, stats: s.stats, selectedModel: s.selectedModel })),
+    useShallow((s) => ({
+      transcript: s.transcript,
+      stats: s.stats,
+      selectedModel: s.selectedModel,
+    })),
   );
+  const registry = useActiveRegistry();
+  // Re-check the file sizes (TTL-gated) whenever the conversation grows, so AGENTS.md edits show up.
+  const contextFiles = useContextFiles(registry?.cwd, transcript.lastUsage);
+  const systemParts = useMemo<ContextSystemParts | null>(() => {
+    if (!registry && contextFiles.length === 0) return null;
+    return {
+      skills: registry?.skills,
+      tools: registry?.tools,
+      contextFiles: contextFiles.map((f) => ({
+        label: f.label,
+        path: f.path,
+        chars: f.chars,
+      })),
+    };
+  }, [registry, contextFiles]);
   const contextTokens = stats?.contextUsage?.tokens ?? transcript.lastUsage?.totalTokens ?? 0;
   const contextWindow = selectedModel?.contextWindow ?? stats?.contextUsage?.contextWindow ?? 200_000;
-  const breakdown = useMemo(() => estimateContextBreakdown(transcript, contextTokens), [transcript, contextTokens]);
+  const breakdown = useMemo(
+    // Only subdivide the system residual once Pi reports an exact total; before that the view stays as it was.
+    () => estimateContextBreakdown(transcript, contextTokens, contextTokens > 0 ? systemParts : null),
+    [transcript, contextTokens, systemParts],
+  );
   const tokens = contextTokens > 0 ? contextTokens : breakdown.totalTokens;
   const percent = contextWindow > 0 ? (tokens / contextWindow) * 100 : 0;
   return { breakdown, contextTokens: tokens, contextWindow, percent };
@@ -123,7 +200,11 @@ const Donut: React.FC<{
   const arcs = segments.map((s) => {
     const frac = Math.max(0, Math.min(s.frac, 1 - cursor));
     const len = Math.max(0, frac * circ - gap);
-    const arc = { ...s, start: cursor * circ, len: frac > 0 ? Math.max(len, 1.5) : 0 };
+    const arc = {
+      ...s,
+      start: cursor * circ,
+      len: frac > 0 ? Math.max(len, 1.5) : 0,
+    };
     cursor += frac;
     return arc;
   });
@@ -189,15 +270,83 @@ const Donut: React.FC<{
   );
 };
 
+/** Nested, collapsible split of a category (skills, tool calls vs results, …). */
+const SubRows: React.FC<{
+  nodes: ContextBreakdownNode[];
+  color: string;
+  depth: number;
+  expanded: Set<string>;
+  onToggle(key: string): void;
+}> = ({ nodes, color, depth, expanded, onToggle }) => (
+  <div className="ctx-sub" style={{ ["--c" as string]: color, ["--depth" as string]: depth }}>
+    {nodes.map((n) => {
+      const hasKids = Boolean(n.children?.length);
+      const open = hasKids && expanded.has(n.key);
+      const title = [n.detail, `${n.tokens.toLocaleString()} tokens`].filter(Boolean).join(" — ");
+      return (
+        <React.Fragment key={n.key}>
+          <div
+            className={`ctx-subrow${hasKids ? " is-expandable" : ""}`}
+            title={title}
+            role={hasKids ? "button" : undefined}
+            tabIndex={hasKids ? 0 : undefined}
+            aria-expanded={hasKids ? open : undefined}
+            onClick={hasKids ? () => onToggle(n.key) : undefined}
+            onKeyDown={
+              hasKids
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onToggle(n.key);
+                    }
+                  }
+                : undefined
+            }
+          >
+            <span className="ctx-subrow__label">
+              {hasKids ? (
+                <ChevronRight size={11} className={`ctx-chevron${open ? " is-open" : ""}`} />
+              ) : (
+                <span className="ctx-subrow__spacer" />
+              )}
+              <span className="ctx-subrow__name">{n.label}</span>
+              {n.count != null && n.count > 1 && <span className="ctx-row__count">×{n.count}</span>}
+            </span>
+            <span className="ctx-row__tokens">{fmtK(n.tokens)}</span>
+            <span className="ctx-row__pct">{fmtPct(n.percentage)}%</span>
+            <div className="ctx-subrow__bar">
+              <div style={{ width: `${Math.min(100, n.percentage)}%` }} />
+            </div>
+          </div>
+          {open && n.children && (
+            <SubRows nodes={n.children} color={color} depth={depth + 1} expanded={expanded} onToggle={onToggle} />
+          )}
+        </React.Fragment>
+      );
+    })}
+  </div>
+);
+
 export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({ data }) => {
   const { selectedModel, activeKey } = useSessionStore(
-    useShallow((s) => ({ selectedModel: s.selectedModel, activeKey: s.activeKey })),
+    useShallow((s) => ({
+      selectedModel: s.selectedModel,
+      activeKey: s.activeKey,
+    })),
   );
   const { breakdown, contextTokens, contextWindow, percent } = data;
   const [compacting, setCompacting] = useState(false);
   const [compactDone, setCompactDone] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
   const [showItems, setShowItems] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const shownTokens = useAnimatedNumber(contextTokens);
 
   const toolIndex = useMemo(() => {
@@ -326,31 +475,58 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
           <div>
             {segments.map((s, i) => {
               const cat = breakdown.categories[i]!;
+              const hasKids = Boolean(cat.children?.length);
+              const open = hasKids && expanded.has(s.key);
               return (
-                <div
-                  key={s.key}
-                  className={`ctx-row${hovered === s.key ? " is-active" : ""}`}
-                  style={{ ["--c" as string]: s.color, ["--i" as string]: i }}
-                  onMouseEnter={() => setHovered(s.key)}
-                  onMouseLeave={() => setHovered(null)}
-                  title={`${cat.tokens.toLocaleString()} tokens`}
-                >
-                  <span className="ctx-row__dot" />
-                  <span className="ctx-row__label">
-                    <span>{s.label}</span>
-                    {cat.count > 1 && <span className="ctx-row__count">×{cat.count}</span>}
-                    {s.key === "system" && (
-                      <span className="ctx-row__info" title={SYSTEM_NOTE}>
-                        <Info size={12} />
-                      </span>
-                    )}
-                  </span>
-                  <span className="ctx-row__tokens">{fmtK(cat.tokens)}</span>
-                  <span className="ctx-row__pct">{fmtPct(s.share)}%</span>
-                  <div className="ctx-row__bar">
-                    <div style={{ width: `${Math.min(100, s.share)}%` }} />
+                <React.Fragment key={s.key}>
+                  <div
+                    className={`ctx-row${hovered === s.key ? " is-active" : ""}${hasKids ? " is-expandable" : ""}`}
+                    style={{ ["--c" as string]: s.color, ["--i" as string]: i }}
+                    onMouseEnter={() => setHovered(s.key)}
+                    onMouseLeave={() => setHovered(null)}
+                    title={`${cat.tokens.toLocaleString()} tokens`}
+                    role={hasKids ? "button" : undefined}
+                    tabIndex={hasKids ? 0 : undefined}
+                    aria-expanded={hasKids ? open : undefined}
+                    onClick={hasKids ? () => toggleExpanded(s.key) : undefined}
+                    onKeyDown={
+                      hasKids
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              toggleExpanded(s.key);
+                            }
+                          }
+                        : undefined
+                    }
+                  >
+                    <span className="ctx-row__dot" />
+                    <span className="ctx-row__label">
+                      {hasKids && <ChevronRight size={12} className={`ctx-chevron${open ? " is-open" : ""}`} />}
+                      <span>{s.label}</span>
+                      {cat.count > 1 && <span className="ctx-row__count">×{cat.count}</span>}
+                      {s.key === "system" && (
+                        <span className="ctx-row__info" title={SYSTEM_NOTE}>
+                          <Info size={12} />
+                        </span>
+                      )}
+                    </span>
+                    <span className="ctx-row__tokens">{fmtK(cat.tokens)}</span>
+                    <span className="ctx-row__pct">{fmtPct(s.share)}%</span>
+                    <div className="ctx-row__bar">
+                      <div style={{ width: `${Math.min(100, s.share)}%` }} />
+                    </div>
                   </div>
-                </div>
+                  {open && cat.children && (
+                    <SubRows
+                      nodes={cat.children}
+                      color={s.color}
+                      depth={0}
+                      expanded={expanded}
+                      onToggle={toggleExpanded}
+                    />
+                  )}
+                </React.Fragment>
               );
             })}
           </div>
@@ -379,7 +555,11 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
                   <span className="ctx-item__dot" style={{ background: CATEGORY_COLORS[item.category] }} />
                   <span className="ctx-item__text">
                     <b>{item.label}</b>
-                    <span style={{ fontFamily: item.category === "tool" ? "var(--font-mono)" : undefined }}>
+                    <span
+                      style={{
+                        fontFamily: item.category === "tool" ? "var(--font-mono)" : undefined,
+                      }}
+                    >
                       {item.detail ?? ""}
                     </span>
                   </span>

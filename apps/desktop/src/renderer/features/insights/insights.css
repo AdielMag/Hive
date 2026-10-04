@@ -209,10 +209,16 @@
   width: 380px;
   max-width: calc(100vw - 32px);
   max-height: 480px;
+  /* Fully opaque, accent-tinted surface so the popover stands out from the app behind it. */
+  --pop-bg: color-mix(in srgb, var(--bg-elevated) 88%, var(--accent-base) 12%);
+  --pop-head-bg: color-mix(in srgb, var(--bg-elevated) 80%, var(--accent-base) 20%);
   background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
+  background: var(--pop-bg);
+  color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--accent-base) 38%, var(--border-prominent));
   border-radius: var(--radius-lg, 10px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 18px 48px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.35);
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -229,8 +235,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-prominent);
   background: var(--bg-elevated);
+  background: var(--pop-head-bg);
 }
 
 .quota-popover__title {
@@ -260,9 +267,25 @@
   padding: 8px 12px;
   font-size: 10.5px;
   color: var(--text-muted);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-prominent);
   text-align: center;
   background: var(--bg-elevated);
+  background: var(--pop-head-bg);
+}
+
+/* Cards/meters inside the popover: lighter panels with clear edges and readable tracks. */
+.quota-popover .quota-card.ui-card {
+  background: rgba(var(--fg-rgb), 0.06);
+  border-color: var(--border-prominent);
+}
+.quota-popover .quota-meter__bar,
+.quota-popover .quota-card__logo {
+  background: rgba(var(--fg-rgb), 0.16);
+}
+.quota-popover .quota-popover__pin-hint,
+.quota-popover .quota-popover__foot,
+.quota-popover .quota-meter__sub {
+  color: var(--text-secondary);
 }
 
 .quota-popover--cost { width: 280px; }

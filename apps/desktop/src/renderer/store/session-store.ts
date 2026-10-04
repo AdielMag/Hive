@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   BRIDGE_TOPICS,
   isStudioFormCancel,
+  isStudioSubagentStopResult,
   isStudioFormRequest,
   type AgentMode,
   type AttachedItem,
@@ -153,6 +154,8 @@ export interface SessionStoreState {
   respondDialog: (response: RpcExtensionUIResponse) => Promise<void>;
   /** Answer (or cancel) the displayed tab's pending question form. */
   respondForm: (result: Omit<StudioFormResult, "kind">) => Promise<void>;
+  /** Ask the runner to terminate a running or queued subagent. Failures surface via `error`. */
+  stopSubagent: (agentId: string) => Promise<void>;
   deleteSessionFile: (sessionPath: string) => Promise<void>;
   /** Delete a specific queued message from steering or follow-up queue. */
   deleteQueuedMessage: (type: "steering" | "followUp", index: number) => Promise<void>;
@@ -597,6 +600,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         } else if (isStudioFormCancel(message.data)) {
           const { id } = message.data;
           updateTabUi(tabId, (s) => (s.pendingForm?.id === id ? { pendingForm: null } : {}));
+        } else if (isStudioSubagentStopResult(message.data) && !message.data.ok) {
+          useSessionStore.setState({ error: `Could not stop subagent: ${message.data.error ?? "unknown error"}` });
         }
       });
 
@@ -1418,6 +1423,20 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (!activeKey) return; // session already gone: just close the form
     try {
       await window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, { kind: "form_result", ...result });
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  stopSubagent: async (agentId) => {
+    const { activeKey } = get();
+    if (!activeKey) return;
+    try {
+      await window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, {
+        kind: "subagent_stop",
+        id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        agentId,
+      });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
     }

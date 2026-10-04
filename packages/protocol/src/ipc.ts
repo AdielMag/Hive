@@ -17,6 +17,7 @@ import type { AgentMode, ProjectDefaults, ProjectEntry, SessionCatalogItem, Sess
 import type { QuotaSnapshot, UsageReport } from "./insights.ts";
 import type { ModulesSnapshot, SetModulesEnabledResult } from "@hive/module-sdk";
 import type {
+  ContextFileInfo,
   McpServerInfo,
   SessionRegistry,
   SubagentLocateRequest,
@@ -234,6 +235,7 @@ export const IPC = {
   // AI Registry, MCP, and Subagent output
   aiSessionRegistry: "ai:session-registry",
   aiMcpCatalog: "ai:mcp-catalog",
+  aiContextFiles: "ai:context-files",
   aiGenerateUsageInsights: "ai:usage:generate-insights",
   subagentLocate: "subagents:locate",
   subagentRead: "subagents:read",
@@ -483,6 +485,8 @@ export interface StudioApi {
   // AI Registry, MCP, and Subagent output
   getSessionRegistry(key?: string): Promise<SessionRegistry | null>;
   getMcpCatalog(): Promise<McpServerInfo[]>;
+  /** Sizes of AGENTS.md / SYSTEM.md style files that feed the system prompt for `cwd`. */
+  getContextFiles(cwd?: string): Promise<ContextFileInfo[]>;
   locateSubagentOutput(req: SubagentLocateRequest): Promise<SubagentOutputRef | null>;
   readSubagentOutput(path: string, fromOffset?: number): Promise<SubagentOutputChunk>;
 

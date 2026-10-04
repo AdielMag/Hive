@@ -334,6 +334,9 @@ const api: StudioApi = {
   getMcpCatalog() {
     return ipcRenderer.invoke(IPC.aiMcpCatalog);
   },
+  getContextFiles(cwd?: string) {
+    return ipcRenderer.invoke(IPC.aiContextFiles, { cwd });
+  },
   locateSubagentOutput(req: SubagentLocateRequest) {
     return ipcRenderer.invoke(IPC.subagentLocate, req);
   },

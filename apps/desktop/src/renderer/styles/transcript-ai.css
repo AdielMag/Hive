@@ -153,6 +153,13 @@
   gap: 8px;
   flex-shrink: 0;
 }
+.msg-agent-card__stop:hover:not(:disabled) {
+  color: var(--danger, #e5484d);
+}
+.msg-agent-card__stop:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
 .msg-agent-card__status-chip {
   display: inline-flex;
   align-items: center;

@@ -1,5 +1,5 @@
 /**
- * AI Tools panel: what this session used — skills, subagents, MCP servers, built-in and extension tools.
+ * Tools breakdown panel: what this session used — skills, subagents, MCP servers, built-in and extension tools.
  * Every section is collapsible (state persisted); a filter forces matching sections open.
  */
 import React, { useEffect, useMemo, useState } from "react";
@@ -136,7 +136,7 @@ export const ToolsPanel: React.FC = () => {
     <div className="tools-panel">
       <div className="ui-panel-header">
         <div className="ui-panel-title">
-          <Blocks size={14} /> AI Tools
+          <Blocks size={14} /> Tools breakdown
         </div>
         <button
           className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
@@ -187,7 +187,7 @@ export const ToolsPanel: React.FC = () => {
         {nothing && (
           <div className="ui-empty" style={{ margin: "30px auto" }}>
             <Blocks size={24} />
-            <div>{q ? "Nothing matches this filter" : "No AI tools registered yet"}</div>
+            <div>{q ? "Nothing matches this filter" : "No tools registered yet"}</div>
             {!q && <div style={{ fontSize: 11 }}>Tools and skills appear as soon as a Pi session is active.</div>}
           </div>
         )}
