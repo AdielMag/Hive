@@ -162,27 +162,6 @@ export const IPC = {
   sessionsUpdateMeta: "sessions:update-meta",
   trustCheck: "trust:check",
   trustSet: "trust:set",
-  // Git
-  gitStatus: "git:status",
-  gitStage: "git:stage",
-  gitStageAll: "git:stage-all",
-  gitUnstage: "git:unstage",
-  gitUnstageAll: "git:unstage-all",
-  gitDiscard: "git:discard",
-  gitDiscardAll: "git:discard-all",
-  gitCommit: "git:commit",
-  gitBranches: "git:branches",
-  gitCheckout: "git:checkout",
-  gitCreateBranch: "git:create-branch",
-  gitDeleteBranch: "git:delete-branch",
-  gitLog: "git:log",
-  gitBranchDetails: "git:branch-details",
-  gitGraph: "git:graph",
-  gitDiff: "git:diff",
-  gitGenerateCommitMessage: "git:generate-commit-message",
-  gitFetch: "git:fetch",
-  gitPull: "git:pull",
-  gitPush: "git:push",
   // Settings & Compaction
   settingsGetCompaction: "settings:get-compaction",
   settingsSaveCompaction: "settings:save-compaction",
@@ -190,7 +169,6 @@ export const IPC = {
   filesList: "files:list",
   filesRead: "files:read",
   filesReadMedia: "files:read-media",
-  filesRun: "files:run",
   pickFiles: "studio:pick-files",
   // Window controls
   windowMinimize: "window:minimize",
@@ -409,27 +387,6 @@ export interface StudioApi {
   checkTrust(path: string): Promise<{ hasTrustResources: boolean; trusted: boolean }>;
   setTrust(path: string, trusted: boolean): Promise<void>;
 
-  // Git operations
-  getGitStatus(cwd: string): Promise<any>;
-  stageFile(cwd: string, filePath: string): Promise<void>;
-  stageAll(cwd: string): Promise<void>;
-  unstageFile(cwd: string, filePath: string): Promise<void>;
-  unstageAll(cwd: string): Promise<void>;
-  discardFile(cwd: string, filePath: string): Promise<void>;
-  discardAll(cwd: string): Promise<void>;
-  gitCommit(cwd: string, message: string, amend?: boolean): Promise<string>;
-  getGitBranches(cwd: string): Promise<string[]>;
-  gitCheckout(cwd: string, branch: string): Promise<string>;
-  gitCreateBranch(cwd: string, branch: string): Promise<string>;
-  gitDeleteBranch(cwd: string, branch: string, force?: boolean): Promise<string>;
-  getGitLog(cwd: string, maxCount?: number): Promise<Array<{ hash: string; author: string; relativeDate: string; message: string }>>;
-  getGitBranchDetails(cwd: string): Promise<GitBranchDetail[]>;
-  getGitGraph(cwd: string, maxCount?: number): Promise<GitGraphCommit[]>;
-  getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }): Promise<string>;
-  generateCommitMessage(cwd: string, model?: string): Promise<string>;
-  gitFetch(cwd: string): Promise<string>;
-  gitPull(cwd: string): Promise<string>;
-  gitPush(cwd: string): Promise<string>;
   getCompactionSettings(): Promise<CompactionSettings>;
   saveCompactionSettings(settings: CompactionSettings): Promise<{ success: boolean; modelsUpdated: number }>;
 
@@ -438,8 +395,6 @@ export interface StudioApi {
   readFile(filePath: string): Promise<any>;
   readMediaFile(filePath: string): Promise<{ data: string; mimeType: string; size: number; name: string }>;
   pickFiles(options?: { allowImagesOnly?: boolean }): Promise<string[]>;
-  runFile(filePath: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }>;
-
   // Marketplace operations
 
   // Window Controls
@@ -509,32 +464,4 @@ export interface ModulesApi {
   /** Calls a method the module registered with `ctx.ipc.handle`. Rejects while the module is disabled. */
   invoke<T = unknown>(moduleId: string, method: string, ...args: unknown[]): Promise<T>;
   on<T = unknown>(moduleId: string, event: string, listener: (payload: T) => void): () => void;
-}
-
-export interface GitBranchDetail {
-  /** Short name: "main" or "origin/main". */
-  name: string;
-  isRemote: boolean;
-  /** Remote name for remote branches, e.g. "origin". */
-  remote?: string;
-  isCurrent: boolean;
-  hash: string;
-  subject: string;
-  relativeDate: string;
-  upstream?: string;
-  ahead: number;
-  behind: number;
-  /** Upstream is configured but the remote branch no longer exists. */
-  gone: boolean;
-}
-
-export interface GitGraphCommit {
-  hash: string;
-  shortHash: string;
-  parents: string[];
-  author: string;
-  relativeDate: string;
-  message: string;
-  /** Decorations, e.g. ["HEAD -> main", "origin/main", "tag: v1"]. */
-  refs: string[];
 }

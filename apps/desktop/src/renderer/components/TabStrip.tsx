@@ -3,8 +3,6 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   Bot,
   Columns2,
-  FileCode,
-  GitCompare,
   Loader2,
   MessageSquare,
   Moon,
@@ -422,10 +420,6 @@ export const TabStrip: React.FC<TabStripProps> = ({
 
 const TabIcon: React.FC<{ tab: TabItem }> = ({ tab }) => {
   switch (tab.kind) {
-    case "file":
-      return <FileCode size={13} />;
-    case "diff":
-      return <GitCompare size={13} />;
     case "subagent":
       return <Bot size={13} />;
 

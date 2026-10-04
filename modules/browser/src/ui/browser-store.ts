@@ -15,7 +15,11 @@ const KEY = "hive.browser.settings.v1";
 
 function getStored(key: string): string | null {
   try {
-    return typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
+    if (typeof localStorage === "undefined") return null;
+    const current = localStorage.getItem(key);
+    if (current !== null) return current;
+    // Pre-rename builds stored this under "pi-studio.*" (same fallback as core's lib/storage.ts).
+    return key.startsWith("hive.") ? localStorage.getItem(`pi-studio.${key.slice("hive.".length)}`) : null;
   } catch {
     return null;
   }

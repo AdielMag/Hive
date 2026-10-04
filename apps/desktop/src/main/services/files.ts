@@ -1,9 +1,5 @@
 import { readdirSync, statSync, readFileSync, existsSync } from "node:fs";
 import { join, extname, relative } from "node:path";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
-
-const execAsync = promisify(exec);
 
 export interface FileNode {
   name: string;
@@ -169,37 +165,4 @@ export function readFileContent(filePath: string): FileContentResult {
     language: detectLanguage(filePath),
     size: stat.size,
   };
-}
-
-export async function runWithInterpreter(
-  filePath: string,
-  cwd: string,
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const ext = extname(filePath).toLowerCase();
-  let cmd = "";
-
-  if (ext === ".py") {
-    cmd = `python "${filePath}"`;
-  } else if ([".js", ".mjs"].includes(ext)) {
-    cmd = `node "${filePath}"`;
-  } else if ([".ts", ".tsx"].includes(ext)) {
-    cmd = `npx tsx "${filePath}"`;
-  } else if ([".sh", ".bash"].includes(ext)) {
-    cmd = `bash "${filePath}"`;
-  } else if (ext === ".ps1") {
-    cmd = `powershell -NoProfile -File "${filePath}"`;
-  } else {
-    throw new Error(`No default interpreter registered for ${ext} files`);
-  }
-
-  try {
-    const { stdout, stderr } = await execAsync(cmd, { cwd, windowsHide: true });
-    return { stdout, stderr, exitCode: 0 };
-  } catch (err: any) {
-    return {
-      stdout: err.stdout ?? "",
-      stderr: err.stderr ?? err.message,
-      exitCode: err.code ?? 1,
-    };
-  }
 }

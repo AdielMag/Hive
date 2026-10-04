@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getGitStatus, getGitBranches, getGitDiff } from "./git.ts";
+import { getGitStatus, getGitBranches, getGitDiff } from "./service.ts";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const repoRoot = resolve(__dirname, "../../../../..");
+const repoRoot = resolve(__dirname, "../../..");
 
 describe("Git operations", () => {
   it("reads status from the current git repository", async () => {

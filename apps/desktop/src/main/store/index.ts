@@ -7,9 +7,34 @@ import {
   type ProjectsFile,
   type SessionMetaEntry,
   type SessionMetaFile,
+  type TabItem,
   type UiStateFile,
   getNextProjectColor,
 } from "@hive/protocol";
+
+/**
+ * Pre-module builds stored file/diff payloads as top-level TabItem fields; the diff-viewer module now
+ * keeps them in `tab.data`. Fold the old fields in so restored tabs still open.
+ */
+export function migrateLegacyTab(tab: TabItem): TabItem {
+  const old = tab as TabItem & {
+    fileContent?: string;
+    fileLanguage?: string;
+    diffContent?: string;
+    diffStaged?: boolean;
+  };
+  const { fileContent, fileLanguage, diffContent, diffStaged, ...rest } = old;
+  if (fileContent === undefined && fileLanguage === undefined && diffContent === undefined && diffStaged === undefined) return tab;
+  const data: Record<string, unknown> = { ...(rest.data as Record<string, unknown> | undefined) };
+  if (rest.kind === "file") {
+    if (fileContent !== undefined && data.content === undefined) data.content = fileContent;
+    if (fileLanguage !== undefined && data.language === undefined) data.language = fileLanguage;
+  } else if (rest.kind === "diff") {
+    if (diffContent !== undefined && data.content === undefined) data.content = diffContent;
+    if (diffStaged !== undefined && data.staged === undefined) data.staged = diffStaged;
+  }
+  return { ...rest, data };
+}
 
 export class GuiStore {
   private readonly dir: string;
@@ -166,7 +191,7 @@ export class GuiStore {
     // 3. UI State
     const uiData = this.readFileSafely<UiStateFile>(this.uiStatePath);
     if (uiData && uiData.schemaVersion === 1) {
-      this.uiState = uiData;
+      this.uiState = { ...uiData, tabs: Array.isArray(uiData.tabs) ? uiData.tabs.map(migrateLegacyTab) : [] };
     }
   }
 

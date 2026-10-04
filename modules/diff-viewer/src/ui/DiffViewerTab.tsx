@@ -1,98 +1,40 @@
+/** Diff viewer tab. Repo-specific actions (e.g. Stage / Unstage) are contributed by other modules via the `diff.actions` slot. */
 import React, { useMemo } from "react";
-import {
-  Plus,
-  Minus,
-  Sparkles,
-  X,
-  GitCompare,
-} from "lucide-react";
-import type { TabItem } from "@hive/protocol";
-import { useShallow } from "zustand/react/shallow";
-import { useSessionStore } from "../store/session-store.ts";
-import { DiffView } from "./code/DiffView.tsx";
-import { languageFromPath } from "../lib/highlight/languages.ts";
-import { getShortModelName, type ResolvedFeatureModel } from "../store/feature-models-store.ts";
-import { AiModelChip } from "./AiModelChip.tsx";
+import { Sparkles, X, GitCompare } from "lucide-react";
+import type { ModuleHost, ModuleTab } from "@hive/module-sdk/renderer";
+import { DIFF_ACTIONS_SLOT, fileBaseName, type DiffTabData } from "../shared.ts";
 
-export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
-  const { setPromptText, closeTab, newSessionTab, activeProject, selectedModel, defaultModel } = useSessionStore(
-    useShallow((s) => ({
-      setPromptText: s.setPromptText,
-      closeTab: s.closeTab,
-      newSessionTab: s.newSessionTab,
-      activeProject: s.activeProject,
-      selectedModel: s.selectedModel,
-      defaultModel: s.defaultModel,
-    })),
-  );
+export const DiffViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ tab, host }) => {
+  const { project: activeProject } = host.hooks.useActiveSession();
+  const activeModel = host.hooks.useFeatureModel("session");
+  const { AiModelChip, DiffView, Slot } = host.ui;
+  const data = (tab.data ?? {}) as Partial<DiffTabData>;
 
-  const activeModel = useMemo<ResolvedFeatureModel>(() => {
-    const rawId = selectedModel?.id || defaultModel || "";
-    const rawName = selectedModel?.name || selectedModel?.id || defaultModel || "Pi Model";
-    return {
-      id: rawId,
-      name: rawName,
-      shortName: getShortModelName(rawId, rawName),
-      source: "session",
-      sourceLabel: "Active session",
-    };
-  }, [selectedModel, defaultModel]);
-
-  const fileName = tab.title || tab.filePath?.split(/[/\\]/).pop() || "Diff";
-  const content = tab.diffContent || "";
-  const isStaged = Boolean(tab.diffStaged);
-
-  const lines = useMemo(() => content.split("\n"), [content]);
+  const fileName = tab.title || (tab.filePath ? fileBaseName(tab.filePath) : "Diff");
+  const content = data.content ?? "";
+  const isStaged = Boolean(data.staged);
 
   // Compute addition and deletion counts
   const stats = useMemo(() => {
     let added = 0;
     let deleted = 0;
-    lines.forEach((l) => {
+    for (const l of content.split("\n")) {
       if (l.startsWith("+") && !l.startsWith("+++")) added++;
       else if (l.startsWith("-") && !l.startsWith("---")) deleted++;
-    });
-    return { added, deleted };
-  }, [lines]);
-
-  const handleStageToggle = async () => {
-    if (!activeProject || !tab.filePath) return;
-    try {
-      if (isStaged) {
-        await window.studio.unstageFile(activeProject.path, tab.filePath);
-      } else {
-        await window.studio.stageFile(activeProject.path, tab.filePath);
-      }
-      // Refresh diff content
-      const updated = await window.studio.getGitDiff(activeProject.path, {
-        staged: !isStaged,
-        filePath: tab.filePath,
-      });
-      useSessionStore.setState((s) => ({
-        tabs: s.tabs.map((t) =>
-          t.id === tab.id
-            ? {
-                ...t,
-                diffStaged: !isStaged,
-                title: `${!isStaged ? "[Staged] " : ""}${fileName.replace(/^\[Staged\]\s*/, "")}`,
-                diffContent: updated || "No differences detected.",
-              }
-            : t,
-        ),
-      }));
-    } catch (err: any) {
-      alert(`Operation failed: ${err.message || String(err)}`);
     }
-  };
+    return { added, deleted };
+  }, [content]);
 
   const handleAskPi = async () => {
     if (!activeProject) return;
     const relPath = tab.filePath?.replace(activeProject.path, "").replace(/^[/\\]/, "") || fileName;
-    setPromptText(
+    host.sessions.setPrompt(
       `Please review and explain the ${isStaged ? "staged" : "unstaged"} changes in ${relPath}:\n\n\`\`\`diff\n${content}\n\`\`\`\n`,
     );
-    await newSessionTab(activeProject.id);
+    await host.sessions.newSession(activeProject.id);
   };
+
+  const empty = !content.trim() || content === "No differences detected.";
 
   return (
     <div
@@ -175,35 +117,8 @@ export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
 
         {/* Right: Actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          {/* Stage / Unstage Action Button */}
-          <button
-            onClick={handleStageToggle}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "4px 9px",
-              background: isStaged ? "rgba(229, 83, 75, 0.12)" : "rgba(16, 185, 129, 0.12)",
-              border: `1px solid ${isStaged ? "rgba(229, 83, 75, 0.3)" : "rgba(16, 185, 129, 0.3)"}`,
-              borderRadius: 4,
-              color: isStaged ? "var(--danger)" : "var(--success)",
-              fontSize: 11,
-              fontWeight: 500,
-              cursor: "pointer",
-            }}
-          >
-            {isStaged ? (
-              <>
-                <Minus size={12} />
-                <span>Unstage</span>
-              </>
-            ) : (
-              <>
-                <Plus size={12} />
-                <span>Stage</span>
-              </>
-            )}
-          </button>
+          {/* Contributed by other modules (git: Stage / Unstage) */}
+          <Slot name={DIFF_ACTIONS_SLOT} props={{ tab }} />
 
           {/* Ask Pi about diff */}
           <button
@@ -230,7 +145,7 @@ export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
 
           {/* Close Tab Button */}
           <button
-            onClick={() => closeTab(tab.id)}
+            onClick={() => host.tabs.close(tab.id)}
             title="Close diff tab"
             style={{
               background: "transparent",
@@ -251,11 +166,7 @@ export const DiffViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
 
       {/* Diff Content View */}
       <div className="viewer__body">
-        {lines.length === 0 || !content.trim() || content === "No differences detected." ? (
-          <div className="ui-empty">No differences detected.</div>
-        ) : (
-          <DiffView diff={content} lang={languageFromPath(tab.filePath)} />
-        )}
+        {empty ? <div className="ui-empty">No differences detected.</div> : <DiffView diff={content} language={host.languages.fromPath(tab.filePath)} />}
       </div>
     </div>
   );

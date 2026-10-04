@@ -22,7 +22,7 @@ describe("layout-persist", () => {
       leftWidth: 300,
       rightWidth: 400,
     };
-    const res = sanitizeLayout(raw, fallback);
+    const res = sanitizeLayout(raw, fallback, { left: new Set(["files"]), right: new Set() });
     expect(res.right).toBeNull();
     expect(res.left).toBe("files");
     expect(res.leftWidth).toBe(300);
@@ -34,9 +34,13 @@ describe("layout-persist", () => {
       right: "context",
       left: "branches",
     };
-    const res = sanitizeLayout(raw, fallback);
+    const res = sanitizeLayout(raw, fallback, { left: new Set(["branches"]), right: new Set() });
     expect(res.right).toBe("context");
     expect(res.left).toBe("branches");
+  });
+
+  it("drops a module left panel (files/git/branches) once its module is off", () => {
+    expect(sanitizeLayout({ left: "git" }, fallback).left).toBeNull();
   });
 
   it("keeps module panel ids declared by a manifest, drops undeclared ones", () => {

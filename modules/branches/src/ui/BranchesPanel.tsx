@@ -17,11 +17,9 @@ import {
   Tag,
   Trash2,
 } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-import type { GitBranchDetail, GitGraphCommit } from "@hive/protocol";
-import { useSessionStore } from "../store/session-store.ts";
-import { useUi } from "../store/ui-store.ts";
-import { useGitStore } from "../store/git-store.ts";
+import type { ModuleHost } from "@hive/module-sdk/renderer";
+import { GitCommands, type GitBranchDetail, type GitGraphCommit } from "@hive-module/git/shared";
+import { gitApi } from "./branches-host.ts";
 
 /* ------------------------------------------------------------------ */
 /* Graph layout (lane assignment, same idea as VS Code / JetBrains)    */
@@ -319,9 +317,9 @@ const BranchRow: React.FC<{
 /* Panel                                                               */
 /* ------------------------------------------------------------------ */
 
-export const BranchesPanel: React.FC = () => {
-  const { activeProject } = useSessionStore(useShallow((s) => ({ activeProject: s.activeProject })));
-  const showLeft = useUi((s) => s.showLeft);
+export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
+  const { project: activeProject } = host.hooks.useActiveSession();
+  const refreshRailStatus = () => void host.commands.run(GitCommands.refresh);
 
   const [status, setStatus] = useState<any>(null);
   const [branches, setBranches] = useState<GitBranchDetail[]>([]);
@@ -348,24 +346,14 @@ export const BranchesPanel: React.FC = () => {
     setErrorMessage(null);
     try {
       const [repoStatus, details, commits] = await Promise.all([
-        window.studio.getGitStatus(activeProject.path),
-        window.studio.getGitBranchDetails(activeProject.path),
-        window.studio.getGitGraph(activeProject.path, 150),
+        gitApi().getGitStatus(activeProject.path),
+        gitApi().getGitBranchDetails(activeProject.path),
+        gitApi().getGitGraph(activeProject.path, 150),
       ]);
       setStatus(repoStatus);
       setBranches(details);
       setGraph(commits);
-      if (repoStatus && repoStatus.isRepo) {
-        useGitStore.getState().setStatus({
-          ahead: repoStatus.ahead ?? 0,
-          behind: repoStatus.behind ?? 0,
-          branch: repoStatus.branch ?? "",
-          upstream: repoStatus.upstream,
-          isRepo: true,
-        });
-      } else {
-        useGitStore.getState().setStatus(null);
-      }
+      refreshRailStatus();
     } catch (err: any) {
       setErrorMessage(`Failed to read git repository: ${err.message || String(err)}`);
     } finally {
@@ -397,7 +385,7 @@ export const BranchesPanel: React.FC = () => {
     setFetching(true);
     setErrorMessage(null);
     try {
-      await window.studio.gitFetch(activeProject.path);
+      await gitApi().gitFetch(activeProject.path);
       flash("Fetched all remotes");
       await refreshAll();
     } catch (err: any) {
@@ -411,7 +399,7 @@ export const BranchesPanel: React.FC = () => {
     if (!activeProject || b.isCurrent) return;
     // For a remote branch, `git checkout <name>` creates a tracking branch automatically.
     const target = b.isRemote ? b.name.slice(b.name.indexOf("/") + 1) : b.name;
-    void run(() => window.studio.gitCheckout(activeProject.path, target), `Checked out "${target}"`, "Checkout failed");
+    void run(() => gitApi().gitCheckout(activeProject.path, target), `Checked out "${target}"`, "Checkout failed");
   };
 
   const handleCreateBranch = async (e: React.FormEvent) => {
@@ -419,7 +407,7 @@ export const BranchesPanel: React.FC = () => {
     const trimmed = newBranchName.trim();
     if (!activeProject || !trimmed) return;
     await run(
-      () => window.studio.gitCreateBranch(activeProject.path, trimmed),
+      () => gitApi().gitCreateBranch(activeProject.path, trimmed),
       `Created and checked out "${trimmed}"`,
       "Failed to create branch",
     );
@@ -434,13 +422,13 @@ export const BranchesPanel: React.FC = () => {
       setLoading(true);
       setErrorMessage(null);
       try {
-        await window.studio.gitDeleteBranch(activeProject.path, b.name);
+        await gitApi().gitDeleteBranch(activeProject.path, b.name);
         flash(`Deleted "${b.name}"`);
       } catch (err: any) {
         const detail = String(err.stderr || err.message || err);
         if (/not fully merged/i.test(detail) && confirm(`"${b.name}" is not fully merged. Force delete and lose its unique commits?`)) {
           try {
-            await window.studio.gitDeleteBranch(activeProject.path, b.name, true);
+            await gitApi().gitDeleteBranch(activeProject.path, b.name, true);
             flash(`Force-deleted "${b.name}"`);
           } catch (e2: any) {
             setErrorMessage(`Failed to delete branch: ${e2.message || String(e2)}`);
@@ -530,7 +518,7 @@ export const BranchesPanel: React.FC = () => {
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button
             type="button"
-            onClick={() => showLeft("git")}
+            onClick={() => void host.commands.run("view.git")}
             title="Switch to Commits & Changes panel"
             style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid var(--border-subtle)", borderRadius: 4, color: "var(--text-secondary)", padding: "2px 6px", fontSize: 10, cursor: "pointer" }}
           >

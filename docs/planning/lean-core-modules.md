@@ -50,7 +50,7 @@
 - [ ] 1. Module SDK + module host (main & renderer) + registries + Modules settings page, with zero features extracted yet
 - [ ] 2. Extract the isolated modules: Plan Previewer, Browser, Marketplace, Library
 - [ ] 3. Extract Analytics/Limits, Terminal, Tools, Context Breakdown, Theme Studio
-- [ ] 4. Extract Git + Branches + Files + Diff viewer (most coupled), then onboarding picker + upgrade migration
+- [x] 4. Extract Git + Branches + Files + Diff viewer (most coupled), then onboarding picker + upgrade migration
 - [ ] 5. (Phase 2, optional) Downloadable module packs + slim installer
 <!-- /SUMMARY -->
 

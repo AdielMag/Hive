@@ -12,8 +12,6 @@ import { ErrorBoundary } from "./ErrorBoundary.tsx";
 const named = <T extends string>(loader: () => Promise<Record<T, React.ComponentType<any>>>, key: T) =>
   lazy(() => loader().then((m) => ({ default: m[key] })));
 
-const FileViewerTab = named(() => import("./FileViewerTab.tsx"), "FileViewerTab");
-const DiffViewerTab = named(() => import("./DiffViewerTab.tsx"), "DiffViewerTab");
 const SubagentTab = named(() => import("./SubagentTab.tsx"), "SubagentTab");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
@@ -79,11 +77,7 @@ export const WorkbenchPane: React.FC<WorkbenchPaneProps> = ({
         <PaneDropOverlay paneId={pane.id} onDropTab={handleDropTab} />
         <ErrorBoundary label="Editor" resetKey={activeTab?.id ?? pane.id}>
           <Suspense fallback={<Loading />}>
-            {activeTab?.kind === "file" ? (
-              <FileViewerTab tab={activeTab} />
-            ) : activeTab?.kind === "diff" ? (
-              <DiffViewerTab tab={activeTab} />
-            ) : activeTab?.kind === "subagent" ? (
+            {activeTab?.kind === "subagent" ? (
               <SubagentTab tab={activeTab} />
             ) : activeTab && !isCoreTabKind(activeTab.kind) ? (
               <ModuleTabView

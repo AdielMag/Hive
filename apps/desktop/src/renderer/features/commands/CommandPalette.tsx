@@ -7,7 +7,7 @@ import {
   Zap,
 } from "lucide-react";
 import { usePalette } from "./palette-store.ts";
-import { COMMANDS, useCommandsVersion } from "./registry.ts";
+import { COMMANDS, COMMANDS_BY_ID, useCommandsVersion } from "./registry.ts";
 import { getShortcutLabel } from "./useShortcut.ts";
 import { fuzzyMatch } from "./fuzzy.ts";
 import { useSessionStore } from "../../store/session-store.ts";
@@ -62,7 +62,7 @@ export const CommandPalette: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  const { activeProject, projects, allSessions, tabs, activeTabId, openSessionTab, switchTab, openFileTab } =
+  const { activeProject, projects, allSessions, tabs, activeTabId, openSessionTab, switchTab } =
     useSessionStore();
 
   // Load project files in background for quick file jump
@@ -215,7 +215,8 @@ export const CommandPalette: React.FC = () => {
     }
 
     // 5. Files (if in active project)
-    if (!isActionsMode && !isSessionsMode && activeProject && files.length > 0) {
+    // Opening goes through the `file.open` command (diff-viewer module; a disabled module's stub offers to enable it).
+    if (!isActionsMode && !isSessionsMode && activeProject && files.length > 0 && COMMANDS_BY_ID.has("file.open")) {
       const fileMatches: PaletteItem[] = [];
       for (const f of files) {
         const match = fuzzyMatch(actualSearch, f.relativePath);
@@ -230,7 +231,7 @@ export const CommandPalette: React.FC = () => {
           score: match.score,
           run: () => {
             close();
-            void openFileTab(f.path, activeProject.id, f.name);
+            void COMMANDS_BY_ID.get("file.open")?.run({ path: f.path, projectId: activeProject.id, name: f.name });
           },
         });
       }
@@ -261,7 +262,6 @@ export const CommandPalette: React.FC = () => {
     close,
     openSessionTab,
     switchTab,
-    openFileTab,
     pushRecent,
   ]);
 

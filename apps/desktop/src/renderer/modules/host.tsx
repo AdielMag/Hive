@@ -4,9 +4,12 @@
  */
 import { useMemo } from "react";
 import type { ActiveSessionContext, ModuleHost, ModuleTab, OpenTabSpec, ResolvedFeatureModelLite, SessionCatalogLite } from "@hive/module-sdk/renderer";
-import type { AgentMode, TabItem } from "@hive/protocol";
+import { BRIDGE_TOPICS, type AgentMode, type TabItem } from "@hive/protocol";
 import { Markdown } from "../components/code/Markdown.tsx";
 import { CodeBlock } from "../components/code/CodeBlock.tsx";
+import { HighlightedSource } from "../components/code/HighlightedSource.tsx";
+import { DiffView } from "../components/code/DiffView.tsx";
+import { languageFromPath, languageLabel, resolveLanguage } from "../lib/highlight/languages.ts";
 import { ProviderIcon } from "../components/ProviderIcon.tsx";
 import { copyText } from "../lib/clipboard.ts";
 import { scrollToToolCall } from "../components/Transcript.tsx";
@@ -14,6 +17,7 @@ import { useActiveRegistry } from "../store/ai-registry-store.ts";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import { useFeatureModelStore, resolveFeatureModel, type FeatureModelsConfig } from "../store/feature-models-store.ts";
 import { setLinkHandler } from "./link-bus.ts";
+import { Slot } from "./ModuleViews.tsx";
 import { AiModelChip } from "../components/AiModelChip.tsx";
 import { ContextBreakdownPanel } from "../components/ContextBreakdownPanel.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
@@ -66,9 +70,16 @@ function useActiveSession(): ActiveSessionContext {
   const activeProject = useSessionStore((s) => s.activeProject);
   const transcript = useSessionStore((s) => s.transcript);
   const registry = useActiveRegistry();
-  return { project: activeProject, transcript, registry };
+  const selected = useSessionStore((s) => s.selectedModel);
+  const provider = selected?.provider;
+  const id = selected?.id;
+  const name = selected?.name;
+  const model = useMemo(() => (provider && id ? { provider, id, name } : null), [provider, id, name]);
+  return { project: activeProject, transcript, registry, model };
 }
 const HostCodeBlock: ModuleHost["ui"]["CodeBlock"] = (props) => <CodeBlock {...props} />;
+const HostHighlightedSource: ModuleHost["ui"]["HighlightedSource"] = (props) => <HighlightedSource {...props} />;
+const HostDiffView: ModuleHost["ui"]["DiffView"] = ({ diff, language }) => <DiffView diff={diff} lang={language ?? null} />;
 const HostProviderIcon: ModuleHost["ui"]["ProviderIcon"] = (props) => <ProviderIcon {...props} />;
 const HostContextBreakdown: ModuleHost["ui"]["ContextBreakdownPanel"] = (props) => <ContextBreakdownPanel {...props} />;
 
@@ -111,7 +122,13 @@ export function createModuleHost(moduleId: string): ModuleHost {
     settings: { open: (tabId) => useUi.getState().openSettings(tabId ? `${moduleId}:${tabId}` : undefined) },
     openExternal: (url: string) => window.studio.openSystemBrowser(url),
     links: { setHandler: (handler) => setLinkHandler(moduleId, handler) },
-    ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, ProviderIcon: HostProviderIcon, ContextBreakdownPanel: HostContextBreakdown },
+    ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, HighlightedSource: HostHighlightedSource, DiffView: HostDiffView, ProviderIcon: HostProviderIcon, ContextBreakdownPanel: HostContextBreakdown, Slot },
+    languages: {
+      fromPath: (path) => languageFromPath(path),
+      resolve: (name) => resolveLanguage(name),
+      label: (language, raw) => languageLabel(language, raw),
+    },
+    files: { read: (filePath) => window.studio.readFile(filePath), list: (dirPath) => window.studio.listFiles(dirPath) },
     models: {
       catalog: () => useSessionStore.getState().allCatalogModels,
       enabledKeys: () => useSessionStore.getState().enabledModelKeys,
@@ -132,16 +149,26 @@ export function createModuleHost(moduleId: string): ModuleHost {
     },
     sessions: {
       onEvent: subscribeSessionEvents,
+      onBridgeEvent: (listener) =>
+        window.studio.onBridgeMessage(({ key, message }) => {
+          if (message.type === "event" && message.topic === BRIDGE_TOPICS.toGui) listener({ key, data: message.data });
+        }),
+      emitToBridge: (key, data) => window.studio.bridgeEmit(key, BRIDGE_TOPICS.fromGui, data),
       activeProject: () => {
         const p = useSessionStore.getState().activeProject;
         return p ? { id: p.id, name: p.name, path: p.path } : null;
       },
       setMode: (mode) => useSessionStore.getState().setMode(mode as AgentMode),
       setPrompt: (text) => useSessionStore.getState().setPromptText(text),
+      newSession: async (projectId) => {
+        const id = projectId ?? useSessionStore.getState().activeProject?.id;
+        if (id) await useSessionStore.getState().newSessionTab(id);
+      },
     scrollToToolCall: (id) => scrollToToolCall(id),
     },
     ipc: {
       invoke: (method, ...args) => window.studio.modules.invoke(moduleId, method, ...args) as Promise<never>,
+      invokeOf: (otherId, method, ...args) => window.studio.modules.invoke(otherId, method, ...args) as Promise<never>,
       on: (event, listener) => window.studio.modules.on(moduleId, event, listener as (payload: unknown) => void),
     },
   };

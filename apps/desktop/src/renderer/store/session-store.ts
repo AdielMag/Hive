@@ -148,8 +148,6 @@ export interface SessionStoreState {
   updateSubagentTab: (identifier: string, view: SubagentView) => void;
   openSessionTab: (sessionPath: string, projectId: string, title?: string) => Promise<void>;
   newSessionTab: (projectId: string) => Promise<void>;
-  openFileTab: (filePath: string, projectId: string, title?: string) => Promise<void>;
-  openDiffTab: (filePath: string, staged: boolean, projectId: string) => Promise<void>;
   /** Open (or focus) the singleton Skills & Agents library tab. */
   openLibraryTab: () => void;
   openModuleTab: (spec: OpenTabSpec) => string;
@@ -1166,99 +1164,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     void get().ensureActiveSession(tabId);
   },
 
-  openFileTab: async (filePath: string, projectId: string, title?: string) => {
-    const { tabs, projects } = get();
-    const tabId = `file:${filePath}`;
-    const existing = tabs.find((t) => t.id === tabId);
-    const project = projects.find((p) => p.id === projectId) ?? null;
-
-    let content = "";
-    let language = "text";
-    try {
-      const data = await window.studio.readFile(filePath);
-      content = data.content;
-      language = data.language;
-    } catch (err: any) {
-      content = `Failed to load file: ${err.message || String(err)}`;
-    }
-
-    if (existing) {
-      set((s) => ({
-        tabs: s.tabs.map((t) =>
-          t.id === tabId ? { ...t, fileContent: content, fileLanguage: language } : t,
-        ),
-        activeTabId: tabId,
-        activeProject: project,
-      }));
-      return;
-    }
-
-    const fileName = filePath.split(/[/\\]/).pop() || "File";
-    const newTab: TabItem = {
-      id: tabId,
-      kind: "file",
-      projectId,
-      title: title || fileName,
-      filePath,
-      fileContent: content,
-      fileLanguage: language,
-      pinned: false,
-      isCold: false,
-    };
-
-    set({
-      tabs: [...tabs, newTab],
-      activeTabId: tabId,
-      activeProject: project,
-    });
-  },
-
-  openDiffTab: async (filePath: string, staged: boolean, projectId: string) => {
-    const { tabs, projects } = get();
-    const tabId = `diff:${staged ? "staged" : "working"}:${filePath}`;
-    const existing = tabs.find((t) => t.id === tabId);
-    const project = projects.find((p) => p.id === projectId) ?? null;
-
-    let diffContent = "";
-    if (project?.path) {
-      try {
-        diffContent = await window.studio.getGitDiff(project.path, { staged, filePath });
-      } catch (err: any) {
-        diffContent = `Failed to load diff: ${err.message || String(err)}`;
-      }
-    }
-
-    if (existing) {
-      set((s) => ({
-        tabs: s.tabs.map((t) =>
-          t.id === tabId ? { ...t, diffContent: diffContent || "No differences detected." } : t,
-        ),
-        activeTabId: tabId,
-        activeProject: project,
-      }));
-      return;
-    }
-
-    const fileName = filePath.split(/[/\\]/).pop() || filePath;
-    const newTab: TabItem = {
-      id: tabId,
-      kind: "diff",
-      projectId,
-      title: `${staged ? "[Staged] " : ""}${fileName}`,
-      filePath,
-      diffStaged: staged,
-      diffContent: diffContent || "No differences detected.",
-      pinned: false,
-      isCold: false,
-    };
-
-    set({
-      tabs: [...tabs, newTab],
-      activeTabId: tabId,
-      activeProject: project,
-    });
-  },
-
   openLibraryTab: () => {
     const { tabs } = get();
     if (!tabs.some((t) => t.id === LIBRARY_TAB_ID)) {
@@ -1297,7 +1202,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     const newTab: TabItem = {
       id: tabId,
       kind: spec.kind,
-      projectId: activeProject?.id ?? "",
+      projectId: spec.projectId ?? activeProject?.id ?? "",
       title: spec.title,
       filePath: spec.filePath,
       url: spec.url,
@@ -1306,7 +1211,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       data: spec.data,
       pinned: false,
     };
-    set({ tabs: [...tabs, newTab], activeTabId: tabId });
+    const owner = spec.projectId ? get().projects.find((p) => p.id === spec.projectId) : undefined;
+    set({ tabs: [...tabs, newTab], activeTabId: tabId, ...(owner ? { activeProject: owner } : {}) });
     return tabId;
   },
 
@@ -1344,13 +1250,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
-    // Module-contributed tab kinds are plain views, like file/diff.
+    // Module-contributed tab kinds are plain views; they follow their own project when they have one.
     if (tab.kind && !isCoreTabKind(tab.kind)) {
-      set({ activeTabId: tabId });
+      const owner = tab.projectId ? get().projects.find((p) => p.id === tab.projectId) : undefined;
+      set(owner ? { activeTabId: tabId, activeProject: owner } : { activeTabId: tabId });
       return;
     }
-    // File / diff / subagent tabs are views; they must not tear down the live session's transcript.
-    if (tab.kind === "file" || tab.kind === "diff" || tab.kind === "subagent") {
+    // Subagent tabs are views; they must not tear down the live session's transcript.
+    if (tab.kind === "subagent") {
       set({ activeTabId: tabId, activeProject: get().projects.find((p) => p.id === tab.projectId) ?? get().activeProject });
       return;
     }

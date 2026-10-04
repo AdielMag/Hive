@@ -47,8 +47,6 @@ export const AppTitleBar: React.FC = () => {
   const kbdSettings = useShortcut("settings.open");
   const kbdPalette = useShortcut("palette.open");
   const kbdProjects = useShortcut("view.projects");
-  const kbdFiles = useShortcut("view.files");
-  const kbdGit = useShortcut("view.git");
   const kbdZoomIn = useShortcut("zoom.in");
   const kbdZoomOut = useShortcut("zoom.out");
   const kbdZoomReset = useShortcut("zoom.reset");
@@ -96,8 +94,6 @@ export const AppTitleBar: React.FC = () => {
       { label: "Command Palette…", shortcut: kbdPalette, action: () => usePalette.getState().openPalette() },
       { separator: true, label: "" },
       { label: "Projects", shortcut: kbdProjects, action: () => ui.toggleLeft("projects") },
-      { label: "Files", shortcut: kbdFiles, action: () => ui.toggleLeft("files") },
-      { label: "Source Control", shortcut: kbdGit, action: () => ui.toggleLeft("git") },
       { separator: true, label: "" },
       { label: "Appearance…", action: () => ui.openSettings("appearance") },
       { label: "Zoom In", shortcut: kbdZoomIn, action: () => window.studio.zoom("in") },

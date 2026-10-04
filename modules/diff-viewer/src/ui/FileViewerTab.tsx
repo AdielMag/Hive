@@ -1,45 +1,38 @@
-/** Read-only file viewer: Rider-highlighted source with line numbers, rendered Markdown / JSON / HTML / SVG. */
-import React, { useMemo, useState } from "react";
+/** Read-only file viewer: highlighted source with line numbers, rendered Markdown / JSON / HTML / SVG. */
+import React, { useEffect, useMemo, useState } from "react";
 import { Check, Code2, Copy, Eye, FileCode, FileJson, FileText, Sparkles, X } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-import type { TabItem } from "@hive/protocol";
-import { useSessionStore } from "../store/session-store.ts";
-import { Markdown } from "./code/Markdown.tsx";
-import { HighlightedLines } from "./code/HighlightedLines.tsx";
-import { useHighlight } from "./code/useHighlight.ts";
-import { languageFromPath, languageLabel, resolveLanguage } from "../lib/highlight/languages.ts";
-import { copyText } from "../lib/clipboard.ts";
-import { useAppearance } from "../features/appearance/appearance-store.ts";
-import { getShortModelName, type ResolvedFeatureModel } from "../store/feature-models-store.ts";
-import { AiModelChip } from "./AiModelChip.tsx";
+import type { ModuleHost, ModuleTab } from "@hive/module-sdk/renderer";
+import { fileBaseName, type FileTabData } from "../shared.ts";
 
-export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
-  const { setPromptText, closeTab, newSessionTab, activeProject, selectedModel, defaultModel } = useSessionStore(
-    useShallow((s) => ({
-      setPromptText: s.setPromptText,
-      closeTab: s.closeTab,
-      newSessionTab: s.newSessionTab,
-      activeProject: s.activeProject,
-      selectedModel: s.selectedModel,
-      defaultModel: s.defaultModel,
-    })),
-  );
+const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-  const activeModel = useMemo<ResolvedFeatureModel>(() => {
-    const rawId = selectedModel?.id || defaultModel || "";
-    const rawName = selectedModel?.name || selectedModel?.id || defaultModel || "Pi Model";
-    return {
-      id: rawId,
-      name: rawName,
-      shortName: getShortModelName(rawId, rawName),
-      source: "session",
-      sourceLabel: "Active session",
+export const FileViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ tab, host }) => {
+  const { project: activeProject } = host.hooks.useActiveSession();
+  const activeModel = host.hooks.useFeatureModel("session");
+  const { AiModelChip, Markdown, HighlightedSource } = host.ui;
+  const data = (tab.data ?? {}) as FileTabData;
+
+  // Tabs opened without content (e.g. by another module) load it themselves.
+  useEffect(() => {
+    if (data.content !== undefined || !tab.filePath) return;
+    let cancelled = false;
+    host.files
+      .read(tab.filePath)
+      .then((res) => {
+        if (!cancelled) host.tabs.update(tab.id, { data: { content: res.content, language: res.language } });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) host.tabs.update(tab.id, { data: { content: `Failed to load file: ${errorText(err)}` } });
+      });
+    return () => {
+      cancelled = true;
     };
-  }, [selectedModel, defaultModel]);
+  }, [data.content, tab.filePath, tab.id, host]);
+
   const [copied, setCopied] = useState(false);
-  const fileName = tab.title || tab.filePath?.split(/[/\\]/).pop() || "File";
-  const content = tab.fileContent || "";
-  const lang = languageFromPath(tab.filePath ?? fileName) ?? resolveLanguage(tab.fileLanguage);
+  const fileName = tab.title || (tab.filePath ? fileBaseName(tab.filePath) : "File");
+  const content = data.content ?? "";
+  const lang = host.languages.fromPath(tab.filePath ?? fileName) ?? host.languages.resolve(data.language);
 
   const isMarkdown = lang === "markdown";
   const isHtml = lang === "html";
@@ -52,7 +45,7 @@ export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
   const sizeKb = (new Blob([content]).size / 1024).toFixed(1);
 
   const onCopy = async () => {
-    if (await copyText(content)) {
+    if (await host.clipboard.copy(content)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     }
@@ -61,9 +54,15 @@ export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
   const askPi = async () => {
     if (!activeProject) return;
     const rel = tab.filePath?.replace(activeProject.path, "").replace(/^[/\\]/, "") || fileName;
-    await newSessionTab(activeProject.id);
-    setPromptText(`Explain ${rel} — what it does and anything notable:\n`);
+    await host.sessions.newSession(activeProject.id);
+    host.sessions.setPrompt(`Explain ${rel} — what it does and anything notable:\n`);
   };
+
+  const source = (code: string, language: string | null) => (
+    <div className="viewer__source selectable">
+      <HighlightedSource code={code} language={language} />
+    </div>
+  );
 
   return (
     <div className="viewer">
@@ -77,7 +76,7 @@ export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
             {tab.filePath}
           </span>
         </div>
-        <span className="ui-chip">{languageLabel(lang, tab.fileLanguage)}</span>
+        <span className="ui-chip">{host.languages.label(lang, data.language)}</span>
         <span className="viewer__meta">
           {lineCount.toLocaleString()} lines · {sizeKb} KB
         </span>
@@ -85,7 +84,7 @@ export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
         {canRender && (
           <div className="ui-seg">
             <button aria-pressed={mode === "rendered"} onClick={() => setMode("rendered")}>
-              <Eye size={12} /> {isMarkdown ? "Preview" : isJson ? "Formatted" : "Preview"}
+              <Eye size={12} /> {isJson ? "Formatted" : "Preview"}
             </button>
             <button aria-pressed={mode === "source"} onClick={() => setMode("source")}>
               <Code2 size={12} /> Source
@@ -105,7 +104,7 @@ export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
           <Sparkles size={12} /> Ask Pi
           <AiModelChip model={activeModel} clickable={false} feature="session" />
         </button>
-        <button className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" onClick={() => void closeTab(tab.id)} title="Close">
+        <button className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" onClick={() => host.tabs.close(tab.id)} title="Close">
           <X size={14} />
         </button>
       </div>
@@ -116,7 +115,7 @@ export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
             <Markdown text={content} />
           </div>
         ) : mode === "rendered" && isJson ? (
-          <SourceView code={prettyJson(content)} lang="json" />
+          source(prettyJson(content), "json")
         ) : mode === "rendered" && isSvg ? (
           <div className="viewer__svg">
             <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(content)}`} alt={fileName} />
@@ -124,7 +123,7 @@ export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
         ) : mode === "rendered" && isHtml ? (
           <iframe className="viewer__iframe" srcDoc={content} sandbox="" title="HTML preview" />
         ) : (
-          <SourceView code={content} lang={lang} />
+          source(content, lang)
         )}
       </div>
     </div>
@@ -138,13 +137,3 @@ function prettyJson(text: string): string {
     return text;
   }
 }
-
-const SourceView: React.FC<{ code: string; lang: string | null }> = ({ code, lang }) => {
-  const tokens = useHighlight(code, lang);
-  const wrap = useAppearance((s) => s.editor.wrapCode);
-  return (
-    <div className="viewer__source selectable">
-      <HighlightedLines code={code} tokens={tokens} lineNumbers wrap={wrap} />
-    </div>
-  );
-};

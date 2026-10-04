@@ -156,8 +156,6 @@ describe("command registry", () => {
       "tab.close",
       "settings.open",
       "view.projects",
-      "view.files",
-      "view.git",
       "zoom.in",
       "zoom.out",
       "zoom.reset",

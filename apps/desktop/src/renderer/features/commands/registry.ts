@@ -113,9 +113,6 @@ const CORE_COMMANDS: readonly Command[] = [
 
   // Views
   left("view.projects", "Projects", "projects", ["Mod+B"]),
-  left("view.files", "Files", "files", ["Mod+Shift+E"]),
-  left("view.git", "Git", "git", ["Mod+Shift+G"]),
-  left("view.branches", "Branches", "branches"),
 
   // Window
   { id: "zoom.in", title: "Zoom In", category: "Window", defaultKeys: ["Mod+=", "Mod+Shift+="], allowInTerminal: true, run: () => void window.studio.zoom("in") },

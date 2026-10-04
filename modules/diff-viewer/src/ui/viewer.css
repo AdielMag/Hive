@@ -1,0 +1,81 @@
+/* ---- File viewer ---- */
+.viewer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.viewer__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.viewer__icon {
+  display: inline-flex;
+  color: var(--accent-base);
+}
+.viewer__names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 40%;
+}
+.viewer__name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viewer__path {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viewer__meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.viewer__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--code-bg);
+}
+.viewer__source {
+  min-width: fit-content;
+}
+.viewer__doc {
+  background: var(--bg-app);
+  min-height: 100%;
+  padding: 28px 40px;
+}
+.viewer__doc .md {
+  max-width: 860px;
+  margin: 0 auto;
+}
+.viewer__svg {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: repeating-conic-gradient(rgba(var(--fg-rgb), 0.05) 0% 25%, transparent 0% 50%) 50% / 18px 18px;
+}
+.viewer__svg img {
+  max-width: 100%;
+  max-height: 70vh;
+}
+.viewer__iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}

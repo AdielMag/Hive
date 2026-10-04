@@ -16,6 +16,7 @@ import { useSessionStore } from "../store/session-store.ts";
 import { useFeatureModelStore, resolveFeatureModel } from "../store/feature-models-store.ts";
 import { AiModelChip } from "./AiModelChip.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
+import { useContributions } from "../modules/registry.ts";
 
 function formatContext(tokens?: number): string {
   if (!tokens) return "";
@@ -25,6 +26,9 @@ function formatContext(tokens?: number): string {
 }
 
 export const ModelsSettingsContent: React.FC = () => {
+  const aiFeatures = useContributions("aiFeatures");
+  const hasGitCommit = aiFeatures.some((f) => f.id === "gitCommit");
+  const hasUsageAnalysis = aiFeatures.some((f) => f.id === "usageAnalysis");
   const { allCatalogModels, models, enabledModelKeys, saveEnabledModels, selectedModel, defaultModel, defaultProvider } =
     useSessionStore(
       useShallow((s) => ({
@@ -223,7 +227,8 @@ export const ModelsSettingsContent: React.FC = () => {
         </div>
       </div>
 
-      {/* Dedicated Auxiliary AI Models Card */}
+      {/* Dedicated Auxiliary AI Models Card: one row per `aiFeatures` contribution of an enabled module. */}
+      {(hasGitCommit || hasUsageAnalysis) && (
       <div
         style={{
           background: "var(--bg-card)",
@@ -247,7 +252,8 @@ export const ModelsSettingsContent: React.FC = () => {
           </span>
         </div>
 
-        {/* Feature 1: Git Commit Message */}
+        {/* Feature 1: Git Commit Message (git module) */}
+        {hasGitCommit && (
         <div
           style={{
             display: "flex",
@@ -325,8 +331,10 @@ export const ModelsSettingsContent: React.FC = () => {
             )}
           </div>
         </div>
+        )}
 
-        {/* Feature 2: AI Usage Insights */}
+        {/* Feature 2: AI Usage Insights (analytics module) */}
+        {hasUsageAnalysis && (
         <div
           style={{
             display: "flex",
@@ -405,7 +413,9 @@ export const ModelsSettingsContent: React.FC = () => {
             )}
           </div>
         </div>
+        )}
       </div>
+      )}
 
       {/* Search and Provider Filters */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
