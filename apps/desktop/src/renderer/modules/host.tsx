@@ -3,12 +3,14 @@
  * modules never reach into `renderer/store/*` themselves.
  */
 import { useMemo } from "react";
-import type { ModuleHost, ModuleTab, OpenTabSpec, ResolvedFeatureModelLite, SessionCatalogLite } from "@hive/module-sdk/renderer";
+import type { ActiveSessionContext, ModuleHost, ModuleTab, OpenTabSpec, ResolvedFeatureModelLite, SessionCatalogLite } from "@hive/module-sdk/renderer";
 import type { AgentMode, TabItem } from "@hive/protocol";
 import { Markdown } from "../components/code/Markdown.tsx";
 import { CodeBlock } from "../components/code/CodeBlock.tsx";
 import { ProviderIcon } from "../components/ProviderIcon.tsx";
 import { copyText } from "../lib/clipboard.ts";
+import { scrollToToolCall } from "../components/Transcript.tsx";
+import { useActiveRegistry } from "../store/ai-registry-store.ts";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import { useFeatureModelStore, resolveFeatureModel, type FeatureModelsConfig } from "../store/feature-models-store.ts";
 import { setLinkHandler } from "./link-bus.ts";
@@ -47,6 +49,13 @@ function useFeatureModel(featureId: string): ResolvedFeatureModelLite {
 }
 
 const useSessionCatalog = (): SessionCatalogLite[] => useSessionStore((s) => s.allSessions);
+
+function useActiveSession(): ActiveSessionContext {
+  const activeProject = useSessionStore((s) => s.activeProject);
+  const transcript = useSessionStore((s) => s.transcript);
+  const registry = useActiveRegistry();
+  return { project: activeProject, transcript, registry };
+}
 const HostCodeBlock: ModuleHost["ui"]["CodeBlock"] = (props) => <CodeBlock {...props} />;
 const HostProviderIcon: ModuleHost["ui"]["ProviderIcon"] = (props) => <ProviderIcon {...props} />;
 
@@ -96,7 +105,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
       loadCatalog: () => useSessionStore.getState().loadModelsCatalog(),
     },
     storage: { get: (key) => getStoredItem(key), set: (key, value) => setStoredItem(key, value) },
-    hooks: { useSessionCatalog, useFeatureModel },
+    hooks: { useSessionCatalog, useFeatureModel, useActiveSession },
     clipboard: {
       copy: copyText,
     },
@@ -116,6 +125,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
       },
       setMode: (mode) => useSessionStore.getState().setMode(mode as AgentMode),
       setPrompt: (text) => useSessionStore.getState().setPromptText(text),
+    scrollToToolCall: (id) => scrollToToolCall(id),
     },
     ipc: {
       invoke: (method, ...args) => window.studio.modules.invoke(moduleId, method, ...args) as Promise<never>,

@@ -126,7 +126,6 @@ const CORE_COMMANDS: readonly Command[] = [
   left("view.files", "Files", "files", ["Mod+Shift+E"]),
   left("view.git", "Git", "git", ["Mod+Shift+G"]),
   left("view.branches", "Branches", "branches"),
-  right("view.tools", "Tools", "tools"),
   right("view.context", "Context", "context"),
 
   // Window

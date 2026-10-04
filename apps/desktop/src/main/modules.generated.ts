@@ -164,6 +164,28 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     },
     "hasMain": true,
     "hasRenderer": true
+  },
+  {
+    "id": "tools",
+    "title": "Tools Inspector",
+    "description": "Inspect skills, subagents, MCP servers, and tools used by the active session with one-click jump to tool calls.",
+    "tier": "bonus",
+    "icon": "wrench",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "tools"
+      ],
+      "commands": [
+        {
+          "id": "view.tools",
+          "title": "Toggle Tools Panel",
+          "category": "View"
+        }
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
   }
 ];
 
@@ -176,4 +198,5 @@ export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ defaul
   "marketplace": () => import("@hive-module/marketplace/main"),
   "plan-previewer": () => import("@hive-module/plan-previewer/main"),
   "terminal": () => import("@hive-module/terminal/main"),
+  "tools": () => import("@hive-module/tools/main"),
 };

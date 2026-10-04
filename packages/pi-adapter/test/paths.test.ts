@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isUnder, normPath } from "./paths.ts";
+import { isUnder, normPath } from "../src/ai/paths.ts";
 
 describe("paths helpers", () => {
   const ctx = {

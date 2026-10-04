@@ -2,15 +2,17 @@
  * Arc-style workbench: the window frame (title bar, activity rails, side panels, status bar) is painted
  * with the theme gradient + grain; the editor area floats on top as a rounded content card.
  */
-import React, { Suspense, lazy, useCallback, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Files,
   FolderKanban,
   GitBranch,
   GitCommit,
   PieChart,
   Settings,
-  Wrench,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "./Sidebar.tsx";
@@ -37,6 +39,7 @@ import { OnboardingPicker } from "../features/modules/OnboardingPicker.tsx";
 import { useKeybindings } from "../features/commands/useKeybindings.ts";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import { CommandPalette } from "../features/commands/CommandPalette.tsx";
+import { startGitStatusWatcher, useGitStore } from "../store/git-store.ts";
 import hiveIcon from "../assets/hive-icon.png";
 
 // Heavy views load on demand to keep startup fast (xterm, charts, settings, file/diff viewers).
@@ -47,7 +50,6 @@ const DiffViewerTab = named(() => import("./DiffViewerTab.tsx"), "DiffViewerTab"
 const SettingsModal = named(() => import("./SettingsModal.tsx"), "SettingsModal");
 const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
 const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel");
-const ToolsPanel = named(() => import("./ToolsPanel.tsx"), "ToolsPanel");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
 
@@ -88,6 +90,42 @@ export const WorkbenchLayout: React.FC = () => {
   const railItems = useContributions("railItems");
   const needsOnboarding = useModules((s) => s.ready && !s.onboarded);
 
+  useEffect(() => {
+    const stopGitWatcher = startGitStatusWatcher();
+    return () => {
+      stopGitWatcher();
+    };
+  }, []);
+
+  const gitStatus = useGitStore((s) => s.status);
+  const ahead = gitStatus?.ahead ?? 0;
+  const behind = gitStatus?.behind ?? 0;
+  const hasAhead = ahead > 0;
+  const hasBehind = behind > 0;
+
+  let gitTitle = gitShortcut ? `Commits & Staging (${gitShortcut})` : "Commits & Staging";
+  if (hasAhead && hasBehind) {
+    gitTitle += ` • ${ahead} to push, ${behind} to pull`;
+  } else if (hasAhead) {
+    gitTitle += ` • ${ahead} to push`;
+  } else if (hasBehind) {
+    gitTitle += ` • ${behind} to pull`;
+  }
+
+  const gitSyncBadge = hasAhead && hasBehind ? (
+    <span className="rail__sync-badge rail__sync-badge--both" aria-hidden="true">
+      <ArrowUpDown size={8} strokeWidth={2.75} />
+    </span>
+  ) : hasAhead ? (
+    <span className="rail__sync-badge rail__sync-badge--ahead" aria-hidden="true">
+      <ArrowUp size={8} strokeWidth={2.75} />
+    </span>
+  ) : hasBehind ? (
+    <span className="rail__sync-badge rail__sync-badge--behind" aria-hidden="true">
+      <ArrowDown size={8} strokeWidth={2.75} />
+    </span>
+  ) : null;
+
   return (
     <div className="shell">
       <div className="shell__grain grain-overlay-bg" />
@@ -113,9 +151,10 @@ export const WorkbenchLayout: React.FC = () => {
           />
           <RailButton
             icon={<GitCommit size={18} />}
-            title={gitShortcut ? `Commits & Staging (${gitShortcut})` : "Commits & Staging"}
+            title={gitTitle}
             active={ui.left === "git"}
             onClick={() => ui.toggleLeft("git")}
+            badge={gitSyncBadge}
           />
           <RailButton
             icon={<GitBranch size={18} />}
@@ -183,7 +222,6 @@ export const WorkbenchLayout: React.FC = () => {
 
         {/* Right rail */}
         <nav className="rail rail--right">
-          <RailButton icon={<Wrench size={18} />} title="Tools breakdown" active={ui.right === "tools"} onClick={() => ui.toggleRight("tools")} />
           <RailButton icon={<PieChart size={18} />} title="Context breakdown" active={ui.right === "context"} onClick={() => ui.toggleRight("context")} />
           {rightModulePanels.map((p) => (
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id} onClick={() => ui.toggleRight(p.id)} />
@@ -211,7 +249,7 @@ const LeftPanelContent: React.FC<{ panel: LeftPanel; onClose(): void }> = ({ pan
   panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : panel === "branches" ? <BranchesPanel /> : panel === "git" ? <GitPanel /> : <ModulePanelView side="left" panelId={panel} onClose={onClose} />;
 
 const RightPanelContent: React.FC<{ panel: RightPanel; onClose(): void }> = ({ panel, onClose }) =>
-  panel === "tools" ? <ToolsPanel /> : panel === "context" ? <ContextBreakdownPanel /> : <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
+  panel === "context" ? <ContextBreakdownPanel /> : <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
 
 const SessionView: React.FC = () => {
   const composerHeight = useUi((s) => s.composerHeight);
@@ -268,8 +306,17 @@ function useDrag(axis: "row" | "col", onMove: (delta: number, start: number) => 
   );
 }
 
-const RailButton: React.FC<{ icon: React.ReactNode; title: string; active: boolean; onClick(): void }> = ({ icon, title, active, onClick }) => (
+const RailButton: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  active: boolean;
+  onClick(): void;
+  badge?: React.ReactNode;
+}> = ({ icon, title, active, onClick, badge }) => (
   <button className={`rail__btn${active ? " is-active" : ""}`} onClick={onClick} title={title} aria-label={title} aria-pressed={active}>
-    {icon}
+    <span className="rail__icon-wrap">
+      {icon}
+      {badge}
+    </span>
   </button>
 );

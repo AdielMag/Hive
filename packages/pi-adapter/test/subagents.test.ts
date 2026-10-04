@@ -6,8 +6,8 @@ import {
   parseGetResultText,
   parseOutputLines,
   resolveSubagentView,
-} from "./subagents.ts";
-import type { AssistantBlock, Timeline } from "@hive/pi-adapter";
+} from "../src/ai/subagents.ts";
+import type { AssistantBlock, Timeline } from "../src/index.ts";
 
 describe("subagents helpers", () => {
   it("parses Agent ID and Output file from result text", () => {

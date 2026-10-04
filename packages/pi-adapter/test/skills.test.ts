@@ -5,8 +5,8 @@ import {
   parseFrontmatter,
   parseSkillBlock,
   skillForToolCall,
-} from "./skills.ts";
-import type { Timeline } from "@hive/pi-adapter";
+} from "../src/ai/skills.ts";
+import type { Timeline } from "../src/index.ts";
 
 describe("skills helpers", () => {
   const ctx = {

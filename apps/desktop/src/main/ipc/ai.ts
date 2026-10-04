@@ -2,7 +2,6 @@ import { closeSync, openSync, readSync } from "node:fs";
 import { IPC, type SubagentLocateRequest } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import { listContextFiles } from "../services/context-files.ts";
-import { getMcpCatalog } from "../services/mcp-catalog.ts";
 import { locateSubagentOutput, readChunk } from "../services/subagent-output.ts";
 import { handle } from "./util.ts";
 
@@ -11,11 +10,6 @@ export function registerAiIpc(ctx: AppContext): void {
   handle(IPC.aiSessionRegistry, ({ key }: { key?: string }) => {
     if (!key) return null;
     return ctx.sessions?.getRegistry(key) ?? null;
-  });
-
-  // MCP Catalog
-  handle(IPC.aiMcpCatalog, () => {
-    return getMcpCatalog();
   });
 
   // Instruction-file sizes for the context breakdown

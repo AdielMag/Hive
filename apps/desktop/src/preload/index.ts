@@ -275,9 +275,6 @@ const api: StudioApi = {
   getSessionRegistry(key?: string) {
     return ipcRenderer.invoke(IPC.aiSessionRegistry, { key });
   },
-  getMcpCatalog() {
-    return ipcRenderer.invoke(IPC.aiMcpCatalog);
-  },
   getContextFiles(cwd?: string) {
     return ipcRenderer.invoke(IPC.aiContextFiles, { cwd });
   },

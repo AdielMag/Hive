@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyTool } from "./classify.ts";
+import { classifyTool } from "../src/ai/classify.ts";
 import type { RegistryTool } from "@hive/protocol";
 
 describe("classifyTool", () => {

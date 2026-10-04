@@ -1,9 +1,6 @@
 import type { Timeline } from "@hive/pi-adapter";
 import type { McpServerInfo, RegistrySkill, RegistryTool, SessionRegistry } from "@hive/protocol";
-import { classifyTool } from "./classify.ts";
-import { indexSkills } from "./skills.ts";
-import { indexSubagents, resolveSubagentView, type SubagentView } from "./subagents.ts";
-import type { PathContext } from "./paths.ts";
+import { classifyTool, indexSkills, indexSubagents, resolveSubagentView, type PathContext, type SubagentView } from "@hive/pi-adapter";
 
 export interface ToolUsageRef {
   toolCallId?: string;

@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { McpServerInfo } from "@hive/protocol";
-import { piAgentDir } from "../paths.ts";
 
 interface CachedTool {
   name: string;
@@ -25,7 +24,7 @@ interface McpCacheFile {
  * Any sensitive credentials or env configs are strictly omitted.
  */
 export function getMcpCatalog(customPath?: string): McpServerInfo[] {
-  const filePath = customPath || join(piAgentDir(), "mcp-cache.json");
+  const filePath = customPath || (process.env.PI_CODING_AGENT_DIR ? join(process.env.PI_CODING_AGENT_DIR, "mcp-cache.json") : join(process.env.HOME || process.env.USERPROFILE || "", ".pi", "agent", "mcp-cache.json"));
   try {
     const raw = readFileSync(filePath, "utf8");
     const parsed = JSON.parse(raw) as McpCacheFile;

@@ -22,23 +22,24 @@ import {
   XCircle,
 } from "lucide-react";
 import { buildTimeline } from "@hive/pi-adapter";
-import { useSessionStore } from "../store/session-store.ts";
-import { useActiveRegistry, useAiRegistryStore } from "../store/ai-registry-store.ts";
-import { availableOnly, collectToolUsage, type ToolUsageRef } from "../lib/ai/tool-usage.ts";
-import type { SubagentView } from "../lib/ai/subagents.ts";
-import { scrollToToolCall } from "./Transcript.tsx";
-import { formatCost } from "../lib/format.ts";
-import { getStoredItem, setStoredItem } from "../lib/storage.ts";
-import "../styles/tools-panel.css";
+import type { ModuleHost } from "@hive/module-sdk/renderer";
+import { formatCost } from "@hive/module-sdk/format";
+import type { McpServerInfo } from "@hive/protocol";
+import type { SubagentView } from "@hive/pi-adapter";
+import { availableOnly, collectToolUsage, type ToolUsageRef } from "./tool-usage.ts";
+import { ToolsMethods } from "../shared.ts";
+import "./tools-panel.css";
 
 type SectionId = "skills" | "subagents" | "mcp" | "builtin" | "extensions";
 
 const COLLAPSE_KEY = "hive:tools-panel:collapsed";
 const SUBAGENT_PREVIEW = 6;
 
-function loadCollapsed(): Partial<Record<SectionId, boolean>> {
+let currentHost: ModuleHost | null = null;
+
+function loadCollapsed(host: ModuleHost): Partial<Record<SectionId, boolean>> {
   try {
-    return JSON.parse(getStoredItem(COLLAPSE_KEY) ?? "{}") as Partial<Record<SectionId, boolean>>;
+    return JSON.parse(host.storage.get(COLLAPSE_KEY) ?? "{}") as Partial<Record<SectionId, boolean>>;
   } catch {
     return {};
   }
@@ -46,36 +47,46 @@ function loadCollapsed(): Partial<Record<SectionId, boolean>> {
 
 const jump = (ref?: ToolUsageRef) => {
   const target = ref?.toolCallId || ref?.itemKey;
-  if (target) scrollToToolCall(target);
+  if (target && currentHost) currentHost.sessions.scrollToToolCall(target);
 };
 
-export const ToolsPanel: React.FC = () => {
-  const activeKey = useSessionStore((s) => s.activeKey);
-  const activeProject = useSessionStore((s) => s.activeProject);
-  const transcript = useSessionStore((s) => s.transcript);
+const scrollToToolCall = (id: string) => {
+  if (currentHost) currentHost.sessions.scrollToToolCall(id);
+};
 
-  const registry = useActiveRegistry();
-  const mcp = useAiRegistryStore((s) => s.mcp);
-  const loadingMcp = useAiRegistryStore((s) => s.loadingMcp);
-  const refreshMcp = useAiRegistryStore((s) => s.refreshMcp);
-  const initRegistry = useAiRegistryStore((s) => s.init);
-  const loadRegistry = useAiRegistryStore((s) => s.load);
+export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
+  currentHost = host;
+  const { project: activeProject, transcript, registry } = host.hooks.useActiveSession();
 
-  const [filter, setFilter] = useState("");
-  const [collapsed, setCollapsed] = useState(loadCollapsed);
-  const [showAllAgents, setShowAllAgents] = useState(false);
+  const [mcp, setMcp] = useState<McpServerInfo[] | null>(null);
+  const [loadingMcp, setLoadingMcp] = useState(false);
+
+  const refreshMcp = async () => {
+    if (loadingMcp) return;
+    setLoadingMcp(true);
+    try {
+      const catalog = await host.ipc.invoke<McpServerInfo[]>(ToolsMethods.getMcpCatalog);
+      setMcp(catalog);
+    } catch {
+      // MCP catalog unavailable
+    } finally {
+      setLoadingMcp(false);
+    }
+  };
 
   useEffect(() => {
-    initRegistry();
-    if (activeKey) void loadRegistry(activeKey);
-  }, [activeKey, initRegistry, loadRegistry]);
+    void refreshMcp();
+  }, []);
+
+  const [filter, setFilter] = useState("");
+  const [collapsed, setCollapsed] = useState(() => loadCollapsed(host));
+  const [showAllAgents, setShowAllAgents] = useState(false);
 
   const toggleSection = (id: SectionId, wasOpen: boolean) => {
-    // While filtering, sections are forced open; don't persist a collapse the user can't see.
     if (filter.trim()) return;
     setCollapsed((prev) => {
       const next = { ...prev, [id]: wasOpen };
-      setStoredItem(COLLAPSE_KEY, JSON.stringify(next));
+      host.storage.set(COLLAPSE_KEY, JSON.stringify(next));
       return next;
     });
   };

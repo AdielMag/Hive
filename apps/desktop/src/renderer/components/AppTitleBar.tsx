@@ -99,8 +99,6 @@ export const AppTitleBar: React.FC = () => {
       { label: "Files", shortcut: kbdFiles, action: () => ui.toggleLeft("files") },
       { label: "Source Control", shortcut: kbdGit, action: () => ui.toggleLeft("git") },
       { separator: true, label: "" },
-      { label: "Tools Breakdown", action: () => ui.toggleRight("tools") },
-      { separator: true, label: "" },
       { label: "Appearance…", action: () => ui.openSettings("appearance") },
       { label: "Zoom In", shortcut: kbdZoomIn, action: () => window.studio.zoom("in") },
       { label: "Zoom Out", shortcut: kbdZoomOut, action: () => window.studio.zoom("out") },

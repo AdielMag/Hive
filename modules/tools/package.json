@@ -1,0 +1,39 @@
+{
+  "name": "@hive-module/tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: tools inspector (skills, subagents, MCP servers and tool usage breakdown)",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "tools",
+    "title": "Tools Inspector",
+    "description": "Inspect skills, subagents, MCP servers, and tools used by the active session with one-click jump to tool calls.",
+    "tier": "bonus",
+    "icon": "wrench",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "tools"
+      ],
+      "commands": [
+        {
+          "id": "view.tools",
+          "title": "Toggle Tools Panel",
+          "category": "View"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "@hive/pi-adapter": "0.1.0",
+    "@hive/protocol": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0"
+  }
+}

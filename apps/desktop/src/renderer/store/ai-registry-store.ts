@@ -1,23 +1,18 @@
 import { useEffect } from "react";
 import { create } from "zustand";
-import type { McpServerInfo, SessionRegistry } from "@hive/protocol";
+import type { SessionRegistry } from "@hive/protocol";
 import { useSessionStore } from "./session-store.ts";
 
 interface AiRegistryState {
   byKey: Record<string, SessionRegistry>;
-  mcp: McpServerInfo[] | null;
-  loadingMcp: boolean;
   init: () => void;
   load: (key: string) => Promise<void>;
-  refreshMcp: () => Promise<void>;
 }
 
 let initStarted = false;
 
 export const useAiRegistryStore = create<AiRegistryState>((set, get) => ({
   byKey: {},
-  mcp: null,
-  loadingMcp: false,
 
   init: () => {
     if (initStarted) return;
@@ -42,9 +37,6 @@ export const useAiRegistryStore = create<AiRegistryState>((set, get) => ({
         }
       });
     }
-
-    // Initial fetch of MCP catalog
-    void get().refreshMcp();
   },
 
   load: async (key: string) => {
@@ -60,22 +52,6 @@ export const useAiRegistryStore = create<AiRegistryState>((set, get) => ({
       }
     } catch (err) {
       console.warn("[ai-registry-store] Failed to load session registry:", err);
-    }
-  },
-
-  refreshMcp: async () => {
-    if (get().loadingMcp) return;
-    set({ loadingMcp: true });
-    try {
-      if (window.studio?.getMcpCatalog) {
-        const mcp = await window.studio.getMcpCatalog();
-        set({ mcp, loadingMcp: false });
-      } else {
-        set({ loadingMcp: false });
-      }
-    } catch (err) {
-      console.warn("[ai-registry-store] Failed to refresh MCP catalog:", err);
-      set({ loadingMcp: false });
     }
   },
 }));

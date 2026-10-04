@@ -3,6 +3,8 @@
  * to core only through the `ModuleHost` it receives — never through `apps/desktop/src/renderer/**` internals.
  */
 import type { ComponentType, ReactNode } from "react";
+import type { TranscriptState } from "@hive/pi-adapter";
+import type { SessionRegistry } from "@hive/protocol";
 
 /** The subset of a workbench tab a module sees. `data` carries module-specific state. */
 export interface ModuleTab {
@@ -68,6 +70,12 @@ export interface SessionCatalogLite {
 }
 
 /** The model a core "AI feature" resolves to under the user's Settings → Models preference. */
+export interface ActiveSessionContext {
+  project: { id: string; name: string; path: string } | null;
+  transcript: TranscriptState;
+  registry: SessionRegistry | null;
+}
+
 export interface ResolvedFeatureModelLite {
   id: string;
   name: string;
@@ -116,6 +124,8 @@ export interface ModuleHost {
     useSessionCatalog(): SessionCatalogLite[];
     /** Resolve an AI feature (declared via `aiFeatures`) to the model chosen in Settings → Models. */
     useFeatureModel(featureId: string): ResolvedFeatureModelLite;
+    /** Active project, live transcript state and session registry. */
+    useActiveSession(): ActiveSessionContext;
   };
   links: {
     /** Claim clicked external links (otherwise they open in the system browser). Returns a disposer. */
@@ -147,6 +157,8 @@ export interface ModuleHost {
     setMode(mode: string): void;
     /** Stage text in the active composer prompt. */
     setPrompt(text: string): void;
+    /** Scroll the transcript view to a tool call or message block by id. */
+    scrollToToolCall(id: string): void;
   };
   ipc: ModuleHostIpc;
 }

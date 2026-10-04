@@ -4,3 +4,4 @@ export * from "./jsonl.ts";
 export * from "./transcript.ts";
 export * from "./version.ts";
 export * from "./usage.ts";
+export * from "./ai/index.ts";

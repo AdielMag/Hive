@@ -17,7 +17,6 @@ import type { ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntr
 import type { ModulesSnapshot, SetModulesEnabledResult } from "@hive/module-sdk";
 import type {
   ContextFileInfo,
-  McpServerInfo,
   SessionRegistry,
   SubagentLocateRequest,
   SubagentOutputChunk,
@@ -216,7 +215,6 @@ export const IPC = {
   evtModuleEvent: "modules:event",
   // AI Registry, MCP, and Subagent output
   aiSessionRegistry: "ai:session-registry",
-  aiMcpCatalog: "ai:mcp-catalog",
   aiContextFiles: "ai:context-files",
   subagentLocate: "subagents:locate",
   subagentRead: "subagents:read",
@@ -302,6 +300,15 @@ export interface LibrarySetFieldRequest {
 export type LibrarySetFieldResult =
   | { ok: true; entry: LibraryEntry }
   | { ok: false; code: "conflict" | "not-allowed" | "io" | "invalid"; error: string };
+
+export interface LibraryDeleteRequest {
+  cwd?: string;
+  path: string;
+}
+
+export type LibraryDeleteResult =
+  | { ok: true }
+  | { ok: false; error: string };
 
 export interface ModelCatalogItem {
   id: string;
@@ -446,7 +453,6 @@ export interface StudioApi {
 
   // AI Registry, MCP, and Subagent output
   getSessionRegistry(key?: string): Promise<SessionRegistry | null>;
-  getMcpCatalog(): Promise<McpServerInfo[]>;
   /** Sizes of AGENTS.md / SYSTEM.md style files that feed the system prompt for `cwd`. */
   getContextFiles(cwd?: string): Promise<ContextFileInfo[]>;
   locateSubagentOutput(req: SubagentLocateRequest): Promise<SubagentOutputRef | null>;
