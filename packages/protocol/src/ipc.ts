@@ -217,7 +217,7 @@ export const IPC = {
   // Shell
   openExternal: "shell:open-external",
   openSystemBrowser: "shell:open-system-browser",
-  evtOpenBrowserTab: "browser:open-tab",
+  evtOpenLink: "app:open-link",
   // Modules (generic bridge for every installable feature module)
   modulesList: "modules:list",
   modulesSetEnabled: "modules:set-enabled",
@@ -478,7 +478,7 @@ export interface StudioApi {
   // Shell
   openExternal(url: string, options?: { external?: boolean }): Promise<void>;
   openSystemBrowser(url: string): Promise<void>;
-  onOpenBrowserTab(listener: (data: { url: string; title?: string }) => void): () => void;
+  onOpenLink(listener: (data: { url: string; title?: string }) => void): () => void;
   /** Page zoom (Ctrl +/-/0). */
   zoom(direction: "in" | "out" | "reset"): void;
 

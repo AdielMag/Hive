@@ -8,6 +8,7 @@ import { Markdown } from "../components/code/Markdown.tsx";
 import { CodeBlock } from "../components/code/CodeBlock.tsx";
 import { ProviderIcon } from "../components/ProviderIcon.tsx";
 import { copyText } from "../lib/clipboard.ts";
+import { setLinkHandler } from "./link-bus.ts";
 import { AiModelChip } from "../components/AiModelChip.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useSessionStore } from "../store/session-store.ts";
@@ -56,6 +57,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
         return tab ? toModuleTab(tab) : undefined;
       },
       list: () => useSessionStore.getState().tabs.map(toModuleTab),
+      onChange: (listener) => useSessionStore.subscribe((s, prev) => { if (s.tabs !== prev.tabs || s.activeTabId !== prev.activeTabId) listener(); }),
     },
     panels: {
       open: (side, panelId) => (side === "left" ? useUi.getState().showLeft(panelId) : useUi.getState().showRight(panelId)),
@@ -70,6 +72,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
     },
     settings: { open: (tabId) => useUi.getState().openSettings(tabId ? `${moduleId}:${tabId}` : undefined) },
     openExternal: (url: string) => window.studio.openSystemBrowser(url),
+    links: { setHandler: (handler) => setLinkHandler(moduleId, handler) },
     ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, ProviderIcon: HostProviderIcon },
     models: {
       catalog: () => useSessionStore.getState().allCatalogModels,

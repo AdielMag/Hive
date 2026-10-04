@@ -67,6 +67,8 @@ export interface ModuleHost {
     update(tabId: string, patch: Partial<ModuleTab> & Record<string, unknown>): void;
     active(): ModuleTab | undefined;
     list(): ModuleTab[];
+    /** Fires whenever the tab list or the active tab changes. */
+    onChange(listener: () => void): () => void;
   };
   panels: {
     open(side: PanelSide, panelId: string): void;
@@ -81,6 +83,10 @@ export interface ModuleHost {
     open(tabId?: string): void;
   };
   openExternal(url: string): Promise<void>;
+  links: {
+    /** Claim clicked external links (otherwise they open in the system browser). Returns a disposer. */
+    setHandler(handler: (url: string, title?: string) => void): () => void;
+  };
   ui: {
     Markdown: ComponentType<{ text: string; className?: string }>;
     /** Core model chip; `model` is the resolved feature model (see host.ai). */

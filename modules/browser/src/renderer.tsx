@@ -3,7 +3,8 @@ import { Globe } from "lucide-react";
 import { defineRendererModule, type ModuleHost } from "@hive/module-sdk/renderer";
 import { BROWSER_TAB_KIND, MODULE_ID } from "./shared.ts";
 import { setBrowserHost } from "./ui/browser-host.ts";
-import { evaluateTabsForMemory, useBrowserStore } from "./ui/browser-store.ts";
+import { useBrowserStore } from "./ui/browser-store.ts";
+import { handleLink, openBrowserUrl, runMemoryCheck } from "./ui/browser-actions.ts";
 
 const BrowserTab = lazy(() => import("./ui/BrowserTab.tsx").then((m) => ({ default: m.BrowserTab })));
 const BrowserSettingsContent = lazy(() =>
@@ -13,7 +14,7 @@ const BrowserSettingsContent = lazy(() =>
 const NewBrowserButton: React.FC<{ host: ModuleHost }> = ({ host }) => (
   <button
     className="tabstrip__new"
-    onClick={() => void host.tabs.open({ kind: BROWSER_TAB_KIND, title: "Hive Browser", url: "https://pi.dev" })}
+    onClick={() => openBrowserUrl(host, useBrowserStore.getState().settings, "https://pi.dev", "Hive Browser")}
     title="Open Hive Browser Tab (Ctrl+Shift+B)"
   >
     <Globe size={13} />
@@ -60,12 +61,7 @@ export default defineRendererModule({
         keywords: "web chromium url link search",
         defaultKeys: ["Mod+Shift+B"],
         allowInTerminal: true,
-        run: (host) =>
-          void host.tabs.open({
-            kind: BROWSER_TAB_KIND,
-            title: "Hive Browser",
-            url: "https://pi.dev",
-          }),
+        run: (host) => void openBrowserUrl(host, useBrowserStore.getState().settings, "https://pi.dev", "Hive Browser"),
       },
       {
         id: "settings.browser",
@@ -89,28 +85,18 @@ export default defineRendererModule({
   activate(host) {
     setBrowserHost(host);
 
-    // Listen for open browser tab events from main process webviews or external links
-    const offOpen = (window as any).studio?.onOpenBrowserTab?.(({ url, title }: { url: string; title?: string }) => {
-      host.tabs.open({
-        kind: BROWSER_TAB_KIND,
-        title: title || "Browser",
-        url,
-        reuse: (t) => t.url === url,
-      });
-    });
+    // Claim clicked links (Markdown, webview popups, Help menu) while this module is enabled.
+    const offLinks = host.links.setHandler((url, title) => handleLink(host, useBrowserStore.getState().settings, url, title));
 
-    // RAM Saver: smart background tab hibernation interval
-    const interval = setInterval(() => {
-      const tabs = host.tabs.list();
-      const active = host.tabs.active();
-      const settings = useBrowserStore.getState().settings;
-      const { tabsToSleep, tabsToWake } = evaluateTabsForMemory(tabs, active?.id ?? null, settings);
-      for (const id of tabsToSleep) host.tabs.update(id, { isSleeping: true });
-      for (const id of tabsToWake) host.tabs.update(id, { isSleeping: false, lastActiveAt: Date.now() });
-    }, 15000);
+    // RAM Saver: wake/sleep on every tab change (instant) and on a slow timer (inactivity timeout).
+    const check = () => runMemoryCheck(host, useBrowserStore.getState().settings);
+    const offTabs = host.tabs.onChange(check);
+    const interval = setInterval(check, 15000);
+    check();
 
     return () => {
-      if (offOpen) offOpen();
+      offLinks();
+      offTabs();
       clearInterval(interval);
       setBrowserHost(null);
     };

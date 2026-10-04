@@ -8,6 +8,7 @@ import { openProjectFolder } from "../features/commands/registry.ts";
 import { getShortcutLabel, useShortcut } from "../features/commands/useShortcut.ts";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useContributions } from "../modules/registry.ts";
+import { openLink } from "../modules/link-bus.ts";
 import { usePalette } from "../features/commands/palette-store.ts";
 import { isInstalling, startUpdateChecks, useUpdates } from "../store/update-store.ts";
 import { updatePercent } from "./UpdateProgressBar.tsx";
@@ -21,14 +22,13 @@ interface MenuItem {
 }
 
 export const AppTitleBar: React.FC = () => {
-  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab, openBrowserTab } = useSessionStore(
+  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       activeTabId: s.activeTabId,
       closeTab: s.closeTab,
       newSessionTab: s.newSessionTab,
       openUsageTab: s.openUsageTab,
-      openBrowserTab: s.openBrowserTab,
     })),
   );
   const ui = useUi(useShallow((s) => ({ openSettings: s.openSettings, toggleLeft: s.toggleLeft, toggleRight: s.toggleRight })));
@@ -112,9 +112,9 @@ export const AppTitleBar: React.FC = () => {
       { label: "Reset Zoom", shortcut: kbdZoomReset, action: () => window.studio.zoom("reset") },
     ],
     Help: [
-      { label: "Pi Documentation", action: () => openBrowserTab("https://pi.dev", "Pi Documentation") },
-      { label: "Hive on GitHub", action: () => openBrowserTab("https://github.com/AdielMag/Hive", "Hive on GitHub") },
-      { label: "Release Notes", action: () => openBrowserTab("https://github.com/AdielMag/Hive/releases", "Release Notes") },
+      { label: "Pi Documentation", action: () => openLink("https://pi.dev", "Pi Documentation") },
+      { label: "Hive on GitHub", action: () => openLink("https://github.com/AdielMag/Hive", "Hive on GitHub") },
+      { label: "Release Notes", action: () => openLink("https://github.com/AdielMag/Hive/releases", "Release Notes") },
       { separator: true, label: "" },
       { label: "About Hive", action: () => ui.openSettings("about") },
     ],

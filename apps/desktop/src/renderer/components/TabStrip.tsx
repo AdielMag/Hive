@@ -17,7 +17,6 @@ export const TabStrip: React.FC = () => {
       switchTab: s.switchTab,
       closeTab: s.closeTab,
       newSessionTab: s.newSessionTab,
-      openBrowserTab: s.openBrowserTab,
       activeProject: s.activeProject,
       running: s.transcript.running,
       sessionActivity: s.sessionActivity,

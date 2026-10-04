@@ -76,7 +76,7 @@ export function registerAppIpc(ctx: AppContext): void {
     } else {
       const win = ctx.getWindow();
       if (win) {
-        win.webContents.send(IPC.evtOpenBrowserTab, { url });
+        win.webContents.send(IPC.evtOpenLink, { url });
       } else {
         await shell.openExternal(url);
       }

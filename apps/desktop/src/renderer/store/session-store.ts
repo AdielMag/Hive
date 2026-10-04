@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   BRIDGE_TOPICS,
+  isCoreTabKind,
   isStudioFormCancel,
   isStudioSubagentStopResult,
   isStudioFormRequest,
@@ -27,6 +28,7 @@ import {
 } from "@hive/pi-adapter";
 import { useInsights } from "../features/insights/insights-store.ts";
 import { emitSessionEvents } from "../modules/session-bus.ts";
+import { openLink } from "../modules/link-bus.ts";
 import type { OpenTabSpec } from "@hive/module-sdk/renderer";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
@@ -133,17 +135,7 @@ export interface SessionStoreState {
   openUsageTab: () => void;
   /** Open (or focus) the singleton Skills & Agents library tab. */
   openLibraryTab: () => void;
-  /** Open (or focus) a Chromium browser tab inside Hive. */
-  openBrowserTab: (url?: string, title?: string) => void;
-  /** Open (or focus) a Plan Previewer tab inside Hive. */
-  /** Opens (or focuses) a tab owned by a module. Returns the tab id. */
   openModuleTab: (spec: OpenTabSpec) => string;
-  /** Update sleeping state of a browser tab to free/restore RAM. */
-  setTabSleeping: (tabId: string, isSleeping: boolean) => void;
-  /** Patch browser tab metadata (e.g. url, title, favicon). */
-  updateBrowserTab: (tabId: string, patch: Partial<TabItem>) => void;
-  /** Put all background browser tabs to sleep immediately. */
-  sleepAllBackgroundTabs: () => void;
   switchTab: (tabId: string) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
   setPromptText: (text: string) => void;
@@ -590,10 +582,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         }
       });
 
-      // Listen for open browser tab events from Electron main process
-      window.studio.onOpenBrowserTab(({ url, title }) => {
-        get().openBrowserTab(url, title);
-      });
+      // Links clicked anywhere (incl. webview popups) are routed by core; a module may claim them.
+      window.studio.onOpenLink(({ url, title }) => openLink(url, title));
 
       // Initial projects and catalog load
       await Promise.all([get().refreshCatalog(), get().loadModelsCatalog()]);
@@ -955,43 +945,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set({ activeTabId: LIBRARY_TAB_ID });
   },
 
-  openBrowserTab: (rawUrl = "https://pi.dev", title) => {
-    const url = (rawUrl || "https://pi.dev").trim();
-    const { tabs, activeProject } = get();
-
-    const existing = tabs.find((t) => t.kind === "browser" && t.url === url);
-    if (existing) {
-      void get().switchTab(existing.id);
-      return;
-    }
-
-    const tabId = `browser-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const parsedTitle = title || (() => {
-      try {
-        const u = new URL(url);
-        return u.hostname || "Browser";
-      } catch {
-        return "Browser";
-      }
-    })();
-
-    const newTab: TabItem = {
-      id: tabId,
-      kind: "browser",
-      projectId: activeProject?.id ?? "",
-      title: parsedTitle,
-      url,
-      isSleeping: false,
-      lastActiveAt: Date.now(),
-      pinned: false,
-    };
-
-    set({
-      tabs: [...tabs, newTab],
-      activeTabId: tabId,
-    });
-  },
-
   openModuleTab: (spec: OpenTabSpec) => {
     const { tabs, activeProject } = get();
     const asModuleTab = (t: TabItem) => ({
@@ -1034,28 +987,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     return tabId;
   },
 
-  setTabSleeping: (tabId: string, isSleeping: boolean) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isSleeping, lastActiveAt: isSleeping ? t.lastActiveAt : Date.now() } : t)),
-    }));
-  },
-
-  updateBrowserTab: (tabId: string, patch: Partial<TabItem>) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t)),
-    }));
-  },
-
-  sleepAllBackgroundTabs: () => {
-    const { activeTabId } = get();
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.kind === "browser" && t.id !== activeTabId ? { ...t, isSleeping: true } : t)),
-    }));
-  },
-
   switchTab: async (tabId: string) => {
     const currentTab = get().tabs.find((t) => t.id === get().activeTabId);
-    if (currentTab?.kind === "browser") {
+    // Stamp the tab being left so modules can reason about inactivity (e.g. the browser's RAM saver).
+    if (currentTab && currentTab.lastActiveAt !== undefined) {
       set((s) => ({
         tabs: s.tabs.map((t) => (t.id === currentTab.id ? { ...t, lastActiveAt: Date.now() } : t)),
       }));
@@ -1063,14 +998,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
-    if (tab.kind === "browser") {
-      set((s) => ({
-        activeTabId: tabId,
-        tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isSleeping: false, lastActiveAt: Date.now() } : t)),
-      }));
-      return;
-    }
-    if (tab.kind === "usage" || tab.kind === "library") {
+    // Module-contributed tab kinds are plain views, like usage/file/diff.
+    if (tab.kind === "usage" || (tab.kind && !isCoreTabKind(tab.kind))) {
       set({ activeTabId: tabId });
       return;
     }

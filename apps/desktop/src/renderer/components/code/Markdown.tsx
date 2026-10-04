@@ -7,7 +7,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock } from "./CodeBlock.tsx";
 import { ImageThumbnail } from "../ImageThumbnail.tsx";
-import { useSessionStore } from "../../store/session-store.ts";
+import { openLink } from "../../modules/link-bus.ts";
 
 const REMARK_PLUGINS = [remarkGfm];
 
@@ -28,7 +28,7 @@ function makeComponents(streaming: boolean): Components {
         onClick={(e) => {
           e.preventDefault();
           if (href) {
-            useSessionStore.getState().openBrowserTab(href);
+            openLink(href);
           }
         }}
         title={href}
