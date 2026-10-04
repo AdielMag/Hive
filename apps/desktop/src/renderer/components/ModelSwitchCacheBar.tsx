@@ -11,6 +11,7 @@ import type { Model } from "@hive/protocol";
 import { applyCompactionResult, useSessionStore } from "../store/session-store.ts";
 import {
   CACHE_TTL_MS,
+  DEFAULT_KEEP_RECENT_MAX_TOKENS,
   DEFAULT_KEEP_RECENT_PERCENT,
   estimateSwitchSavings,
   isCacheExpired,
@@ -36,24 +37,33 @@ const dismissed = new Set<string>();
  */
 const compactedAfter = new Set<string>();
 
-let keepRecentPercentCache: number | null = null;
-function useKeepRecentPercent(): number {
-  const [pct, setPct] = useState(keepRecentPercentCache ?? DEFAULT_KEEP_RECENT_PERCENT);
+interface KeepRecent {
+  percent: number;
+  /** Ceiling on the verbatim tail in tokens (0 = none). */
+  maxTokens: number;
+}
+const DEFAULT_KEEP_RECENT: KeepRecent = { percent: DEFAULT_KEEP_RECENT_PERCENT, maxTokens: DEFAULT_KEEP_RECENT_MAX_TOKENS };
+let keepRecentCache: KeepRecent | null = null;
+function useKeepRecent(): KeepRecent {
+  const [keep, setKeep] = useState(keepRecentCache ?? DEFAULT_KEEP_RECENT);
   useEffect(() => {
-    if (keepRecentPercentCache !== null || !window.studio?.getCompactionSettings) return;
+    if (keepRecentCache !== null || !window.studio?.getCompactionSettings) return;
     let alive = true;
     window.studio
       .getCompactionSettings()
       .then((s) => {
-        keepRecentPercentCache = s?.keepRecentPercent || DEFAULT_KEEP_RECENT_PERCENT;
-        if (alive) setPct(keepRecentPercentCache);
+        keepRecentCache = {
+          percent: s?.keepRecentPercent || DEFAULT_KEEP_RECENT_PERCENT,
+          maxTokens: s?.keepRecentMaxTokens ?? DEFAULT_KEEP_RECENT_MAX_TOKENS,
+        };
+        if (alive) setKeep(keepRecentCache);
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, []);
-  return pct;
+  return keep;
 }
 
 /** Action state, scoped to the session (Pi process key) it was started in. */
@@ -73,7 +83,7 @@ export const ModelSwitchCacheBar: React.FC = () => {
       activeTabId: s.activeTabId,
     })),
   );
-  const keepRecentPercent = useKeepRecentPercent();
+  const keepRecent = useKeepRecent();
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [, bump] = useState(0);
 
@@ -103,9 +113,12 @@ export const ModelSwitchCacheBar: React.FC = () => {
       contextTokens,
       baselineTokens: last.baselineTokens,
       // Pi compacts with the current (new) model's per-model override.
-      keepRecentTokens: Math.round((ctxWindow * keepRecentPercent) / 100),
+      keepRecentTokens: Math.min(
+        Math.round((ctxWindow * keepRecent.percent) / 100),
+        keepRecent.maxTokens > 0 ? keepRecent.maxTokens : Infinity,
+      ),
     });
-  }, [coldCache, last, contextTokens, ctxWindow, keepRecentPercent]);
+  }, [coldCache, last, contextTokens, ctxWindow, keepRecent]);
 
   // Any compaction (manual, auto, or ours) supersedes the advice for the response it followed.
   const compacting = !!transcript.compaction;

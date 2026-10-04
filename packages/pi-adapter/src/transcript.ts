@@ -502,15 +502,9 @@ function messageItem(message: AnyMessage, key: string, isFirstSystem: boolean): 
     case "branchSummary":
       return { kind: "summary", key, variant: "branch", summary: String(message.summary ?? "") };
     case "system": {
-      if (isFirstSystem) return null;
-      const sections = Object.keys((message.sections as Record<string, unknown>) ?? {});
-      const added = ((message.toolsAdded as Array<{ name: string }>) ?? []).map((t) => `+${t.name}`);
-      const removed = ((message.toolsRemoved as Array<{ name: string }>) ?? []).map((t) => `-${t.name}`);
-      const parts = [
-        sections.length ? `sections: ${sections.join(", ")}` : "",
-        [...added, ...removed].length ? `tools: ${[...added, ...removed].join(" ")}` : "",
-      ].filter(Boolean);
-      return { kind: "marker", key, text: `Instructions updated${parts.length ? ` (${parts.join("; ")})` : ""}` };
+      // "Instructions updated" markers are intentionally hidden.
+      void isFirstSystem;
+      return null;
     }
     default:
       return { kind: "unknown", key, label: `message role "${message.role}"`, raw: message };

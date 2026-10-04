@@ -41,6 +41,7 @@ describe("percentage-based compaction", () => {
       enabled: true,
       triggerPercent: 98,
       keepRecentPercent: 93,
+      keepRecentMaxTokens: 20_000,
     });
     expect(normalizeCompaction({ enabled: false, triggerPercent: 1, keepRecentPercent: 0 }).triggerPercent).toBe(10);
   });
@@ -54,7 +55,7 @@ describe("percentage-based compaction", () => {
       }),
     );
     const service = new ModelsService(piDir, studioDir);
-    const res = service.saveCompactionSettings({ enabled: true, triggerPercent: 80, keepRecentPercent: 5 });
+    const res = service.saveCompactionSettings({ enabled: true, triggerPercent: 80, keepRecentPercent: 5, keepRecentMaxTokens: 0 });
     expect(res).toEqual({ success: true, modelsUpdated: 2 });
 
     const s = readSettings();
@@ -65,7 +66,17 @@ describe("percentage-based compaction", () => {
     expect(s.compaction.modelOverrides["other/x"]).toEqual({ reserveTokens: 5 }); // unknown window: untouched
     expect(s.compaction.reserveTokens).toBe(40_000); // fallback for unknown windows (200K reference)
 
-    expect(service.getCompactionSettings()).toEqual({ enabled: true, triggerPercent: 80, keepRecentPercent: 5 });
+    expect(service.getCompactionSettings()).toEqual({ enabled: true, triggerPercent: 80, keepRecentPercent: 5, keepRecentMaxTokens: 0 });
+  });
+
+  it("caps the verbatim tail in tokens (smaller of percent and cap wins; default cap 20K; 0 = none)", () => {
+    const base = { enabled: true, triggerPercent: 40, keepRecentPercent: 5 };
+    expect(compactionTokensFor(1_000_000, { ...base, keepRecentMaxTokens: 20_000 }).keepRecentTokens).toBe(20_000);
+    expect(compactionTokensFor(200_000, { ...base, keepRecentMaxTokens: 20_000 }).keepRecentTokens).toBe(10_000);
+    expect(compactionTokensFor(1_000_000, { ...base, keepRecentMaxTokens: 0 }).keepRecentTokens).toBe(50_000);
+    expect(normalizeCompaction(base).keepRecentMaxTokens).toBe(20_000); // missing -> default
+    expect(normalizeCompaction({ ...base, keepRecentMaxTokens: 0 }).keepRecentMaxTokens).toBe(0);
+    expect(normalizeCompaction({ ...base, keepRecentMaxTokens: 5 }).keepRecentMaxTokens).toBe(1_000);
   });
 
   it("derives initial percentages from the default model's existing overrides", () => {
@@ -77,7 +88,12 @@ describe("percentage-based compaction", () => {
         compaction: { enabled: true, modelOverrides: { "anthropic/big": { reserveTokens: 600_000 } } },
       }),
     );
-    expect(new ModelsService(piDir, studioDir).getCompactionSettings()).toEqual({ enabled: true, triggerPercent: 40, keepRecentPercent: 2 });
+    expect(new ModelsService(piDir, studioDir).getCompactionSettings()).toEqual({
+      enabled: true,
+      triggerPercent: 40,
+      keepRecentPercent: 2,
+      keepRecentMaxTokens: 0,
+    });
   });
 
   it("refuses to overwrite a corrupt settings.json", () => {
@@ -89,7 +105,7 @@ describe("percentage-based compaction", () => {
   it("re-applies saved percentages to models added later, and is a no-op before any save", () => {
     const service = new ModelsService(piDir, studioDir);
     expect(service.reapplyCompaction()).toBe(0);
-    service.saveCompactionSettings({ enabled: true, triggerPercent: 50, keepRecentPercent: 10 });
+    service.saveCompactionSettings({ enabled: true, triggerPercent: 50, keepRecentPercent: 10, keepRecentMaxTokens: 0 });
 
     writeFileSync(
       join(piDir, "models-store.json"),
