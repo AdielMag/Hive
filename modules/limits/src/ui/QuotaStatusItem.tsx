@@ -6,6 +6,7 @@ import { formatAgo } from "@hive/module-sdk/format";
 import { useLimits, useNow } from "./limits-store.ts";
 import { ProviderQuotaCard, usageTone } from "./quota-ui.tsx";
 import { useHoverPopover } from "./useHoverPopover.ts";
+import { buildMeters } from "./meters.ts";
 
 const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "openai-codex": "Codex" };
 const TONE_COLOR = { ok: "#3fb27f", warn: "#e0a43a", danger: "#e5534b" } as const;
@@ -25,24 +26,17 @@ const Mini: React.FC<{ label: string; used: number }> = ({ label, used }) => {
 };
 
 /** Status-bar meters + the hover/pin popover with full window details. */
-export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = () => {
+export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const quota = useLimits((s) => s.quota);
   const quotaLoading = useLimits((s) => s.loading);
   const refreshQuota = useLimits((s) => s.refresh);
   const now = useNow(30_000);
   const quotaPop = useHoverPopover();
 
+  const model = host.hooks.useActiveSession().model;
   const meters = useMemo(
-    () =>
-      (quota?.providers ?? [])
-        .filter((p) => p.status === "ok")
-        .map((p) => {
-          const windows = p.groups.flatMap((g) => g.windows);
-          const w5 = windows.filter((w) => w.kind === "5h").sort((a, b) => b.usedPercent - a.usedPercent)[0];
-          const wk = windows.filter((w) => w.kind === "weekly").sort((a, b) => b.usedPercent - a.usedPercent)[0];
-          return { id: p.providerId, label: SHORT[p.providerId] ?? p.name, w5, wk };
-        }),
-    [quota],
+    () => buildMeters(quota?.providers ?? [], model).map((m) => ({ ...m, label: (SHORT[m.providerId] ?? m.providerId) + (m.pool ? ` ${m.pool}` : "") })),
+    [quota, model?.provider, model?.id],
   );
 
   const subscriptions = useMemo(() => (quota?.providers ?? []).filter((p) => p.status !== "unsupported"), [quota]);
@@ -63,8 +57,13 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = () => {
           aria-expanded={quotaPop.open}
         >
           {meters.map((m) => (
-            <span key={m.id} className="sb-quota__item">
-              <span>{m.label}</span>
+            <span
+              key={m.key}
+              className="sb-quota__item"
+              style={m.active === false ? { opacity: 0.5 } : undefined}
+              title={m.active === true ? "Pool used by the active model" : undefined}
+            >
+              <span style={m.active ? { fontWeight: 600 } : undefined}>{m.label}</span>
               {m.w5 && <Mini label="5h" used={m.w5.usedPercent} />}
               {m.wk && <Mini label="7d" used={m.wk.usedPercent} />}
             </span>
