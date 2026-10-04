@@ -2,8 +2,13 @@ import { existsSync } from "node:fs";
 import { extname, isAbsolute } from "node:path";
 import { shell } from "electron";
 import { defineMainModule } from "@hive/module-sdk/main";
-import { isInside, libraryRoots, listLibrary, setFrontmatterField } from "./service.ts";
-import { LibraryMethods, MODULE_ID, type LibrarySetFieldRequest } from "./shared.ts";
+import { deleteLibraryEntry, isInside, libraryRoots, listLibrary, setFrontmatterField } from "./service.ts";
+import {
+  LibraryMethods,
+  MODULE_ID,
+  type LibraryDeleteRequest,
+  type LibrarySetFieldRequest,
+} from "./shared.ts";
 
 export default defineMainModule({
   id: MODULE_ID,
@@ -36,5 +41,12 @@ export default defineMainModule({
       const err = await shell.openPath(path);
       return err ? { ok: false, error: err } : { ok: true };
     });
+
+    ctx.ipc.handle(LibraryMethods.delete, (req: LibraryDeleteRequest) =>
+      deleteLibraryEntry(req, {
+        ...opts(),
+        trashItem: (targetPath: string) => shell.trashItem(targetPath),
+      }),
+    );
   },
 });

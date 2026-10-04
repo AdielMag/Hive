@@ -21,6 +21,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { useFeatureModelStore, resolveFeatureModel } from "../store/feature-models-store.ts";
+import { useGitStore } from "../store/git-store.ts";
 import { AiModelChip } from "./AiModelChip.tsx";
 
 export const GitPanel: React.FC = () => {
@@ -85,6 +86,17 @@ export const GitPanel: React.FC = () => {
       ]);
       setStatus(s);
       setBranches(b);
+      if (s && s.isRepo) {
+        useGitStore.getState().setStatus({
+          ahead: s.ahead ?? 0,
+          behind: s.behind ?? 0,
+          branch: s.branch ?? "",
+          upstream: s.upstream,
+          isRepo: true,
+        });
+      } else {
+        useGitStore.getState().setStatus(null);
+      }
     } catch (err: any) {
       setErrorMessage(err.message || String(err));
     } finally {

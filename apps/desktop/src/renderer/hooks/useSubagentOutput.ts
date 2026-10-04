@@ -3,6 +3,11 @@ import { messagesToTimeline, type AnyMessage, type Timeline } from "@hive/pi-ada
 import { parseOutputLines, type SubagentView } from "../lib/ai/subagents.ts";
 import { useSessionStore } from "../store/session-store.ts";
 
+export interface SubagentSessionContext {
+  key?: string | null;
+  sessionPath?: string | null;
+}
+
 interface SubagentOutputState {
   timeline: Timeline;
   prompt?: string;
@@ -16,10 +21,15 @@ const EMPTY_TIMELINE: Timeline = { items: [], toolResults: {} };
  * Loads and streams the nested transcript from a subagent's `.output` JSONL file.
  * Polls for updates while the subagent is running and the card is expanded.
  */
-export function useSubagentOutput(view: SubagentView, expanded: boolean): SubagentOutputState {
-  const activeKey = useSessionStore((s) => s.activeKey);
+export function useSubagentOutput(
+  view: SubagentView,
+  expanded: boolean,
+  context?: SubagentSessionContext,
+): SubagentOutputState {
+  const storeActiveKey = useSessionStore((s) => s.activeKey);
   const activeTab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
-  const sessionPath = activeTab?.sessionPath;
+  const effectiveSessionPath = context?.sessionPath ?? (activeTab?.kind === "subagent" ? activeTab?.parentSessionPath : activeTab?.sessionPath);
+  const effectiveKey = context?.key ?? (activeTab?.kind === "subagent" ? activeTab?.parentActiveKey : storeActiveKey);
 
   const [timeline, setTimeline] = useState<Timeline>(EMPTY_TIMELINE);
   const [prompt, setPrompt] = useState<string | undefined>(undefined);
@@ -43,8 +53,8 @@ export function useSubagentOutput(view: SubagentView, expanded: boolean): Subage
         if (!filePathRef.current) {
           if (!window.studio?.locateSubagentOutput) return;
           const ref = await window.studio.locateSubagentOutput({
-            key: activeKey ?? undefined,
-            sessionPath: sessionPath ?? undefined,
+            key: effectiveKey ?? undefined,
+            sessionPath: effectiveSessionPath ?? undefined,
             agentId: view.agentId,
             outputFile: view.outputFile,
             prompt: view.prompt,
@@ -110,7 +120,7 @@ export function useSubagentOutput(view: SubagentView, expanded: boolean): Subage
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [expanded, isRunning, activeKey, sessionPath, view.agentId, view.outputFile, view.prompt, view.toolCallId]);
+  }, [expanded, isRunning, effectiveKey, effectiveSessionPath, view.agentId, view.outputFile, view.prompt, view.toolCallId]);
 
   return { timeline, prompt, loading, error };
 }

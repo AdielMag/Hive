@@ -20,6 +20,12 @@ export interface ModuleAgentAssets {
   agentsMd?: string;
   /** CLI name → script path (relative to the module root). A shim is written to Hive's managed bin dir. */
   bin?: Record<string, string>;
+  /**
+   * Pi extension files (.ts), relative to the module root (e.g. `agent/extensions/bash-guard.ts`).
+   * Installed into `<piAgentDir>/extensions/<file name>` with a `.hive-managed` marker so Pi CLI
+   * loads them automatically in all sessions.
+   */
+  extensions?: string[];
 }
 
 /** A command declared statically so core can offer it (and its shortcut) even while the module is disabled. */
@@ -48,6 +54,8 @@ export interface ModuleManifest {
   title: string;
   description: string;
   tier: ModuleTier;
+  /** Whether this module is recommended (highlighted with a recommended badge). */
+  recommended?: boolean;
   /** Hard dependencies, enabled together (transitively). */
   requires?: string[];
   /** Used when present; never auto-enabled. */

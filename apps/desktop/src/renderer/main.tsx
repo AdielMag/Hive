@@ -13,6 +13,7 @@ import "./styles/image-preview.css";
 import "./styles/browser.css";
 import "./components/code/code.css";
 import "./styles/statusbar-popover.css";
+import "./styles/subagent-viewer.css";
 import { initAppearance } from "./features/appearance/appearance-store.ts";
 import { App } from "./App.tsx";
 

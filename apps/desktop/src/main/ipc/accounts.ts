@@ -13,6 +13,10 @@ export function registerAccountIpc(ctx: AppContext): void {
     ctx.auth?.loginOAuth(providerId) ?? { success: false, error: "Auth not initialized" },
   );
 
+  handle(IPC.authRefresh, ({ providerId }: { providerId: string }) =>
+    ctx.auth?.refreshOAuth(providerId) ?? { success: false, error: "Auth not initialized" },
+  );
+
   handle(IPC.updaterCheck, () => ctx.updater.checkForUpdates());
   handle(IPC.updaterApply, ({ downloadUrl }: { downloadUrl?: string }) =>
     ctx.updater.applyUpdate(downloadUrl, (progress) => {

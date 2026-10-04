@@ -32,7 +32,14 @@ import { openLink } from "../modules/link-bus.ts";
 import type { OpenTabSpec } from "@hive/module-sdk/renderer";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
-import { parseAgentResultText } from "../lib/ai/subagents.ts";
+import { parseAgentResultText, type SubagentView } from "../lib/ai/subagents.ts";
+
+export interface SubagentModalTarget {
+  view: SubagentView;
+  parentSessionPath?: string;
+  parentActiveKey?: string;
+  projectId?: string;
+}
 
 declare global {
   interface Window {
@@ -89,6 +96,9 @@ export interface SessionStoreState {
   activeProject: ProjectEntry | null;
   status: SessionStatusUpdate | null;
   transcript: TranscriptState;
+  transcriptsByTab: Record<string, TranscriptState>;
+  /** Session tab whose state occupies the top-level fields (transcript, composer...). Differs from activeTabId while a file/diff tab is focused. */
+  displayedTabId: string | null;
   models: Array<Model<any>>;
   allCatalogModels: Array<Model<any>>;
   enabledModelKeys: string[];
@@ -128,6 +138,14 @@ export interface SessionStoreState {
   addProject: (dirPath: string, name?: string, color?: string) => Promise<ProjectEntry>;
   updateProject: (id: string, updates: Partial<ProjectEntry>) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
+  subagentModal: SubagentModalTarget | null;
+  openSubagentModal: (target: SubagentModalTarget) => void;
+  closeSubagentModal: () => void;
+  openSubagentTab: (
+    view: SubagentView,
+    opts?: { parentSessionPath?: string; parentActiveKey?: string; projectId?: string },
+  ) => void;
+  updateSubagentTab: (identifier: string, view: SubagentView) => void;
   openSessionTab: (sessionPath: string, projectId: string, title?: string) => Promise<void>;
   newSessionTab: (projectId: string) => Promise<void>;
   openFileTab: (filePath: string, projectId: string, title?: string) => Promise<void>;
@@ -135,8 +153,10 @@ export interface SessionStoreState {
   /** Open (or focus) the singleton Skills & Agents library tab. */
   openLibraryTab: () => void;
   openModuleTab: (spec: OpenTabSpec) => string;
+  ensureTabTranscriptLoaded: (tabId: string) => Promise<void>;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
   switchTab: (tabId: string) => Promise<void>;
-  closeTab: (tabId: string) => Promise<void>;
+  closeTab: (tabId: string, nextActiveTabId?: string) => Promise<void>;
   setPromptText: (text: string) => void;
   sendPrompt: (streamingBehavior?: "steer" | "followUp") => Promise<void>;
   abort: () => Promise<void>;
@@ -199,6 +219,7 @@ function swapInSessionTab(nextTabId: string): Partial<SessionStoreState> {
     thinkingLevels: supportedLevels,
     selectedThinkingLevel: clampedLevel,
     selectedMode: nextTab?.mode ?? DEFAULT_MODE,
+    displayedTabId: nextTabId,
   };
   if (prev === nextTabId) return config;
   const tabUi = { ...s.tabUi };
@@ -214,7 +235,10 @@ function swapInSessionTab(nextTabId: string): Partial<SessionStoreState> {
   }
   const next = tabUi[nextTabId] ?? EMPTY_TAB_UI;
   delete tabUi[nextTabId];
-  return { ...config, tabUi, ...next };
+  // Keep the outgoing session's live transcript so another pane can keep showing it.
+  const transcriptsByTab =
+    prev && s.tabs.some((t) => t.id === prev) ? { ...s.transcriptsByTab, [prev]: s.transcript } : s.transcriptsByTab;
+  return { ...config, tabUi, transcriptsByTab, ...next };
 }
 
 /** Apply a UI-state change to a tab, whether it is displayed (top-level fields) or parked. */
@@ -623,6 +647,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   activeProject: null,
   status: null,
   transcript: createTranscript(),
+  transcriptsByTab: {},
+  displayedTabId: null,
   models: [],
   allCatalogModels: [],
   enabledModelKeys: [],
@@ -635,6 +661,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   stats: null,
   sessionActivity: {},
   tabUi: {},
+  subagentModal: null,
   extensionWidgets: {},
   extensionStatus: {},
   pendingUiDialog: null,
@@ -666,9 +693,22 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           }
         }
         emitSessionEvents(batch.key, batch.key === get().activeKey, batch.events as Array<{ type: string }>);
+        const bgTabId = tabIdForKey(batch.key);
         if (batch.key !== get().activeKey) {
           // A background tab finishing a turn may have just created / updated its session file.
           if (batch.events.some((e) => e.type === "agent_settled")) void get().refreshCatalog();
+          if (bgTabId) {
+            const cached = get().transcriptsByTab[bgTabId];
+            const hasFile = !!get().tabs.find((t) => t.id === bgTabId)?.sessionPath;
+            if (!cached && hasFile) {
+              // Don't cache an events-only transcript; load history from disk instead.
+              void get().ensureTabTranscriptLoaded(bgTabId);
+            } else {
+              let bgT = cached ?? createTranscript();
+              for (const ev of batch.events) bgT = applyEvent(bgT, ev);
+              set((s) => ({ transcriptsByTab: { ...s.transcriptsByTab, [bgTabId]: bgT } }));
+            }
+          }
           return;
         }
         let t = get().transcript;
@@ -685,7 +725,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
             }
           }
         }
-        set({ transcript: t });
+        const curTabId = displayedSessionTabId ?? get().activeTabId;
+        set((s) => ({
+          transcript: t,
+          ...(curTabId ? { transcriptsByTab: { ...s.transcriptsByTab, [curTabId]: t } } : {}),
+        }));
         // Refresh session stats on settled
         if (batch.events.some((e) => e.type === "agent_settled")) {
           void (async () => {
@@ -958,6 +1002,84 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     await get().refreshCatalog();
   },
 
+  openSubagentModal: (target) => set({ subagentModal: target }),
+  closeSubagentModal: () => set({ subagentModal: null }),
+
+  openSubagentTab: (view, opts) => {
+    const { tabs, activeProject, activeKey, activeTabId } = get();
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    const identifier = view.toolCallId || view.agentId || `sub_${Date.now()}`;
+    const tabId = `subagent:${identifier}`;
+    const existing = tabs.find(
+      (t) =>
+        t.id === tabId ||
+        (view.agentId && t.subagentAgentId === view.agentId) ||
+        (view.toolCallId && t.subagentToolCallId === view.toolCallId),
+    );
+
+    const parentSessionPath =
+      opts?.parentSessionPath ??
+      (activeTab?.kind === "session" ? activeTab?.sessionPath : activeTab?.parentSessionPath);
+    const parentActiveKey =
+      opts?.parentActiveKey ??
+      (activeTab?.kind === "session" ? activeTab?.activeKey : activeTab?.parentActiveKey) ??
+      activeKey ??
+      undefined;
+    const projectId = opts?.projectId ?? activeTab?.projectId ?? activeProject?.id ?? "";
+
+    if (existing) {
+      set((s) => ({
+        tabs: s.tabs.map((t) =>
+          t.id === existing.id
+            ? {
+                ...t,
+                subagentView: view,
+                title: `${view.type}: ${view.description || "Subagent"}`,
+                subagentToolCallId: view.toolCallId || t.subagentToolCallId,
+                subagentAgentId: view.agentId || t.subagentAgentId,
+              }
+            : t,
+        ),
+        activeTabId: existing.id,
+      }));
+      return;
+    }
+
+    const newTab: TabItem = {
+      id: tabId,
+      kind: "subagent",
+      projectId,
+      title: `${view.type}: ${view.description || "Subagent"}`,
+      pinned: false,
+      subagentToolCallId: view.toolCallId,
+      subagentAgentId: view.agentId,
+      subagentView: view,
+      parentSessionPath,
+      parentActiveKey,
+    };
+
+    set({ tabs: [...tabs, newTab], activeTabId: tabId });
+  },
+
+  updateSubagentTab: (identifier, view) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.kind === "subagent" &&
+        (t.id === `subagent:${identifier}` ||
+          t.subagentAgentId === identifier ||
+          t.subagentToolCallId === identifier)
+          ? {
+              ...t,
+              subagentView: { ...t.subagentView, ...view },
+              title: `${view.type || t.subagentView?.type || "subagent"}: ${
+                view.description || t.subagentView?.description || "Subagent"
+              }`,
+            }
+          : t,
+      ),
+    }));
+  },
+
   openSessionTab: async (sessionPath: string, projectId: string, title?: string) => {
     const { tabs, projects } = get();
     const existing = tabs.find((t) => t.sessionPath === sessionPath);
@@ -993,7 +1115,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     // Cold read: parse entries from disk without spawning process
     try {
       const { entries, leafId } = await window.studio.readSessionFile(sessionPath);
-      set((s) => (s.activeTabId === tabId ? { transcript: applyEntries(s.transcript, entries, leafId, "replace") } : {}));
+      const t = applyEntries(createTranscript(), entries, leafId, "replace");
+      set((s) => ({
+        transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
+        ...(s.displayedTabId === tabId ? { transcript: t } : {}),
+      }));
     } catch (err) {
       console.error("Failed to read cold session", err);
     }
@@ -1179,6 +1305,29 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     return tabId;
   },
 
+  ensureTabTranscriptLoaded: async (tabId: string) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab || !tab.sessionPath || get().transcriptsByTab[tabId]) return;
+    try {
+      const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
+      const t = applyEntries(createTranscript(), entries, leafId, "replace");
+      set((s) => ({
+        transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
+      }));
+    } catch (err) {
+      console.error("Failed to load background tab transcript", err);
+    }
+  },
+
+  reorderTabs: (fromIndex: number, toIndex: number) => {
+    const tabs = [...get().tabs];
+    if (fromIndex < 0 || fromIndex >= tabs.length || toIndex < 0 || toIndex >= tabs.length) return;
+    const [moved] = tabs.splice(fromIndex, 1);
+    if (!moved) return;
+    tabs.splice(toIndex, 0, moved);
+    set({ tabs });
+  },
+
   switchTab: async (tabId: string) => {
     const currentTab = get().tabs.find((t) => t.id === get().activeTabId);
     // Stamp the tab being left so modules can reason about inactivity (e.g. the browser's RAM saver).
@@ -1195,8 +1344,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       set({ activeTabId: tabId });
       return;
     }
-    // File / diff tabs are views; they must not tear down the live session's transcript.
-    if (tab.kind === "file" || tab.kind === "diff") {
+    // File / diff / subagent tabs are views; they must not tear down the live session's transcript.
+    if (tab.kind === "file" || tab.kind === "diff" || tab.kind === "subagent") {
       set({ activeTabId: tabId, activeProject: get().projects.find((p) => p.id === tab.projectId) ?? get().activeProject });
       return;
     }
@@ -1217,14 +1366,19 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       activeKey: tab.activeKey ?? null,
       // A session that kept working in the background reflects running if its main thread was active
       // (hydrateSession then confirms with Pi's own isStreaming flag).
-      transcript: { ...createTranscript(), running: bgRunning && (mainThreadRunning.get(tabId) ?? false) },
+      transcript: { ...(get().transcriptsByTab[tabId] ?? createTranscript()), running: bgRunning && (mainThreadRunning.get(tabId) ?? false) },
       stats: null,
     });
 
     if (tab.sessionPath) {
       try {
         const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
-        set((s) => (s.activeTabId === tabId ? { transcript: applyEntries(s.transcript, entries, leafId, "replace") } : {}));
+        const base = get().transcriptsByTab[tabId] ?? createTranscript();
+        const t = applyEntries(base, entries, leafId, "replace");
+        set((s) => ({
+          transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
+          ...(s.displayedTabId === tabId ? { transcript: t } : {}),
+        }));
       } catch (err) {
         console.error("Failed to read session file", err);
       }
@@ -1235,7 +1389,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
   },
 
-  closeTab: async (tabId: string) => {
+  closeTab: async (tabId: string, nextActiveTabId?: string) => {
     const { tabs, activeTabId } = get();
     const tab = tabs.find((t) => t.id === tabId);
     // Stop in the background: closing a tab should feel instant.
@@ -1249,12 +1403,17 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set((s) => {
       const tabUi = { ...s.tabUi };
       delete tabUi[tabId];
-      return { tabs: remaining, tabUi };
+      const transcriptsByTab = { ...s.transcriptsByTab };
+      delete transcriptsByTab[tabId];
+      return { tabs: remaining, tabUi, transcriptsByTab };
     });
-    if (displayedSessionTabId === tabId) displayedSessionTabId = null;
+    if (displayedSessionTabId === tabId) {
+      displayedSessionTabId = null;
+      set({ displayedTabId: null });
+    }
 
     if (activeTabId === tabId && remaining.length > 0) {
-      const nextTab = remaining[remaining.length - 1]!;
+      const nextTab = remaining.find((t) => t.id === nextActiveTabId) ?? remaining[remaining.length - 1]!;
       await get().switchTab(nextTab.id);
     } else if (remaining.length === 0) {
       set({ activeTabId: null, activeProject: null, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });

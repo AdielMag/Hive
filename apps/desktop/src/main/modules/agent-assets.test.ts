@@ -15,7 +15,12 @@ const manifest: ModuleManifest = {
   title: "Demo",
   description: "demo",
   tier: "bonus",
-  agent: { skills: ["agent/skills/*"], agentsMd: "agent/AGENTS.block.md", bin: { demo: "bin/demo.js" } },
+  agent: {
+    skills: ["agent/skills/*"],
+    agentsMd: "agent/AGENTS.block.md",
+    bin: { demo: "bin/demo.js" },
+    extensions: ["agent/extensions/demo-guard.ts"],
+  },
 };
 
 const opts = () => ({ piAgentDir: piDir, binDir, platform: "linux" as const });
@@ -28,10 +33,12 @@ beforeEach(() => {
   mkdirSync(join(moduleRoot, "agent", "skills", "alpha"), { recursive: true });
   mkdirSync(join(moduleRoot, "agent", "skills", "beta"), { recursive: true });
   mkdirSync(join(moduleRoot, "bin"), { recursive: true });
+  mkdirSync(join(moduleRoot, "agent", "extensions"), { recursive: true });
   writeFileSync(join(moduleRoot, "agent", "skills", "alpha", "SKILL.md"), "# alpha\n");
   writeFileSync(join(moduleRoot, "agent", "skills", "beta", "SKILL.md"), "# beta\n");
   writeFileSync(join(moduleRoot, "agent", "AGENTS.block.md"), "Use the demo tool.\n");
   writeFileSync(join(moduleRoot, "bin", "demo.js"), "console.log('demo')\n");
+  writeFileSync(join(moduleRoot, "agent", "extensions", "demo-guard.ts"), "export default function () {}\n");
 });
 
 afterEach(() => rmSync(tmp, { recursive: true, force: true }));
@@ -65,7 +72,10 @@ describe("installAgentAssets", () => {
     expect(existsSync(join(piDir, "skills", "beta", MARKER_FILE))).toBe(true);
     expect(readFileSync(join(piDir, "AGENTS.md"), "utf8")).toContain("Use the demo tool.");
     expect(existsSync(join(binDir, "demo"))).toBe(true);
+    expect(existsSync(join(piDir, "extensions", "demo-guard.ts"))).toBe(true);
+    expect(existsSync(join(piDir, "extensions", ".demo-guard.ts.hive-managed"))).toBe(true);
     expect(record.skills?.map((s) => s.name).sort()).toEqual(["alpha", "beta"]);
+    expect(record.extensions?.map((e) => e.name)).toEqual(["demo-guard.ts"]);
   });
 
   it("is idempotent", () => {
@@ -113,6 +123,8 @@ describe("removeAgentAssets", () => {
     expect(existsSync(join(piDir, "skills", "beta"))).toBe(false);
     expect(existsSync(join(piDir, "skills", "unrelated"))).toBe(true);
     expect(existsSync(join(binDir, "demo"))).toBe(false);
+    expect(existsSync(join(piDir, "extensions", "demo-guard.ts"))).toBe(false);
+    expect(existsSync(join(piDir, "extensions", ".demo-guard.ts.hive-managed"))).toBe(false);
     const agents = readFileSync(join(piDir, "AGENTS.md"), "utf8");
     expect(agents).toContain("# Mine");
     expect(agents).not.toContain("demo managed block");

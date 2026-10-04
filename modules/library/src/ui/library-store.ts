@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { LibraryMethods } from "../shared.ts";
 import { libraryHost } from "./library-host.ts";
 import type {
+  LibraryDeleteResult,
   LibraryEntry,
   LibraryFieldValue,
   LibraryKind,
@@ -24,6 +25,7 @@ export interface LibraryState {
   showOverridden: boolean;
   viewMode: "sections" | "raw";
   savingField: string | null;
+  deletingId: string | null;
   feedback: { key: string; type: "success" | "error"; message: string } | null;
 
   load: (cwd?: string, preserveSelection?: boolean) => Promise<void>;
@@ -34,6 +36,7 @@ export interface LibraryState {
   setShowOverridden: (v: boolean) => void;
   setViewMode: (mode: "sections" | "raw") => void;
   updateField: (entry: LibraryEntry, key: string, value: LibraryFieldValue, cwd?: string) => Promise<boolean>;
+  deleteEntry: (entry: LibraryEntry, cwd?: string) => Promise<boolean>;
   clearFeedback: () => void;
 }
 
@@ -50,6 +53,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   showOverridden: false,
   viewMode: "sections",
   savingField: null,
+  deletingId: null,
   feedback: null,
 
   load: async (cwd, preserveSelection = true) => {
@@ -141,6 +145,66 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         savingField: null,
         feedback: { key, type: "error", message: err.message || String(err) },
       });
+      return false;
+    }
+  },
+
+  deleteEntry: async (entry, cwd) => {
+    if (entry.readOnly || !entry.path) return false;
+    set({ deletingId: entry.id });
+
+    try {
+      const res = await libraryHost().ipc.invoke<LibraryDeleteResult>(LibraryMethods.delete, {
+        cwd,
+        path: entry.path,
+      });
+
+      if (!res.ok) {
+        set({
+          deletingId: null,
+          feedback: { key: "delete", type: "error", message: res.error },
+        });
+        libraryHost().toast({ message: res.error, kind: "error" });
+        return false;
+      }
+
+      // Close open editor tabs matching this file or its directory
+      try {
+        const tabs = libraryHost().tabs.list();
+        const norm = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+        const entryNorm = norm(entry.path);
+        const skillDirNorm = entry.path.endsWith("SKILL.md")
+          ? norm(entry.path.slice(0, -("SKILL.md".length + 1)))
+          : null;
+
+        for (const tab of tabs) {
+          if (!tab.filePath) continue;
+          const tabNorm = norm(tab.filePath);
+          if (tabNorm === entryNorm || (skillDirNorm && tabNorm.startsWith(skillDirNorm + "/"))) {
+            libraryHost().tabs.close(tab.id);
+          }
+        }
+      } catch {
+        // Tab closing is non-critical
+      }
+
+      libraryHost().toast({
+        message: `Deleted ${entry.kind} "${entry.displayName || entry.name}"`,
+        kind: "success",
+      });
+
+      // Reload snapshot — preserveSelection=false will pick the next active item
+      await get().load(cwd, false);
+
+      set({ deletingId: null });
+      return true;
+    } catch (err: any) {
+      const msg = err.message || String(err);
+      set({
+        deletingId: null,
+        feedback: { key: "delete", type: "error", message: msg },
+      });
+      libraryHost().toast({ message: msg, kind: "error" });
       return false;
     }
   },

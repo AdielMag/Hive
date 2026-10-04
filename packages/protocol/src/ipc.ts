@@ -194,6 +194,7 @@ export const IPC = {
   authSaveApiKey: "auth:save-api-key",
   authLogout: "auth:logout",
   authLoginOAuth: "auth:login-oauth",
+  authRefresh: "auth:refresh",
   // Updater
   updaterCheck: "updater:check",
   updaterApply: "updater:apply",
@@ -435,6 +436,8 @@ export interface StudioApi {
   saveApiKey(providerId: string, apiKey: string): Promise<void>;
   logoutAccount(providerId: string): Promise<void>;
   loginOAuth(providerId: string): Promise<{ success: boolean; error?: string }>;
+  /** Silently refresh an OAuth token (no browser). `success: false` means the user must reconnect. */
+  refreshOAuth(providerId: string): Promise<{ success: boolean; error?: string }>;
 
   // Updater
   checkForUpdates(): Promise<any>;

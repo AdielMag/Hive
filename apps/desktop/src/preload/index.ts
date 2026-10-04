@@ -241,6 +241,9 @@ const api: StudioApi = {
   loginOAuth(providerId: string) {
     return ipcRenderer.invoke(IPC.authLoginOAuth, { providerId });
   },
+  refreshOAuth(providerId: string) {
+    return ipcRenderer.invoke(IPC.authRefresh, { providerId });
+  },
 
   // Updater
   checkForUpdates() {

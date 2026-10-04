@@ -11,11 +11,13 @@ import {
   FolderOpen,
   Info,
   List,
+  Loader2,
   Maximize2,
   Minimize2,
   Shield,
   Sparkles,
   Terminal,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import type { LibraryEntry, LibraryFieldValue } from "@hive/protocol";
@@ -41,6 +43,8 @@ export const LibraryDetail: React.FC<Props> = ({ entry }) => {
     selectEntry,
     updateField,
     savingField,
+    deleteEntry,
+    deletingId,
     feedback,
     viewMode,
     setViewMode,
@@ -132,6 +136,18 @@ export const LibraryDetail: React.FC<Props> = ({ entry }) => {
   const isSavingModel = savingField === "model";
   const isSavingThinking = savingField === "thinking";
   const isSavingEnabled = savingField === "enabled";
+  const isDeleting = deletingId === entry.id;
+
+  const handleDelete = async () => {
+    if (entry.readOnly || !entry.path || isDeleting) return;
+    const kindLabel = entry.kind === "skill" ? "skill" : "agent";
+    const nameLabel = entry.displayName || entry.name;
+    const ok = window.confirm(
+      `Delete ${kindLabel} "${nameLabel}"?\n\nThe file will be moved to the system trash.`,
+    );
+    if (!ok) return;
+    await deleteEntry(entry, cwd);
+  };
 
   // Frontmatter tools
   const toolsList = useMemo(() => {
@@ -198,6 +214,19 @@ export const LibraryDetail: React.FC<Props> = ({ entry }) => {
                 <FileCode size={12} />
                 <span>Open in Editor</span>
               </button>
+              {!entry.readOnly && (
+                <button
+                  type="button"
+                  className="ui-btn ui-btn--sm lib-btn--danger"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  title={`Delete ${entry.kind === "skill" ? "skill" : "agent"}`}
+                  aria-label={`Delete ${entry.kind === "skill" ? "skill" : "agent"}`}
+                >
+                  {isDeleting ? <Loader2 size={12} className="spin" /> : <Trash2 size={12} />}
+                  <span>{isDeleting ? "Deleting…" : "Delete"}</span>
+                </button>
+              )}
             </div>
           )}
         </div>

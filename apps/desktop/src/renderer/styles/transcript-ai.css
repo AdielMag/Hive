@@ -146,6 +146,51 @@
   gap: 6px;
   font-size: 11.5px;
   color: var(--accent-base);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm, 4px);
+  background: rgba(83, 155, 245, 0.08);
+  border: 1px solid rgba(83, 155, 245, 0.2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  max-width: 100%;
+}
+.msg-agent-card__activity:hover {
+  background: rgba(83, 155, 245, 0.16);
+  border-color: rgba(83, 155, 245, 0.4);
+}
+.msg-agent-card__activity-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-agent-card__activity-action {
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-base);
+  color: #fff;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.msg-agent-card__activity:hover .msg-agent-card__activity-action {
+  opacity: 1;
+}
+.msg-agent-card__activity--done {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--border-subtle);
+}
+.msg-agent-card__activity--done:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-base);
+}
+.msg-agent-card__activity--done .msg-agent-card__activity-action {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.15));
+  color: var(--text-base);
 }
 .msg-agent-card__right {
   display: flex;
