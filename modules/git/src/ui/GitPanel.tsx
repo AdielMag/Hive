@@ -432,117 +432,120 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           />
         </button>
 
-        {/* Refresh: frequently used, kept outside the dropdown */}
-        <button
-          type="button"
-          onClick={() => void refreshGit()}
-          disabled={!!syncOp || loading}
-          title="Refresh status"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            background: "transparent",
-            border: "none",
-            borderRadius: 4,
-            color: "var(--text-muted)",
-            cursor: syncOp || loading ? "default" : "pointer",
-            padding: "3px 5px",
-            flexShrink: 0,
-          }}
-        >
-          <RefreshCw size={13} className={syncOp || loading ? "spin" : undefined} />
-        </button>
-
-        {/* Sync menu: Fetch / Pull / Push / Branches (collapsed into one button) */}
-        <div ref={syncMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+        {/* Right header actions: Refresh button right next to the 3 dots menu */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          {/* Refresh: frequently used, kept outside the dropdown */}
           <button
             type="button"
-            onClick={() => setSyncMenuOpen((prev) => !prev)}
-            title={
-              status?.behind || status?.ahead
-                ? `Sync & Git actions (${status?.behind || 0} behind, ${status?.ahead || 0} ahead)`
-                : "Sync & Git actions"
-            }
+            onClick={() => void refreshGit()}
+            disabled={!!syncOp || loading}
+            title="Refresh status"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 4,
-              background: syncMenuOpen ? "var(--bg-elevated)" : "transparent",
+              background: "transparent",
               border: "none",
               borderRadius: 4,
               color: "var(--text-muted)",
-              cursor: "pointer",
+              cursor: syncOp || loading ? "default" : "pointer",
               padding: "3px 5px",
-              fontSize: 10,
-              fontWeight: 600,
+              flexShrink: 0,
             }}
           >
-            <MoreHorizontal size={14} />
-            {!!status?.behind && <span style={{ color: "var(--warning)" }}>↓{status.behind}</span>}
-            {!!status?.ahead && <span style={{ color: "var(--accent-base)" }}>↑{status.ahead}</span>}
+            <RefreshCw size={13} className={syncOp || loading ? "spin" : undefined} />
           </button>
-          {syncMenuOpen && (
-            <div
+
+          {/* Sync menu: Fetch / Pull / Push / Branches (collapsed into one button) */}
+          <div ref={syncMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setSyncMenuOpen((prev) => !prev)}
+              title={
+                status?.behind || status?.ahead
+                  ? `Sync & Git actions (${status?.behind || 0} behind, ${status?.ahead || 0} ahead)`
+                  : "Sync & Git actions"
+              }
               style={{
-                position: "absolute",
-                top: "100%",
-                right: 0,
-                marginTop: 4,
-                minWidth: 190,
-                background: "var(--bg-elevated)",
-                border: "1px solid var(--border-prominent)",
-                borderRadius: 6,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                zIndex: 100,
-                padding: 4,
                 display: "flex",
-                flexDirection: "column",
+                alignItems: "center",
+                gap: 4,
+                background: syncMenuOpen ? "var(--bg-elevated)" : "transparent",
+                border: "none",
+                borderRadius: 4,
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                padding: "3px 5px",
+                fontSize: 10,
+                fontWeight: 600,
               }}
             >
-              {(
-                [
-                  { key: "fetch", icon: CloudDownload, label: "Fetch", hint: "", sync: "fetch" },
-                  { key: "pull", icon: Download, label: "Pull", hint: status?.behind ? `${status.behind} behind` : "", sync: "pull" },
-                  { key: "push", icon: Upload, label: "Push", hint: status?.ahead ? `${status.ahead} ahead` : "", sync: "push" },
-                  { key: "branches", icon: GitBranch, label: "Branches & History", hint: "", sync: null },
-                ] as const
-              ).map(({ key, icon: Icon, label, hint, sync }) => {
-                const disabled = key === "branches" ? false : !!syncOp || loading;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => {
-                      setSyncMenuOpen(false);
-                      if (sync) void handleSync(sync);
-                      else void host.commands.run("view.branches");
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      background: "transparent",
-                      border: "none",
-                      borderRadius: 4,
-                      color: "var(--text-primary)",
-                      cursor: disabled ? "default" : "pointer",
-                      opacity: disabled ? 0.5 : 1,
-                      padding: "5px 8px",
-                      fontSize: 12,
-                      textAlign: "left",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                  >
-                    <Icon size={13} color="var(--text-muted)" />
-                    <span style={{ flex: 1 }}>{label}</span>
-                    {hint && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{hint}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+              <MoreHorizontal size={14} />
+              {!!status?.behind && <span style={{ color: "var(--warning)" }}>↓{status.behind}</span>}
+              {!!status?.ahead && <span style={{ color: "var(--accent-base)" }}>↑{status.ahead}</span>}
+            </button>
+            {syncMenuOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  marginTop: 4,
+                  minWidth: 190,
+                  background: "var(--bg-elevated)",
+                  border: "1px solid var(--border-prominent)",
+                  borderRadius: 6,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                  zIndex: 100,
+                  padding: 4,
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                {(
+                  [
+                    { key: "fetch", icon: CloudDownload, label: "Fetch", hint: "", sync: "fetch" },
+                    { key: "pull", icon: Download, label: "Pull", hint: status?.behind ? `${status.behind} behind` : "", sync: "pull" },
+                    { key: "push", icon: Upload, label: "Push", hint: status?.ahead ? `${status.ahead} ahead` : "", sync: "push" },
+                    { key: "branches", icon: GitBranch, label: "Branches & History", hint: "", sync: null },
+                  ] as const
+                ).map(({ key, icon: Icon, label, hint, sync }) => {
+                  const disabled = key === "branches" ? false : !!syncOp || loading;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        setSyncMenuOpen(false);
+                        if (sync) void handleSync(sync);
+                        else void host.commands.run("view.branches");
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        background: "transparent",
+                        border: "none",
+                        borderRadius: 4,
+                        color: "var(--text-primary)",
+                        cursor: disabled ? "default" : "pointer",
+                        opacity: disabled ? 0.5 : 1,
+                        padding: "5px 8px",
+                        fontSize: 12,
+                        textAlign: "left",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <Icon size={13} color="var(--text-muted)" />
+                      <span style={{ flex: 1 }}>{label}</span>
+                      {hint && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{hint}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Branch Dropdown Popover */}
