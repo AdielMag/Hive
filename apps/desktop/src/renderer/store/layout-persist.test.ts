@@ -29,13 +29,13 @@ describe("layout-persist", () => {
     expect(res.rightWidth).toBe(400);
   });
 
-  it("accepts valid right panels including 'tools'", () => {
+  it("accepts valid right panels including 'context'", () => {
     const raw = {
-      right: "tools",
+      right: "context",
       left: "branches",
     };
     const res = sanitizeLayout(raw, fallback);
-    expect(res.right).toBe("tools");
+    expect(res.right).toBe("context");
     expect(res.left).toBe("branches");
   });
 

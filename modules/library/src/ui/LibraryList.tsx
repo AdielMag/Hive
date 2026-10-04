@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
-import { AlertTriangle, Bot, EyeOff, Filter, Search, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Bot, EyeOff, Filter, Search, Sparkles, Trash2, X } from "lucide-react";
 import type { LibraryEntry, LibraryScope } from "@hive/protocol";
 import { useLibraryStore } from "./library-store.ts";
+import { libraryHost } from "./library-host.ts";
 
 const SCOPES: Array<{ id: LibraryScope; label: string }> = [
   { id: "project", label: "Project" },
@@ -30,7 +31,23 @@ export const LibraryList: React.FC = () => {
     setFilterScope,
     showOverridden,
     setShowOverridden,
+    deleteEntry,
+    deletingId,
   } = useLibraryStore();
+
+  const activeProject = libraryHost().sessions.activeProject();
+  const cwd = activeProject?.path;
+
+  const handleDeleteEntry = async (entry: LibraryEntry) => {
+    if (entry.readOnly || !entry.path || deletingId === entry.id) return;
+    const kindLabel = entry.kind === "skill" ? "skill" : "agent";
+    const nameLabel = entry.displayName || entry.name;
+    const ok = window.confirm(
+      `Delete ${kindLabel} "${nameLabel}"?\n\nThe file will be moved to the system trash.`,
+    );
+    if (!ok) return;
+    await deleteEntry(entry, cwd);
+  };
 
   const entries = snapshot?.entries ?? [];
   const overriddenCount = useMemo(() => entries.filter((e) => e.shadowed).length, [entries]);
@@ -174,7 +191,14 @@ export const LibraryList: React.FC = () => {
                 </div>
               )}
               {g.items.map((entry) => (
-                <LibraryRow key={entry.id} entry={entry} selected={entry.id === selectedId} onSelect={() => selectEntry(entry.id)} />
+                <LibraryRow
+                  key={entry.id}
+                  entry={entry}
+                  selected={entry.id === selectedId}
+                  onSelect={() => selectEntry(entry.id)}
+                  onDelete={() => void handleDeleteEntry(entry)}
+                  isDeleting={deletingId === entry.id}
+                />
               ))}
             </div>
           ))
@@ -184,7 +208,13 @@ export const LibraryList: React.FC = () => {
   );
 };
 
-const LibraryRow: React.FC<{ entry: LibraryEntry; selected: boolean; onSelect(): void }> = ({ entry, selected, onSelect }) => {
+const LibraryRow: React.FC<{
+  entry: LibraryEntry;
+  selected: boolean;
+  onSelect(): void;
+  onDelete?(): void;
+  isDeleting?: boolean;
+}> = ({ entry, selected, onSelect, onDelete, isDeleting }) => {
   const model = entry.kind === "agent" ? prettyModel(entry.frontmatter.model) : null;
   const thinking = entry.kind === "agent" && typeof entry.frontmatter.thinking === "string" ? entry.frontmatter.thinking : null;
   const disabled = entry.frontmatter.enabled === false;
@@ -202,6 +232,9 @@ const LibraryRow: React.FC<{ entry: LibraryEntry; selected: boolean; onSelect():
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onSelect();
+        } else if ((e.key === "Delete" || e.key === "Backspace") && !entry.readOnly && entry.path && onDelete) {
+          e.preventDefault();
+          onDelete();
         }
       }}
     >
@@ -219,6 +252,21 @@ const LibraryRow: React.FC<{ entry: LibraryEntry; selected: boolean; onSelect():
           {disabled && <EyeOff size={11} className="lib-item__flag" aria-label="Disabled" />}
           {entry.scope !== "global" && <span className={`lib-item__scope lib-item__scope--${entry.scope}`}>{entry.scope === "builtin" ? "built-in" : entry.scope}</span>}
           {entry.shadowed && <span className="lib-item__scope lib-item__scope--shadowed">overridden</span>}
+          {!entry.readOnly && entry.path && onDelete && (
+            <button
+              type="button"
+              className="lib-item__delete-btn"
+              title={`Delete ${entry.kind}`}
+              aria-label={`Delete ${entry.displayName || entry.name}`}
+              disabled={isDeleting}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <Trash2 size={11} />
+            </button>
+          )}
         </div>
         {entry.description && <div className="lib-item__desc">{entry.description}</div>}
         {meta && <div className="lib-item__meta">{meta}</div>}

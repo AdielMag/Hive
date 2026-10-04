@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   applyFrontmatterEdit,
+  deleteLibraryEntry,
   isEditableLibraryPath,
   listLibrary,
   parseFrontmatter,
@@ -209,5 +210,78 @@ describe("setFrontmatterField", () => {
     const res = await setFrontmatterField({ cwd: project, path: projFile, key: "enabled", value: false }, opts());
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.entry.scope).toBe("project");
+  });
+});
+
+describe("deleteLibraryEntry", () => {
+  it("deletes an agent markdown file", async () => {
+    const file = join(agentDir, "agents", "custom.md");
+    put(file, "---\nname: custom\n---\nHello agent");
+    expect(existsSync(file)).toBe(true);
+
+    const res = await deleteLibraryEntry({ path: file }, opts());
+    expect(res).toEqual({ ok: true });
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it("deletes a flat skill markdown file", async () => {
+    const file = join(project, ".pi", "skills", "flat-skill.md");
+    put(file, "---\ndescription: Flat\n---\nBody");
+    expect(existsSync(file)).toBe(true);
+
+    const res = await deleteLibraryEntry({ cwd: project, path: file }, opts());
+    expect(res).toEqual({ ok: true });
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it("deletes a folder skill including SKILL.md and supporting files", async () => {
+    const skillDir = join(project, ".pi", "skills", "bundle-skill");
+    const skillFile = join(skillDir, "SKILL.md");
+    put(skillFile, "---\ndescription: Bundle\n---\nBody");
+    put(join(skillDir, "helper.js"), "console.log('hi');");
+    put(join(skillDir, "sub", "doc.txt"), "some doc");
+
+    expect(existsSync(skillFile)).toBe(true);
+    expect(existsSync(skillDir)).toBe(true);
+
+    const res = await deleteLibraryEntry({ cwd: project, path: skillFile }, opts());
+    expect(res).toEqual({ ok: true });
+    expect(existsSync(skillDir)).toBe(false);
+  });
+
+  it("uses trashItem when provided and falls back to rm on failure", async () => {
+    const file = join(agentDir, "agents", "trash-me.md");
+    put(file, "---\nname: trash\n---\nTrash me");
+
+    let trashed = false;
+    const res = await deleteLibraryEntry(
+      { path: file },
+      {
+        ...opts(),
+        trashItem: async (target) => {
+          expect(target).toBe(file);
+          trashed = true;
+          rmSync(target);
+        },
+      },
+    );
+    expect(res).toEqual({ ok: true });
+    expect(trashed).toBe(true);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it("refuses paths outside discovery roots", async () => {
+    const outside = join(tmp, "evil.md");
+    put(outside, "---\nname: evil\n---\n");
+
+    const res = await deleteLibraryEntry({ path: outside }, opts());
+    expect(res).toEqual({ ok: false, error: "Path is not a skill or agent file in a known location." });
+    expect(existsSync(outside)).toBe(true);
+  });
+
+  it("fails gracefully when the file does not exist", async () => {
+    const missing = join(agentDir, "agents", "missing.md");
+    const res = await deleteLibraryEntry({ path: missing }, opts());
+    expect(res).toEqual({ ok: false, error: "File does not exist." });
   });
 });

@@ -678,3 +678,28 @@ div.msg-tool__head {
   align-items: center;
   gap: 2px;
 }
+
+/* "Reconnect <provider>" button on auth-failure errors (transcript row + session banner). */
+.auth-error-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--danger);
+  background: var(--danger);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.15s ease;
+}
+.auth-error-action:hover {
+  filter: brightness(1.1);
+}
+.auth-error-action--banner {
+  margin-left: 0;
+}

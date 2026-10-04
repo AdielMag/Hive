@@ -8,6 +8,15 @@ export const ExtensionDialogModal: React.FC = () => {
 
   if (!pendingUiDialog) return null;
 
+  // Suppress full-screen modal when handled inline by an approval widget above the composer
+  if (
+    pendingUiDialog.method === "confirm" &&
+    typeof pendingUiDialog.message === "string" &&
+    pendingUiDialog.message.includes('"kind":"dangerous_bash_approval"')
+  ) {
+    return null;
+  }
+
   const { id, method } = pendingUiDialog;
 
   return (

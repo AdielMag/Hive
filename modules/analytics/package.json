@@ -1,0 +1,43 @@
+{
+  "name": "@hive-module/analytics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: usage and cost analytics (+ AI Insights)",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "analytics",
+    "title": "Usage & Cost Analytics",
+    "description": "Comprehensive spend velocity, token telemetry, cost breakdown by model/project/day, and AI-driven efficiency analysis.",
+    "tier": "bonus",
+    "icon": "bar-chart-3",
+    "category": "Insights",
+    "contributes": {
+      "tabKinds": [
+        "usage"
+      ],
+      "commands": [
+        {
+          "id": "view.usage",
+          "title": "Open Usage Analytics",
+          "category": "View",
+          "keys": [
+            "Mod+Shift+U"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "@hive/pi-adapter": "0.1.0",
+    "@hive/protocol": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0",
+    "zustand": "^5.0.0"
+  }
+}

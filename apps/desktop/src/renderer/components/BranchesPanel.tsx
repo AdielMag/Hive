@@ -21,6 +21,7 @@ import { useShallow } from "zustand/react/shallow";
 import type { GitBranchDetail, GitGraphCommit } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
+import { useGitStore } from "../store/git-store.ts";
 
 /* ------------------------------------------------------------------ */
 /* Graph layout (lane assignment, same idea as VS Code / JetBrains)    */
@@ -354,6 +355,17 @@ export const BranchesPanel: React.FC = () => {
       setStatus(repoStatus);
       setBranches(details);
       setGraph(commits);
+      if (repoStatus && repoStatus.isRepo) {
+        useGitStore.getState().setStatus({
+          ahead: repoStatus.ahead ?? 0,
+          behind: repoStatus.behind ?? 0,
+          branch: repoStatus.branch ?? "",
+          upstream: repoStatus.upstream,
+          isRepo: true,
+        });
+      } else {
+        useGitStore.getState().setStatus(null);
+      }
     } catch (err: any) {
       setErrorMessage(`Failed to read git repository: ${err.message || String(err)}`);
     } finally {

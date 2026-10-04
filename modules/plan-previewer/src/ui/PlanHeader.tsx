@@ -1,177 +1,110 @@
 import React from "react";
-import {
-  AlignLeft,
-  CheckCircle,
-  Clock,
-  Compass,
-  FileText,
-  Maximize2,
-  Minimize2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
-  X,
-} from "lucide-react";
-import { usePlanStore } from "./plan-store.ts";
+import { FileText, MoreHorizontal, PanelLeft, X } from "lucide-react";
+import { usePlanStore, type PlanPhase } from "./plan-store.ts";
+import { PlanMenu, type PlanMenuItem } from "./PlanMenu.tsx";
 
 interface Props {
-  onClose?: () => void;
+  hasBothViews: boolean;
+  outlineVisible: boolean;
+  onToggleOutline: () => void;
+  onCopyPath: () => void;
 }
 
-export const PlanHeader: React.FC<Props> = ({ onClose }) => {
-  const {
-    planData,
-    viewMode,
-    widthMode,
-    collapseLeft,
-    collapseRight,
-    decisions,
-    selections,
-    draftAnswers,
-    isApproved,
-    setViewMode,
-    setWidthMode,
-    toggleLeftSidebar,
-    toggleRightSidebar,
-  } = usePlanStore();
+const STATUS: Record<PlanPhase, { label: string; tone: string }> = {
+  reviewing: { label: "Awaiting review", tone: "review" },
+  answering: { label: "Needs your input", tone: "input" },
+  sent: { label: "Waiting for agent", tone: "sent" },
+  approved: { label: "Approved", tone: "approved" },
+};
 
-  const totalDecisions = decisions.length;
-  const answeredDecisions = decisions.filter((d) => {
-    if (d.type === "choice") return Boolean(selections[d.id]);
-    if (d.type === "question") return Boolean(draftAnswers[d.id]?.trim());
-    return false;
-  }).length;
+export const PlanHeader: React.FC<Props> = ({ hasBothViews, outlineVisible, onToggleOutline, onCopyPath }) => {
+  const planData = usePlanStore((s) => s.planData);
+  const phase = usePlanStore((s) => s.phase);
+  const viewMode = usePlanStore((s) => s.viewMode);
+  const widthMode = usePlanStore((s) => s.widthMode);
+  const outlineOpen = usePlanStore((s) => s.outlineOpen);
+  const lastUpdate = usePlanStore((s) => s.lastUpdate);
+  const setViewMode = usePlanStore((s) => s.setViewMode);
+  const setWidthMode = usePlanStore((s) => s.setWidthMode);
+  const setOutlineOpen = usePlanStore((s) => s.setOutlineOpen);
+  const clearLastUpdate = usePlanStore((s) => s.clearLastUpdate);
 
-  const percent = totalDecisions > 0 ? Math.round((answeredDecisions / totalDecisions) * 100) : 100;
-
-  // Extract goal title from first H1
-  const goalTitle = React.useMemo(() => {
-    if (!planData?.content) return "Plan Overview";
-    const m = planData.content.match(/^#\s+(.+)$/m);
-    return m && m[1] ? m[1].replace(/<!--.*?-->/g, "").trim() : "Plan Overview";
-  }, [planData?.content]);
+  const status = STATUS[phase];
+  const menuItems: PlanMenuItem[] = [
+    { id: "w-c", group: "Reading width", label: "Comfortable", checked: widthMode === "comfortable", onSelect: () => setWidthMode("comfortable") },
+    { id: "w-w", label: "Wide", checked: widthMode === "wide", onSelect: () => setWidthMode("wide") },
+    { id: "o-a", group: "Outline", label: "Automatic", hint: "Shown when the tab is wide", checked: outlineOpen === null, onSelect: () => setOutlineOpen(null) },
+    { id: "o-s", label: "Always show", checked: outlineOpen === true, onSelect: () => setOutlineOpen(true) },
+    { id: "o-h", label: "Hide", checked: outlineOpen === false, onSelect: () => setOutlineOpen(false) },
+    { id: "copy", group: "File", label: "Copy file path", onSelect: onCopyPath },
+  ];
 
   return (
     <header className="plan-header">
-      <div className="plan-header__left">
+      <button
+        type="button"
+        className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon"
+        onClick={onToggleOutline}
+        aria-pressed={outlineVisible}
+        title={outlineVisible ? "Hide outline" : "Show outline"}
+        aria-label={outlineVisible ? "Hide outline" : "Show outline"}
+      >
+        <PanelLeft size={14} />
+      </button>
+
+      <span className="plan-header__file" title={planData?.filePath}>
+        <FileText size={14} className="plan-header__icon" />
+        <span className="plan-header__name">{planData?.filename || "plan.md"}</span>
+      </span>
+
+      <span className={`plan-status plan-status--${status.tone}`} role="status">
+        <span className="plan-status__dot" aria-hidden="true" />
+        {status.label}
+      </span>
+
+      {lastUpdate && (
         <button
           type="button"
-          className="plan-header__btn"
-          onClick={toggleLeftSidebar}
-          title={collapseLeft ? "Show Outline (Ctrl+B)" : "Hide Outline (Ctrl+B)"}
+          className="ui-chip plan-update-chip"
+          onClick={clearLastUpdate}
+          title="The agent revised the plan. Click to dismiss."
         >
-          {collapseLeft ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+          <span>Updated</span>
+          {lastUpdate.additions > 0 && <span className="plan-diff-add">+{lastUpdate.additions}</span>}
+          {lastUpdate.deletions > 0 && <span className="plan-diff-del">−{lastUpdate.deletions}</span>}
+          <X size={11} aria-hidden="true" />
         </button>
+      )}
 
-        <div className="plan-header__agent">
-          <div className="plan-header__avatar">
-            <Compass size={14} />
-          </div>
-          <div className="plan-header__agent-info">
-            <span className="plan-header__agent-name">Hive Agent</span>
-            <span className="plan-header__agent-mode">Plan Review</span>
-          </div>
-        </div>
+      <span className="plan-header__spacer" />
 
-        <div className="plan-header__context">
-          <span className="plan-header__file">
-            <FileText size={12} />
-            <span>{planData?.filename || "plan.md"}</span>
-          </span>
-          <span className="plan-header__goal" title={goalTitle}>
-            {goalTitle}
-          </span>
-        </div>
-      </div>
-
-      {totalDecisions > 0 && (
-        <div className="plan-header__progress" title={`${answeredDecisions} of ${totalDecisions} decisions resolved`}>
-          <div className="plan-header__progress-text">
-            <span>{answeredDecisions} of {totalDecisions} resolved</span>
-            <span className="plan-header__progress-pct">{percent}%</span>
-          </div>
-          <div className="plan-header__progress-track">
-            <div className="plan-header__progress-fill" style={{ width: `${percent}%` }} />
-          </div>
+      {hasBothViews && (
+        <div className="ui-seg plan-header__seg" role="group" aria-label="Plan view">
+          <button type="button" aria-pressed={viewMode === "summary"} onClick={() => setViewMode("summary")}>
+            Summary
+          </button>
+          <button type="button" aria-pressed={viewMode === "full"} onClick={() => setViewMode("full")}>
+            Full
+          </button>
         </div>
       )}
 
-      <div className="plan-header__right">
-        {/* Summary vs Full View */}
-        <div className="plan-header__btn-group" role="group" aria-label="View Mode">
+      <PlanMenu
+        label="Plan options"
+        items={menuItems}
+        renderTrigger={({ ref, ...props }) => (
           <button
+            ref={ref}
             type="button"
-            className={`plan-header__mode-btn${viewMode === "summary" ? " is-active" : ""}`}
-            onClick={() => setViewMode("summary")}
-            title="Summary View: 30-sec executive scan of key strategy & decisions"
+            className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon"
+            title="Plan options"
+            aria-label="Plan options"
+            {...props}
           >
-            <AlignLeft size={13} />
-            <span>Summary</span>
-          </button>
-          <button
-            type="button"
-            className={`plan-header__mode-btn${viewMode === "full" ? " is-active" : ""}`}
-            onClick={() => setViewMode("full")}
-            title="Full View: complete technical blueprint & implementation steps"
-          >
-            <FileText size={13} />
-            <span>Full</span>
-          </button>
-        </div>
-
-        {/* Width Switcher */}
-        <div className="plan-header__btn-group" role="group" aria-label="Reading Width">
-          <button
-            type="button"
-            className={`plan-header__mode-btn${widthMode === "comfortable" ? " is-active" : ""}`}
-            onClick={() => setWidthMode("comfortable")}
-            title="Narrow reading column (~820px)"
-          >
-            <Minimize2 size={13} />
-            <span>Narrow</span>
-          </button>
-          <button
-            type="button"
-            className={`plan-header__mode-btn${widthMode === "wide" ? " is-active" : ""}`}
-            onClick={() => setWidthMode("wide")}
-            title="Wide reading column (75%)"
-          >
-            <span>Wide</span>
-          </button>
-          <button
-            type="button"
-            className={`plan-header__mode-btn${widthMode === "full" ? " is-active" : ""}`}
-            onClick={() => setWidthMode("full")}
-            title="Full window width (100%)"
-          >
-            <Maximize2 size={13} />
-            <span>Full</span>
-          </button>
-        </div>
-
-        {/* Status Pill */}
-        <div className={`plan-status-pill ${isApproved ? "is-approved" : "is-review"}`}>
-          {isApproved ? <CheckCircle size={12} /> : <Clock size={12} />}
-          <span>{isApproved ? "Approved" : "Awaiting review"}</span>
-        </div>
-
-        {/* Toggle Activity Sidebar */}
-        <button
-          type="button"
-          className="plan-header__btn"
-          onClick={toggleRightSidebar}
-          title={collapseRight ? "Show Activity" : "Hide Activity"}
-        >
-          {collapseRight ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
-        </button>
-
-        {onClose && (
-          <button type="button" className="plan-header__btn plan-header__btn--close" onClick={onClose} title="Close Plan Tab">
-            <X size={15} />
+            <MoreHorizontal size={15} />
           </button>
         )}
-      </div>
+      />
     </header>
   );
 };

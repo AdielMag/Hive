@@ -2,9 +2,13 @@ import React, { useState } from "react";
 import { AlertCircle, Copy, Check, X, ChevronDown, ChevronUp } from "lucide-react";
 import { copyText } from "../lib/clipboard.ts";
 import { useSessionStore } from "../store/session-store.ts";
+import { detectAuthError } from "../lib/auth-errors.ts";
+import { AuthErrorActions } from "./AuthErrorActions.tsx";
 
 export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
   const clearError = useSessionStore((s) => s.clearError);
+  const activeProvider = useSessionStore((s) => s.selectedModel?.provider);
+  const auth = detectAuthError(error, activeProvider);
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -58,6 +62,7 @@ export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {auth && <AuthErrorActions auth={auth} tone="banner" />}
           {hasMultipleLines && (
             <button
               type="button"

@@ -34,6 +34,9 @@ const mockSnapshot: LibrarySnapshot = {
 
 describe("useLibraryStore", () => {
   let mockInvoke: any;
+  let mockToast: any;
+  let mockTabsList: any;
+  let mockTabsClose: any;
 
   beforeEach(() => {
     useLibraryStore.setState({
@@ -46,8 +49,16 @@ describe("useLibraryStore", () => {
       filterScope: "all",
       viewMode: "sections",
       savingField: null,
+      deletingId: null,
       feedback: null,
     });
+
+    mockToast = vi.fn();
+    mockTabsClose = vi.fn();
+    mockTabsList = vi.fn().mockReturnValue([
+      { id: "tab-1", filePath: "/path/to/alpha.md" },
+      { id: "tab-2", filePath: "/path/to/other.md" },
+    ]);
 
     mockInvoke = vi.fn().mockImplementation((method: string, args: any) => {
       if (method === "list") return Promise.resolve(mockSnapshot);
@@ -60,6 +71,9 @@ describe("useLibraryStore", () => {
           },
         });
       }
+      if (method === "delete") {
+        return Promise.resolve({ ok: true });
+      }
       return Promise.resolve(undefined);
     });
 
@@ -68,6 +82,11 @@ describe("useLibraryStore", () => {
       ipc: {
         invoke: mockInvoke,
         on: vi.fn(),
+      },
+      toast: mockToast,
+      tabs: {
+        list: mockTabsList,
+        close: mockTabsClose,
       },
     } as any);
   });
@@ -138,5 +157,61 @@ describe("useLibraryStore", () => {
     expect(success).toBe(false);
     expect(useLibraryStore.getState().feedback?.type).toBe("error");
     expect(mockInvoke).toHaveBeenCalledWith("list", { cwd: "/workspace" });
+  });
+
+  it("deletes entry, closes matching tabs, displays toast, and reloads snapshot", async () => {
+    await useLibraryStore.getState().load("/workspace");
+
+    mockInvoke.mockImplementation((method: string) => {
+      if (method === "delete") return Promise.resolve({ ok: true });
+      if (method === "list") {
+        return Promise.resolve({
+          ...mockSnapshot,
+          entries: [],
+        });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const success = await useLibraryStore.getState().deleteEntry(mockEntry, "/workspace");
+
+    expect(success).toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith("delete", {
+      cwd: "/workspace",
+      path: mockEntry.path,
+    });
+    expect(mockTabsClose).toHaveBeenCalledWith("tab-1");
+    expect(mockTabsClose).not.toHaveBeenCalledWith("tab-2");
+    expect(mockToast).toHaveBeenCalledWith({
+      message: 'Deleted agent "Alpha Agent"',
+      kind: "success",
+    });
+    expect(useLibraryStore.getState().snapshot?.entries).toEqual([]);
+    expect(useLibraryStore.getState().selectedId).toBeNull();
+  });
+
+  it("handles deletion failure cleanly", async () => {
+    await useLibraryStore.getState().load("/workspace");
+
+    mockInvoke.mockImplementation((method: string) => {
+      if (method === "delete") {
+        return Promise.resolve({ ok: false, error: "Permission denied" });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const success = await useLibraryStore.getState().deleteEntry(mockEntry, "/workspace");
+
+    expect(success).toBe(false);
+    expect(mockToast).toHaveBeenCalledWith({
+      message: "Permission denied",
+      kind: "error",
+    });
+    expect(useLibraryStore.getState().feedback).toEqual({
+      key: "delete",
+      type: "error",
+      message: "Permission denied",
+    });
+    expect(useLibraryStore.getState().deletingId).toBeNull();
   });
 });

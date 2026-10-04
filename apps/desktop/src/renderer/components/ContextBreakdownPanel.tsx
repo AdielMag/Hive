@@ -1,11 +1,12 @@
 import React from "react";
 import { PieChart, X } from "lucide-react";
+import type { ModuleHost } from "@hive/module-sdk/renderer";
 import { ContextBreakdownView, useContextBreakdown } from "./ContextBreakdownView.tsx";
 import { useUi } from "../store/ui-store.ts";
 
-export const ContextBreakdownPanel: React.FC = () => {
+export const ContextBreakdownPanel: React.FC<{ host?: ModuleHost }> = ({ host }) => {
   const data = useContextBreakdown();
-  const close = useUi((s) => s.showRight);
+  const close = () => (host ? host.panels.close("right") : useUi.getState().showRight(null));
   return (
     <div className="ctx-panel">
       <div className="ui-panel-header">
@@ -21,7 +22,7 @@ export const ContextBreakdownPanel: React.FC = () => {
           </span>
           <button
             className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
-            onClick={() => close(null)}
+            onClick={close}
             title="Close panel"
             aria-label="Close panel"
           >

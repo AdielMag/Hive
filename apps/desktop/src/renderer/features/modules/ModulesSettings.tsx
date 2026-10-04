@@ -102,6 +102,7 @@ export const ModulesSettings: React.FC = () => {
                   <div className="modules__card-text">
                     <span className="modules__card-title">
                       {m.title}
+                      {m.recommended && <span className="ui-chip ui-chip--accent" style={{ background: "var(--accent-subtle)", color: "var(--accent-hover)", border: "1px solid rgba(var(--accent-rgb), 0.3)" }}>Recommended</span>}
                       {m.category && <span className="ui-chip">{m.category}</span>}
                     </span>
                     <span className="modules__card-desc">{m.description}</span>
@@ -120,6 +121,7 @@ export const ModulesSettings: React.FC = () => {
                     {requires.length > 0 && <span>Needs {requires.join(", ")}</span>}
                     {on && requiredBy.length > 0 && <span>Required by {requiredBy.join(", ")}. Turning this off turns those off too.</span>}
                     {m.agent?.skills && <span>Installs Pi skills</span>}
+                    {m.agent?.extensions && <span>Installs Pi safety extension</span>}
                     {m.agent?.bin && (
                       <span>
                         <Terminal size={11} style={{ verticalAlign: -1 }} /> Adds the {Object.keys(m.agent.bin).join(", ")} command

@@ -1,15 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, CheckCircle2, Loader2, Sparkles, X } from "lucide-react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Bot, Loader2, X } from "lucide-react";
 import type { ModuleHost, ModuleTab } from "@hive/module-sdk/renderer";
-import { PlanEvents, type PlanUpdatedEvent } from "../shared.ts";
-import { usePlanStore } from "./plan-store.ts";
-import { extractPlanViews } from "../plan-utils.ts";
+import { PlanEvents, type OpenPlanTabEvent, type PlanUpdatedEvent } from "../shared.ts";
+import { activeViewMarkdown, extractPlanViews, segmentPlan, type TocHeading } from "../plan-utils.ts";
+import { pendingRounds } from "../plan-review.ts";
+import { usePlanStore, type PlanAnnotation } from "./plan-store.ts";
+import { applyBadges, applyHeadingIds, findTextRange, scrollToRange, setNoteHighlights } from "./plan-dom.ts";
 import { PlanHeader } from "./PlanHeader.tsx";
-import { PlanOutline } from "./PlanOutline.tsx";
-import { PlanDecisions } from "./PlanDecisions.tsx";
+import { PlanOutline, outlineHeadings } from "./PlanOutline.tsx";
+import { DecisionCard } from "./DecisionCard.tsx";
+import { PlanCallout } from "./PlanCallout.tsx";
+import { PlanAskCard } from "./PlanAskCard.tsx";
 import { PlanSelectionPopover } from "./PlanSelectionPopover.tsx";
-import { PlanActivitySidebar } from "./PlanActivitySidebar.tsx";
-import { PlanFooter } from "./PlanFooter.tsx";
+import { PlanReviewBar } from "./PlanReviewBar.tsx";
 import "./plan.css";
 
 interface Props {
@@ -17,109 +20,163 @@ interface Props {
   host: ModuleHost;
 }
 
+/** Tab width below which the outline hides itself (unless the user forced it). */
+const OUTLINE_MIN_WIDTH = 1100;
+
+const samePath = (a?: string | null, b?: string | null) =>
+  Boolean(a && b) && a!.replace(/\\/g, "/").toLowerCase() === b!.replace(/\\/g, "/").toLowerCase();
+
 export const PlanPreviewerTab: React.FC<Props> = ({ tab, host }) => {
   const Markdown = host.ui.Markdown;
-  const {
-    planData,
-    loading,
-    error,
-    viewMode,
-    widthMode,
-    collapseLeft,
-    collapseRight,
-    toastMessage,
-    isApproved,
-    loadPlan,
-    updateFromDisk,
-    setViewMode,
-    clearToast,
-  } = usePlanStore();
+  const planData = usePlanStore((s) => s.planData);
+  const loading = usePlanStore((s) => s.loading);
+  const error = usePlanStore((s) => s.error);
+  const viewMode = usePlanStore((s) => s.viewMode);
+  const widthMode = usePlanStore((s) => s.widthMode);
+  const outlineOpen = usePlanStore((s) => s.outlineOpen);
+  const phase = usePlanStore((s) => s.phase);
+  const annotations = usePlanStore((s) => s.annotations);
+  const dismissedReplyAt = usePlanStore((s) => s.dismissedReplyAt);
+  const { loadPlan, refresh, updateFromDisk, setOutlineOpen, dismissReply } = usePlanStore.getState();
 
-  const docContainerRef = useRef<HTMLDivElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const [activeHeadingId, setActiveHeadingId] = useState<string | undefined>();
-  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const docRef = useRef<HTMLDivElement>(null);
+  const [headings, setHeadings] = useState<TocHeading[]>([]);
+  const [activeId, setActiveId] = useState<string | undefined>();
+  const [wideEnough, setWideEnough] = useState(true);
 
   const targetPath = tab.filePath || "plan.md";
 
-  // Initial load
   useEffect(() => {
     void loadPlan(targetPath);
   }, [targetPath, loadPlan]);
 
-  // Listen for live updates from disk
+  // Live file edits, and agent re-notifications (new --ask questions / replies) for this plan.
   useEffect(() => {
-    const unsub = host.ipc.on<PlanUpdatedEvent>(PlanEvents.updated, (data) => {
-      if (data.filePath === planData?.filePath && data.content) {
+    const offUpdated = host.ipc.on<PlanUpdatedEvent>(PlanEvents.updated, (data) => {
+      if (samePath(data.filePath, usePlanStore.getState().planData?.filePath) && typeof data.content === "string") {
         updateFromDisk(data.content, data.fileVersion);
       }
     });
-    return unsub;
-  }, [host, planData?.filePath, updateFromDisk]);
-
-  // Auto-dismiss toast
-  useEffect(() => {
-    if (toastMessage) {
-      const timer = setTimeout(() => clearToast(), 4000);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [toastMessage, clearToast]);
-
-  // Show modal once approved
-  useEffect(() => {
-    if (isApproved) {
-      setShowApprovalModal(true);
-    }
-  }, [isApproved]);
-
-  // Dual-view markdown extraction
-  const views = useMemo(() => extractPlanViews(planData?.content || ""), [planData?.content]);
-
-  // If in summary mode and summary exists, show summary; otherwise full/raw
-  const activeMarkdown = useMemo(() => {
-    if (viewMode === "summary" && views.summary) return views.summary;
-    if (viewMode === "full" && views.full) return views.full;
-    // Strip out choice/question blockquotes from rendered body since DecisionsTray handles them
-    return views.raw;
-  }, [viewMode, views]);
-
-  // Clean markdown for rendering without repeating decisions blockquotes in body
-  const bodyMarkdown = useMemo(() => {
-    // Remove > [!CHOICE] and > [!QUESTION] blockquotes from text so they don't render twice
-    return activeMarkdown.replace(/(?:^[ \t]*>[ \t]*.*(?:\r?\n|$))+/gm, (match) => {
-      if (/^>[ \t]*\[!(CHOICE|QUESTION)\]/im.test(match)) {
-        return ""; // Stripped out, handled by PlanDecisions tray
-      }
-      return match;
+    const offOpen = host.ipc.on<OpenPlanTabEvent>(PlanEvents.openTab, (data) => {
+      if (samePath(data.filePath, usePlanStore.getState().planData?.filePath)) void refresh();
     });
-  }, [activeMarkdown]);
+    return () => {
+      offUpdated();
+      offOpen();
+    };
+  }, [host, updateFromDisk, refresh]);
 
-  const handleSelectHeading = (slug: string) => {
-    setActiveHeadingId(slug);
-    // Find heading element with matching slug/text
-    const headings = docContainerRef.current?.querySelectorAll("h1, h2, h3") || [];
-    for (const h of Array.from(headings)) {
-      const text = h.textContent?.replace(/[^\w\s-]/g, "").trim().toLowerCase().replace(/\s+/g, "-") || "";
-      if (text === slug || h.id === slug) {
-        h.scrollIntoView({ behavior: "smooth", block: "start" });
-        break;
-      }
-    }
-  };
+  // Outline auto-hides on narrow tabs.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setWideEnough((entry?.contentRect.width ?? 0) >= OUTLINE_MIN_WIDTH));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [planData !== null]);
+
+  const views = useMemo(() => extractPlanViews(planData?.content || ""), [planData?.content]);
+  const activeMarkdown = useMemo(() => activeViewMarkdown(views, viewMode), [views, viewMode]);
+  const segments = useMemo(() => segmentPlan(activeMarkdown), [activeMarkdown]);
+  const hasBothViews = Boolean(views.summary && views.full);
+  const toc = useMemo(() => outlineHeadings(headings), [headings]);
+  const outlineVisible = (outlineOpen ?? wideEnough) && toc.length > 0;
+  const readOnly = phase === "sent" || phase === "approved";
+  const rounds = pendingRounds(planData?.agentQuestions);
+  const latestReply = planData?.agentResponses?.at(-1);
+
+  // DOM post-pass after every render of the segments: heading ids (+ outline) and file badges. Idempotent.
+  useLayoutEffect(() => {
+    const doc = docRef.current;
+    if (!doc) return;
+    const found = applyHeadingIds(doc);
+    applyBadges(doc);
+    setHeadings((prev) =>
+      prev.length === found.length && prev.every((h, i) => h.id === found[i]!.id && h.text === found[i]!.text) ? prev : found,
+    );
+  }, [segments]);
+
+  // Scroll-spy: the active outline entry is the last heading that crossed the top band of the viewport.
+  useEffect(() => {
+    const root = scrollRef.current;
+    const doc = docRef.current;
+    if (!root || !doc || toc.length === 0) return;
+    const ids = toc.map((h) => h.id);
+    const els = ids.map((id) => doc.querySelector<HTMLElement>(`#${CSS.escape(id)}`)).filter((e): e is HTMLElement => !!e);
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const idx = ids.indexOf(entry.target.id);
+          if (entry.isIntersecting) setActiveId(entry.target.id);
+          else if (entry.rootBounds && entry.boundingClientRect.top > entry.rootBounds.top && idx > 0) {
+            // Scrolled back above this heading: the previous section is current again.
+            setActiveId((cur) => (cur === entry.target.id ? ids[idx - 1] : cur));
+          }
+        }
+      },
+      { root, rootMargin: "0px 0px -75% 0px", threshold: 0 },
+    );
+    els.forEach((el) => io.observe(el));
+    setActiveId((cur) => (cur && ids.includes(cur) ? cur : ids[0]));
+    return () => io.disconnect();
+  }, [toc]);
+
+  // Persistent highlights for saved notes (CSS Custom Highlight API; no-op where unsupported).
+  useEffect(() => {
+    const doc = docRef.current;
+    if (!doc) return;
+    const ranges = annotations.map((a) => findTextRange(doc, a.selectedText)).filter((r): r is Range => !!r);
+    setNoteHighlights(ranges);
+  }, [annotations, segments]);
+  useEffect(() => () => void setNoteHighlights([]), []);
+
+  const scrollToHeading = useCallback((id: string) => {
+    const el = docRef.current?.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveId(id);
+  }, []);
+
+  const jumpToDecision = useCallback((key: string) => {
+    const el = docRef.current?.querySelector<HTMLElement>(`[data-decision-key="${CSS.escape(key)}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.querySelector<HTMLElement>('[role="radio"][tabindex="0"], textarea, .plan-decision__change')?.focus({ preventScroll: true });
+  }, []);
+
+  const jumpToNote = useCallback((note: PlanAnnotation) => {
+    const doc = docRef.current;
+    const range = doc ? findTextRange(doc, note.selectedText) : null;
+    if (range) scrollToRange(range);
+    else host.toast({ message: "That text is no longer in this view", kind: "info" });
+  }, [host]);
+
+  const jumpToAsk = useCallback(() => {
+    const el = docRef.current?.querySelector<HTMLElement>("#plan-ask");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    el?.querySelector<HTMLElement>('[role="radio"][tabindex="0"], input')?.focus({ preventScroll: true });
+  }, []);
+
+  const copyPath = useCallback(async () => {
+    const path = usePlanStore.getState().planData?.filePath;
+    if (!path) return;
+    const ok = await host.clipboard.copy(path);
+    host.toast({ message: ok ? "Plan path copied" : "Could not copy the path", kind: ok ? "success" : "error" });
+  }, [host]);
 
   if (loading && !planData) {
     return (
-      <div className="plan-view plan-view--loading">
-        <Loader2 size={28} className="spin text-accent" />
-        <p>Loading plan preview...</p>
+      <div className="plan-view plan-view--center">
+        <Loader2 size={20} className="spin" />
+        <p>Loading plan…</p>
       </div>
     );
   }
 
   if (error && !planData) {
     return (
-      <div className="plan-view plan-view--error">
+      <div className="plan-view plan-view--center">
         <h3>Could not load plan</h3>
         <p>{error}</p>
         <button type="button" className="ui-btn ui-btn--sm" onClick={() => void loadPlan(targetPath)}>
@@ -130,98 +187,61 @@ export const PlanPreviewerTab: React.FC<Props> = ({ tab, host }) => {
   }
 
   return (
-    <div className={`plan-view plan-view--w-${widthMode}`} data-view-mode={viewMode}>
-      <PlanHeader onClose={() => host.tabs.close(tab.id)} />
+    <div ref={rootRef} className={`plan-view plan-view--${widthMode}`} data-phase={phase}>
+      <PlanHeader
+        hasBothViews={hasBothViews}
+        outlineVisible={outlineVisible}
+        onToggleOutline={() => setOutlineOpen(!outlineVisible)}
+        onCopyPath={() => void copyPath()}
+      />
 
       <div className="plan-body">
-        {/* Left TOC Sidebar */}
-        {!collapseLeft && (
-          <PlanOutline
-            markdown={activeMarkdown}
-            activeId={activeHeadingId}
-            onSelectHeading={handleSelectHeading}
-          />
-        )}
+        {outlineVisible && <PlanOutline headings={toc} activeId={activeId} onSelectHeading={scrollToHeading} />}
 
-        {/* Center Document Area */}
-        <div className="plan-doc-area" ref={scrollAreaRef}>
-          <div className="plan-doc-container" ref={docContainerRef}>
-            {/* Live update toast */}
-            {toastMessage && (
-              <div className="plan-toast-banner">
-                <Sparkles size={14} className="text-accent" />
-                <span>{toastMessage}</span>
-                <button type="button" className="plan-toast-close" onClick={clearToast}>
-                  <X size={12} />
-                </button>
-              </div>
-            )}
-
-            {/* Summary View Banner */}
-            {viewMode === "summary" && (
-              <div className="plan-summary-banner">
-                <div className="plan-summary-banner__text">
-                  <span className="plan-summary-banner__icon">✦</span>
-                  <span>
-                    <strong>Summary View:</strong> High-level strategy, key trade-offs &amp; milestones
-                  </span>
+        <div className="plan-scroll" ref={scrollRef}>
+          <div className="plan-doc" ref={docRef}>
+            {latestReply && latestReply.timestamp !== dismissedReplyAt && (
+              <aside className="plan-reply" aria-label="Agent reply">
+                <div className="plan-reply__head">
+                  <Bot size={13} aria-hidden="true" />
+                  <span>Agent reply</span>
+                  <button
+                    type="button"
+                    className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon"
+                    aria-label="Dismiss agent reply"
+                    onClick={() => dismissReply(latestReply.timestamp)}
+                  >
+                    <X size={12} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="plan-summary-banner__switch-btn"
-                  onClick={() => setViewMode("full")}
-                >
-                  <span>Show Full Blueprint</span>
-                  <ArrowRight size={12} />
-                </button>
-              </div>
+                <div className="plan-reply__body">
+                  <Markdown text={latestReply.text} />
+                </div>
+              </aside>
             )}
 
-            <div className="plan-doc-card">
-              {/* Decisions Tray */}
-              <PlanDecisions />
+            {phase === "answering" && <PlanAskCard rounds={rounds} />}
 
-              {/* Rendered Markdown Blueprint */}
-              <div className="plan-doc-content selectable">
-                <Markdown text={bodyMarkdown} />
-              </div>
-            </div>
+            {segments.map((seg, i) => {
+              if (seg.kind === "md") {
+                return (
+                  <div key={`md-${i}`} className="plan-seg-md">
+                    <Markdown text={seg.text} />
+                  </div>
+                );
+              }
+              if (seg.kind === "callout") {
+                return <PlanCallout key={`co-${i}`} type={seg.type} title={seg.title} body={seg.body} Markdown={Markdown} />;
+              }
+              return <DecisionCard key={`dc-${seg.item.key}-${i}`} item={seg.item} readOnly={readOnly} />;
+            })}
 
-            {/* Floating popover for text selection annotations */}
-            <PlanSelectionPopover containerRef={docContainerRef} />
+            <PlanSelectionPopover containerRef={docRef} disabled={readOnly} />
           </div>
         </div>
-
-        {/* Right Activity Sidebar */}
-        {!collapseRight && <PlanActivitySidebar />}
       </div>
 
-      <PlanFooter />
-
-      {/* Approval Success Modal */}
-      {showApprovalModal && (
-        <div className="plan-modal-scrim" onClick={() => setShowApprovalModal(false)}>
-          <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="plan-modal__icon">
-              <CheckCircle2 size={32} className="text-success" />
-            </div>
-            <h2 className="plan-modal__title">Plan Approved</h2>
-            <p className="plan-modal__desc">
-              Your approval and comments have been transmitted back to the agent session. The agent is now executing
-              the plan in <strong>{usePlanStore.getState().selectedExecutionMode.toUpperCase()}</strong> mode.
-            </p>
-            <div className="plan-modal__actions">
-              <button
-                type="button"
-                className="plan-footer__btn plan-footer__btn--approve"
-                onClick={() => setShowApprovalModal(false)}
-              >
-                Close Notice
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PlanReviewBar onJumpToDecision={jumpToDecision} onJumpToNote={jumpToNote} onJumpToAsk={jumpToAsk} />
     </div>
   );
 };

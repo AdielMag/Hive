@@ -477,6 +477,17 @@
   flex-shrink: 0;
 }
 
+.lib-btn--danger {
+  color: var(--danger, #e5534b);
+  border-color: rgba(var(--danger-rgb, 229, 83, 75), 0.3);
+  background: transparent;
+}
+.lib-btn--danger:hover:not(:disabled) {
+  background: rgba(var(--danger-rgb, 229, 83, 75), 0.12);
+  border-color: var(--danger, #e5534b);
+  color: var(--danger, #e5534b);
+}
+
 .lib-detail__desc {
   font-size: 13px;
   line-height: 1.5;
@@ -1109,6 +1120,34 @@
   color: var(--text-muted);
   background: transparent;
   border: 1px dashed var(--border-subtle);
+}
+
+.lib-item__delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+.lib-item:hover .lib-item__delete-btn,
+.lib-item.is-selected .lib-item__delete-btn,
+.lib-item__delete-btn:focus-visible {
+  opacity: 0.7;
+}
+.lib-item__delete-btn:hover {
+  opacity: 1;
+  background: rgba(var(--danger-rgb, 229, 83, 75), 0.15);
+  color: var(--danger, #e5534b);
 }
 .lib-item__desc {
   font-size: 11px;

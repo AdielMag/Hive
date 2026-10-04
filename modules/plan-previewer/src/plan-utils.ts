@@ -1,6 +1,6 @@
 /**
- * Pure utilities for Plan Previewer: view mode extraction (Summary vs Full),
- * decisions parsing ([!CHOICE] & [!QUESTION]), table of contents headings, and diff stats.
+ * Pure utilities for Plan Previewer: view extraction (Summary vs Full), segmenting a view into markdown /
+ * decision / callout blocks, decision parsing ([!CHOICE] & [!QUESTION]), outline headings, and diff stats.
  */
 
 export interface PlanViews {
@@ -41,15 +41,58 @@ export function extractPlanViews(content: string): PlanViews {
   return { summary, full, raw: content };
 }
 
+/** The markdown shown for a view mode: the requested section when present, otherwise the other one, else raw. */
+export function activeViewMarkdown(views: PlanViews, mode: "summary" | "full"): string {
+  if (mode === "summary" && views.summary) return views.summary;
+  if (mode === "full" && views.full) return views.full;
+  return views.full ?? views.summary ?? views.raw;
+}
+
+/** One slug function for outline entries, heading ids, scrolling and decision keys. */
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+/** Drops the "(Executive Summary)" / "(Full Specification)" suffixes the old skill template added to titles. */
+export function cleanTitle(text: string): string {
+  return text
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\s*[([]\s*(?:executive\s+summary|full\s+spec(?:ification)?)\s*[)\]]\s*$/i, "")
+    .trim();
+}
+
+/** Plain text of an inline-markdown string (links, emphasis, code ticks removed). */
+export function stripInlineMarkdown(text: string): string {
+  return text
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/(^|[^\w*])[*_](\S[^*_]*?)[*_](?=[^\w*]|$)/g, "$1$2")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/~~(.+?)~~/g, "$1")
+    .trim();
+}
+
 export interface PlanChoiceOption {
+  /** Option name (bold part of `**Name**: why`). */
   label: string;
+  /** The reason / description after the name, if any. */
+  detail: string;
+  /** Full option text sent back to the agent: `Name: detail`. */
+  text: string;
   isRecommended: boolean;
   isPreselected: boolean;
   rawLine: string;
 }
 
 export interface DecisionItem {
-  id: string; // e.g. "D1", "D2", "Q1"
+  /** Positional id within the parsed markdown: "D1", "D2", "Q1"... (sent in the feedback payload). */
+  id: string;
+  /** Stable key (type + title slug) that survives agent revisions and reordering. */
+  key: string;
   type: "choice" | "question";
   title: string;
   prompt: string;
@@ -57,98 +100,180 @@ export interface DecisionItem {
   rawBlock: string;
 }
 
-export function extractDecisions(content: string): DecisionItem[] {
-  if (!content) return [];
-  const items: DecisionItem[] = [];
+export type CalloutType = "note" | "tip" | "important" | "warning" | "caution";
 
-  // Match blockquotes that start with > [!CHOICE] or > [!QUESTION]
-  const blockquoteRegex = /((?:^[ \t]*>[ \t]*.*(?:\r?\n|$))+)/gm;
-  let match: RegExpExecArray | null;
+export type PlanSegment =
+  | { kind: "md"; text: string }
+  | { kind: "decision"; item: DecisionItem }
+  | { kind: "callout"; type: CalloutType; title: string; body: string };
 
+const FENCE_OPEN = /^[ \t]*(`{3,}|~{3,})/;
+const QUOTE_LINE = /^[ \t]*>/;
+const MARKER = /^\[!(CHOICE|QUESTION|NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(.*)$/i;
+const HEADING = /^(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/;
+
+/** Tracks fenced code blocks line by line so blockquotes / headings inside code are left alone. */
+function createFenceTracker() {
+  let fence: { char: string; len: number } | null = null;
+  return (line: string): boolean => {
+    const m = line.match(FENCE_OPEN);
+    if (fence) {
+      if (m && m[1]![0] === fence.char && m[1]!.length >= fence.len && line.trim() === m[1]) fence = null;
+      return true;
+    }
+    if (m) {
+      fence = { char: m[1]![0]!, len: m[1]!.length };
+      return true;
+    }
+    return false;
+  };
+}
+
+function unquote(line: string): string {
+  return line.replace(/^[ \t]*>[ \t]?/, "");
+}
+
+function decisionKey(type: DecisionItem["type"], title: string): string {
+  return `${type === "choice" ? "d" : "q"}-${slugify(title) || "untitled"}`;
+}
+
+function parseOption(line: string): PlanChoiceOption | null {
+  const m = line.match(/^[-*+]\s*\(([ xX])\)\s*(.*)$/);
+  if (!m) return null;
+  const isPreselected = m[1]!.toLowerCase() === "x";
+  let rest = m[2]!.trim();
+  const isRecommended = /[[(]recommended[\])]/i.test(rest);
+  rest = rest.replace(/\s*[[(]recommended[\])]\s*/gi, " ").trim();
+
+  let label = rest;
+  let detail = "";
+  const bold = rest.match(/^\*\*(.+?)\*\*\s*(?:[:：]|—|–|\s-\s|-)?\s*([\s\S]*)$/);
+  if (bold) {
+    label = bold[1]!.trim().replace(/[:：]$/, "").trim();
+    detail = bold[2]!.trim();
+  } else {
+    const plain = rest.match(/^(.+?)\s+(?:—|–)\s+(.+)$/);
+    if (plain) {
+      label = plain[1]!.trim();
+      detail = plain[2]!.trim();
+    }
+  }
+  const text = detail ? `${label}: ${detail}` : label;
+  return { label, detail, text, isRecommended, isPreselected, rawLine: line };
+}
+
+function parseDecisionBlock(type: DecisionItem["type"], titleText: string, bodyLines: string[], rawBlock: string, ordinal: number): DecisionItem {
+  const title = cleanTitle(titleText) || (type === "choice" ? `Decision ${ordinal}` : `Question ${ordinal}`);
+  const lines = bodyLines.map((l) => l.trim()).filter(Boolean);
+  let prompt = "";
+  const options: PlanChoiceOption[] = [];
+
+  for (const line of lines) {
+    const q = line.match(/^\*{0,2}Question\*{0,2}\s*:\*{0,2}\s*(.*)$/i);
+    if (q) {
+      prompt = q[1]!.trim();
+      continue;
+    }
+    if (type === "choice") {
+      const opt = parseOption(line);
+      if (opt) {
+        options.push(opt);
+        continue;
+      }
+    }
+    if (!prompt && !/^[-*+]\s/.test(line)) prompt = line;
+  }
+
+  return { id: "", key: decisionKey(type, title), type, title, prompt, options, rawBlock };
+}
+
+/**
+ * Splits a plan view into renderable segments: plain markdown, decision blocks (`> [!CHOICE]` / `> [!QUESTION]`)
+ * and GitHub-style callouts (`> [!NOTE]` etc). Indented `>` is accepted; blockquotes inside fenced code are not
+ * touched. Decisions get positional ids (D#/Q#) de-duplicated by key, so a block repeated in the same view
+ * reuses one id. Heading lines lose the old "(Executive Summary)" suffixes.
+ */
+export function segmentPlan(markdown: string): PlanSegment[] {
+  if (!markdown) return [];
+  const lines = markdown.split(/\r?\n/);
+  const segments: PlanSegment[] = [];
+  const inFence = createFenceTracker();
+  const ids = new Map<string, string>();
   let dCount = 0;
   let qCount = 0;
+  let buffer: string[] = [];
 
-  while ((match = blockquoteRegex.exec(content)) !== null) {
-    const block = match[1]!;
-    const cleanLines = block
-      .split(/\r?\n/)
-      .map((l) => l.replace(/^[ \t]*>[ \t]?/, "").trim())
-      .filter((l) => l.length > 0);
+  const flush = () => {
+    const text = buffer.join("\n");
+    if (text.trim()) segments.push({ kind: "md", text });
+    buffer = [];
+  };
 
-    if (cleanLines.length === 0) continue;
-    const firstLine = cleanLines[0]!;
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i]!;
+    if (inFence(line)) {
+      buffer.push(line);
+      i++;
+      continue;
+    }
+    if (!QUOTE_LINE.test(line)) {
+      const h = line.match(HEADING);
+      const cleaned = h ? cleanTitle(h[2]!) : null;
+      buffer.push(h && cleaned && cleaned !== h[2] ? `${h[1]} ${cleaned}` : line);
+      i++;
+      continue;
+    }
 
-    const choiceMatch = firstLine.match(/^\[!CHOICE\]\s*(.*)$/i);
-    const questionMatch = firstLine.match(/^\[!QUESTION\]\s*(.*)$/i);
+    // Collect a contiguous blockquote.
+    const start = i;
+    while (i < lines.length && QUOTE_LINE.test(lines[i]!)) i++;
+    const block = lines.slice(start, i);
+    const inner = block.map(unquote);
+    const firstIdx = inner.findIndex((l) => l.trim().length > 0);
+    const marker = firstIdx >= 0 ? inner[firstIdx]!.trim().match(MARKER) : null;
+    if (!marker) {
+      buffer.push(...block);
+      continue;
+    }
 
-    if (choiceMatch) {
-      dCount++;
-      const title = choiceMatch[1]?.trim() || `Decision ${dCount}`;
-      let prompt = "";
-      const options: PlanChoiceOption[] = [];
+    flush();
+    const kind = marker[1]!.toUpperCase();
+    const titleText = marker[2]!.trim();
+    const body = inner.slice(firstIdx + 1);
+    const rawBlock = block.join("\n");
 
-      for (let i = 1; i < cleanLines.length; i++) {
-        const line = cleanLines[i]!;
-        const qLineMatch = line.match(/^\*?\*?Question\*?\*?:\s*(.*)$/i);
-        if (qLineMatch) {
-          prompt = qLineMatch[1]!.trim();
-          continue;
-        }
-
-        const optMatch = line.match(/^-\s*\(([ xX])\)\s*(.*)$/);
-        if (optMatch) {
-          const isPreselected = optMatch[1]!.toLowerCase() === "x";
-          let label = optMatch[2]!.trim();
-          const isRecommended = /\[recommended\]/i.test(label);
-          label = label.replace(/\[recommended\]/i, "").trim();
-          // Remove leading bold if present
-          label = label.replace(/^\*\*(.*?)\*\*(?::\s*)?/, "$1: ");
-          options.push({
-            label,
-            isRecommended,
-            isPreselected,
-            rawLine: line,
-          });
-        } else if (!prompt && !line.startsWith("-")) {
-          prompt = line;
-        }
+    if (kind === "CHOICE" || kind === "QUESTION") {
+      const type = kind === "CHOICE" ? "choice" : "question";
+      const item = parseDecisionBlock(type, titleText, body, rawBlock, type === "choice" ? dCount + 1 : qCount + 1);
+      let id = ids.get(item.key);
+      if (!id) {
+        id = type === "choice" ? `D${++dCount}` : `Q${++qCount}`;
+        ids.set(item.key, id);
       }
-
-      items.push({
-        id: `D${dCount}`,
-        type: "choice",
-        title,
-        prompt,
-        options,
-        rawBlock: block,
-      });
-    } else if (questionMatch) {
-      qCount++;
-      const title = questionMatch[1]?.trim() || `Question ${qCount}`;
-      let prompt = "";
-
-      for (let i = 1; i < cleanLines.length; i++) {
-        const line = cleanLines[i]!;
-        const qLineMatch = line.match(/^\*?\*?Question\*?\*?:\s*(.*)$/i);
-        if (qLineMatch) {
-          prompt = qLineMatch[1]!.trim();
-          break;
-        } else if (!prompt) {
-          prompt = line;
-        }
-      }
-
-      items.push({
-        id: `Q${qCount}`,
-        type: "question",
-        title,
-        prompt,
-        options: [],
-        rawBlock: block,
+      segments.push({ kind: "decision", item: { ...item, id } });
+    } else {
+      segments.push({
+        kind: "callout",
+        type: kind.toLowerCase() as CalloutType,
+        title: titleText,
+        body: body.join("\n").trim(),
       });
     }
   }
+  flush();
+  return segments;
+}
 
+/** Decisions of a view (pass the active view, not the raw file), de-duplicated by title key. */
+export function extractDecisions(markdown: string): DecisionItem[] {
+  const seen = new Set<string>();
+  const items: DecisionItem[] = [];
+  for (const seg of segmentPlan(markdown)) {
+    if (seg.kind !== "decision" || seen.has(seg.item.key)) continue;
+    seen.add(seg.item.key);
+    items.push(seg.item);
+  }
   return items;
 }
 
@@ -158,30 +283,29 @@ export interface TocHeading {
   level: number;
 }
 
+/** Assigns unique ids to heading texts in document order (`slug`, `slug-1`, ...). Shared with the DOM pass. */
+export function createHeadingIdAllocator(): (text: string) => string {
+  const seen = new Map<string, number>();
+  return (text: string) => {
+    const base = slugify(text) || "section";
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    return count > 0 ? `${base}-${count}` : base;
+  };
+}
+
 export function extractTocHeadings(markdown: string): TocHeading[] {
   if (!markdown) return [];
-  const lines = markdown.split(/\r?\n/);
   const headings: TocHeading[] = [];
-  const seenSlugs = new Map<string, number>();
+  const inFence = createFenceTracker();
+  const nextId = createHeadingIdAllocator();
 
-  for (const line of lines) {
-    const match = line.match(/^(#{1,3})\s+(.*)$/);
+  for (const line of markdown.split(/\r?\n/)) {
+    if (inFence(line)) continue;
+    const match = line.match(/^(#{1,3})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/);
     if (!match) continue;
-    const level = match[1]!.length;
-    let text = match[2]!.trim();
-    // Strip markdown formatting from heading text
-    text = text.replace(/[*_`]/g, "").replace(/\[(.*?)\]\(.*?\)/g, "$1");
-
-    let slug = text
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-");
-
-    const count = seenSlugs.get(slug) || 0;
-    seenSlugs.set(slug, count + 1);
-    if (count > 0) slug = `${slug}-${count}`;
-
-    headings.push({ id: slug, text, level });
+    const text = cleanTitle(stripInlineMarkdown(match[2]!));
+    headings.push({ id: nextId(text), text, level: match[1]!.length });
   }
 
   return headings;

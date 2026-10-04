@@ -3,6 +3,8 @@
  * Transported over the generic module bridge: `mod:library:<method>`.
  */
 import type {
+  LibraryDeleteRequest,
+  LibraryDeleteResult,
   LibraryEntry,
   LibraryFieldValue,
   LibraryKind,
@@ -22,9 +24,12 @@ export const LibraryMethods = {
   setField: "setField",
   reveal: "reveal",
   openPath: "openPath",
+  delete: "delete",
 } as const;
 
 export type {
+  LibraryDeleteRequest,
+  LibraryDeleteResult,
   LibraryEntry,
   LibraryFieldValue,
   LibraryKind,

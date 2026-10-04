@@ -1,0 +1,32 @@
+{
+  "name": "@hive-module/bash-guard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: safety guard for destructive bash commands with inline composer approval",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "bash-guard",
+    "title": "Bash Guard",
+    "description": "Intercepts potentially dangerous bash commands (rm -rf, git reset --hard, disk operations, sudo) and prompts for confirmation with an inline approval card above the composer.",
+    "tier": "bonus",
+    "recommended": true,
+    "icon": "shield-alert",
+    "category": "Security",
+    "agent": {
+      "extensions": [
+        "agent/extensions/bash-guard.ts"
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0",
+    "zustand": "^5.0.0"
+  }
+}

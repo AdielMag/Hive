@@ -18,15 +18,25 @@ import {
 export type { LeftPanel, RightPanel };
 export { LIMITS };
 
+/** Set when Settings is opened because a provider's login failed: highlights that account in AI Providers. */
+export interface SettingsFocus {
+  providerId: string;
+  /** Why we're here, shown as a notice on the account card. */
+  reason?: string;
+}
+
 interface UiState extends Persisted {
   settingsOpen: boolean;
   settingsTab: SettingsTabId;
+  settingsFocus: SettingsFocus | null;
   toggleLeft(p: LeftPanel): void;
   toggleRight(p: RightPanel): void;
   showLeft(p: LeftPanel | null): void;
   showRight(p: RightPanel | null): void;
   setSize(patch: Partial<Pick<Persisted, "leftWidth" | "rightWidth" | "composerHeight">>): void;
-  openSettings(tab?: SettingsTabId): void;
+  openSettings(tab?: SettingsTabId, focus?: SettingsFocus): void;
+  /** Opens Settings → AI Providers on a provider that needs (re)connecting. */
+  openAccountSettings(providerId: string, reason?: string): void;
   closeSettings(): void;
 }
 
@@ -55,6 +65,7 @@ export const useUi = create<UiState>((set, get) => ({
   ...load(),
   settingsOpen: false,
   settingsTab: "appearance",
+  settingsFocus: null,
   toggleLeft: (p) => set({ left: get().left === p ? null : p }),
   toggleRight: (p) => set({ right: get().right === p ? null : p }),
   showLeft: (p) => set({ left: p }),
@@ -65,8 +76,10 @@ export const useUi = create<UiState>((set, get) => ({
       ...(patch.rightWidth !== undefined ? { rightWidth: clamp(patch.rightWidth, LIMITS.rightWidth) } : {}),
       ...(patch.composerHeight !== undefined ? { composerHeight: clamp(patch.composerHeight, LIMITS.composerHeight) } : {}),
     }),
-  openSettings: (tab) => set({ settingsOpen: true, ...(tab ? { settingsTab: tab } : {}) }),
-  closeSettings: () => set({ settingsOpen: false }),
+  openSettings: (tab, focus) => set({ settingsOpen: true, settingsFocus: focus ?? null, ...(tab ? { settingsTab: tab } : {}) }),
+  openAccountSettings: (providerId, reason) =>
+    set({ settingsOpen: true, settingsTab: "accounts", settingsFocus: { providerId, ...(reason ? { reason } : {}) } }),
+  closeSettings: () => set({ settingsOpen: false, settingsFocus: null }),
 }));
 
 useUi.subscribe((s) => save(s));
