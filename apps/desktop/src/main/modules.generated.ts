@@ -5,6 +5,28 @@ import type { MainModule } from "@hive/module-sdk/main";
 /** Metadata of every module in the repo (enabled or not). */
 export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   {
+    "id": "marketplace",
+    "title": "Marketplace",
+    "description": "Browse and discover MCP servers, Pi extensions, and agent skills from npm, Anthropic, and the official MCP registry.",
+    "tier": "bonus",
+    "icon": "shopping-bag",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "marketplace"
+      ],
+      "commands": [
+        {
+          "id": "view.marketplace",
+          "title": "Toggle Marketplace Panel",
+          "category": "View"
+        }
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
     "id": "plan-previewer",
     "title": "Plan Previewer",
     "description": "Review agent plans in a rich tab: decisions, questions, annotations and approve / request changes. Runs a local server on :3456 for the plan-previewer CLI and installs its Pi skills.",
@@ -32,5 +54,6 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
 
 /** Lazy entry points; only called for enabled modules. */
 export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ default: MainModule }>>> = {
+  "marketplace": () => import("@hive-module/marketplace/main"),
   "plan-previewer": () => import("@hive-module/plan-previewer/main"),
 };

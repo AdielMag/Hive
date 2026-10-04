@@ -210,11 +210,6 @@ const api: StudioApi = {
     return ipcRenderer.invoke(IPC.filesRun, { filePath, cwd });
   },
 
-  // Marketplace
-  searchMarketplace(query?: string, kind?: string) {
-    return ipcRenderer.invoke(IPC.marketplaceSearch, { query, kind });
-  },
-
   // Window Controls
   minimizeWindow() {
     return ipcRenderer.invoke(IPC.windowMinimize);

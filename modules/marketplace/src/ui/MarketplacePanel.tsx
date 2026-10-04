@@ -1,21 +1,22 @@
 import React, { useEffect, useState } from "react";
-import { ShoppingBag, Search, Download, Check } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-import { useSessionStore } from "../store/session-store.ts";
+import { Check, Download, Search, ShoppingBag } from "lucide-react";
+import type { ModuleHost } from "@hive/module-sdk/renderer";
+import { MarketplaceMethods, type MarketplacePackage, type MarketplaceSourceKind } from "../shared.ts";
 
-export const MarketplacePanel: React.FC = () => {
-  const { setPromptText } = useSessionStore(useShallow((s) => ({ setPromptText: s.setPromptText })));
-  const [activeKind, setActiveKind] = useState<"pi-npm" | "claude" | "mcp">("pi-npm");
+export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
+  const [activeKind, setActiveKind] = useState<MarketplaceSourceKind>("pi-npm");
   const [query, setQuery] = useState("");
-  const [packages, setPackages] = useState<any[]>([]);
+  const [packages, setPackages] = useState<MarketplacePackage[]>([]);
   const [loading, setLoading] = useState(false);
   const [installedMap, setInstalledMap] = useState<Record<string, boolean>>({});
 
   const search = async (q = query, k = activeKind) => {
     setLoading(true);
     try {
-      const items = await window.studio.searchMarketplace(q, k);
-      setPackages(items);
+      const items = await host.ipc.invoke<MarketplacePackage[]>(MarketplaceMethods.search, { query: q, kind: k });
+      setPackages(items ?? []);
+    } catch {
+      setPackages([]);
     } finally {
       setLoading(false);
     }
@@ -25,10 +26,10 @@ export const MarketplacePanel: React.FC = () => {
     void search();
   }, [activeKind]);
 
-  const handleInstall = (pkg: any) => {
-    // Stage prompt for installing package via Pi CLI or prompt
+  const handleInstall = (pkg: MarketplacePackage) => {
     setInstalledMap((s) => ({ ...s, [pkg.id]: true }));
-    setPromptText(`/install ${pkg.source}`);
+    host.sessions.setPrompt(`/install ${pkg.source}`);
+    host.toast({ message: `Staged /install ${pkg.name} in prompt`, kind: "info" });
   };
 
   return (
@@ -164,7 +165,7 @@ export const MarketplacePanel: React.FC = () => {
 
             {/* Chips */}
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-              {pkg.capabilities?.map((cap: string) => (
+              {pkg.capabilities?.map((cap) => (
                 <span
                   key={cap}
                   style={{

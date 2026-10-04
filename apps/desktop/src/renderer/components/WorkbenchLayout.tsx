@@ -12,7 +12,6 @@ import {
   GitCommit,
   PieChart,
   Settings,
-  ShoppingBag,
   Terminal as TerminalIcon,
   Wrench,
 } from "lucide-react";
@@ -46,7 +45,6 @@ import hiveIcon from "../assets/hive-icon.png";
 // Heavy views load on demand to keep startup fast (xterm, charts, settings, file/diff viewers).
 const named = <T extends string>(loader: () => Promise<Record<T, React.ComponentType<any>>>, key: T) =>
   lazy(() => loader().then((m) => ({ default: m[key] })));
-const MarketplacePanel = named(() => import("./MarketplacePanel.tsx"), "MarketplacePanel");
 const FileViewerTab = named(() => import("./FileViewerTab.tsx"), "FileViewerTab");
 const DiffViewerTab = named(() => import("./DiffViewerTab.tsx"), "DiffViewerTab");
 const TerminalPanel = named(() => import("./TerminalPanel.tsx"), "TerminalPanel");
@@ -219,7 +217,6 @@ export const WorkbenchLayout: React.FC = () => {
             active={ui.right === "terminal"}
             onClick={() => ui.toggleRight("terminal")}
           />
-          <RailButton icon={<ShoppingBag size={18} />} title="Marketplace" active={ui.right === "marketplace"} onClick={() => ui.toggleRight("marketplace")} />
           {rightModulePanels.map((p) => (
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id} onClick={() => ui.toggleRight(p.id)} />
           ))}
@@ -246,7 +243,7 @@ const LeftPanelContent: React.FC<{ panel: LeftPanel; onClose(): void }> = ({ pan
   panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : panel === "branches" ? <BranchesPanel /> : panel === "git" ? <GitPanel /> : <ModulePanelView side="left" panelId={panel} onClose={onClose} />;
 
 const RightPanelContent: React.FC<{ panel: RightPanel; onClose(): void }> = ({ panel, onClose }) =>
-  panel === "tools" ? <ToolsPanel /> : panel === "context" ? <ContextBreakdownPanel /> : panel === "terminal" ? <TerminalPanel /> : panel === "marketplace" ? <MarketplacePanel /> : <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
+  panel === "tools" ? <ToolsPanel /> : panel === "context" ? <ContextBreakdownPanel /> : panel === "terminal" ? <TerminalPanel /> : <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
 
 const SessionView: React.FC = () => {
   const composerHeight = useUi((s) => s.composerHeight);

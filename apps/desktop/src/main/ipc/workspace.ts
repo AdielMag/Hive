@@ -2,14 +2,13 @@ import { IPC } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import * as git from "../services/git.ts";
 import { listDirectory, readFileContent, readMediaFile, runWithInterpreter } from "../services/files.ts";
-import type { MarketplaceSourceKind } from "../services/marketplace.ts";
 import { handle } from "./util.ts";
 
 type Cwd = { cwd: string };
 type CwdFile = { cwd: string; filePath: string };
 type CwdBranch = { cwd: string; branch: string };
 
-/** Git, files, marketplace and the integrated terminal. */
+/** Git, files, and the integrated terminal. */
 export function registerWorkspaceIpc(ctx: AppContext): void {
   handle(IPC.gitStatus, ({ cwd }: Cwd) => git.getGitStatus(cwd));
   handle(IPC.gitBranches, ({ cwd }: Cwd) => git.getGitBranches(cwd));
@@ -43,10 +42,6 @@ export function registerWorkspaceIpc(ctx: AppContext): void {
   handle(IPC.filesRead, ({ filePath }: { filePath: string }) => readFileContent(filePath));
   handle(IPC.filesReadMedia, ({ filePath }: { filePath: string }) => readMediaFile(filePath));
   handle(IPC.filesRun, ({ filePath, cwd }: CwdFile) => runWithInterpreter(filePath, cwd));
-
-  handle(IPC.marketplaceSearch, ({ query, kind }: { query?: string; kind?: string }) =>
-    ctx.marketplace.search(query, kind as MarketplaceSourceKind),
-  );
 
   handle(IPC.terminalCreate, (options?: { cwd?: string; shell?: string; cols?: number; rows?: number }) =>
     ctx.terminals.createTerminal(

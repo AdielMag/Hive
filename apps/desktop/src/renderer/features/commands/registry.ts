@@ -138,7 +138,6 @@ const CORE_COMMANDS: readonly Command[] = [
   right("view.terminal", "Terminal", "terminal", ["Mod+`"]),
   right("view.tools", "Tools", "tools"),
   right("view.context", "Context", "context"),
-  right("view.marketplace", "Marketplace", "marketplace"),
   { id: "view.usage", title: "Open Usage Analytics", category: "View", keywords: "cost tokens quota", defaultKeys: ["Mod+Shift+U"], allowInTerminal: true, run: () => useSessionStore.getState().openUsageTab() },
   { id: "view.library", title: "Open Skills & Agents", category: "View", keywords: "library subagents", defaultKeys: ["Mod+Shift+K"], allowInTerminal: true, run: () => useSessionStore.getState().openLibraryTab() },
 

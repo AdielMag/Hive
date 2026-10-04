@@ -68,6 +68,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
         return p ? { id: p.id, name: p.name, path: p.path } : null;
       },
       setMode: (mode) => useSessionStore.getState().setMode(mode as AgentMode),
+      setPrompt: (text) => useSessionStore.getState().setPromptText(text),
     },
     ipc: {
       invoke: (method, ...args) => window.studio.modules.invoke(moduleId, method, ...args) as Promise<never>,

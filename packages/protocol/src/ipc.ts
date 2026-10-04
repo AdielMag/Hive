@@ -185,8 +185,6 @@ export const IPC = {
   filesReadMedia: "files:read-media",
   filesRun: "files:run",
   pickFiles: "studio:pick-files",
-  // Marketplace
-  marketplaceSearch: "marketplace:search",
   // Window controls
   windowMinimize: "window:minimize",
   windowMaximize: "window:maximize",
@@ -434,7 +432,6 @@ export interface StudioApi {
   runFile(filePath: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 
   // Marketplace operations
-  searchMarketplace(query?: string, kind?: string): Promise<any[]>;
 
   // Window Controls
   minimizeWindow(): Promise<void>;

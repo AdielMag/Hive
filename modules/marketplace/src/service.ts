@@ -1,16 +1,4 @@
-export type MarketplaceSourceKind = "pi-npm" | "claude" | "mcp";
-
-export interface MarketplacePackage {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  sourceKind: MarketplaceSourceKind;
-  source: string; // npm:package, git:url, etc.
-  author?: string;
-  homepage?: string;
-  capabilities: Array<"tool" | "skill" | "command" | "theme" | "mcp" | "provider">;
-}
+import type { MarketplacePackage, MarketplaceSourceKind } from "./shared.ts";
 
 export class MarketplaceService {
   async search(query = "", kind: MarketplaceSourceKind = "pi-npm"): Promise<MarketplacePackage[]> {
@@ -60,10 +48,10 @@ export class MarketplaceService {
         return {
           id: p.name,
           name: p.name,
-          description: p.description || "",
+          description: p.description || "No description provided.",
           version: p.version,
           sourceKind: "pi-npm",
-          source: `npm:${p.name}@${p.version}`,
+          source: `npm:${p.name}`,
           author: p.author?.name,
           homepage: p.links?.homepage,
           capabilities: caps,
@@ -76,29 +64,21 @@ export class MarketplaceService {
 
   private async fetchClaudeOfficial(): Promise<MarketplacePackage[]> {
     try {
-      const res = await fetch(
-        "https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/.claude-plugin/marketplace.json",
-        { signal: AbortSignal.timeout(8000) },
-      );
+      const res = await fetch("https://raw.githubusercontent.com/anthropics/anthropic-tools/main/marketplace.json", {
+        signal: AbortSignal.timeout(8000),
+      });
       if (!res.ok) return [];
-      const data = (await res.json()) as {
-        plugins: Array<{
-          name: string;
-          description?: string;
-          version?: string;
-          source?: any;
-          category?: string;
-        }>;
-      };
-
-      return data.plugins.map((p) => ({
-        id: `claude:${p.name}`,
-        name: p.name,
-        description: p.description || "",
-        version: p.version || "1.0.0",
+      const data = (await res.json()) as any[];
+      return data.map((item) => ({
+        id: item.name || item.id,
+        name: item.name || item.id,
+        description: item.description || "Anthropic tool/skill definition",
+        version: item.version || "1.0.0",
         sourceKind: "claude",
-        source: typeof p.source === "string" ? p.source : JSON.stringify(p.source),
-        capabilities: ["skill", "command"],
+        source: item.repo ? `git:${item.repo}` : item.source || item.name,
+        author: item.author || "Anthropic / Community",
+        homepage: item.homepage,
+        capabilities: item.capabilities || ["tool"],
       }));
     } catch {
       return [];
@@ -107,36 +87,25 @@ export class MarketplaceService {
 
   private async fetchMcpRegistry(query: string): Promise<MarketplacePackage[]> {
     try {
-      const res = await fetch("https://registry.modelcontextprotocol.io/v0/servers?limit=40", {
+      const q = encodeURIComponent(query);
+      const res = await fetch(`https://registry.modelcontextprotocol.io/v0/servers?query=${q}`, {
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return [];
-      const data = (await res.json()) as {
-        servers: Array<{
-          server: {
-            name: string;
-            description?: string;
-            version?: string;
-            title?: string;
-          };
-        }>;
-      };
+      const data = (await res.json()) as any;
+      const servers = data.servers || [];
 
-      return data.servers
-        .filter((s) => {
-          if (!query) return true;
-          const text = `${s.server.name} ${s.server.description ?? ""}`.toLowerCase();
-          return text.includes(query.toLowerCase());
-        })
-        .map((s) => ({
-          id: `mcp:${s.server.name}`,
-          name: s.server.title || s.server.name,
-          description: s.server.description || "",
-          version: s.server.version || "1.0.0",
-          sourceKind: "mcp",
-          source: s.server.name,
-          capabilities: ["mcp", "tool"],
-        }));
+      return servers.map((s: any) => ({
+        id: s.name || s.id,
+        name: s.name || s.id,
+        description: s.description || "MCP Protocol Server",
+        version: s.version || "0.1.0",
+        sourceKind: "mcp",
+        source: s.repository?.url || s.url || s.name,
+        author: s.publisher || s.author,
+        homepage: s.homepage || s.repository?.url,
+        capabilities: ["mcp", "tool"],
+      }));
     } catch {
       return [];
     }

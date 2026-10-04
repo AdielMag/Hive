@@ -86,6 +86,8 @@ export interface ModuleHost {
     activeProject(): { id: string; name: string; path: string } | null;
     /** Set the active session's agent mode (e.g. "auto-edit", "manual"). */
     setMode(mode: string): void;
+    /** Stage text in the active composer prompt. */
+    setPrompt(text: string): void;
   };
   ipc: ModuleHostIpc;
 }
