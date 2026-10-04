@@ -28,6 +28,8 @@ export const RECENT_RESPONSE_MS = 60 * 60_000;
 export const CACHE_TTL_MS = 5 * 60_000;
 /** Hive's default `keepRecentPercent` (share of the window Pi keeps verbatim after compaction). */
 export const DEFAULT_KEEP_RECENT_PERCENT = 10;
+/** Hive's default ceiling on the verbatim tail (`keepRecentMaxTokens`). */
+export const DEFAULT_KEEP_RECENT_MAX_TOKENS = 20_000;
 
 export interface LastResponse {
   /** Stable identity of the message (dismissals are keyed on it). */

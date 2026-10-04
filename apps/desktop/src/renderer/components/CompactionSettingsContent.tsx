@@ -6,7 +6,21 @@ import React, { useEffect, useState } from "react";
 import { Check, Info, RotateCcw, Save } from "lucide-react";
 import type { CompactionSettings } from "@hive/protocol";
 
-const DEFAULT_SETTINGS: CompactionSettings = { enabled: true, triggerPercent: 90, keepRecentPercent: 10 };
+const DEFAULT_SETTINGS: CompactionSettings = { enabled: true, triggerPercent: 90, keepRecentPercent: 10, keepRecentMaxTokens: 20_000 };
+
+/**
+ * What compaction can't shrink: system prompt + tool schemas + context files (~9K in a plain Hive session,
+ * more with many tools/skills) and the summary itself (~4K). Rough, for the preview only.
+ */
+const FIXED_OVERHEAD_TOKENS = 9_000;
+const SUMMARY_TOKENS = 4_000;
+
+const KEEP_MAX_PRESETS = [
+  { label: "10K (Leanest)", value: 10_000 },
+  { label: "20K (Default)", value: 20_000 },
+  { label: "50K", value: 50_000 },
+  { label: "No cap", value: 0 },
+];
 
 const TRIGGER_PRESETS = [
   { label: "40% (Early, lean context)", value: 40 },
@@ -49,6 +63,55 @@ const badge: React.CSSProperties = {
   padding: "2px 8px",
   borderRadius: 4,
 };
+
+const TokenCapField: React.FC<{
+  value: number;
+  disabled: boolean;
+  onChange(v: number): void;
+}> = ({ value, disabled, onChange }) => (
+  <div style={{ ...card, opacity: disabled ? 0.6 : 1 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>Cap on recent history</span>
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          Hard ceiling on the verbatim tail. The tail is raw tool output that summarization can&apos;t shrink, and a percentage
+          of a big window gets huge (5% of 1M = 50K). The smaller of the two wins.
+        </span>
+      </div>
+      <span style={badge}>{value > 0 ? fmtTokens(value) : "No cap"}</span>
+    </div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+      {KEEP_MAX_PRESETS.map((p) => {
+        const isSelected = value === p.value;
+        return (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => onChange(p.value)}
+            disabled={disabled}
+            style={{
+              padding: "6px 8px",
+              fontSize: 11,
+              textAlign: "left",
+              borderRadius: 6,
+              border: `1px solid ${isSelected ? "var(--accent-base)" : "var(--border-subtle)"}`,
+              background: isSelected ? "rgba(var(--accent-rgb), 0.1)" : "transparent",
+              color: isSelected ? "var(--accent-base)" : "var(--text-secondary)",
+              cursor: disabled ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 4,
+            }}
+          >
+            <span>{p.label}</span>
+            {isSelected && <Check size={12} />}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
 
 const PercentField: React.FC<{
   title: string;
@@ -253,18 +316,26 @@ export const CompactionSettingsContent: React.FC = () => {
         onChange={(keepRecentPercent) => setSettings({ ...settings, keepRecentPercent })}
       />
 
+      <TokenCapField
+        value={settings.keepRecentMaxTokens ?? DEFAULT_SETTINGS.keepRecentMaxTokens!}
+        disabled={!settings.enabled}
+        onChange={(keepRecentMaxTokens) => setSettings({ ...settings, keepRecentMaxTokens })}
+      />
+
       {/* Preview */}
       <div style={{ ...card, gap: 8, padding: "12px 14px" }}>
         <span style={{ fontWeight: 600, color: "var(--text-secondary)", fontSize: 11 }}>What this means per model</span>
         {PREVIEW_WINDOWS.map((w) => {
           const trigger = (w.tokens * settings.triggerPercent) / 100;
-          const keep = (w.tokens * settings.keepRecentPercent) / 100;
+          const cap = settings.keepRecentMaxTokens ?? DEFAULT_SETTINGS.keepRecentMaxTokens!;
+          const keep = Math.min((w.tokens * settings.keepRecentPercent) / 100, cap > 0 ? cap : Infinity);
+          const after = FIXED_OVERHEAD_TOKENS + SUMMARY_TOKENS + keep;
           return (
             <div key={w.label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)" }}>
                 <span>{w.label}</span>
                 <span style={{ fontFamily: "var(--font-mono)" }}>
-                  compacts at {fmtTokens(trigger)} · keeps last {fmtTokens(keep)}
+                  compacts at {fmtTokens(trigger)} · keeps last {fmtTokens(keep)} · ≈{fmtTokens(after)} after
                 </span>
               </div>
               <div style={{ height: 8, borderRadius: 4, background: "rgba(var(--fg-rgb), 0.08)", overflow: "hidden", position: "relative" }}>
@@ -283,7 +354,10 @@ export const CompactionSettingsContent: React.FC = () => {
         })}
         <div style={{ fontSize: 10.5, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}>
           <Info size={11} />
-          <span>Applied to every model in your catalog using its own context window.</span>
+          <span>
+            Applied to every model in your catalog using its own context window. "After" = system prompt &amp; tools (~9K) +
+            summary (~4K) + kept history; the first two can&apos;t be compacted.
+          </span>
         </div>
       </div>
 

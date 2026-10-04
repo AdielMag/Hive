@@ -9,7 +9,14 @@ const PI_DEFAULT_RESERVE = 16384;
 const PI_DEFAULT_KEEP_RECENT = 20000;
 /** Window used for the ordinary (non-override) values, which apply to models with an unknown window. */
 const REFERENCE_WINDOW = 200_000;
-export const DEFAULT_COMPACTION: CompactionSettings = { enabled: true, triggerPercent: 90, keepRecentPercent: 10 };
+/** Raw recent history is the part of a compacted context that summarization can't shrink; cap it. */
+export const DEFAULT_KEEP_RECENT_MAX = 20_000;
+export const DEFAULT_COMPACTION: CompactionSettings = {
+  enabled: true,
+  triggerPercent: 90,
+  keepRecentPercent: 10,
+  keepRecentMaxTokens: DEFAULT_KEEP_RECENT_MAX,
+};
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
@@ -17,14 +24,23 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
 export function normalizeCompaction(s: CompactionSettings): CompactionSettings {
   const triggerPercent = Math.round(clamp(Number(s.triggerPercent) || DEFAULT_COMPACTION.triggerPercent, 10, 98));
   const keepRecentPercent = Math.round(clamp(Number(s.keepRecentPercent) || DEFAULT_COMPACTION.keepRecentPercent, 1, triggerPercent - 5));
-  return { enabled: Boolean(s.enabled), triggerPercent, keepRecentPercent };
+  const rawCap = s.keepRecentMaxTokens;
+  const keepRecentMaxTokens =
+    rawCap === undefined || rawCap === null || !Number.isFinite(Number(rawCap))
+      ? DEFAULT_KEEP_RECENT_MAX
+      : Number(rawCap) <= 0
+        ? 0
+        : Math.max(1_000, Math.round(Number(rawCap)));
+  return { enabled: Boolean(s.enabled), triggerPercent, keepRecentPercent, keepRecentMaxTokens };
 }
 
 /** Pi's absolute token values for one context window. */
 export function compactionTokensFor(contextWindow: number, s: CompactionSettings): { reserveTokens: number; keepRecentTokens: number } {
+  const keep = Math.round((contextWindow * s.keepRecentPercent) / 100);
+  const cap = s.keepRecentMaxTokens && s.keepRecentMaxTokens > 0 ? s.keepRecentMaxTokens : Infinity;
   return {
     reserveTokens: Math.round((contextWindow * (100 - s.triggerPercent)) / 100),
-    keepRecentTokens: Math.round((contextWindow * s.keepRecentPercent) / 100),
+    keepRecentTokens: Math.min(keep, cap),
   };
 }
 
@@ -221,6 +237,7 @@ export class ModelsService {
       enabled,
       triggerPercent: 100 - (reserve / window) * 100,
       keepRecentPercent: (keep / window) * 100,
+      keepRecentMaxTokens: 0, // faithful to the existing hand-written values
     });
   }
 

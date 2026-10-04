@@ -346,6 +346,11 @@ export interface CompactionSettings {
   triggerPercent: number;
   /** Keep this % of the model's window as recent, un-summarized history (Pi: keepRecentTokens). */
   keepRecentPercent: number;
+  /**
+   * Ceiling (tokens) on the recent history kept verbatim, so a big window doesn't keep a big raw
+   * tail (5% of 1M = 50K of tool output). 0 = no cap. Missing = default (20K).
+   */
+  keepRecentMaxTokens?: number;
 }
 
 export interface StudioApi {
