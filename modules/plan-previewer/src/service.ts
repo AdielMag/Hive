@@ -1,15 +1,19 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import type { BrowserWindow } from "electron";
 import {
-  IPC,
+  PlanEvents,
+  type OpenPlanTabEvent,
   type PlanFeedbackPayload,
   type PlanPreviewData,
   type PlanQuestionRound,
   type PlanAgentResponse,
   type PlanAgentQuestion,
-} from "@hive/protocol";
+  type PlanUpdatedEvent,
+} from "./shared.ts";
+
+/** Pushes an event to the renderer (the module's `ctx.ipc.emit`). */
+export type PlanEventSink = (event: string, payload: OpenPlanTabEvent | PlanUpdatedEvent) => void;
 
 export interface PlanSessionMarker {
   port: number;
@@ -37,8 +41,16 @@ export class PlanPreviewerService {
     planFile: string | null;
   }> = [];
 
-  constructor(private getWindow: () => BrowserWindow | null) {
-    this.startServer();
+  /** The HTTP server is not started here; call `start()` (the module does so in `activate`). */
+  constructor(private emit: PlanEventSink = () => {}) {}
+
+  public start(preferredPort = 3456): void {
+    if (this.server) return;
+    this.startServer(preferredPort);
+  }
+
+  public isListening(): boolean {
+    return this.server?.listening ?? false;
   }
 
   public getPort(): number {
@@ -164,13 +176,9 @@ export class PlanPreviewerService {
         }
         this.fileVersion++;
 
-        // Notify Hive renderer window to open/focus the plan tab
-        const win = this.getWindow();
-        if (win && this.activePlanPath) {
-          win.webContents.send(IPC.evtOpenPlanTab, {
-            filePath: this.activePlanPath,
-            context: this.sessionContext,
-          });
+        // Notify the renderer to open/focus the plan tab
+        if (this.activePlanPath) {
+          this.emit(PlanEvents.openTab, { filePath: this.activePlanPath, context: this.sessionContext });
         }
 
         this.json(res, {
@@ -304,14 +312,7 @@ export class PlanPreviewerService {
         if (Date.now() < this.selfWriteUntil) return;
         this.fileVersion++;
         const content = fs.existsSync(targetPath) ? fs.readFileSync(targetPath, "utf8") : "";
-        const win = this.getWindow();
-        if (win) {
-          win.webContents.send(IPC.evtPlanUpdated, {
-            filePath: targetPath,
-            fileVersion: this.fileVersion,
-            content,
-          });
-        }
+        this.emit(PlanEvents.updated, { filePath: targetPath, fileVersion: this.fileVersion, content });
       });
     } catch {}
   }

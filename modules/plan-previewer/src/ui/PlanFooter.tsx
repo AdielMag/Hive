@@ -10,7 +10,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { usePlanStore } from "./plan-store.ts";
-import { useSessionStore } from "../../store/session-store.ts";
+import { planHost } from "./plan-host.ts";
 
 export const PlanFooter: React.FC = () => {
   const {
@@ -42,7 +42,7 @@ export const PlanFooter: React.FC = () => {
 
   const handleApprove = async () => {
     // Also switch Hive's active session mode to the selected execution mode
-    useSessionStore.getState().setMode(selectedExecutionMode);
+    planHost().sessions.setMode(selectedExecutionMode);
     await submitFeedback("approved");
   };
 

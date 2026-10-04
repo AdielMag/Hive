@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AlignLeft, ChevronRight, ChevronsDown, ChevronsUp } from "lucide-react";
-import { extractTocHeadings } from "./plan-utils.ts";
+import { extractTocHeadings } from "../plan-utils.ts";
 
 interface Props {
   markdown: string;

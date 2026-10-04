@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Check, ChevronDown, ChevronRight, HelpCircle, Layers, RotateCcw, Sparkles } from "lucide-react";
 import { usePlanStore } from "./plan-store.ts";
-import type { DecisionItem } from "./plan-utils.ts";
+import type { DecisionItem } from "../plan-utils.ts";
 
 export const PlanDecisions: React.FC = () => {
   const { decisions, selections, draftAnswers, selectChoice, clearChoice, setDraftAnswer } = usePlanStore();

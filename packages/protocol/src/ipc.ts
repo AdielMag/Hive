@@ -15,6 +15,7 @@ export type { Model } from "@earendil-works/pi-ai";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
 import type { AgentMode, ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
 import type { QuotaSnapshot, UsageReport } from "./insights.ts";
+import type { ModulesSnapshot, SetModulesEnabledResult } from "@hive/module-sdk";
 import type {
   McpServerInfo,
   SessionRegistry,
@@ -109,63 +110,6 @@ export interface UiRequestMessage {
 export interface BridgeMessage {
   key: string;
   message: BridgeToStudio;
-}
-
-export interface PlanAgentQuestionOption {
-  value: string;
-  label: string;
-  description?: string;
-  recommended?: boolean;
-}
-
-export interface PlanAgentQuestion {
-  id: string;
-  type?: "text" | "choice";
-  title?: string;
-  question: string;
-  options?: PlanAgentQuestionOption[];
-  allowOther?: boolean;
-}
-
-export interface PlanQuestionRound {
-  roundId: number;
-  status: "pending" | "answered";
-  fileVersion: number;
-  questions: PlanAgentQuestion[];
-  answers?: Array<{ id: string; selected?: string; answer?: string; title?: string }>;
-  timestamp: string;
-  answeredAt?: string;
-}
-
-export interface PlanAgentResponse {
-  text: string;
-  timestamp: string;
-  fileVersion: number;
-}
-
-export interface PlanPreviewData {
-  filename: string;
-  filePath: string;
-  content: string;
-  fileVersion: number;
-  createdAt: string;
-  updatedAt: string;
-  callerAgent?: { id: string; name: string };
-  sessionContext?: string;
-  agentResponses: PlanAgentResponse[];
-  agentQuestions: PlanQuestionRound[];
-  planApproved: boolean;
-}
-
-export interface PlanFeedbackPayload {
-  filePath: string;
-  status: "approved" | "changes_requested" | "answered";
-  comment?: string;
-  executionMode?: AgentMode; // "auto-edit" | "manual"
-  questions?: Array<{ id: string; question: string; answer?: string; selectedText?: string }>;
-  choices?: Array<{ id: string; title: string; selected?: string; answer?: string }>;
-  answers?: Array<{ id: string; roundId?: number; selected?: string; answer?: string; title?: string }>;
-  content?: string;
 }
 
 export interface StartSessionRequest {
@@ -275,12 +219,13 @@ export const IPC = {
   openExternal: "shell:open-external",
   openSystemBrowser: "shell:open-system-browser",
   evtOpenBrowserTab: "browser:open-tab",
-  // Plan Previewer
-  planGet: "plan:get",
-  planSubmitFeedback: "plan:submit-feedback",
-  planSave: "plan:save",
-  evtOpenPlanTab: "plan:open-tab",
-  evtPlanUpdated: "plan:updated",
+  // Modules (generic bridge for every installable feature module)
+  modulesList: "modules:list",
+  modulesSetEnabled: "modules:set-enabled",
+  modulesSetEnabledSet: "modules:set-enabled-set",
+  modulesMarkOnboarded: "modules:mark-onboarded",
+  modulesInvoke: "modules:invoke",
+  evtModuleEvent: "modules:event",
   // Skills & agents library
   libraryList: "library:list",
   librarySetField: "library:set-field",
@@ -548,10 +493,25 @@ export interface StudioApi {
   /** Page zoom (Ctrl +/-/0). */
   zoom(direction: "in" | "out" | "reset"): void;
 
-  // Plan Previewer
-  getPlanData(filePath: string): Promise<PlanPreviewData | null>;
-  submitPlanFeedback(payload: PlanFeedbackPayload): Promise<{ success: boolean; error?: string }>;
-  savePlanContent(filePath: string, content: string): Promise<{ success: boolean; fileVersion: number; error?: string }>;
-  onOpenPlanTab(listener: (data: { filePath: string; context?: string }) => void): () => void;
-  onPlanUpdated(listener: (data: { filePath: string; fileVersion: number; content?: string }) => void): () => void;
+  /** Installable feature modules. Module code talks to its main half only through `invoke` / `on`. */
+  modules: ModulesApi;
+}
+
+/** Main -> renderer push of a module event (`ctx.ipc.emit` in a main module). */
+export interface ModuleEventMessage {
+  moduleId: string;
+  event: string;
+  payload: unknown;
+}
+
+export interface ModulesApi {
+  list(): Promise<ModulesSnapshot>;
+  /** Turns a module on/off (requirements / dependents follow). Resolves with the resulting enabled set. */
+  setEnabled(moduleId: string, enabled: boolean): Promise<SetModulesEnabledResult>;
+  /** Replaces the whole enabled set (first-run presets). Requirements are added automatically. */
+  setEnabledSet(moduleIds: string[]): Promise<SetModulesEnabledResult>;
+  markOnboarded(): Promise<void>;
+  /** Calls a method the module registered with `ctx.ipc.handle`. Rejects while the module is disabled. */
+  invoke<T = unknown>(moduleId: string, method: string, ...args: unknown[]): Promise<T>;
+  on<T = unknown>(moduleId: string, event: string, listener: (payload: T) => void): () => void;
 }

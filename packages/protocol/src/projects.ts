@@ -60,9 +60,20 @@ export interface SessionCatalogItem {
 
 export type AgentMode = "plan" | "auto-edit" | "manual" | "debug" | "ask";
 
+/** Tab kinds implemented by core. Modules add their own kinds (any string), e.g. "plan". */
+export type CoreTabKind = "session" | "file" | "diff" | "usage" | "library" | "browser";
+
+export const CORE_TAB_KINDS: readonly CoreTabKind[] = ["session", "file", "diff", "usage", "library", "browser"];
+
+/** True for core kinds (and a missing kind, which means "session"). */
+export function isCoreTabKind(kind: string | undefined): boolean {
+  return kind === undefined || (CORE_TAB_KINDS as readonly string[]).includes(kind);
+}
+
 export interface TabItem {
   id: string; // tab identifier (usually sessionPath or temp id)
-  kind?: "session" | "file" | "diff" | "usage" | "library" | "browser" | "plan";
+  /** Core kind, or a module-contributed kind rendered through the module registry. Missing = session. */
+  kind?: CoreTabKind | (string & {});
   sessionPath?: string;
   projectId: string;
   title: string;
@@ -88,10 +99,8 @@ export interface TabItem {
   isSleeping?: boolean;
   lastActiveAt?: number;
 
-  // Plan tab fields
-  planFile?: string;
-  planContext?: string;
-  planStatus?: "in_review" | "approved" | "changes_requested";
+  /** Module tab state (shape defined by the module that owns the tab kind). */
+  data?: Record<string, unknown>;
 }
 
 export interface UiStateFile {

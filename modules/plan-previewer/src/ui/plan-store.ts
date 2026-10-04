@@ -1,6 +1,13 @@
 import { create } from "zustand";
-import type { AgentMode, PlanFeedbackPayload, PlanPreviewData } from "@hive/protocol";
-import { extractDecisions, extractPlanViews, summarizeDiff, type DecisionItem } from "./plan-utils.ts";
+import {
+  PlanMethods,
+  type PlanExecutionMode as AgentMode,
+  type PlanFeedbackPayload,
+  type PlanPreviewData,
+  type SubmitFeedbackResult,
+} from "../shared.ts";
+import { extractDecisions, extractPlanViews, summarizeDiff, type DecisionItem } from "../plan-utils.ts";
+import { planHost } from "./plan-host.ts";
 
 export type PlanViewMode = "summary" | "full";
 export type PlanWidthMode = "comfortable" | "wide" | "full";
@@ -94,7 +101,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   loadPlan: async (filePath: string) => {
     set({ loading: true, error: null, filePath });
     try {
-      const data = await window.studio.getPlanData(filePath);
+      const data = await planHost().ipc.invoke<PlanPreviewData | null>(PlanMethods.get, filePath);
       if (!data) {
         set({ loading: false, error: `Plan file not found: ${filePath}` });
         return;
@@ -282,7 +289,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
     };
 
     try {
-      const res = await window.studio.submitPlanFeedback(payload);
+      const res = await planHost().ipc.invoke<SubmitFeedbackResult>(PlanMethods.submitFeedback, payload);
       if (res.success && status === "approved") {
         set({ isApproved: true });
       }

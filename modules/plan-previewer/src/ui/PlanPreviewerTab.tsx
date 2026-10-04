@@ -1,23 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, CheckCircle2, Loader2, Sparkles, X } from "lucide-react";
-import type { TabItem } from "@hive/protocol";
+import type { ModuleHost, ModuleTab } from "@hive/module-sdk/renderer";
+import { PlanEvents, type PlanUpdatedEvent } from "../shared.ts";
 import { usePlanStore } from "./plan-store.ts";
-import { extractPlanViews } from "./plan-utils.ts";
+import { extractPlanViews } from "../plan-utils.ts";
 import { PlanHeader } from "./PlanHeader.tsx";
 import { PlanOutline } from "./PlanOutline.tsx";
 import { PlanDecisions } from "./PlanDecisions.tsx";
 import { PlanSelectionPopover } from "./PlanSelectionPopover.tsx";
 import { PlanActivitySidebar } from "./PlanActivitySidebar.tsx";
 import { PlanFooter } from "./PlanFooter.tsx";
-import { Markdown } from "../../components/code/Markdown.tsx";
-import { useSessionStore } from "../../store/session-store.ts";
 import "./plan.css";
 
 interface Props {
-  tab: TabItem;
+  tab: ModuleTab;
+  host: ModuleHost;
 }
 
-export const PlanPreviewerTab: React.FC<Props> = ({ tab }) => {
+export const PlanPreviewerTab: React.FC<Props> = ({ tab, host }) => {
+  const Markdown = host.ui.Markdown;
   const {
     planData,
     loading,
@@ -34,13 +35,12 @@ export const PlanPreviewerTab: React.FC<Props> = ({ tab }) => {
     clearToast,
   } = usePlanStore();
 
-  const closeTab = useSessionStore((s) => s.closeTab);
   const docContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [activeHeadingId, setActiveHeadingId] = useState<string | undefined>();
   const [showApprovalModal, setShowApprovalModal] = useState(false);
 
-  const targetPath = tab.planFile || tab.filePath || "plan.md";
+  const targetPath = tab.filePath || "plan.md";
 
   // Initial load
   useEffect(() => {
@@ -49,13 +49,13 @@ export const PlanPreviewerTab: React.FC<Props> = ({ tab }) => {
 
   // Listen for live updates from disk
   useEffect(() => {
-    const unsub = window.studio.onPlanUpdated((data) => {
+    const unsub = host.ipc.on<PlanUpdatedEvent>(PlanEvents.updated, (data) => {
       if (data.filePath === planData?.filePath && data.content) {
         updateFromDisk(data.content, data.fileVersion);
       }
     });
     return unsub;
-  }, [planData?.filePath, updateFromDisk]);
+  }, [host, planData?.filePath, updateFromDisk]);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -131,7 +131,7 @@ export const PlanPreviewerTab: React.FC<Props> = ({ tab }) => {
 
   return (
     <div className={`plan-view plan-view--w-${widthMode}`} data-view-mode={viewMode}>
-      <PlanHeader onClose={() => void closeTab(tab.id)} />
+      <PlanHeader onClose={() => host.tabs.close(tab.id)} />
 
       <div className="plan-body">
         {/* Left TOC Sidebar */}

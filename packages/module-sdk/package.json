@@ -1,0 +1,12 @@
+{
+  "name": "@hive/module-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Contract between Hive core and its feature modules: manifest, main-process and renderer module APIs",
+  "exports": {
+    ".": "./src/index.ts",
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.ts"
+  }
+}
