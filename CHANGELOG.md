@@ -2,6 +2,25 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.14.0 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.13.1...v0.14.0)
+
+### ✨ Features
+
+- **auth:** reconnect flow for expired Claude/Antigravity logins ([`d44fb60`](https://github.com/AdielMag/Hive/commit/d44fb6068630570a239388d176f81033cf294cbb))
+- **modules:** extract Arc Theme Studio module ([`cacf0b1`](https://github.com/AdielMag/Hive/commit/cacf0b1b36a46ea29bfa0b13e65d8f29a459096d))
+- **modules:** extract context window breakdown module ([`558892d`](https://github.com/AdielMag/Hive/commit/558892de426d8c1e78aa6fa6909d687ba3efd576))
+- **modules:** extract tools inspector module ([`4126066`](https://github.com/AdielMag/Hive/commit/41260663cbacf13383c0254191ac2cd99e677cee))
+- **modules:** extract analytics module (usage, cost telemetry, AI insights) ([`3128888`](https://github.com/AdielMag/Hive/commit/3128888a92c51826600b15bb2df73a950d248163))
+- **plan-previewer:** declutter and redesign preview tab and skills ([`d751fda`](https://github.com/AdielMag/Hive/commit/d751fdaf34e1df6bea7d5923b18e10fad23a7ed6))
+- **modules:** extract limits module (quota service + status-bar meters) ([`f64cfcb`](https://github.com/AdielMag/Hive/commit/f64cfcbc181a09fac0c09028d71866a5d68e26e3))
+
+### 🧹 Other changes
+
+- Merge origin/main (v0.13.1) ([`b6bffe1`](https://github.com/AdielMag/Hive/commit/b6bffe1c030f1e211432074a82296716df937d92))
+- sync lockfile with module workspaces ([`6670e3c`](https://github.com/AdielMag/Hive/commit/6670e3cfc535452aacec7fb89247ddf29b076387))
+- remove stray temp script ([`e14718c`](https://github.com/AdielMag/Hive/commit/e14718c7afb4c14c8553f4273e96d7fe52334a11))
+- Merge feat/modules-m3: limits, analytics, tools, context-breakdown, theme-studio modules ([`d0c4ec7`](https://github.com/AdielMag/Hive/commit/d0c4ec79d9568f388e175d838d8785bdecadd1c8))
+
 ## v0.13.1 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.13.0...v0.13.1)
 
 ### 🧹 Other changes
