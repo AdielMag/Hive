@@ -2,6 +2,13 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.12.1 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.12.0...v0.12.1)
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`be581a8`](https://github.com/AdielMag/Hive/commit/be581a82c788bda26f0512e93f0639bf838327b9))
+- **insights:** make quota popover opaque and accent-tinted ([`c447630`](https://github.com/AdielMag/Hive/commit/c447630a1135bc900b40d29a32483552840efb5c))
+
 ## v0.12.0 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.11.1...v0.12.0)
 
 ### ✨ Features
