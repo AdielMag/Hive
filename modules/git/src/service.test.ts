@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { getGitStatus, getGitBranches, getGitDiff } from "./service.ts";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -17,9 +20,21 @@ describe("Git operations", () => {
   });
 
   it("lists local branches", async () => {
-    const branches = await getGitBranches(repoRoot);
-    expect(branches.length).toBeGreaterThan(0);
-    expect(branches.includes("master") || branches.includes("main")).toBe(true);
+    // Hermetic: CI checks out a feature branch, so the host repo may lack main/master.
+    const dir = mkdtempSync(join(tmpdir(), "hive-git-branches-"));
+    try {
+      const git = (...args: string[]) =>
+        execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir, stdio: "ignore" });
+      git("init", "-q");
+      git("checkout", "-q", "-b", "main");
+      git("commit", "-q", "--allow-empty", "-m", "init");
+      git("branch", "feature-x");
+      const branches = await getGitBranches(dir);
+      expect(branches).toContain("main");
+      expect(branches).toContain("feature-x");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("reads git diff", async () => {
