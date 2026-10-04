@@ -6,7 +6,8 @@
   "description": "Contract between Hive core and its feature modules: manifest, main-process and renderer module APIs",
   "dependencies": {
     "@hive/pi-adapter": "0.1.0",
-    "@hive/protocol": "0.1.0"
+    "@hive/protocol": "0.1.0",
+    "@hive/theme-engine": "0.1.0"
   },
   "exports": {
     ".": "./src/index.ts",

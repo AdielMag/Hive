@@ -5,6 +5,7 @@
 import type { ComponentType, ReactNode } from "react";
 import type { TranscriptState } from "@hive/pi-adapter";
 import type { SessionRegistry } from "@hive/protocol";
+import type { ArcTheme } from "@hive/theme-engine";
 
 /** The subset of a workbench tab a module sees. `data` carries module-specific state. */
 export interface ModuleTab {
@@ -126,6 +127,15 @@ export interface ModuleHost {
     useFeatureModel(featureId: string): ResolvedFeatureModelLite;
     /** Active project, live transcript state and session registry. */
     useActiveSession(): ActiveSessionContext;
+    /** Current Arc theme & editor preferences with reactive setters. */
+    useTheme(): {
+      theme: ArcTheme;
+      editor: { codeFontSize: number; ligatures: boolean; wrapCode: boolean };
+      setTheme(patch: Partial<ArcTheme>): void;
+      replaceTheme(theme: ArcTheme): void;
+      setEditor(patch: Partial<{ codeFontSize: number; ligatures: boolean; wrapCode: boolean }>): void;
+      reset(): void;
+    };
   };
   links: {
     /** Claim clicked external links (otherwise they open in the system browser). Returns a disposer. */

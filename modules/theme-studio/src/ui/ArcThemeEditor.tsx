@@ -15,9 +15,9 @@ import {
   type ArcMode,
   type ArcTheme,
 } from "@hive/theme-engine";
-import { useAppearance } from "./appearance-store.ts";
+import type { ModuleHost } from "@hive/module-sdk/renderer";
 import { ArcColorPad } from "./ArcColorPad.tsx";
-import { CodeBlock } from "../../components/code/CodeBlock.tsx";
+import "./appearance.css";
 
 const SAMPLE_CODE = `// Hive · Rider-style highlighting
 export class SessionPool<T extends Session> {
@@ -38,13 +38,9 @@ function harmonious(primary: ArcColor, count: number): ArcColor[] {
   return out;
 }
 
-export const ArcThemeEditor: React.FC = () => {
-  const theme = useAppearance((s) => s.theme);
-  const editor = useAppearance((s) => s.editor);
-  const setTheme = useAppearance((s) => s.setTheme);
-  const replaceTheme = useAppearance((s) => s.replaceTheme);
-  const setEditor = useAppearance((s) => s.setEditor);
-  const reset = useAppearance((s) => s.reset);
+export const ArcThemeEditor: React.FC<{ host: ModuleHost }> = ({ host }) => {
+  const { theme, editor, setTheme, replaceTheme, setEditor, reset } = host.hooks.useTheme();
+  const CodeBlock = host.ui.CodeBlock;
 
   const dark = resolveMode(theme.mode, systemDark()) === "dark";
   const primary = theme.colors[0]!;
@@ -76,7 +72,7 @@ export const ArcThemeEditor: React.FC = () => {
           <ArcColorPad colors={theme.colors} onChange={(colors) => setTheme({ colors })} />
           <div className="appearance__pad-tools">
             <div className="appearance__dots">
-              {theme.colors.map((c, i) => (
+              {theme.colors.map((c: any, i: number) => (
                 <span key={i} className="appearance__dot" style={{ background: arcDotColor(c) }} />
               ))}
               <button className="ui-btn ui-btn--sm ui-btn--icon" onClick={removeColor} disabled={theme.colors.length <= 1} title="Remove colour">

@@ -204,6 +204,16 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     "hasRenderer": true
   },
   {
+    "id": "theme-studio",
+    "title": "Arc Theme Studio",
+    "description": "Interactive color pad, grain texture, gradient styling, custom color presets, and real-time palette tuner.",
+    "tier": "bonus",
+    "icon": "palette",
+    "category": "Appearance",
+    "hasMain": false,
+    "hasRenderer": true
+  },
+  {
     "id": "tools",
     "title": "Tools Inspector",
     "description": "Inspect skills, subagents, MCP servers, and tools used by the active session with one-click jump to tool calls.",

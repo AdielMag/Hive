@@ -18,6 +18,7 @@ import { AiModelChip } from "../components/AiModelChip.tsx";
 import { ContextBreakdownPanel } from "../components/ContextBreakdownPanel.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useSessionStore } from "../store/session-store.ts";
+import { useAppearance } from "../features/appearance/appearance-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { subscribeSessionEvents } from "./session-bus.ts";
 import { setModuleHostFactory } from "./registry.ts";
@@ -50,6 +51,16 @@ function useFeatureModel(featureId: string): ResolvedFeatureModelLite {
 }
 
 const useSessionCatalog = (): SessionCatalogLite[] => useSessionStore((s) => s.allSessions);
+
+function useTheme() {
+  const theme = useAppearance((s) => s.theme);
+  const editor = useAppearance((s) => s.editor);
+  const setTheme = useAppearance((s) => s.setTheme);
+  const replaceTheme = useAppearance((s) => s.replaceTheme);
+  const setEditor = useAppearance((s) => s.setEditor);
+  const reset = useAppearance((s) => s.reset);
+  return { theme, editor, setTheme, replaceTheme, setEditor, reset };
+}
 
 function useActiveSession(): ActiveSessionContext {
   const activeProject = useSessionStore((s) => s.activeProject);
@@ -107,7 +118,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
       loadCatalog: () => useSessionStore.getState().loadModelsCatalog(),
     },
     storage: { get: (key) => getStoredItem(key), set: (key, value) => setStoredItem(key, value) },
-    hooks: { useSessionCatalog, useFeatureModel, useActiveSession },
+    hooks: { useSessionCatalog, useFeatureModel, useActiveSession, useTheme },
     clipboard: {
       copy: copyText,
     },

@@ -1,7 +1,7 @@
 /** Settings dialog: Appearance, Models, AI providers, Updates, About. */
 import React, { useCallback, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, X } from "lucide-react";
-import { ArcThemeEditor } from "../features/appearance/ArcThemeEditor.tsx";
+import { AppearanceSettingsContent } from "./AppearanceSettingsContent.tsx";
 import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
 import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
 import { KeyboardSettings } from "../features/commands/KeyboardSettings.tsx";
@@ -93,7 +93,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             </button>
           </header>
           <div className="settings__body">
-            {tab === "appearance" && <ArcThemeEditor />}
+            {tab === "appearance" && <AppearanceSettingsContent />}
             {tab === "models" && <ModelsSettingsContent />}
             {tab === "compaction" && <CompactionSettingsContent />}
             {tab === "accounts" && <AccountsTab />}
