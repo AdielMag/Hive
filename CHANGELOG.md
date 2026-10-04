@@ -2,6 +2,20 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.12.0 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.11.1...v0.12.0)
+
+### ✨ Features
+
+- **desktop:** enhance context breakdown, model switching, and composer ([`79d0c76`](https://github.com/AdielMag/Hive/commit/79d0c76dbedda4329c220535610ab2f96bd4c5d7))
+
+### 🐛 Fixes
+
+- **statusbar:** give quota/cost popover an opaque background ([`df75281`](https://github.com/AdielMag/Hive/commit/df7528196bb910e284e132c239b6a7350b21eeae))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`3d48d03`](https://github.com/AdielMag/Hive/commit/3d48d0318f5d351daa84713d8d4eebeb35015ed7))
+
 ## v0.11.1 — 2026-10-03 · [diff](https://github.com/AdielMag/Hive/compare/v0.11.0...v0.11.1)
 
 ### 🐛 Fixes
