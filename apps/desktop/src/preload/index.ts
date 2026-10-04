@@ -3,7 +3,6 @@ import {
   IPC,
   type Bootstrap,
   type CompactionSettings,
-  type LibrarySetFieldRequest,
   type PiLocateResult,
   type ModuleEventMessage,
   type BridgeActionRequest,
@@ -306,20 +305,6 @@ const api: StudioApi = {
   },
   generateUsageInsights(summaryText: string, model?: string) {
     return ipcRenderer.invoke(IPC.aiGenerateUsageInsights, { summaryText, model });
-  },
-
-  // Skills & agents library
-  listLibrary(cwd?: string) {
-    return ipcRenderer.invoke(IPC.libraryList, { cwd });
-  },
-  setLibraryField(request: LibrarySetFieldRequest) {
-    return ipcRenderer.invoke(IPC.librarySetField, request);
-  },
-  revealLibraryPath(path: string, cwd?: string) {
-    return ipcRenderer.invoke(IPC.libraryReveal, { path, cwd });
-  },
-  openLibraryPath(path: string, cwd?: string) {
-    return ipcRenderer.invoke(IPC.libraryOpenPath, { path, cwd });
   },
 
   // AI Registry, MCP, and Subagent output

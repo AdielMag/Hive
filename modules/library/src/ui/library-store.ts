@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { LibraryMethods } from "../shared.ts";
+import { libraryHost } from "./library-host.ts";
 import type {
   LibraryEntry,
   LibraryFieldValue,
@@ -53,7 +55,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   load: async (cwd, preserveSelection = true) => {
     set({ loading: true, error: null });
     try {
-      const snap = await window.studio.listLibrary(cwd);
+      const snap = await libraryHost().ipc.invoke<LibrarySnapshot>(LibraryMethods.list, { cwd });
       const curSelected = get().selectedId;
       let nextSelected: string | null = null;
       if (preserveSelection && curSelected && snap.entries.some((e) => e.id === curSelected)) {
@@ -89,7 +91,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ savingField: key });
 
     try {
-      const res = await window.studio.setLibraryField({
+      const res = await libraryHost().ipc.invoke<any>(LibraryMethods.setField, {
         cwd,
         path: entry.path,
         key,

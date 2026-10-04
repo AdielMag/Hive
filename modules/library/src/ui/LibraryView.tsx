@@ -7,14 +7,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useLibraryStore } from "./library-store.ts";
-import { useSessionStore } from "../../store/session-store.ts";
 import { LibraryList } from "./LibraryList.tsx";
 import { LibraryDetail } from "./LibraryDetail.tsx";
+import { libraryHost } from "./library-host.ts";
 import "./library.css";
 
 export const LibraryView: React.FC = () => {
   const { snapshot, loading, error, selectedId, load } = useLibraryStore();
-  const activeProject = useSessionStore((s) => s.activeProject);
+  const activeProject = libraryHost().sessions.activeProject();
   const cwd = activeProject?.path;
 
   // Load when mounted or when active project changes

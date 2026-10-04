@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import type { LibrarySection } from "@hive/protocol";
-import { Markdown } from "../../components/code/Markdown.tsx";
-import { copyText } from "../../lib/clipboard.ts";
+import { libraryHost } from "./library-host.ts";
 
 interface Props {
   section: LibrarySection;
@@ -10,6 +9,9 @@ interface Props {
 }
 
 export const SectionCard: React.FC<Props> = ({ section, defaultExpanded = true }) => {
+  const host = libraryHost();
+  const Markdown = host.ui.Markdown;
+  const copyText = (t: string) => host.clipboard.copy(t);
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState(false);
 

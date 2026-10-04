@@ -5,6 +5,31 @@ import type { RendererModule } from "@hive/module-sdk/renderer";
 /** Metadata of every module in the repo (enabled or not). */
 export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   {
+    "id": "library",
+    "title": "Skills & Agents Library",
+    "description": "Browse, inspect, and configure your coding agent skills, system prompts, and custom subagents with a dedicated editor.",
+    "tier": "bonus",
+    "icon": "blocks",
+    "category": "Agent",
+    "contributes": {
+      "tabKinds": [
+        "library"
+      ],
+      "commands": [
+        {
+          "id": "view.library",
+          "title": "Open Skills & Agents",
+          "category": "View",
+          "keys": [
+            "Mod+Shift+K"
+          ]
+        }
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
     "id": "marketplace",
     "title": "Marketplace",
     "description": "Browse and discover MCP servers, Pi extensions, and agent skills from npm, Anthropic, and the official MCP registry.",
@@ -54,6 +79,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
 
 /** Lazy entry points; only called for enabled modules. */
 export const RENDERER_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ default: RendererModule }>>> = {
+  "library": () => import("@hive-module/library/renderer"),
   "marketplace": () => import("@hive-module/marketplace/renderer"),
   "plan-previewer": () => import("@hive-module/plan-previewer/renderer"),
 };

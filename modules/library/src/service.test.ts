@@ -9,7 +9,7 @@ import {
   parseFrontmatter,
   setFrontmatterField,
   splitSections,
-} from "./library.ts";
+} from "./service.ts";
 
 let tmp: string;
 let agentDir: string;

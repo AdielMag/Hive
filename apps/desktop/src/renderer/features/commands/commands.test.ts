@@ -160,7 +160,6 @@ describe("command registry", () => {
       "view.git",
       "view.terminal",
       "view.usage",
-      "view.library",
       "zoom.in",
       "zoom.out",
       "zoom.reset",

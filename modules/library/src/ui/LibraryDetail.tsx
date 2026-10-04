@@ -20,12 +20,11 @@ import {
 } from "lucide-react";
 import type { LibraryEntry, LibraryFieldValue } from "@hive/protocol";
 import { useLibraryStore } from "./library-store.ts";
-import { useSessionStore } from "../../store/session-store.ts";
 import { ModelPicker } from "./ModelPicker.tsx";
 import { ThinkingSelect } from "./ThinkingSelect.tsx";
 import { SectionCard } from "./SectionCard.tsx";
-import { CodeBlock } from "../../components/code/CodeBlock.tsx";
-import { copyText } from "../../lib/clipboard.ts";
+import { libraryHost } from "./library-host.ts";
+import { LibraryMethods } from "../shared.ts";
 
 interface Props {
   entry: LibraryEntry;
@@ -47,8 +46,10 @@ export const LibraryDetail: React.FC<Props> = ({ entry }) => {
     setViewMode,
   } = useLibraryStore();
   // Narrow selectors: the session store updates on every streamed token.
-  const activeProject = useSessionStore((s) => s.activeProject);
-  const openFileTab = useSessionStore((s) => s.openFileTab);
+  const host = libraryHost();
+  const activeProject = host.sessions.activeProject();
+  const CodeBlock = host.ui.CodeBlock;
+  const copyText = (t: string) => host.clipboard.copy(t);
 
   const [copiedPath, setCopiedPath] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -107,20 +108,20 @@ export const LibraryDetail: React.FC<Props> = ({ entry }) => {
 
   const handleReveal = () => {
     if (entry.path) {
-      void window.studio.revealLibraryPath(entry.path, cwd);
+      void host.ipc.invoke(LibraryMethods.reveal, { path: entry.path, cwd });
     }
   };
 
   const handleOpenInEditor = () => {
     if (entry.path) {
-      void openFileTab(entry.path, activeProject?.id || "", entry.name + ".md");
+      host.tabs.open({ kind: "file", title: entry.name + ".md", filePath: entry.path });
     }
   };
 
   const handleOpenSupportingFile = (relPath: string) => {
     if (!entry.path) return;
     const fullPath = entry.path.replace(/[/\\]SKILL\.md$/, "") + "/" + relPath;
-    void openFileTab(fullPath, activeProject?.id || "", relPath.split("/").pop());
+    host.tabs.open({ kind: "file", title: relPath.split("/").pop() || "file", filePath: fullPath });
   };
 
   // Helper to save a frontmatter field

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LibraryEntry, LibrarySnapshot } from "@hive/protocol";
+import { setLibraryHost } from "./library-host.ts";
 import { useLibraryStore } from "./library-store.ts";
 
 const mockEntry: LibraryEntry = {
@@ -32,8 +33,9 @@ const mockSnapshot: LibrarySnapshot = {
 };
 
 describe("useLibraryStore", () => {
+  let mockInvoke: any;
+
   beforeEach(() => {
-    (globalThis as any).window = globalThis;
     useLibraryStore.setState({
       snapshot: null,
       loading: false,
@@ -47,21 +49,27 @@ describe("useLibraryStore", () => {
       feedback: null,
     });
 
-    // Mock window.studio
-    (window as any).studio = {
-      listLibrary: vi.fn().mockResolvedValue(mockSnapshot),
-      setLibraryField: vi.fn().mockImplementation((req) => {
+    mockInvoke = vi.fn().mockImplementation((method: string, args: any) => {
+      if (method === "list") return Promise.resolve(mockSnapshot);
+      if (method === "setField") {
         return Promise.resolve({
           ok: true,
           entry: {
             ...mockEntry,
-            frontmatter: { ...mockEntry.frontmatter, [req.key]: req.value },
+            frontmatter: { ...mockEntry.frontmatter, [args.key]: args.value },
           },
         });
-      }),
-      revealLibraryPath: vi.fn().mockResolvedValue(undefined),
-      openLibraryPath: vi.fn().mockResolvedValue({ ok: true }),
-    };
+      }
+      return Promise.resolve(undefined);
+    });
+
+    setLibraryHost({
+      moduleId: "library",
+      ipc: {
+        invoke: mockInvoke,
+        on: vi.fn(),
+      },
+    } as any);
   });
 
   it("loads library snapshot and automatically selects the first non-shadowed entry", async () => {
@@ -95,7 +103,7 @@ describe("useLibraryStore", () => {
       .updateField(mockEntry, "model", "antigravity/gemini-3.8-flash", "/workspace");
 
     expect(success).toBe(true);
-    expect((window as any).studio.setLibraryField).toHaveBeenCalledWith({
+    expect(mockInvoke).toHaveBeenCalledWith("setField", {
       cwd: "/workspace",
       path: mockEntry.path,
       key: "model",
@@ -111,10 +119,16 @@ describe("useLibraryStore", () => {
   it("handles field update conflict by reloading snapshot", async () => {
     await useLibraryStore.getState().load("/workspace");
 
-    (window as any).studio.setLibraryField = vi.fn().mockResolvedValue({
-      ok: false,
-      code: "conflict",
-      error: "Changed on disk",
+    mockInvoke.mockImplementation((method: string) => {
+      if (method === "list") return Promise.resolve(mockSnapshot);
+      if (method === "setField") {
+        return Promise.resolve({
+          ok: false,
+          code: "conflict",
+          error: "Changed on disk",
+        });
+      }
+      return Promise.resolve(undefined);
     });
 
     const success = await useLibraryStore
@@ -123,6 +137,6 @@ describe("useLibraryStore", () => {
 
     expect(success).toBe(false);
     expect(useLibraryStore.getState().feedback?.type).toBe("error");
-    expect((window as any).studio.listLibrary).toHaveBeenCalledTimes(2);
+    expect(mockInvoke).toHaveBeenCalledWith("list", { cwd: "/workspace" });
   });
 });

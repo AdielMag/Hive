@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, ChevronDown, Cpu, RotateCcw, Search, X } from "lucide-react";
-import { useSessionStore } from "../../store/session-store.ts";
-import { ProviderIcon } from "../../components/ProviderIcon.tsx";
+import { libraryHost } from "./library-host.ts";
 
 interface Props {
   currentValue?: string | null;
@@ -10,9 +9,11 @@ interface Props {
 }
 
 export const ModelPicker: React.FC<Props> = ({ currentValue, disabled, onSelect }) => {
-  const allCatalogModels = useSessionStore((s) => s.allCatalogModels);
-  const enabledModelKeys = useSessionStore((s) => s.enabledModelKeys);
-  const loadModelsCatalog = useSessionStore((s) => s.loadModelsCatalog);
+  const host = libraryHost();
+  const allCatalogModels = host.models.catalog();
+  const enabledModelKeys = host.models.enabledKeys();
+  const loadModelsCatalog = () => host.models.loadCatalog();
+  const ProviderIcon = host.ui.ProviderIcon;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const popoverRef = useRef<HTMLDivElement>(null);

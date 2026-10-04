@@ -2,7 +2,7 @@
 import React from "react";
 import { Loader2, PackageOpen, Puzzle } from "lucide-react";
 import type { TabItem } from "@hive/protocol";
-import type { ModuleTab, PanelContribution } from "@hive/module-sdk/renderer";
+import type { ModuleTab, PanelContribution, RailItemContribution } from "@hive/module-sdk/renderer";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import { ownerOfPanel, ownerOfTabKind } from "./manifests.ts";
 import { useContributions, useModuleHost, useModules, useSlot } from "./registry.ts";
@@ -108,6 +108,26 @@ export const ModuleRailButton: React.FC<{ panel: PanelContribution & { moduleId:
   const title = shortcut ? `${panel.title} (${shortcut})` : panel.title;
   return (
     <button className={`rail__btn${active ? " is-active" : ""}`} onClick={onClick} title={title} aria-label={title} aria-pressed={active}>
+      <Icon size={18} />
+    </button>
+  );
+};
+
+/** Rail button for a contributed action/tab (e.g. Library, Usage). */
+export const ModuleRailItemButton: React.FC<{ item: RailItemContribution & { moduleId: string } }> = ({ item }) => {
+  const shortcut = useShortcut(item.commandId ?? "");
+  const host = useModuleHost(item.moduleId);
+  const Icon = item.icon;
+  const title = shortcut ? `${item.title} (${shortcut})` : item.title;
+  const active = host && item.active ? item.active(host) : false;
+  return (
+    <button
+      className={`rail__btn${active ? " is-active" : ""}`}
+      onClick={() => host && item.onClick(host)}
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+    >
       <Icon size={18} />
     </button>
   );

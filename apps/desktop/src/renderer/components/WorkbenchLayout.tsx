@@ -5,7 +5,6 @@
 import React, { Suspense, lazy, useCallback, useRef, useState } from "react";
 import {
   BarChart3,
-  Blocks,
   Files,
   FolderKanban,
   GitBranch,
@@ -34,7 +33,7 @@ import { useSessionStore } from "../store/session-store.ts";
 import { useUi, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
 import { isCoreTabKind } from "@hive/protocol";
 import { useContributions, useModules } from "../modules/registry.ts";
-import { ModulePanelView, ModuleRailButton, ModuleTabView } from "../modules/ModuleViews.tsx";
+import { ModulePanelView, ModuleRailButton, ModuleRailItemButton, ModuleTabView } from "../modules/ModuleViews.tsx";
 import { ToastHost } from "../modules/ToastHost.tsx";
 import { OnboardingPicker } from "../features/modules/OnboardingPicker.tsx";
 import { useKeybindings } from "../features/commands/useKeybindings.ts";
@@ -53,7 +52,6 @@ const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
 const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel");
 const ToolsPanel = named(() => import("./ToolsPanel.tsx"), "ToolsPanel");
 const UsageView = named(() => import("../features/insights/UsageView.tsx"), "UsageView");
-const LibraryView = named(() => import("../features/library/LibraryView.tsx"), "LibraryView");
 const BrowserTab = named(() => import("./browser/BrowserTab.tsx"), "BrowserTab");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
@@ -63,19 +61,17 @@ export const WorkbenchLayout: React.FC = () => {
   const projectsShortcut = useShortcut("view.projects");
   const filesShortcut = useShortcut("view.files");
   const gitShortcut = useShortcut("view.git");
-  const libraryShortcut = useShortcut("view.library");
   const usageShortcut = useShortcut("view.usage");
   const settingsShortcut = useShortcut("settings.open");
   const terminalShortcut = useShortcut("view.terminal");
 
-  const { activeProject, tabs, activeTabId, error, openUsageTab, openLibraryTab } = useSessionStore(
+  const { activeProject, tabs, activeTabId, error, openUsageTab } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       tabs: s.tabs,
       activeTabId: s.activeTabId,
       error: s.error,
       openUsageTab: s.openUsageTab,
-      openLibraryTab: s.openLibraryTab,
     })),
   );
   const ui = useUi(
@@ -97,6 +93,7 @@ export const WorkbenchLayout: React.FC = () => {
   const hasSession = Boolean(activeProject && tabs.some((t) => !t.kind || t.kind === "session"));
   const leftModulePanels = useContributions("leftPanels");
   const rightModulePanels = useContributions("rightPanels");
+  const railItems = useContributions("railItems");
   const needsOnboarding = useModules((s) => s.ready && !s.onboarded);
 
   return (
@@ -138,12 +135,9 @@ export const WorkbenchLayout: React.FC = () => {
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.left === p.id} onClick={() => ui.toggleLeft(p.id)} />
           ))}
           <div className="rail__spacer" />
-          <RailButton
-            icon={<Blocks size={18} />}
-            title={libraryShortcut ? `Skills & Agents (${libraryShortcut})` : "Skills & Agents"}
-            active={activeTab?.kind === "library"}
-            onClick={openLibraryTab}
-          />
+          {railItems.map((item) => (
+            <ModuleRailItemButton key={`${item.moduleId}:${item.id}`} item={item} />
+          ))}
           <RailButton
             icon={<BarChart3 size={18} />}
             title={usageShortcut ? `Usage analytics (${usageShortcut})` : "Usage analytics"}
@@ -177,8 +171,6 @@ export const WorkbenchLayout: React.FC = () => {
               <Suspense fallback={<Loading />}>
               {activeTab?.kind === "usage" ? (
                 <UsageView />
-              ) : activeTab?.kind === "library" ? (
-                <LibraryView />
               ) : activeTab?.kind === "file" ? (
                 <FileViewerTab tab={activeTab} />
               ) : activeTab?.kind === "diff" ? (

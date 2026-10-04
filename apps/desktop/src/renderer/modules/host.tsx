@@ -5,6 +5,9 @@
 import type { ModuleHost, ModuleTab, OpenTabSpec } from "@hive/module-sdk/renderer";
 import type { AgentMode, TabItem } from "@hive/protocol";
 import { Markdown } from "../components/code/Markdown.tsx";
+import { CodeBlock } from "../components/code/CodeBlock.tsx";
+import { ProviderIcon } from "../components/ProviderIcon.tsx";
+import { copyText } from "../lib/clipboard.ts";
 import { AiModelChip } from "../components/AiModelChip.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useSessionStore } from "../store/session-store.ts";
@@ -17,6 +20,8 @@ const toModuleTab = (t: TabItem): ModuleTab => ({ id: t.id, kind: t.kind, title:
 
 const HostMarkdown: ModuleHost["ui"]["Markdown"] = ({ text, className }) => <Markdown text={text} className={className} />;
 const HostAiModelChip: ModuleHost["ui"]["AiModelChip"] = (props) => <AiModelChip {...props} />;
+const HostCodeBlock: ModuleHost["ui"]["CodeBlock"] = (props) => <CodeBlock {...props} />;
+const HostProviderIcon: ModuleHost["ui"]["ProviderIcon"] = (props) => <ProviderIcon {...props} />;
 
 const isDark = (): boolean => document.documentElement.dataset.theme !== "light";
 
@@ -52,7 +57,15 @@ export function createModuleHost(moduleId: string): ModuleHost {
       },
     },
     settings: { open: (tabId) => useUi.getState().openSettings(tabId ? `${moduleId}:${tabId}` : undefined) },
-    ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip },
+    ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, ProviderIcon: HostProviderIcon },
+    models: {
+      catalog: () => useSessionStore.getState().allCatalogModels,
+      enabledKeys: () => useSessionStore.getState().enabledModelKeys,
+      loadCatalog: () => useSessionStore.getState().loadModelsCatalog(),
+    },
+    clipboard: {
+      copy: copyText,
+    },
     theme: {
       isDark,
       subscribe: (listener) => {

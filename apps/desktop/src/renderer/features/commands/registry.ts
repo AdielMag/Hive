@@ -139,7 +139,6 @@ const CORE_COMMANDS: readonly Command[] = [
   right("view.tools", "Tools", "tools"),
   right("view.context", "Context", "context"),
   { id: "view.usage", title: "Open Usage Analytics", category: "View", keywords: "cost tokens quota", defaultKeys: ["Mod+Shift+U"], allowInTerminal: true, run: () => useSessionStore.getState().openUsageTab() },
-  { id: "view.library", title: "Open Skills & Agents", category: "View", keywords: "library subagents", defaultKeys: ["Mod+Shift+K"], allowInTerminal: true, run: () => useSessionStore.getState().openLibraryTab() },
 
   // Window
   { id: "zoom.in", title: "Zoom In", category: "Window", defaultKeys: ["Mod+=", "Mod+Shift+="], allowInTerminal: true, run: () => void window.studio.zoom("in") },

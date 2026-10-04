@@ -225,11 +225,6 @@ export const IPC = {
   modulesMarkOnboarded: "modules:mark-onboarded",
   modulesInvoke: "modules:invoke",
   evtModuleEvent: "modules:event",
-  // Skills & agents library
-  libraryList: "library:list",
-  librarySetField: "library:set-field",
-  libraryReveal: "library:reveal",
-  libraryOpenPath: "library:open-path",
   // AI Registry, MCP, and Subagent output
   aiSessionRegistry: "ai:session-registry",
   aiMcpCatalog: "ai:mcp-catalog",
@@ -471,13 +466,6 @@ export interface StudioApi {
   getUsage(force?: boolean): Promise<UsageReport>;
   generateUsageInsights(summaryText: string, model?: string): Promise<string>;
 
-  // Skills & agents library
-  listLibrary(cwd?: string): Promise<LibrarySnapshot>;
-  setLibraryField(request: LibrarySetFieldRequest): Promise<LibrarySetFieldResult>;
-  /** Show a library file in the OS file manager. */
-  revealLibraryPath(path: string, cwd?: string): Promise<void>;
-  /** Open a library file (or skill folder) with the OS default application. */
-  openLibraryPath(path: string, cwd?: string): Promise<{ ok: boolean; error?: string }>;
 
   // AI Registry, MCP, and Subagent output
   getSessionRegistry(key?: string): Promise<SessionRegistry | null>;

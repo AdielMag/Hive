@@ -76,6 +76,16 @@ export interface ModuleHost {
     Markdown: ComponentType<{ text: string; className?: string }>;
     /** Core model chip; `model` is the resolved feature model (see host.ai). */
     AiModelChip: ComponentType<{ model: any; className?: string; clickable?: boolean; title?: string }>;
+    CodeBlock: ComponentType<{ code: string; language?: string | null; fileName?: string; collapseAfter?: number; [key: string]: any }>;
+    ProviderIcon: ComponentType<{ provider: string; size?: number; className?: string; style?: React.CSSProperties }>;
+  };
+  models: {
+    catalog(): any[];
+    enabledKeys(): string[];
+    loadCatalog(): Promise<void>;
+  };
+  clipboard: {
+    copy(text: string): Promise<boolean>;
   };
   theme: {
     isDark(): boolean;
@@ -157,10 +167,20 @@ export interface AiFeatureContribution {
 
 export type SlotComponent = ComponentType<{ host: ModuleHost; [prop: string]: unknown }>;
 
+export interface RailItemContribution extends ContributionBase {
+  id: string;
+  title: string;
+  icon: IconComponent;
+  commandId?: string;
+  active?: (host: ModuleHost) => boolean;
+  onClick: (host: ModuleHost) => void;
+}
+
 export interface RendererContributions {
   leftPanels?: PanelContribution[];
   rightPanels?: PanelContribution[];
   tabKinds?: TabKindContribution[];
+  railItems?: RailItemContribution[];
   settings?: SettingsContribution[];
   commands?: CommandContribution[];
   statusBar?: StatusBarContribution[];
