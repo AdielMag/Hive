@@ -15,6 +15,7 @@ import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import { useFeatureModelStore, resolveFeatureModel, type FeatureModelsConfig } from "../store/feature-models-store.ts";
 import { setLinkHandler } from "./link-bus.ts";
 import { AiModelChip } from "../components/AiModelChip.tsx";
+import { ContextBreakdownPanel } from "../components/ContextBreakdownPanel.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
@@ -58,6 +59,7 @@ function useActiveSession(): ActiveSessionContext {
 }
 const HostCodeBlock: ModuleHost["ui"]["CodeBlock"] = (props) => <CodeBlock {...props} />;
 const HostProviderIcon: ModuleHost["ui"]["ProviderIcon"] = (props) => <ProviderIcon {...props} />;
+const HostContextBreakdown: ModuleHost["ui"]["ContextBreakdownPanel"] = (props) => <ContextBreakdownPanel {...props} />;
 
 const isDark = (): boolean => document.documentElement.dataset.theme !== "light";
 
@@ -98,7 +100,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
     settings: { open: (tabId) => useUi.getState().openSettings(tabId ? `${moduleId}:${tabId}` : undefined) },
     openExternal: (url: string) => window.studio.openSystemBrowser(url),
     links: { setHandler: (handler) => setLinkHandler(moduleId, handler) },
-    ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, ProviderIcon: HostProviderIcon },
+    ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, ProviderIcon: HostProviderIcon, ContextBreakdownPanel: HostContextBreakdown },
     models: {
       catalog: () => useSessionStore.getState().allCatalogModels,
       enabledKeys: () => useSessionStore.getState().enabledModelKeys,

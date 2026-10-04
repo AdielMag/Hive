@@ -11,7 +11,6 @@ import {
   FolderKanban,
   GitBranch,
   GitCommit,
-  PieChart,
   Settings,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
@@ -21,12 +20,12 @@ import { WelcomeView } from "./WelcomeView.tsx";
 import { TabStrip } from "./TabStrip.tsx";
 import { Transcript } from "./Transcript.tsx";
 import { Composer } from "./Composer.tsx";
-import { ContextBreakdownPanel } from "./ContextBreakdownPanel.tsx";
 import { AppTitleBar } from "./AppTitleBar.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
 import { QuestionFormModal } from "./QuestionFormModal.tsx";
 import { ImagePreviewModal } from "./ImagePreviewModal.tsx";
+import { SubagentDetailModal } from "./SubagentDetailModal.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { SessionErrorBanner } from "./SessionErrorBanner.tsx";
 import { useSessionStore } from "../store/session-store.ts";
@@ -40,13 +39,13 @@ import { useKeybindings } from "../features/commands/useKeybindings.ts";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import { CommandPalette } from "../features/commands/CommandPalette.tsx";
 import { startGitStatusWatcher, useGitStore } from "../store/git-store.ts";
+import { WorkbenchSplitTree } from "./WorkbenchSplitTree.tsx";
+import { usePaneLayoutStore, findLeaf } from "../store/pane-layout-store.ts";
 import hiveIcon from "../assets/hive-icon.png";
 
 // Heavy views load on demand to keep startup fast (xterm, charts, settings, file/diff viewers).
 const named = <T extends string>(loader: () => Promise<Record<T, React.ComponentType<any>>>, key: T) =>
   lazy(() => loader().then((m) => ({ default: m[key] })));
-const FileViewerTab = named(() => import("./FileViewerTab.tsx"), "FileViewerTab");
-const DiffViewerTab = named(() => import("./DiffViewerTab.tsx"), "DiffViewerTab");
 const SettingsModal = named(() => import("./SettingsModal.tsx"), "SettingsModal");
 const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
 const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel");
@@ -60,14 +59,24 @@ export const WorkbenchLayout: React.FC = () => {
   const gitShortcut = useShortcut("view.git");
   const settingsShortcut = useShortcut("settings.open");
 
-  const { activeProject, tabs, activeTabId, error } = useSessionStore(
+  const { activeProject, tabs, activeTabId, error, switchTab } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       tabs: s.tabs,
       activeTabId: s.activeTabId,
       error: s.error,
+      switchTab: s.switchTab,
     })),
   );
+  const tabIds = useMemo(() => tabs.map((t) => t.id), [tabs]);
+  const root = usePaneLayoutStore((s) => s.root);
+  const activePaneId = usePaneLayoutStore((s) => s.activePaneId);
+  const setActivePaneId = usePaneLayoutStore((s) => s.setActivePaneId);
+  const syncWithTabs = usePaneLayoutStore((s) => s.syncWithTabs);
+
+  useEffect(() => {
+    syncWithTabs(tabIds, activeTabId);
+  }, [tabIds, activeTabId, syncWithTabs]);
   const ui = useUi(
     useShallow((s) => ({
       left: s.left,
@@ -83,8 +92,6 @@ export const WorkbenchLayout: React.FC = () => {
       closeSettings: s.closeSettings,
     })),
   );
-  const activeTab = tabs.find((t) => t.id === activeTabId);
-  const hasSession = Boolean(activeProject && tabs.some((t) => !t.kind || t.kind === "session"));
   const leftModulePanels = useContributions("leftPanels");
   const rightModulePanels = useContributions("rightPanels");
   const railItems = useContributions("railItems");
@@ -189,24 +196,19 @@ export const WorkbenchLayout: React.FC = () => {
 
         {/* Content card */}
         <main className="card">
-          <TabStrip />
           {error && <SessionErrorBanner error={error} />}
           <div className="card__content">
-            <ErrorBoundary label="Editor" resetKey={activeTabId ?? ""}>
-              <Suspense fallback={<Loading />}>
-              {activeTab?.kind === "file" ? (
-                <FileViewerTab tab={activeTab} />
-              ) : activeTab?.kind === "diff" ? (
-                <DiffViewerTab tab={activeTab} />
-              ) : activeTab && !isCoreTabKind(activeTab.kind) ? (
-                <ModuleTabView tab={activeTab} onClose={() => void useSessionStore.getState().closeTab(activeTab.id)} />
-              ) : hasSession ? (
-                <SessionView />
-              ) : (
-                <WelcomeView />
-              )}
-              </Suspense>
-            </ErrorBoundary>
+            <WorkbenchSplitTree
+              node={root}
+              activePaneId={activePaneId}
+              setActivePaneId={(id) => {
+                setActivePaneId(id);
+                const leaf = findLeaf(root, id);
+                if (leaf?.activeTabId && leaf.activeTabId !== activeTabId) {
+                  void switchTab(leaf.activeTabId);
+                }
+              }}
+            />
           </div>
         </main>
 
@@ -222,7 +224,6 @@ export const WorkbenchLayout: React.FC = () => {
 
         {/* Right rail */}
         <nav className="rail rail--right">
-          <RailButton icon={<PieChart size={18} />} title="Context breakdown" active={ui.right === "context"} onClick={() => ui.toggleRight("context")} />
           {rightModulePanels.map((p) => (
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id} onClick={() => ui.toggleRight(p.id)} />
           ))}
@@ -233,6 +234,7 @@ export const WorkbenchLayout: React.FC = () => {
       <ExtensionDialogModal />
       <QuestionFormModal />
       <ImagePreviewModal />
+      <SubagentDetailModal />
       <CommandPalette />
       <ToastHost />
       {needsOnboarding && <OnboardingPicker />}
@@ -249,20 +251,7 @@ const LeftPanelContent: React.FC<{ panel: LeftPanel; onClose(): void }> = ({ pan
   panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : panel === "branches" ? <BranchesPanel /> : panel === "git" ? <GitPanel /> : <ModulePanelView side="left" panelId={panel} onClose={onClose} />;
 
 const RightPanelContent: React.FC<{ panel: RightPanel; onClose(): void }> = ({ panel, onClose }) =>
-  panel === "context" ? <ContextBreakdownPanel /> : <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
-
-const SessionView: React.FC = () => {
-  const composerHeight = useUi((s) => s.composerHeight);
-  const setSize = useUi((s) => s.setSize);
-  const startDrag = useDrag("row", (dy, start) => setSize({ composerHeight: start - dy }), () => composerHeight);
-  return (
-    <div className="session-view">
-      <Transcript />
-      <div className="resizer resizer--row" onMouseDown={startDrag} title="Drag to resize" />
-      <Composer height={composerHeight} />
-    </div>
-  );
-};
+  <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
 
 const SidePanel: React.FC<{ side: "left" | "right"; width: number; onResize(w: number): void; children: React.ReactNode }> = ({ side, width, onResize, children }) => {
   const start = useDrag("col", (dx, w0) => onResize(side === "left" ? w0 + dx : w0 - dx), () => width);

@@ -30,6 +30,22 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     "hasRenderer": true
   },
   {
+    "id": "bash-guard",
+    "title": "Bash Guard",
+    "description": "Intercepts potentially dangerous bash commands (rm -rf, git reset --hard, disk operations, sudo) and prompts for confirmation with an inline approval card above the composer.",
+    "tier": "bonus",
+    "recommended": true,
+    "icon": "shield-alert",
+    "category": "Security",
+    "agent": {
+      "extensions": [
+        "agent/extensions/bash-guard.ts"
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
     "id": "browser",
     "title": "Hive Browser",
     "description": "Integrated Chromium web browser with automatic background tab hibernation (RAM Saver) and web search.",
@@ -57,6 +73,28 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
       ]
     },
     "hasMain": true,
+    "hasRenderer": true
+  },
+  {
+    "id": "context-breakdown",
+    "title": "Context Window Breakdown",
+    "description": "Token usage inspector showing exact model-reported and estimated tokens across instructions, tools, skills and conversation turns.",
+    "tier": "bonus",
+    "icon": "pie-chart",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "context"
+      ],
+      "commands": [
+        {
+          "id": "view.context",
+          "title": "Toggle Context Window Panel",
+          "category": "View"
+        }
+      ]
+    },
+    "hasMain": false,
     "hasRenderer": true
   },
   {
@@ -192,6 +230,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
 /** Lazy entry points; only called for enabled modules. */
 export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ default: MainModule }>>> = {
   "analytics": () => import("@hive-module/analytics/main"),
+  "bash-guard": () => import("@hive-module/bash-guard/main"),
   "browser": () => import("@hive-module/browser/main"),
   "library": () => import("@hive-module/library/main"),
   "limits": () => import("@hive-module/limits/main"),

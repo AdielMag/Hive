@@ -137,6 +137,7 @@ export interface ModuleHost {
     AiModelChip: ComponentType<{ model: any; className?: string; clickable?: boolean; title?: string; feature?: string }>;
     CodeBlock: ComponentType<{ code: string; language?: string | null; fileName?: string; collapseAfter?: number; [key: string]: any }>;
     ProviderIcon: ComponentType<{ provider: string; size?: number; className?: string; style?: React.CSSProperties }>;
+    ContextBreakdownPanel: ComponentType<{ host: ModuleHost }>;
   };
   models: {
     catalog(): any[];
