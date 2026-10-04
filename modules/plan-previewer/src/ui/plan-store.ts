@@ -6,11 +6,24 @@ import {
   type PlanPreviewData,
   type SubmitFeedbackResult,
 } from "../shared.ts";
-import { extractDecisions, extractPlanViews, summarizeDiff, type DecisionItem } from "../plan-utils.ts";
+import { activeViewMarkdown, extractDecisions, extractPlanViews, summarizeDiff, type DecisionItem } from "../plan-utils.ts";
+import {
+  buildAnswersPayload,
+  buildChoicesPayload,
+  buildQuestionsPayload,
+  countUnansweredAgentQuestions,
+  pendingRounds,
+  reconcileSelections,
+  type ChoiceSelections,
+  type DraftAnswers,
+} from "../plan-review.ts";
 import { planHost } from "./plan-host.ts";
 
 export type PlanViewMode = "summary" | "full";
-export type PlanWidthMode = "comfortable" | "wide" | "full";
+export type PlanWidthMode = "comfortable" | "wide";
+/** reviewing: normal; answering: agent `--ask` questions pending; sent: waiting for the agent; approved: done. */
+export type PlanPhase = "reviewing" | "answering" | "sent" | "approved";
+export type FeedbackStatus = PlanFeedbackPayload["status"];
 
 export interface PlanAnnotation {
   id: string;
@@ -19,72 +32,103 @@ export interface PlanAnnotation {
   timestamp: string;
 }
 
-export interface PlanChoiceSelection {
-  choiceTitle: string;
-  selectedText: string;
-  isRecommended?: boolean;
+const LS_VIEW = "hive-plan-view-mode";
+const LS_WIDTH = "hive-plan-reading-width";
+const LS_OUTLINE = "hive-plan-outline"; // "show" | "hide"; absent = automatic
+
+function readStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(key: string, value: string | null): void {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+// Keys from the previous layout (3-way width, right sidebar) no longer apply.
+for (const old of ["hive-plan-width-mode", "hive-plan-collapse-left", "hive-plan-collapse-right"]) writeStorage(old, null);
+
+function initialOutline(): boolean | null {
+  const v = readStorage(LS_OUTLINE);
+  return v === "show" ? true : v === "hide" ? false : null;
+}
+
+function decisionsFor(content: string, viewMode: PlanViewMode): DecisionItem[] {
+  return extractDecisions(activeViewMarkdown(extractPlanViews(content), viewMode));
+}
+
+function derivePhase(data: PlanPreviewData | null, sent: boolean): PlanPhase {
+  if (data?.planApproved) return "approved";
+  if (pendingRounds(data?.agentQuestions).length > 0) return "answering";
+  return sent ? "sent" : "reviewing";
 }
 
 interface PlanState {
   filePath: string | null;
   planData: PlanPreviewData | null;
-  previousContent: string | null;
-  diffStats: { additions: number; deletions: number };
   loading: boolean;
   error: string | null;
 
   viewMode: PlanViewMode;
   widthMode: PlanWidthMode;
-  collapseLeft: boolean;
-  collapseRight: boolean;
+  /** null = automatic (by tab width); boolean = user override. */
+  outlineOpen: boolean | null;
 
+  /** Decisions of the active view. */
   decisions: DecisionItem[];
-  selections: Record<string, PlanChoiceSelection>;
-  draftAnswers: Record<string, string>; // for open questions
+  selections: ChoiceSelections;
+  draftAnswers: DraftAnswers;
   annotations: PlanAnnotation[];
-  agentAnswers: Record<string, string>; // for agent --ask questions
+  agentAnswers: Record<string, string>; // `${roundId}:${questionId}` -> value
   footerComment: string;
-  selectedExecutionMode: AgentMode; // "auto-edit" | "manual"
+  selectedExecutionMode: AgentMode;
 
-  toastMessage: string | null;
+  phase: PlanPhase;
+  /** What the last successful submit sent (drives the "sent" copy). */
+  sentKind: "changes" | "answers" | null;
+  lastUpdate: { additions: number; deletions: number; at: number } | null;
+  dismissedReplyAt: string | null;
   isSubmitting: boolean;
-  isApproved: boolean;
 
-  // Actions
   loadPlan: (filePath: string) => Promise<void>;
+  refresh: () => Promise<void>;
   updateFromDisk: (content: string, fileVersion: number) => void;
   setViewMode: (mode: PlanViewMode) => void;
   setWidthMode: (mode: PlanWidthMode) => void;
-  toggleLeftSidebar: () => void;
-  toggleRightSidebar: () => void;
+  setOutlineOpen: (open: boolean | null) => void;
 
-  selectChoice: (decisionId: string, choiceTitle: string, selectedText: string, isRecommended?: boolean) => void;
-  clearChoice: (decisionId: string) => void;
-  setDraftAnswer: (questionId: string, text: string) => void;
+  selectChoice: (decision: DecisionItem, optionLabel: string) => void;
+  setDraftAnswer: (key: string, text: string) => void;
 
   addAnnotation: (selectedText: string, question: string) => void;
   removeAnnotation: (id: string) => void;
 
-  setAgentAnswer: (questionId: string, value: string) => void;
+  setAgentAnswer: (answerKey: string, value: string) => void;
   setFooterComment: (comment: string) => void;
   setSelectedExecutionMode: (mode: AgentMode) => void;
 
-  clearToast: () => void;
-  submitFeedback: (status: "approved" | "changes_requested") => Promise<{ success: boolean; error?: string }>;
+  clearLastUpdate: () => void;
+  dismissReply: (timestamp: string) => void;
+  submitFeedback: (status: FeedbackStatus) => Promise<SubmitFeedbackResult>;
 }
 
 export const usePlanStore = create<PlanState>((set, get) => ({
   filePath: null,
   planData: null,
-  previousContent: null,
-  diffStats: { additions: 0, deletions: 0 },
   loading: false,
   error: null,
 
-  viewMode: (localStorage.getItem("hive-plan-view-mode") as PlanViewMode) || "full",
-  widthMode: (localStorage.getItem("hive-plan-width-mode") as PlanWidthMode) || "wide",
-  collapseLeft: localStorage.getItem("hive-plan-collapse-left") === "true",
-  collapseRight: localStorage.getItem("hive-plan-collapse-right") === "true",
+  viewMode: (readStorage(LS_VIEW) as PlanViewMode) === "summary" ? "summary" : "full",
+  widthMode: readStorage(LS_WIDTH) === "wide" ? "wide" : "comfortable",
+  outlineOpen: initialOutline(),
 
   decisions: [],
   selections: {},
@@ -94,11 +138,14 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   footerComment: "",
   selectedExecutionMode: "auto-edit",
 
-  toastMessage: null,
+  phase: "reviewing",
+  sentKind: null,
+  lastUpdate: null,
+  dismissedReplyAt: null,
   isSubmitting: false,
-  isApproved: false,
 
   loadPlan: async (filePath: string) => {
+    const samePlan = get().filePath === filePath && get().planData !== null;
     set({ loading: true, error: null, filePath });
     try {
       const data = await planHost().ipc.invoke<PlanPreviewData | null>(PlanMethods.get, filePath);
@@ -108,109 +155,103 @@ export const usePlanStore = create<PlanState>((set, get) => ({
       }
 
       const views = extractPlanViews(data.content);
-      // Auto-default to summary view if summary section exists
-      let preferredView: PlanViewMode = get().viewMode;
-      if (views.summary && !localStorage.getItem("hive-plan-view-mode")) {
-        preferredView = "summary";
-      }
+      let viewMode = get().viewMode;
+      if (views.summary && !readStorage(LS_VIEW)) viewMode = "summary";
+      const decisions = decisionsFor(data.content, viewMode);
 
-      const decisions = extractDecisions(data.content);
-      // Pre-select any decisions that had (x) in markdown
-      const initialSelections: Record<string, PlanChoiceSelection> = {};
-      decisions.forEach((d) => {
-        if (d.type === "choice") {
-          const pre = d.options.find((o) => o.isPreselected);
-          if (pre) {
-            initialSelections[d.id] = {
-              choiceTitle: d.title,
-              selectedText: pre.label,
-              isRecommended: pre.isRecommended,
-            };
-          }
-        }
-      });
+      // Re-mounting the same plan keeps the review in progress; a different plan starts fresh.
+      const reset = samePlan
+        ? { selections: reconcileSelections(decisions, get().selections) }
+        : {
+            selections: {},
+            draftAnswers: {},
+            annotations: [],
+            agentAnswers: {},
+            footerComment: "",
+            lastUpdate: null,
+            dismissedReplyAt: null,
+          };
 
       set({
+        ...reset,
         loading: false,
         planData: data,
-        previousContent: data.content,
         decisions,
-        selections: initialSelections,
-        viewMode: preferredView,
-        isApproved: data.planApproved,
+        viewMode,
+        sentKind: null,
+        phase: derivePhase(data, false),
       });
     } catch (err: any) {
-      set({ loading: false, error: err.message || "Failed to load plan" });
+      set({ loading: false, error: err?.message || "Failed to load plan" });
+    }
+  },
+
+  /** Re-fetch after the agent re-notifies (new questions / reply): the agent acted, so "sent" ends. */
+  refresh: async () => {
+    const { filePath, planData: prev } = get();
+    if (!filePath || !prev) return;
+    try {
+      const data = await planHost().ipc.invoke<PlanPreviewData | null>(PlanMethods.get, filePath);
+      if (!data) return;
+      const decisions = decisionsFor(data.content, get().viewMode);
+      const diff = summarizeDiff(prev.content, data.content);
+      set((s) => ({
+        planData: data,
+        decisions,
+        selections: reconcileSelections(decisions, s.selections),
+        phase: derivePhase(data, false),
+        sentKind: null,
+        lastUpdate: diff.additions || diff.deletions ? { ...diff, at: Date.now() } : s.lastUpdate,
+      }));
+    } catch {
+      /* keep the current view */
     }
   },
 
   updateFromDisk: (content: string, fileVersion: number) => {
     const prev = get().planData;
-    if (!prev) return;
+    if (!prev || prev.content === content) return;
 
     const diff = summarizeDiff(prev.content, content);
-    const updatedDecisions = extractDecisions(content);
+    const planData = { ...prev, content, fileVersion, updatedAt: new Date().toISOString() };
+    const decisions = decisionsFor(content, get().viewMode);
 
-    set({
-      planData: {
-        ...prev,
-        content,
-        fileVersion,
-        updatedAt: new Date().toISOString(),
-      },
-      decisions: updatedDecisions,
-      diffStats: diff,
-      toastMessage: "✨ Plan updated live by agent",
-    });
+    set((s) => ({
+      planData,
+      decisions,
+      selections: reconcileSelections(decisions, s.selections),
+      lastUpdate: { ...diff, at: Date.now() },
+      phase: s.phase === "sent" ? derivePhase(planData, false) : s.phase,
+      sentKind: s.phase === "sent" ? null : s.sentKind,
+    }));
   },
 
   setViewMode: (viewMode) => {
-    localStorage.setItem("hive-plan-view-mode", viewMode);
-    set({ viewMode });
+    writeStorage(LS_VIEW, viewMode);
+    const content = get().planData?.content ?? "";
+    set({ viewMode, decisions: decisionsFor(content, viewMode) });
   },
 
   setWidthMode: (widthMode) => {
-    localStorage.setItem("hive-plan-width-mode", widthMode);
+    writeStorage(LS_WIDTH, widthMode);
     set({ widthMode });
   },
 
-  toggleLeftSidebar: () => {
-    set((s) => {
-      const next = !s.collapseLeft;
-      localStorage.setItem("hive-plan-collapse-left", String(next));
-      return { collapseLeft: next };
-    });
+  setOutlineOpen: (outlineOpen) => {
+    writeStorage(LS_OUTLINE, outlineOpen === null ? null : outlineOpen ? "show" : "hide");
+    set({ outlineOpen });
   },
 
-  toggleRightSidebar: () => {
-    set((s) => {
-      const next = !s.collapseRight;
-      localStorage.setItem("hive-plan-collapse-right", String(next));
-      return { collapseRight: next };
-    });
-  },
-
-  selectChoice: (decisionId, choiceTitle, selectedText, isRecommended) => {
+  selectChoice: (decision, optionLabel) => {
+    const opt = decision.options.find((o) => o.label === optionLabel);
+    if (!opt) return;
     set((s) => ({
-      selections: {
-        ...s.selections,
-        [decisionId]: { choiceTitle, selectedText, isRecommended },
-      },
+      selections: { ...s.selections, [decision.key]: { title: decision.title, label: opt.label, text: opt.text } },
     }));
   },
 
-  clearChoice: (decisionId) => {
-    set((s) => {
-      const next = { ...s.selections };
-      delete next[decisionId];
-      return { selections: next };
-    });
-  },
-
-  setDraftAnswer: (questionId, text) => {
-    set((s) => ({
-      draftAnswers: { ...s.draftAnswers, [questionId]: text },
-    }));
+  setDraftAnswer: (key, text) => {
+    set((s) => ({ draftAnswers: { ...s.draftAnswers, [key]: text } }));
   },
 
   addAnnotation: (selectedText, question) => {
@@ -220,84 +261,85 @@ export const usePlanStore = create<PlanState>((set, get) => ({
       question,
       timestamp: new Date().toISOString(),
     };
-    set((s) => ({
-      annotations: [item, ...s.annotations],
-      collapseRight: false, // reveal activity sidebar
-    }));
+    set((s) => ({ annotations: [...s.annotations, item] }));
   },
 
   removeAnnotation: (id) => {
-    set((s) => ({
-      annotations: s.annotations.filter((a) => a.id !== id),
-    }));
+    set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) }));
   },
 
-  setAgentAnswer: (questionId, value) => {
-    set((s) => ({
-      agentAnswers: { ...s.agentAnswers, [questionId]: value },
-    }));
+  setAgentAnswer: (answerKey, value) => {
+    set((s) => ({ agentAnswers: { ...s.agentAnswers, [answerKey]: value } }));
   },
 
   setFooterComment: (footerComment) => set({ footerComment }),
 
   setSelectedExecutionMode: (selectedExecutionMode) => set({ selectedExecutionMode }),
 
-  clearToast: () => set({ toastMessage: null }),
+  clearLastUpdate: () => set({ lastUpdate: null }),
+
+  dismissReply: (timestamp) => set({ dismissedReplyAt: timestamp }),
 
   submitFeedback: async (status) => {
     const state = get();
-    if (!state.filePath) return { success: false, error: "No active plan" };
+    if (!state.filePath || !state.planData) return { success: false, error: "No active plan" };
+    if (state.isSubmitting) return { success: false, error: "Already sending" };
+
+    const rounds = pendingRounds(state.planData.agentQuestions);
+    if (status === "approved" && rounds.length > 0) {
+      return { success: false, error: "Answer the agent's questions before approving" };
+    }
+    if (status === "answered" && countUnansweredAgentQuestions(rounds, state.agentAnswers) > 0) {
+      return { success: false, error: "Answer every question first" };
+    }
+
+    const answers = buildAnswersPayload(rounds, state.agentAnswers);
+    const payload: PlanFeedbackPayload =
+      status === "answered"
+        ? { filePath: state.filePath, status, comment: "", choices: [], questions: [], answers }
+        : {
+            filePath: state.filePath,
+            status,
+            comment: state.footerComment.trim(),
+            executionMode: status === "approved" ? state.selectedExecutionMode : undefined,
+            choices: buildChoicesPayload(state.decisions, state.selections),
+            questions: buildQuestionsPayload(state.decisions, state.draftAnswers, state.annotations),
+            answers,
+          };
 
     set({ isSubmitting: true });
-
-    // Format choices
-    const choices = Object.entries(state.selections).map(([id, sel]) => ({
-      id,
-      title: sel.choiceTitle,
-      selected: sel.selectedText,
-    }));
-
-    // Format questions & answers
-    const questions = [
-      ...Object.entries(state.draftAnswers).map(([id, ans]) => ({
-        id,
-        question: state.decisions.find((d) => d.id === id)?.prompt || id,
-        answer: ans,
-      })),
-      ...state.annotations.map((a) => ({
-        id: a.id,
-        question: a.question,
-        selectedText: a.selectedText,
-      })),
-    ];
-
-    // Format agent questions answers
-    const answers = Object.entries(state.agentAnswers).map(([qid, val]) => ({
-      id: qid,
-      selected: val,
-      answer: val,
-    }));
-
-    const payload: PlanFeedbackPayload = {
-      filePath: state.filePath,
-      status,
-      comment: state.footerComment.trim(),
-      executionMode: status === "approved" ? state.selectedExecutionMode : undefined,
-      choices,
-      questions,
-      answers,
-    };
-
     try {
       const res = await planHost().ipc.invoke<SubmitFeedbackResult>(PlanMethods.submitFeedback, payload);
-      if (res.success && status === "approved") {
-        set({ isApproved: true });
+      if (!res.success) {
+        set({ isSubmitting: false });
+        return res;
       }
-      set({ isSubmitting: false });
+
+      const answeredIds = new Set(answers.map((a) => a.roundId));
+      const planData: PlanPreviewData = {
+        ...state.planData,
+        planApproved: state.planData.planApproved || status === "approved",
+        agentQuestions: state.planData.agentQuestions.map((r) =>
+          answeredIds.has(r.roundId) ? { ...r, status: "answered" as const, answeredAt: new Date().toISOString() } : r,
+        ),
+      };
+
+      if (status === "approved") {
+        set({ isSubmitting: false, planData, phase: "approved", sentKind: null });
+      } else {
+        set({
+          isSubmitting: false,
+          planData,
+          phase: "sent",
+          sentKind: status === "answered" ? "answers" : "changes",
+          // Sent feedback is consumed; the next round starts clean.
+          ...(status === "changes_requested" ? { footerComment: "", annotations: [] } : {}),
+        });
+      }
       return res;
     } catch (err: any) {
       set({ isSubmitting: false });
-      return { success: false, error: err.message };
+      return { success: false, error: err?.message || "Failed to send feedback" };
     }
   },
 }));
