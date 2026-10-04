@@ -1,6 +1,6 @@
 {
   "name": "@hive/desktop",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "private": true,
   "type": "module",
   "description": "Hive Desktop App",
