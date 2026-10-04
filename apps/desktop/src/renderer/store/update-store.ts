@@ -7,7 +7,7 @@
  * focus, so any check (including Settings' "Check now") lights up the badge.
  */
 import { create } from "zustand";
-import type { UpdateProgress } from "@hive/protocol";
+import type { PiUpdateInfo, UpdateProgress } from "@hive/protocol";
 
 export type { UpdateProgress };
 
@@ -34,6 +34,13 @@ interface UpdateState {
   /** Live state of a "Download & install" run; null when idle. */
   install: UpdateProgress | null;
   check(): Promise<void>;
+  piInfo: PiUpdateInfo | null;
+  piChecking: boolean;
+  piInstalling: boolean;
+  /** Result of the last Pi install attempt. */
+  piResult: { success: boolean; message: string } | null;
+  checkPi(): Promise<void>;
+  applyPiUpdate(): Promise<void>;
   applyUpdate(): Promise<void>;
 }
 
@@ -45,6 +52,35 @@ export const useUpdates = create<UpdateState>((set, get) => ({
   checking: false,
   lastCheckedAt: 0,
   install: null,
+  piInfo: null,
+  piChecking: false,
+  piInstalling: false,
+  piResult: null,
+  checkPi: async () => {
+    if (get().piChecking) return;
+    set({ piChecking: true });
+    try {
+      const piInfo = await window.studio.checkPiUpdate();
+      if (piInfo && (piInfo.latestVersion || !get().piInfo?.hasUpdate)) set({ piInfo });
+    } catch {
+      // offline: keep previous info
+    } finally {
+      set({ piChecking: false });
+    }
+  },
+  applyPiUpdate: async () => {
+    if (get().piInstalling) return;
+    set({ piInstalling: true, piResult: null });
+    try {
+      const res = await window.studio.applyPiUpdate();
+      set({ piResult: res });
+      if (res.success) set((s) => ({ piInfo: s.piInfo ? { ...s.piInfo, hasUpdate: false, currentVersion: s.piInfo.latestVersion } : s.piInfo }));
+    } catch (err) {
+      set({ piResult: { success: false, message: err instanceof Error ? err.message : String(err) } });
+    } finally {
+      set({ piInstalling: false });
+    }
+  },
   applyUpdate: async () => {
     const url = get().info?.downloadUrl;
     if (isInstalling(get().install)) return;
@@ -83,7 +119,10 @@ let started = false;
 export function startUpdateChecks(): () => void {
   if (started) return () => {};
   started = true;
-  const check = () => void useUpdates.getState().check();
+  const check = () => {
+    void useUpdates.getState().check();
+    void useUpdates.getState().checkPi();
+  };
   const first = setTimeout(check, FIRST_CHECK_DELAY_MS);
   const interval = setInterval(check, CHECK_INTERVAL_MS);
   const onFocus = () => {

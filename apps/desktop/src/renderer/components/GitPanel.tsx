@@ -436,7 +436,28 @@ export const GitPanel: React.FC = () => {
           />
         </button>
 
-        {/* Sync menu: Fetch / Pull / Push / Refresh / Branches (collapsed into one button) */}
+        {/* Refresh: frequently used, kept outside the dropdown */}
+        <button
+          type="button"
+          onClick={() => void refreshGit()}
+          disabled={!!syncOp || loading}
+          title="Refresh status"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            background: "transparent",
+            border: "none",
+            borderRadius: 4,
+            color: "var(--text-muted)",
+            cursor: syncOp || loading ? "default" : "pointer",
+            padding: "3px 5px",
+            flexShrink: 0,
+          }}
+        >
+          <RefreshCw size={13} className={syncOp || loading ? "spin" : undefined} />
+        </button>
+
+        {/* Sync menu: Fetch / Pull / Push / Branches (collapsed into one button) */}
         <div ref={syncMenuRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
             type="button"
@@ -460,7 +481,7 @@ export const GitPanel: React.FC = () => {
               fontWeight: 600,
             }}
           >
-            {syncOp || loading ? <RefreshCw size={13} className="spin" /> : <MoreHorizontal size={14} />}
+            <MoreHorizontal size={14} />
             {!!status?.behind && <span style={{ color: "var(--warning)" }}>↓{status.behind}</span>}
             {!!status?.ahead && <span style={{ color: "var(--accent-base)" }}>↑{status.ahead}</span>}
           </button>
@@ -487,7 +508,6 @@ export const GitPanel: React.FC = () => {
                   { key: "fetch", icon: CloudDownload, label: "Fetch", hint: "", sync: "fetch" },
                   { key: "pull", icon: Download, label: "Pull", hint: status?.behind ? `${status.behind} behind` : "", sync: "pull" },
                   { key: "push", icon: Upload, label: "Push", hint: status?.ahead ? `${status.ahead} ahead` : "", sync: "push" },
-                  { key: "refresh", icon: RefreshCw, label: "Refresh status", hint: "", sync: null },
                   { key: "branches", icon: GitBranch, label: "Branches & History", hint: "", sync: null },
                 ] as const
               ).map(({ key, icon: Icon, label, hint, sync }) => {
@@ -500,7 +520,6 @@ export const GitPanel: React.FC = () => {
                     onClick={() => {
                       setSyncMenuOpen(false);
                       if (sync) void handleSync(sync);
-                      else if (key === "refresh") void refreshGit();
                       else showLeft("branches");
                     }}
                     style={{

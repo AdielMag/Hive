@@ -176,6 +176,12 @@ const api: StudioApi = {
   getGitLog(cwd: string, maxCount?: number) {
     return ipcRenderer.invoke(IPC.gitLog, { cwd, maxCount });
   },
+  getGitBranchDetails(cwd: string) {
+    return ipcRenderer.invoke(IPC.gitBranchDetails, { cwd });
+  },
+  getGitGraph(cwd: string, maxCount?: number) {
+    return ipcRenderer.invoke(IPC.gitGraph, { cwd, maxCount });
+  },
   getGitDiff(cwd: string, options?: { staged?: boolean; filePath?: string }) {
     return ipcRenderer.invoke(IPC.gitDiff, { cwd, options });
   },
@@ -245,6 +251,12 @@ const api: StudioApi = {
   // Updater
   checkForUpdates() {
     return ipcRenderer.invoke(IPC.updaterCheck);
+  },
+  checkPiUpdate() {
+    return ipcRenderer.invoke(IPC.piUpdateCheck);
+  },
+  applyPiUpdate() {
+    return ipcRenderer.invoke(IPC.piUpdateApply);
   },
   applyUpdate(downloadUrl?: string) {
     return ipcRenderer.invoke(IPC.updaterApply, { downloadUrl });
