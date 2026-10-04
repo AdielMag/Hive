@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.15.1 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.15.0...v0.15.1)
+
+### 🧹 Other changes
+
+- **git:** make branch listing test hermetic (CI has no local main/master) ([`6725b0f`](https://github.com/AdielMag/Hive/commit/6725b0fd04221aabe77ec039d9bff1d09b96a5af))
+
 ## v0.15.0 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.14.0...v0.15.0)
 
 ### ✨ Features
