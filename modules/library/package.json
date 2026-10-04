@@ -1,0 +1,42 @@
+{
+  "name": "@hive-module/library",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: browse, edit and manage Pi skills and subagents with frontmatter editor",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "library",
+    "title": "Skills & Agents Library",
+    "description": "Browse, inspect, and configure your coding agent skills, system prompts, and custom subagents with a dedicated editor.",
+    "tier": "bonus",
+    "icon": "blocks",
+    "category": "Agent",
+    "contributes": {
+      "tabKinds": [
+        "library"
+      ],
+      "commands": [
+        {
+          "id": "view.library",
+          "title": "Open Skills & Agents",
+          "category": "View",
+          "keys": [
+            "Mod+Shift+K"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0",
+    "yaml": "^2.7.0",
+    "zustand": "^5.0.0"
+  }
+}

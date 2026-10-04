@@ -5,15 +5,12 @@
 import React, { Suspense, lazy, useCallback, useRef, useState } from "react";
 import {
   BarChart3,
-  Blocks,
   Files,
   FolderKanban,
   GitBranch,
   GitCommit,
   PieChart,
   Settings,
-  ShoppingBag,
-  Terminal as TerminalIcon,
   Wrench,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
@@ -33,6 +30,11 @@ import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { SessionErrorBanner } from "./SessionErrorBanner.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
+import { isCoreTabKind } from "@hive/protocol";
+import { useContributions, useModules } from "../modules/registry.ts";
+import { ModulePanelView, ModuleRailButton, ModuleRailItemButton, ModuleTabView } from "../modules/ModuleViews.tsx";
+import { ToastHost } from "../modules/ToastHost.tsx";
+import { OnboardingPicker } from "../features/modules/OnboardingPicker.tsx";
 import { useKeybindings } from "../features/commands/useKeybindings.ts";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import { CommandPalette } from "../features/commands/CommandPalette.tsx";
@@ -41,18 +43,13 @@ import hiveIcon from "../assets/hive-icon.png";
 // Heavy views load on demand to keep startup fast (xterm, charts, settings, file/diff viewers).
 const named = <T extends string>(loader: () => Promise<Record<T, React.ComponentType<any>>>, key: T) =>
   lazy(() => loader().then((m) => ({ default: m[key] })));
-const MarketplacePanel = named(() => import("./MarketplacePanel.tsx"), "MarketplacePanel");
 const FileViewerTab = named(() => import("./FileViewerTab.tsx"), "FileViewerTab");
 const DiffViewerTab = named(() => import("./DiffViewerTab.tsx"), "DiffViewerTab");
-const TerminalPanel = named(() => import("./TerminalPanel.tsx"), "TerminalPanel");
 const SettingsModal = named(() => import("./SettingsModal.tsx"), "SettingsModal");
 const GitPanel = named(() => import("./GitPanel.tsx"), "GitPanel");
 const BranchesPanel = named(() => import("./BranchesPanel.tsx"), "BranchesPanel");
 const ToolsPanel = named(() => import("./ToolsPanel.tsx"), "ToolsPanel");
 const UsageView = named(() => import("../features/insights/UsageView.tsx"), "UsageView");
-const LibraryView = named(() => import("../features/library/LibraryView.tsx"), "LibraryView");
-const BrowserTab = named(() => import("./browser/BrowserTab.tsx"), "BrowserTab");
-const PlanPreviewerTab = named(() => import("../features/plan/PlanPreviewerTab.tsx"), "PlanPreviewerTab");
 
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
 
@@ -61,19 +58,16 @@ export const WorkbenchLayout: React.FC = () => {
   const projectsShortcut = useShortcut("view.projects");
   const filesShortcut = useShortcut("view.files");
   const gitShortcut = useShortcut("view.git");
-  const libraryShortcut = useShortcut("view.library");
   const usageShortcut = useShortcut("view.usage");
   const settingsShortcut = useShortcut("settings.open");
-  const terminalShortcut = useShortcut("view.terminal");
 
-  const { activeProject, tabs, activeTabId, error, openUsageTab, openLibraryTab } = useSessionStore(
+  const { activeProject, tabs, activeTabId, error, openUsageTab } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       tabs: s.tabs,
       activeTabId: s.activeTabId,
       error: s.error,
       openUsageTab: s.openUsageTab,
-      openLibraryTab: s.openLibraryTab,
     })),
   );
   const ui = useUi(
@@ -93,6 +87,10 @@ export const WorkbenchLayout: React.FC = () => {
   );
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const hasSession = Boolean(activeProject && tabs.some((t) => !t.kind || t.kind === "session"));
+  const leftModulePanels = useContributions("leftPanels");
+  const rightModulePanels = useContributions("rightPanels");
+  const railItems = useContributions("railItems");
+  const needsOnboarding = useModules((s) => s.ready && !s.onboarded);
 
   return (
     <div className="shell">
@@ -129,13 +127,13 @@ export const WorkbenchLayout: React.FC = () => {
             active={ui.left === "branches"}
             onClick={() => ui.toggleLeft("branches")}
           />
+          {leftModulePanels.map((p) => (
+            <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.left === p.id} onClick={() => ui.toggleLeft(p.id)} />
+          ))}
           <div className="rail__spacer" />
-          <RailButton
-            icon={<Blocks size={18} />}
-            title={libraryShortcut ? `Skills & Agents (${libraryShortcut})` : "Skills & Agents"}
-            active={activeTab?.kind === "library"}
-            onClick={openLibraryTab}
-          />
+          {railItems.map((item) => (
+            <ModuleRailItemButton key={`${item.moduleId}:${item.id}`} item={item} />
+          ))}
           <RailButton
             icon={<BarChart3 size={18} />}
             title={usageShortcut ? `Usage analytics (${usageShortcut})` : "Usage analytics"}
@@ -154,7 +152,7 @@ export const WorkbenchLayout: React.FC = () => {
           <SidePanel side="left" width={ui.leftWidth} onResize={(w) => ui.setSize({ leftWidth: w })}>
             <ErrorBoundary label="Side panel">
               <Suspense fallback={<Loading />}>
-                <LeftPanelContent panel={ui.left} />
+                <LeftPanelContent panel={ui.left} onClose={() => ui.toggleLeft(ui.left!)} />
               </Suspense>
             </ErrorBoundary>
           </SidePanel>
@@ -169,16 +167,12 @@ export const WorkbenchLayout: React.FC = () => {
               <Suspense fallback={<Loading />}>
               {activeTab?.kind === "usage" ? (
                 <UsageView />
-              ) : activeTab?.kind === "library" ? (
-                <LibraryView />
               ) : activeTab?.kind === "file" ? (
                 <FileViewerTab tab={activeTab} />
               ) : activeTab?.kind === "diff" ? (
                 <DiffViewerTab tab={activeTab} />
-              ) : activeTab?.kind === "browser" ? (
-                <BrowserTab tab={activeTab} />
-              ) : activeTab?.kind === "plan" ? (
-                <PlanPreviewerTab tab={activeTab} />
+              ) : activeTab && !isCoreTabKind(activeTab.kind) ? (
+                <ModuleTabView tab={activeTab} onClose={() => void useSessionStore.getState().closeTab(activeTab.id)} />
               ) : hasSession ? (
                 <SessionView />
               ) : (
@@ -193,7 +187,7 @@ export const WorkbenchLayout: React.FC = () => {
           <SidePanel side="right" width={ui.rightWidth} onResize={(w) => ui.setSize({ rightWidth: w })}>
             <ErrorBoundary label="Side panel">
               <Suspense fallback={<Loading />}>
-                <RightPanelContent panel={ui.right} />
+                <RightPanelContent panel={ui.right} onClose={() => ui.toggleRight(ui.right!)} />
               </Suspense>
             </ErrorBoundary>
           </SidePanel>
@@ -203,13 +197,9 @@ export const WorkbenchLayout: React.FC = () => {
         <nav className="rail rail--right">
           <RailButton icon={<Wrench size={18} />} title="Tools breakdown" active={ui.right === "tools"} onClick={() => ui.toggleRight("tools")} />
           <RailButton icon={<PieChart size={18} />} title="Context breakdown" active={ui.right === "context"} onClick={() => ui.toggleRight("context")} />
-          <RailButton
-            icon={<TerminalIcon size={18} />}
-            title={terminalShortcut ? `Terminal (${terminalShortcut})` : "Terminal"}
-            active={ui.right === "terminal"}
-            onClick={() => ui.toggleRight("terminal")}
-          />
-          <RailButton icon={<ShoppingBag size={18} />} title="Marketplace" active={ui.right === "marketplace"} onClick={() => ui.toggleRight("marketplace")} />
+          {rightModulePanels.map((p) => (
+            <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id} onClick={() => ui.toggleRight(p.id)} />
+          ))}
         </nav>
       </div>
 
@@ -218,6 +208,8 @@ export const WorkbenchLayout: React.FC = () => {
       <QuestionFormModal />
       <ImagePreviewModal />
       <CommandPalette />
+      <ToastHost />
+      {needsOnboarding && <OnboardingPicker />}
       {ui.settingsOpen && (
         <Suspense fallback={null}>
           <SettingsModal isOpen initialTab={ui.settingsTab} onClose={ui.closeSettings} />
@@ -227,11 +219,11 @@ export const WorkbenchLayout: React.FC = () => {
   );
 };
 
-const LeftPanelContent: React.FC<{ panel: LeftPanel }> = ({ panel }) =>
-  panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : panel === "branches" ? <BranchesPanel /> : <GitPanel />;
+const LeftPanelContent: React.FC<{ panel: LeftPanel; onClose(): void }> = ({ panel, onClose }) =>
+  panel === "projects" ? <Sidebar /> : panel === "files" ? <FilesPanel /> : panel === "branches" ? <BranchesPanel /> : panel === "git" ? <GitPanel /> : <ModulePanelView side="left" panelId={panel} onClose={onClose} />;
 
-const RightPanelContent: React.FC<{ panel: RightPanel }> = ({ panel }) =>
-  panel === "tools" ? <ToolsPanel /> : panel === "context" ? <ContextBreakdownPanel /> : panel === "terminal" ? <TerminalPanel /> : <MarketplacePanel />;
+const RightPanelContent: React.FC<{ panel: RightPanel; onClose(): void }> = ({ panel, onClose }) =>
+  panel === "tools" ? <ToolsPanel /> : panel === "context" ? <ContextBreakdownPanel /> : <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
 
 const SessionView: React.FC = () => {
   const composerHeight = useUi((s) => s.composerHeight);

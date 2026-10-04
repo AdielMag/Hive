@@ -68,7 +68,7 @@ export function createMainWindow(): BrowserWindow {
   win.webContents.on("did-attach-webview", (_event, guestWebContents) => {
     guestWebContents.setWindowOpenHandler(({ url }) => {
       if (isSafeExternalUrl(url)) {
-        win.webContents.send(IPC.evtOpenBrowserTab, { url });
+        win.webContents.send(IPC.evtOpenLink, { url });
       }
       return { action: "deny" };
     });
@@ -82,7 +82,7 @@ export function createMainWindow(): BrowserWindow {
   // External links clicked inside the app open in Hive's integrated browser by default!
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternalUrl(url)) {
-      win.webContents.send(IPC.evtOpenBrowserTab, { url });
+      win.webContents.send(IPC.evtOpenLink, { url });
     }
     return { action: "deny" };
   });
@@ -90,7 +90,7 @@ export function createMainWindow(): BrowserWindow {
     if (url !== win.webContents.getURL()) {
       event.preventDefault();
       if (isSafeExternalUrl(url)) {
-        win.webContents.send(IPC.evtOpenBrowserTab, { url });
+        win.webContents.send(IPC.evtOpenLink, { url });
       }
     }
   });

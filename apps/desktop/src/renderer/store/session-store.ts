@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   BRIDGE_TOPICS,
+  isCoreTabKind,
   isStudioFormCancel,
   isStudioSubagentActivity,
   isStudioSubagentStopResult,
@@ -26,8 +27,10 @@ import {
   createTranscript,
   type TranscriptState,
 } from "@hive/pi-adapter";
-import { evaluateTabsForMemory, formatUrlOrSearch, useBrowserStore } from "../lib/browser/browser-store.ts";
 import { useInsights } from "../features/insights/insights-store.ts";
+import { emitSessionEvents } from "../modules/session-bus.ts";
+import { openLink } from "../modules/link-bus.ts";
+import type { OpenTabSpec } from "@hive/module-sdk/renderer";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { parseAgentResultText } from "../lib/ai/subagents.ts";
@@ -134,16 +137,7 @@ export interface SessionStoreState {
   openUsageTab: () => void;
   /** Open (or focus) the singleton Skills & Agents library tab. */
   openLibraryTab: () => void;
-  /** Open (or focus) a Chromium browser tab inside Hive. */
-  openBrowserTab: (url?: string, title?: string) => void;
-  /** Open (or focus) a Plan Previewer tab inside Hive. */
-  openPlanTab: (filePath: string, context?: string) => void;
-  /** Update sleeping state of a browser tab to free/restore RAM. */
-  setTabSleeping: (tabId: string, isSleeping: boolean) => void;
-  /** Patch browser tab metadata (e.g. url, title, favicon). */
-  updateBrowserTab: (tabId: string, patch: Partial<TabItem>) => void;
-  /** Put all background browser tabs to sleep immediately. */
-  sleepAllBackgroundTabs: () => void;
+  openModuleTab: (spec: OpenTabSpec) => string;
   switchTab: (tabId: string) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
   setPromptText: (text: string) => void;
@@ -622,24 +616,6 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
 export const USAGE_TAB_ID = "studio:usage";
 export const LIBRARY_TAB_ID = "studio:library";
 
-let memoryIntervalStarted = false;
-
-export function runMemoryCheck(): void {
-  const state = useSessionStore.getState();
-  const { tabs, activeTabId } = state;
-  const settings = useBrowserStore.getState().settings;
-  const { tabsToSleep, tabsToWake } = evaluateTabsForMemory(tabs, activeTabId, settings);
-  if (tabsToSleep.length > 0 || tabsToWake.length > 0) {
-    useSessionStore.setState((s) => ({
-      tabs: s.tabs.map((tab) => {
-        if (tabsToSleep.includes(tab.id)) return { ...tab, isSleeping: true };
-        if (tabsToWake.includes(tab.id)) return { ...tab, isSleeping: false, lastActiveAt: Date.now() };
-        return tab;
-      }),
-    }));
-  }
-}
-
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   bootstrap: null,
   projects: [],
@@ -693,6 +669,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
             void applyCompactionResult(batch.key, done.result);
           }
         }
+        emitSessionEvents(batch.key, batch.key === get().activeKey, batch.events as Array<{ type: string }>);
         if (batch.key !== get().activeKey) {
           // A background tab finishing a turn may have just created / updated its session file.
           if (batch.events.some((e) => e.type === "agent_settled")) void get().refreshCatalog();
@@ -812,22 +789,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         }
       });
 
-      // Listen for open browser tab events from Electron main process
-      window.studio.onOpenBrowserTab(({ url, title }) => {
-        get().openBrowserTab(url, title);
-      });
-
-      // Listen for open plan tab events from Electron main process
-      window.studio.onOpenPlanTab(({ filePath, context }) => {
-        get().openPlanTab(filePath, context);
-      });
-
-      if (!memoryIntervalStarted) {
-        memoryIntervalStarted = true;
-        setInterval(() => {
-          runMemoryCheck();
-        }, 15000);
-      }
+      // Links clicked anywhere (incl. webview popups) are routed by core; a module may claim them.
+      window.studio.onOpenLink(({ url, title }) => openLink(url, title));
 
       // Initial projects and catalog load
       await Promise.all([get().refreshCatalog(), get().loadModelsCatalog()]);
@@ -1189,99 +1152,52 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set({ activeTabId: LIBRARY_TAB_ID });
   },
 
-  openBrowserTab: (rawUrl = "https://pi.dev", title) => {
-    const settings = useBrowserStore.getState().settings;
-    const url = formatUrlOrSearch(rawUrl, settings.searchEngine);
+  openModuleTab: (spec: OpenTabSpec) => {
     const { tabs, activeProject } = get();
-
-    // Check if an existing browser tab already has this URL
-    const existing = tabs.find((t) => t.kind === "browser" && t.url === url);
+    const asModuleTab = (t: TabItem) => ({
+      id: t.id,
+      kind: t.kind,
+      title: t.title,
+      projectId: t.projectId,
+      filePath: t.filePath,
+      url: t.url,
+      favicon: t.favicon,
+      isSleeping: t.isSleeping,
+      lastActiveAt: t.lastActiveAt,
+      data: t.data,
+    });
+    const existing = tabs.find((t) => {
+      if (t.kind !== spec.kind) return false;
+      if (spec.reuse) return spec.reuse(asModuleTab(t));
+      if (spec.filePath) return t.filePath === spec.filePath;
+      return !!spec.id && t.id === spec.id;
+    });
     if (existing) {
       void get().switchTab(existing.id);
-      return;
+      return existing.id;
     }
 
-    const tabId = `browser-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const parsedTitle = title || (() => {
-      try {
-        const u = new URL(url);
-        return u.hostname || "Browser";
-      } catch {
-        return "Browser";
-      }
-    })();
-
+    const tabId = spec.id ?? `${spec.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const newTab: TabItem = {
       id: tabId,
-      kind: "browser",
+      kind: spec.kind,
       projectId: activeProject?.id ?? "",
-      title: parsedTitle,
-      url,
-      isSleeping: false,
-      lastActiveAt: Date.now(),
+      title: spec.title,
+      filePath: spec.filePath,
+      url: spec.url,
+      isSleeping: spec.isSleeping ?? false,
+      lastActiveAt: spec.lastActiveAt ?? Date.now(),
+      data: spec.data,
       pinned: false,
     };
-
-    set({
-      tabs: [...tabs, newTab],
-      activeTabId: tabId,
-    });
-
-    runMemoryCheck();
-  },
-
-  openPlanTab: (filePath: string, context?: string) => {
-    const { tabs, activeProject } = get();
-    const resolved = filePath.replace(/\\/g, "/");
-    const filename = resolved.split("/").pop() || "plan.md";
-
-    // Check if an existing plan tab has this file
-    const existing = tabs.find((t) => t.kind === "plan" && (t.planFile === filePath || t.filePath === filePath));
-    if (existing) {
-      void get().switchTab(existing.id);
-      return;
-    }
-
-    const tabId = `plan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const newTab: TabItem = {
-      id: tabId,
-      kind: "plan",
-      projectId: activeProject?.id ?? "",
-      title: filename,
-      planFile: filePath,
-      filePath,
-      planContext: context,
-      pinned: false,
-    };
-
-    set({
-      tabs: [...tabs, newTab],
-      activeTabId: tabId,
-    });
-  },
-
-  setTabSleeping: (tabId: string, isSleeping: boolean) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isSleeping, lastActiveAt: isSleeping ? t.lastActiveAt : Date.now() } : t)),
-    }));
-  },
-
-  updateBrowserTab: (tabId: string, patch: Partial<TabItem>) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t)),
-    }));
-  },
-
-  sleepAllBackgroundTabs: () => {
-    const { activeTabId } = get();
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.kind === "browser" && t.id !== activeTabId ? { ...t, isSleeping: true } : t)),
-    }));
+    set({ tabs: [...tabs, newTab], activeTabId: tabId });
+    return tabId;
   },
 
   switchTab: async (tabId: string) => {
     const currentTab = get().tabs.find((t) => t.id === get().activeTabId);
-    if (currentTab?.kind === "browser") {
+    // Stamp the tab being left so modules can reason about inactivity (e.g. the browser's RAM saver).
+    if (currentTab && currentTab.lastActiveAt !== undefined) {
       set((s) => ({
         tabs: s.tabs.map((t) => (t.id === currentTab.id ? { ...t, lastActiveAt: Date.now() } : t)),
       }));
@@ -1289,23 +1205,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
-    if (tab.kind === "browser") {
-      set((s) => ({
-        activeTabId: tabId,
-        tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, isSleeping: false, lastActiveAt: Date.now() } : t)),
-      }));
-      runMemoryCheck();
-      return;
-    }
-    if (tab.kind === "usage" || tab.kind === "library") {
+    // Module-contributed tab kinds are plain views, like usage/file/diff.
+    if (tab.kind === "usage" || (tab.kind && !isCoreTabKind(tab.kind))) {
       set({ activeTabId: tabId });
-      runMemoryCheck();
       return;
     }
     // File / diff tabs are views; they must not tear down the live session's transcript.
     if (tab.kind === "file" || tab.kind === "diff") {
       set({ activeTabId: tabId, activeProject: get().projects.find((p) => p.id === tab.projectId) ?? get().activeProject });
-      runMemoryCheck();
       return;
     }
     // Leaving a non-session tab back to the same live session: nothing to reload.
@@ -1367,7 +1274,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     } else if (remaining.length === 0) {
       set({ activeTabId: null, activeProject: null, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });
     }
-    runMemoryCheck();
   },
 
   setPromptText: (text: string) => set({ promptText: text }),

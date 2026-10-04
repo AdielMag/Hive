@@ -5,7 +5,10 @@ import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { openProjectFolder } from "../features/commands/registry.ts";
-import { useShortcut } from "../features/commands/useShortcut.ts";
+import { getShortcutLabel, useShortcut } from "../features/commands/useShortcut.ts";
+import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
+import { useContributions } from "../modules/registry.ts";
+import { openLink } from "../modules/link-bus.ts";
 import { usePalette } from "../features/commands/palette-store.ts";
 import { isInstalling, startUpdateChecks, useUpdates } from "../store/update-store.ts";
 import { updatePercent } from "./UpdateProgressBar.tsx";
@@ -19,19 +22,18 @@ interface MenuItem {
 }
 
 export const AppTitleBar: React.FC = () => {
-  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab, openLibraryTab, openBrowserTab } = useSessionStore(
+  const { activeProject, activeTabId, closeTab, newSessionTab, openUsageTab } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       activeTabId: s.activeTabId,
       closeTab: s.closeTab,
       newSessionTab: s.newSessionTab,
       openUsageTab: s.openUsageTab,
-      openLibraryTab: s.openLibraryTab,
-      openBrowserTab: s.openBrowserTab,
     })),
   );
   const ui = useUi(useShallow((s) => ({ openSettings: s.openSettings, toggleLeft: s.toggleLeft, toggleRight: s.toggleRight })));
   const [menu, setMenu] = useState<string | null>(null);
+  const moduleMenuItems = useContributions("titleMenu");
   const [maximized, setMaximized] = useState(false);
   const update = useUpdates((s) => s.info);
   const install = useUpdates((s) => s.install);
@@ -41,7 +43,6 @@ export const AppTitleBar: React.FC = () => {
 
   // Dynamic shortcut hints
   const kbdNewSession = useShortcut("session.new");
-  const kbdNewBrowser = useShortcut("browser.new");
   const kbdOpenProject = useShortcut("project.open");
   const kbdCloseTab = useShortcut("tab.close");
   const kbdSettings = useShortcut("settings.open");
@@ -49,9 +50,7 @@ export const AppTitleBar: React.FC = () => {
   const kbdProjects = useShortcut("view.projects");
   const kbdFiles = useShortcut("view.files");
   const kbdGit = useShortcut("view.git");
-  const kbdLibrary = useShortcut("view.library");
   const kbdUsage = useShortcut("view.usage");
-  const kbdTerminal = useShortcut("view.terminal");
   const kbdZoomIn = useShortcut("zoom.in");
   const kbdZoomOut = useShortcut("zoom.out");
   const kbdZoomReset = useShortcut("zoom.reset");
@@ -80,7 +79,6 @@ export const AppTitleBar: React.FC = () => {
   const menus: Record<string, MenuItem[]> = {
     File: [
       { label: "New Session", shortcut: kbdNewSession, disabled: !activeProject, action: () => activeProject && void newSessionTab(activeProject.id) },
-      { label: "New Browser Tab", shortcut: kbdNewBrowser, action: () => openBrowserTab("https://pi.dev") },
       { label: "Open Project Folder…", shortcut: kbdOpenProject, action: () => void openProjectFolder() },
       { label: "Close Tab", shortcut: kbdCloseTab, disabled: !activeTabId, action: () => activeTabId && void closeTab(activeTabId) },
       { separator: true, label: "" },
@@ -104,9 +102,7 @@ export const AppTitleBar: React.FC = () => {
       { label: "Source Control", shortcut: kbdGit, action: () => ui.toggleLeft("git") },
       { separator: true, label: "" },
       { label: "Tools Breakdown", action: () => ui.toggleRight("tools") },
-      { label: "Skills & Agents", shortcut: kbdLibrary, action: () => openLibraryTab() },
       { label: "Usage Analytics", shortcut: kbdUsage, action: () => openUsageTab() },
-      { label: "Terminal", shortcut: kbdTerminal, action: () => ui.toggleRight("terminal") },
       { separator: true, label: "" },
       { label: "Appearance…", action: () => ui.openSettings("appearance") },
       { label: "Zoom In", shortcut: kbdZoomIn, action: () => window.studio.zoom("in") },
@@ -114,13 +110,22 @@ export const AppTitleBar: React.FC = () => {
       { label: "Reset Zoom", shortcut: kbdZoomReset, action: () => window.studio.zoom("reset") },
     ],
     Help: [
-      { label: "Pi Documentation", action: () => openBrowserTab("https://pi.dev", "Pi Documentation") },
-      { label: "Hive on GitHub", action: () => openBrowserTab("https://github.com/AdielMag/Hive", "Hive on GitHub") },
-      { label: "Release Notes", action: () => openBrowserTab("https://github.com/AdielMag/Hive/releases", "Release Notes") },
+      { label: "Pi Documentation", action: () => openLink("https://pi.dev", "Pi Documentation") },
+      { label: "Hive on GitHub", action: () => openLink("https://github.com/AdielMag/Hive", "Hive on GitHub") },
+      { label: "Release Notes", action: () => openLink("https://github.com/AdielMag/Hive/releases", "Release Notes") },
       { separator: true, label: "" },
       { label: "About Hive", action: () => ui.openSettings("about") },
     ],
   };
+
+  // Module menu entries are appended to the matching built-in menu (File / View / Help).
+  for (const item of moduleMenuItems) {
+    const items = menus[item.menu];
+    if (!items) continue;
+    if (!items.some((it) => it.label === item.label)) {
+      items.push({ label: item.label, shortcut: getShortcutLabel(item.command), action: () => void COMMANDS_BY_ID.get(item.command)?.run() });
+    }
+  }
 
   return (
     <div ref={barRef} className="titlebar">

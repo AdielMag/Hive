@@ -13,8 +13,9 @@ import type {
 export type { SessionStats } from "@earendil-works/pi-coding-agent";
 export type { Model } from "@earendil-works/pi-ai";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
-import type { AgentMode, ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
+import type { ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
 import type { QuotaSnapshot, UsageReport } from "./insights.ts";
+import type { ModulesSnapshot, SetModulesEnabledResult } from "@hive/module-sdk";
 import type {
   ContextFileInfo,
   McpServerInfo,
@@ -112,63 +113,6 @@ export interface BridgeMessage {
   message: BridgeToStudio;
 }
 
-export interface PlanAgentQuestionOption {
-  value: string;
-  label: string;
-  description?: string;
-  recommended?: boolean;
-}
-
-export interface PlanAgentQuestion {
-  id: string;
-  type?: "text" | "choice";
-  title?: string;
-  question: string;
-  options?: PlanAgentQuestionOption[];
-  allowOther?: boolean;
-}
-
-export interface PlanQuestionRound {
-  roundId: number;
-  status: "pending" | "answered";
-  fileVersion: number;
-  questions: PlanAgentQuestion[];
-  answers?: Array<{ id: string; selected?: string; answer?: string; title?: string }>;
-  timestamp: string;
-  answeredAt?: string;
-}
-
-export interface PlanAgentResponse {
-  text: string;
-  timestamp: string;
-  fileVersion: number;
-}
-
-export interface PlanPreviewData {
-  filename: string;
-  filePath: string;
-  content: string;
-  fileVersion: number;
-  createdAt: string;
-  updatedAt: string;
-  callerAgent?: { id: string; name: string };
-  sessionContext?: string;
-  agentResponses: PlanAgentResponse[];
-  agentQuestions: PlanQuestionRound[];
-  planApproved: boolean;
-}
-
-export interface PlanFeedbackPayload {
-  filePath: string;
-  status: "approved" | "changes_requested" | "answered";
-  comment?: string;
-  executionMode?: AgentMode; // "auto-edit" | "manual"
-  questions?: Array<{ id: string; question: string; answer?: string; selectedText?: string }>;
-  choices?: Array<{ id: string; title: string; selected?: string; answer?: string }>;
-  answers?: Array<{ id: string; roundId?: number; selected?: string; answer?: string; title?: string }>;
-  content?: string;
-}
-
 export interface StartSessionRequest {
   projectPath: string;
   /** Resume this session file; omit to start a new session. */
@@ -241,8 +185,6 @@ export const IPC = {
   filesReadMedia: "files:read-media",
   filesRun: "files:run",
   pickFiles: "studio:pick-files",
-  // Marketplace
-  marketplaceSearch: "marketplace:search",
   // Window controls
   windowMinimize: "window:minimize",
   windowMaximize: "window:maximize",
@@ -258,14 +200,6 @@ export const IPC = {
   updaterCheck: "updater:check",
   updaterApply: "updater:apply",
   evtUpdaterProgress: "updater:progress",
-  // Terminal
-  terminalCreate: "terminal:create",
-  terminalWrite: "terminal:write",
-  terminalResize: "terminal:resize",
-  terminalKill: "terminal:kill",
-  terminalList: "terminal:list",
-  evtTerminalData: "terminal:data",
-  evtTerminalExit: "terminal:exit",
   // Models
   modelsGetCatalog: "models:get-catalog",
   modelsSaveEnabled: "models:save-enabled",
@@ -275,18 +209,14 @@ export const IPC = {
   // Shell
   openExternal: "shell:open-external",
   openSystemBrowser: "shell:open-system-browser",
-  evtOpenBrowserTab: "browser:open-tab",
-  // Plan Previewer
-  planGet: "plan:get",
-  planSubmitFeedback: "plan:submit-feedback",
-  planSave: "plan:save",
-  evtOpenPlanTab: "plan:open-tab",
-  evtPlanUpdated: "plan:updated",
-  // Skills & agents library
-  libraryList: "library:list",
-  librarySetField: "library:set-field",
-  libraryReveal: "library:reveal",
-  libraryOpenPath: "library:open-path",
+  evtOpenLink: "app:open-link",
+  // Modules (generic bridge for every installable feature module)
+  modulesList: "modules:list",
+  modulesSetEnabled: "modules:set-enabled",
+  modulesSetEnabledSet: "modules:set-enabled-set",
+  modulesMarkOnboarded: "modules:mark-onboarded",
+  modulesInvoke: "modules:invoke",
+  evtModuleEvent: "modules:event",
   // AI Registry, MCP, and Subagent output
   aiSessionRegistry: "ai:session-registry",
   aiMcpCatalog: "ai:mcp-catalog",
@@ -489,7 +419,6 @@ export interface StudioApi {
   runFile(filePath: string, cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 
   // Marketplace operations
-  searchMarketplace(query?: string, kind?: string): Promise<any[]>;
 
   // Window Controls
   minimizeWindow(): Promise<void>;
@@ -509,14 +438,6 @@ export interface StudioApi {
   applyUpdate(downloadUrl?: string): Promise<{ success: boolean; message: string }>;
   onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void;
 
-  // Terminal
-  terminalCreate(options?: { cwd?: string; shell?: string; cols?: number; rows?: number }): Promise<{ id: string; shell: string; cwd: string }>;
-  terminalWrite(id: string, data: string): Promise<void>;
-  terminalResize(id: string, cols: number, rows: number): Promise<void>;
-  terminalKill(id: string): Promise<void>;
-  terminalList(): Promise<{ id: string; shell: string; cwd: string }[]>;
-  onTerminalData(listener: (event: { id: string; data: string }) => void): () => void;
-  onTerminalExit(listener: (event: { id: string; exitCode: number }) => void): () => void;
 
   // Models
   getModelsCatalog(): Promise<ModelsCatalogResponse>;
@@ -529,13 +450,6 @@ export interface StudioApi {
   getUsage(force?: boolean): Promise<UsageReport>;
   generateUsageInsights(summaryText: string, model?: string): Promise<string>;
 
-  // Skills & agents library
-  listLibrary(cwd?: string): Promise<LibrarySnapshot>;
-  setLibraryField(request: LibrarySetFieldRequest): Promise<LibrarySetFieldResult>;
-  /** Show a library file in the OS file manager. */
-  revealLibraryPath(path: string, cwd?: string): Promise<void>;
-  /** Open a library file (or skill folder) with the OS default application. */
-  openLibraryPath(path: string, cwd?: string): Promise<{ ok: boolean; error?: string }>;
 
   // AI Registry, MCP, and Subagent output
   getSessionRegistry(key?: string): Promise<SessionRegistry | null>;
@@ -548,14 +462,29 @@ export interface StudioApi {
   // Shell
   openExternal(url: string, options?: { external?: boolean }): Promise<void>;
   openSystemBrowser(url: string): Promise<void>;
-  onOpenBrowserTab(listener: (data: { url: string; title?: string }) => void): () => void;
+  onOpenLink(listener: (data: { url: string; title?: string }) => void): () => void;
   /** Page zoom (Ctrl +/-/0). */
   zoom(direction: "in" | "out" | "reset"): void;
 
-  // Plan Previewer
-  getPlanData(filePath: string): Promise<PlanPreviewData | null>;
-  submitPlanFeedback(payload: PlanFeedbackPayload): Promise<{ success: boolean; error?: string }>;
-  savePlanContent(filePath: string, content: string): Promise<{ success: boolean; fileVersion: number; error?: string }>;
-  onOpenPlanTab(listener: (data: { filePath: string; context?: string }) => void): () => void;
-  onPlanUpdated(listener: (data: { filePath: string; fileVersion: number; content?: string }) => void): () => void;
+  /** Installable feature modules. Module code talks to its main half only through `invoke` / `on`. */
+  modules: ModulesApi;
+}
+
+/** Main -> renderer push of a module event (`ctx.ipc.emit` in a main module). */
+export interface ModuleEventMessage {
+  moduleId: string;
+  event: string;
+  payload: unknown;
+}
+
+export interface ModulesApi {
+  list(): Promise<ModulesSnapshot>;
+  /** Turns a module on/off (requirements / dependents follow). Resolves with the resulting enabled set. */
+  setEnabled(moduleId: string, enabled: boolean): Promise<SetModulesEnabledResult>;
+  /** Replaces the whole enabled set (first-run presets). Requirements are added automatically. */
+  setEnabledSet(moduleIds: string[]): Promise<SetModulesEnabledResult>;
+  markOnboarded(): Promise<void>;
+  /** Calls a method the module registered with `ctx.ipc.handle`. Rejects while the module is disabled. */
+  invoke<T = unknown>(moduleId: string, method: string, ...args: unknown[]): Promise<T>;
+  on<T = unknown>(moduleId: string, event: string, listener: (payload: T) => void): () => void;
 }

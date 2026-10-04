@@ -38,6 +38,27 @@ export function bridgeExtensionPath(): string {
   return resourcePath("bridge", "studio-bridge.ts");
 }
 
+/**
+ * Folder of a module's shipped files (package.json, agent/**, bin/**). Packaged builds copy them to
+ * `<resources>/modules/<id>` (electron-builder `extraResources`, outside the asar so Pi and the CLI shims can
+ * read them); dev uses the repo's `modules/<id>` (out/main -> ../../../../modules).
+ */
+export function moduleRootPath(id: string): string {
+  if (/app\.asar(?=[\\/])/.test(here) && process.resourcesPath) return join(process.resourcesPath, "modules", id);
+  return resolve(here, "../../../../modules", id);
+}
+
+/** Appends `dir` to this process's PATH (inherited by Pi sessions and terminals). No-op when present. */
+export function appendToProcessPath(dir: string): void {
+  const win = process.platform === "win32";
+  const key = win ? (Object.keys(process.env).find((k) => k.toLowerCase() === "path") ?? "Path") : "PATH";
+  const sep = win ? ";" : ":";
+  const current = process.env[key] ?? "";
+  const norm = (p: string) => (win ? p.toLowerCase() : p).replace(/[\\/]+$/, "");
+  if (current.split(sep).some((p) => norm(p) === norm(dir))) return;
+  process.env[key] = current ? `${current}${sep}${dir}` : dir;
+}
+
 /** Pi's agent dir (~/.pi/agent, overridable like Pi itself via PI_CODING_AGENT_DIR). */
 export function piAgentDir(): string {
   return process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");

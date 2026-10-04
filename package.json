@@ -11,6 +11,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
+    "modules/*",
     "apps/*"
   ],
   "engines": {
@@ -19,9 +20,11 @@
   "scripts": {
     "dev": "npm --prefix apps/desktop run dev",
     "build": "npm --prefix apps/desktop run build",
-    "typecheck": "tsc -p packages/protocol && tsc -p packages/pi-adapter && tsc -p packages/test-provider && tsc -p packages/theme-engine && npm run typecheck -w @hive/desktop",
+    "typecheck": "node scripts/gen-modules.mjs && tsc -p packages/protocol && tsc -p packages/pi-adapter && tsc -p packages/test-provider && tsc -p packages/theme-engine && tsc -p packages/module-sdk && tsc -p modules && npm run typecheck -w @hive/desktop",
     "test": "vitest run --project unit",
     "test:contract": "vitest run --project contract",
+    "gen:modules": "node scripts/gen-modules.mjs",
+    "check:modules": "node scripts/gen-modules.mjs --check && node scripts/check-module-boundaries.mjs",
     "dist": "npm --prefix apps/desktop run dist",
     "screenshots": "node scripts/capture-screenshots.mjs",
     "release:preview": "node scripts/release/prepare.mjs --dry-run"

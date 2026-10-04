@@ -1,0 +1,37 @@
+{
+  "name": "@hive-module/marketplace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: browse and discover MCP servers, Pi extensions, and agent skills",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "marketplace",
+    "title": "Marketplace",
+    "description": "Browse and discover MCP servers, Pi extensions, and agent skills from npm, Anthropic, and the official MCP registry.",
+    "tier": "bonus",
+    "icon": "shopping-bag",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "marketplace"
+      ],
+      "commands": [
+        {
+          "id": "view.marketplace",
+          "title": "Toggle Marketplace Panel",
+          "category": "View"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0"
+  }
+}

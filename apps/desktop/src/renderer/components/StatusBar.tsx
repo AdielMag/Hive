@@ -7,6 +7,7 @@ import { parseAnsi } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
 import { useInsights, useNow, useQuotaPolling } from "../features/insights/insights-store.ts";
 import { ProviderQuotaCard, usageTone } from "../features/insights/quota-ui.tsx";
+import { useContributions, useModules } from "../modules/registry.ts";
 import { formatAgo, formatCost, formatTokens } from "../lib/format.ts";
 
 const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "openai-codex": "Codex" };
@@ -135,6 +136,8 @@ export const StatusBar: React.FC = () => {
             </span>
           ))}
       </div>
+
+      <ModuleStatusItems />
 
       {meters.length > 0 && (
         <button
@@ -346,5 +349,21 @@ const Mini: React.FC<{ label: string; used: number }> = ({ label, used }) => {
         {label} {Math.round(used)}%
       </span>
     </span>
+  );
+};
+
+/** Status-bar items contributed by enabled modules. */
+const ModuleStatusItems: React.FC = () => {
+  const items = useContributions("statusBar");
+  const loaded = useModules((s) => s.loaded);
+  if (items.length === 0) return null;
+  return (
+    <>
+      {items.map((item) => {
+        const host = loaded[item.moduleId]?.host;
+        const Item = item.component;
+        return host ? <Item key={`${item.moduleId}:${item.id}`} host={host} /> : null;
+      })}
+    </>
   );
 };

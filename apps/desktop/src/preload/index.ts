@@ -3,9 +3,8 @@ import {
   IPC,
   type Bootstrap,
   type CompactionSettings,
-  type LibrarySetFieldRequest,
   type PiLocateResult,
-  type PlanFeedbackPayload,
+  type ModuleEventMessage,
   type BridgeActionRequest,
   type BridgeActionResult,
   type BridgeMessage,
@@ -210,11 +209,6 @@ const api: StudioApi = {
     return ipcRenderer.invoke(IPC.filesRun, { filePath, cwd });
   },
 
-  // Marketplace
-  searchMarketplace(query?: string, kind?: string) {
-    return ipcRenderer.invoke(IPC.marketplaceSearch, { query, kind });
-  },
-
   // Window Controls
   minimizeWindow() {
     return ipcRenderer.invoke(IPC.windowMinimize);
@@ -261,33 +255,6 @@ const api: StudioApi = {
     return () => ipcRenderer.removeListener(IPC.evtUpdaterProgress, handler);
   },
 
-  // Terminal
-  terminalCreate(options?: { cwd?: string; shell?: string; cols?: number; rows?: number }) {
-    return ipcRenderer.invoke(IPC.terminalCreate, options);
-  },
-  terminalWrite(id: string, data: string) {
-    return ipcRenderer.invoke(IPC.terminalWrite, { id, data });
-  },
-  terminalResize(id: string, cols: number, rows: number) {
-    return ipcRenderer.invoke(IPC.terminalResize, { id, cols, rows });
-  },
-  terminalKill(id: string) {
-    return ipcRenderer.invoke(IPC.terminalKill, { id });
-  },
-  terminalList() {
-    return ipcRenderer.invoke(IPC.terminalList);
-  },
-  onTerminalData(listener: (event: { id: string; data: string }) => void) {
-    const handler = (_event: Electron.IpcRendererEvent, payload: { id: string; data: string }) => listener(payload);
-    ipcRenderer.on(IPC.evtTerminalData, handler);
-    return () => ipcRenderer.removeListener(IPC.evtTerminalData, handler);
-  },
-  onTerminalExit(listener: (event: { id: string; exitCode: number }) => void) {
-    const handler = (_event: Electron.IpcRendererEvent, payload: { id: string; exitCode: number }) => listener(payload);
-    ipcRenderer.on(IPC.evtTerminalExit, handler);
-    return () => ipcRenderer.removeListener(IPC.evtTerminalExit, handler);
-  },
-
   // Models
   getModelsCatalog() {
     return ipcRenderer.invoke(IPC.modelsGetCatalog);
@@ -311,20 +278,6 @@ const api: StudioApi = {
   },
   generateUsageInsights(summaryText: string, model?: string) {
     return ipcRenderer.invoke(IPC.aiGenerateUsageInsights, { summaryText, model });
-  },
-
-  // Skills & agents library
-  listLibrary(cwd?: string) {
-    return ipcRenderer.invoke(IPC.libraryList, { cwd });
-  },
-  setLibraryField(request: LibrarySetFieldRequest) {
-    return ipcRenderer.invoke(IPC.librarySetField, request);
-  },
-  revealLibraryPath(path: string, cwd?: string) {
-    return ipcRenderer.invoke(IPC.libraryReveal, { path, cwd });
-  },
-  openLibraryPath(path: string, cwd?: string) {
-    return ipcRenderer.invoke(IPC.libraryOpenPath, { path, cwd });
   },
 
   // AI Registry, MCP, and Subagent output
@@ -351,35 +304,29 @@ const api: StudioApi = {
   openSystemBrowser(url: string) {
     return ipcRenderer.invoke(IPC.openSystemBrowser, url);
   },
-  onOpenBrowserTab(listener: (data: { url: string; title?: string }) => void): () => void {
+  onOpenLink(listener: (data: { url: string; title?: string }) => void): () => void {
     const handler = (_event: Electron.IpcRendererEvent, data: { url: string; title?: string }) => listener(data);
-    ipcRenderer.on(IPC.evtOpenBrowserTab, handler);
-    return () => ipcRenderer.removeListener(IPC.evtOpenBrowserTab, handler);
+    ipcRenderer.on(IPC.evtOpenLink, handler);
+    return () => ipcRenderer.removeListener(IPC.evtOpenLink, handler);
   },
   zoom(direction: "in" | "out" | "reset") {
     const level = direction === "reset" ? 0 : webFrame.getZoomLevel() + (direction === "in" ? 0.5 : -0.5);
     webFrame.setZoomLevel(Math.max(-3, Math.min(4, level)));
   },
 
-  // Plan Previewer
-  getPlanData(filePath: string) {
-    return ipcRenderer.invoke(IPC.planGet, filePath);
-  },
-  submitPlanFeedback(payload: PlanFeedbackPayload) {
-    return ipcRenderer.invoke(IPC.planSubmitFeedback, payload);
-  },
-  savePlanContent(filePath: string, content: string) {
-    return ipcRenderer.invoke(IPC.planSave, filePath, content);
-  },
-  onOpenPlanTab(listener: (data: { filePath: string; context?: string }) => void): () => void {
-    const handler = (_event: Electron.IpcRendererEvent, data: { filePath: string; context?: string }) => listener(data);
-    ipcRenderer.on(IPC.evtOpenPlanTab, handler);
-    return () => ipcRenderer.removeListener(IPC.evtOpenPlanTab, handler);
-  },
-  onPlanUpdated(listener: (data: { filePath: string; fileVersion: number; content?: string }) => void): () => void {
-    const handler = (_event: Electron.IpcRendererEvent, data: { filePath: string; fileVersion: number; content?: string }) => listener(data);
-    ipcRenderer.on(IPC.evtPlanUpdated, handler);
-    return () => ipcRenderer.removeListener(IPC.evtPlanUpdated, handler);
+  modules: {
+    list: () => ipcRenderer.invoke(IPC.modulesList),
+    setEnabled: (moduleId: string, enabled: boolean) => ipcRenderer.invoke(IPC.modulesSetEnabled, moduleId, enabled),
+    setEnabledSet: (moduleIds: string[]) => ipcRenderer.invoke(IPC.modulesSetEnabledSet, moduleIds),
+    markOnboarded: () => ipcRenderer.invoke(IPC.modulesMarkOnboarded),
+    invoke: (moduleId: string, method: string, ...args: unknown[]) => ipcRenderer.invoke(IPC.modulesInvoke, moduleId, method, ...args),
+    on<T = unknown>(moduleId: string, event: string, listener: (payload: T) => void): () => void {
+      const handler = (_event: Electron.IpcRendererEvent, msg: ModuleEventMessage) => {
+        if (msg?.moduleId === moduleId && msg.event === event) listener(msg.payload as T);
+      };
+      ipcRenderer.on(IPC.evtModuleEvent, handler);
+      return () => ipcRenderer.removeListener(IPC.evtModuleEvent, handler);
+    },
   },
 };
 

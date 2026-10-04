@@ -6,5 +6,8 @@
   "description": "Shared contracts: Hive Bridge protocol v1 and main/renderer IPC types",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0"
   }
 }

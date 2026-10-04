@@ -14,11 +14,11 @@
     "plan-previewer": "./bin/plan-previewer.js"
   },
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build && node scripts/build-bridge.mjs",
+    "dev": "node ../../scripts/gen-modules.mjs && electron-vite dev",
+    "build": "node ../../scripts/gen-modules.mjs && electron-vite build && node scripts/build-bridge.mjs",
     "preview": "electron-vite preview",
     "dist": "npm run build && electron-builder --publish never",
-    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "typecheck": "node ../../scripts/gen-modules.mjs && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "icon": "electron build/render-icon.mjs"
   },
   "build": {
@@ -77,17 +77,27 @@
     },
     "portable": {
       "artifactName": "Hive-${version}-portable.${ext}"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "../../modules",
+        "to": "modules",
+        "filter": [
+          "*/package.json",
+          "*/agent/**",
+          "*/bin/**"
+        ]
+      }
+    ]
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@hive/module-sdk": "0.1.0",
     "@hive/pi-adapter": "0.1.0",
     "@hive/protocol": "0.1.0",
     "@hive/theme-engine": "0.1.0",
     "@shikijs/langs": "^4.5.0",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/xterm": "^6.0.0",
     "culori": "^4.0.2",
     "lucide-react": "^1.49.0",
     "react": "^19.0.0",

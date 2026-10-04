@@ -1,0 +1,42 @@
+{
+  "name": "@hive-module/terminal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: integrated terminal (xterm.js) in the right panel",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "terminal",
+    "title": "Terminal",
+    "description": "Integrated terminal in the right panel (PowerShell / bash / zsh) rooted at your project folder.",
+    "tier": "recommended",
+    "icon": "terminal",
+    "category": "Workbench",
+    "contributes": {
+      "rightPanels": [
+        "terminal"
+      ],
+      "commands": [
+        {
+          "id": "view.terminal",
+          "title": "Toggle Terminal Panel",
+          "category": "View",
+          "keys": [
+            "Mod+`"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0"
+  }
+}

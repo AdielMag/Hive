@@ -1,0 +1,36 @@
+{
+  "name": "@hive-module/plan-previewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: review agent plans in a rich tab and send feedback back to the agent",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "plan-previewer",
+    "title": "Plan Previewer",
+    "description": "Review agent plans in a rich tab: decisions, questions, annotations and approve / request changes. Runs a local server on :3456 for the plan-previewer CLI and installs its Pi skills.",
+    "tier": "recommended",
+    "icon": "clipboard-check",
+    "category": "Agent",
+    "agent": {
+      "skills": ["agent/skills/*"],
+      "agentsMd": "agent/AGENTS.block.md",
+      "bin": {
+        "plan-previewer": "bin/plan-previewer.js"
+      }
+    },
+    "contributes": {
+      "tabKinds": ["plan"]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0",
+    "zustand": "^5.0.0"
+  }
+}

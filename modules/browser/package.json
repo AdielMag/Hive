@@ -1,0 +1,46 @@
+{
+  "name": "@hive-module/browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: integrated Chromium browser with RAM saver and background tab hibernation",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "browser",
+    "title": "Hive Browser",
+    "description": "Integrated Chromium web browser with automatic background tab hibernation (RAM Saver) and web search.",
+    "tier": "bonus",
+    "icon": "globe",
+    "category": "Workbench",
+    "contributes": {
+      "tabKinds": [
+        "browser"
+      ],
+      "commands": [
+        {
+          "id": "browser.new",
+          "title": "New Browser Tab",
+          "category": "Browser",
+          "keys": [
+            "Mod+Shift+B"
+          ]
+        },
+        {
+          "id": "settings.browser",
+          "title": "Settings: Browser & RAM",
+          "category": "App"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0",
+    "zustand": "^5.0.0"
+  }
+}

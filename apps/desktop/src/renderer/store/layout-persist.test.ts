@@ -39,6 +39,13 @@ describe("layout-persist", () => {
     expect(res.left).toBe("branches");
   });
 
+  it("keeps module panel ids declared by a manifest, drops undeclared ones", () => {
+    const extra = { left: new Set(["git-lens"]), right: new Set(["notes"]) };
+    expect(sanitizeLayout({ left: "git-lens", right: "notes" }, fallback, extra)).toMatchObject({ left: "git-lens", right: "notes" });
+    expect(sanitizeLayout({ left: "ghost", right: "ghost" }, fallback, extra)).toMatchObject({ left: null, right: null });
+    expect(sanitizeLayout({ left: "git-lens" }, fallback).left).toBeNull();
+  });
+
   it("clamps invalid dimensions to bounds", () => {
     const raw = {
       leftWidth: 10,
