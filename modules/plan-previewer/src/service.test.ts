@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { PlanPreviewerService } from "./plan-previewer.ts";
+import { PlanPreviewerService } from "./service.ts";
 
 describe("PlanPreviewerService", () => {
   let tempDir = "";

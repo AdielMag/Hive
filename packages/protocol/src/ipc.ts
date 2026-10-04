@@ -13,7 +13,7 @@ import type {
 export type { SessionStats } from "@earendil-works/pi-coding-agent";
 export type { Model } from "@earendil-works/pi-ai";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
-import type { AgentMode, ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
+import type { ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
 import type { QuotaSnapshot, UsageReport } from "./insights.ts";
 import type { ModulesSnapshot, SetModulesEnabledResult } from "@hive/module-sdk";
 import type {
