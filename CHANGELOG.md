@@ -2,6 +2,26 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.15.0 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.14.0...v0.15.0)
+
+### ✨ Features
+
+- **limits:** status-bar meters follow the active model's quota pool ([`4280a3c`](https://github.com/AdielMag/Hive/commit/4280a3c5895fa97cef6cdd12445bfe34d0b7cb13))
+- **modules:** extract git, branches, files and diff-viewer into modules (M4) ([`30bbb9c`](https://github.com/AdielMag/Hive/commit/30bbb9c0809fad2a8fecb7ca3e7d95c854e5f5ba))
+- **modules:** add Jev module (smart compaction hint, ask_jev tool) ([`f90e3a5`](https://github.com/AdielMag/Hive/commit/f90e3a59d79860193b5d0c754f81530e26275e57))
+- **desktop:** add Pi CLI updater and git branch graph view ([`b02395f`](https://github.com/AdielMag/Hive/commit/b02395fe30a97e8ed1220201155a929bbbaafc8e))
+- **transcript:** Cursor-style edit/retry/regenerate message actions ([`b500f56`](https://github.com/AdielMag/Hive/commit/b500f565ffc342bbb66944bf5a537280c61bb88f))
+
+### 📝 Documentation
+
+- milestone 4 handoff notes ([`8d06d44`](https://github.com/AdielMag/Hive/commit/8d06d443fc3cb38d0b7bac2b24d014b8693b5021))
+
+### 🧹 Other changes
+
+- Merge branch 'feat/modules-m4': extract git, branches, files, diff-viewer (M4) ([`3a60274`](https://github.com/AdielMag/Hive/commit/3a602746f1d699427e2ce4071f27e47b2837c526))
+- Merge origin/main into feat/modules-m4 ([`0c1a408`](https://github.com/AdielMag/Hive/commit/0c1a408d8c422941305f30002c6f44e7f54b9057))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`52b39d8`](https://github.com/AdielMag/Hive/commit/52b39d82123abefd5566ebc75a654a94d726d3ad))
+
 ## v0.14.0 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.13.1...v0.14.0)
 
 ### ✨ Features
