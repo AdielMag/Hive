@@ -1,7 +1,6 @@
 /** Resolves fresh provider credentials by running a helper under the user's Pi Node runtime. */
 import { execFile } from "node:child_process";
 import type { PiInstallInfo } from "@hive/protocol";
-import { resourcePath } from "../../paths.ts";
 
 export interface ProviderCredential {
   providerId: string;
@@ -10,7 +9,7 @@ export interface ProviderCredential {
   error?: string;
 }
 
-/** Must match the SENTINEL in resources/helpers/pi-credentials.mjs. Legacy value accepted for old helpers. */
+/** Must match the SENTINEL in modules/limits/helpers/pi-credentials.mjs. Legacy value accepted for old helpers. */
 export const SENTINEL = "@@HIVE_CREDENTIALS@@";
 const SENTINELS = [SENTINEL, "@@PI_STUDIO_CREDENTIALS@@"];
 
@@ -29,8 +28,8 @@ export function parseCredentialsOutput(stdout: string): ProviderCredential[] {
   return payload.credentials ?? [];
 }
 
-export function resolveCredentials(pi: PiInstallInfo): Promise<ProviderCredential[]> {
-  const helper = resourcePath("helpers", "pi-credentials.mjs");
+/** `helper` is the absolute path of pi-credentials.mjs (shipped in the module folder). */
+export function resolveCredentials(pi: Pick<PiInstallInfo, "nodePath" | "packageRoot">, helper: string): Promise<ProviderCredential[]> {
   return new Promise((resolvePromise, reject) => {
     execFile(
       pi.nodePath,

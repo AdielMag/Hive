@@ -168,6 +168,11 @@ export interface CommandContribution {
 
 export interface StatusBarContribution extends ContributionBase {
   id: string;
+  /**
+   * Pi extension status keys this item replaces (e.g. a built-in quota meter hides the extension's own).
+   * Core hides them only while the contribution is active.
+   */
+  hideExtensionStatuses?: string[];
   component: ComponentType<{ host: ModuleHost }>;
 }
 

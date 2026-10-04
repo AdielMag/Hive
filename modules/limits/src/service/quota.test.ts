@@ -101,7 +101,7 @@ describe("credential helper output", () => {
     expect(parseCredentialsOutput(out)).toEqual([]);
   });
   it("matches the sentinel emitted by the bundled helper", () => {
-    const helper = readFileSync(resolve(__dirname, "../../../../resources/helpers/pi-credentials.mjs"), "utf8");
+    const helper = readFileSync(resolve(__dirname, "../../helpers/pi-credentials.mjs"), "utf8");
     expect(helper).toContain(`"${SENTINEL}"`);
   });
 });

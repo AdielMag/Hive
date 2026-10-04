@@ -5,14 +5,15 @@
 import React from "react";
 import { Clock } from "lucide-react";
 import type { ProviderQuota, QuotaWindow } from "@hive/protocol";
-import { ProviderIcon } from "../../components/ProviderIcon.tsx";
-import { formatDuration, formatResetAt } from "../../lib/format.ts";
+import { formatDuration, formatResetAt } from "@hive/module-sdk/format";
+import { limitsHost } from "./limits-host.ts";
 
 export function usageTone(used: number): "ok" | "warn" | "danger" {
   return used >= 90 ? "danger" : used >= 70 ? "warn" : "ok";
 }
 
 export const ProviderQuotaCard: React.FC<{ provider: ProviderQuota; now: number }> = ({ provider, now }) => {
+  const ProviderIcon = limitsHost().ui.ProviderIcon;
   const worst = Math.max(0, ...provider.groups.flatMap((g) => g.windows.map((w) => w.usedPercent)));
   return (
     <div className="quota-card ui-card">

@@ -14,7 +14,7 @@ export type { SessionStats } from "@earendil-works/pi-coding-agent";
 export type { Model } from "@earendil-works/pi-ai";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
 import type { ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
-import type { QuotaSnapshot, UsageReport } from "./insights.ts";
+import type { UsageReport } from "./insights.ts";
 import type { ModulesSnapshot, SetModulesEnabledResult } from "@hive/module-sdk";
 import type {
   ContextFileInfo,
@@ -204,7 +204,6 @@ export const IPC = {
   modelsGetCatalog: "models:get-catalog",
   modelsSaveEnabled: "models:save-enabled",
   // Insights
-  quotaGet: "insights:quota",
   usageGet: "insights:usage",
   // Shell
   openExternal: "shell:open-external",
@@ -445,7 +444,6 @@ export interface StudioApi {
 
   // Insights
   /** Subscription limits for every connected account. `force` bypasses the short-lived cache. */
-  getQuota(force?: boolean): Promise<QuotaSnapshot>;
   /** Aggregated token/cost usage parsed from Pi session files. */
   getUsage(force?: boolean): Promise<UsageReport>;
   generateUsageInsights(summaryText: string, model?: string): Promise<string>;

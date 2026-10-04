@@ -32,8 +32,20 @@ export interface MainModulePaths {
   moduleRoot: string;
 }
 
+/** The Pi installation Hive found (structurally compatible with `PiInstallInfo` in @hive/protocol). */
+export interface PiRuntimeInfo {
+  version: string;
+  /** Node executable used to run Pi. */
+  nodePath: string;
+  cliPath: string;
+  /** Root of the @earendil-works/pi-coding-agent package. */
+  packageRoot: string;
+}
+
 export interface MainModuleContext {
   moduleId: string;
+  /** Pi install, or null when Pi was not found. Read lazily: the user can relocate Pi at runtime. */
+  pi(): PiRuntimeInfo | null;
   ipc: MainModuleIpc;
   paths: MainModulePaths;
   log: ModuleLogger;

@@ -60,6 +60,16 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     "hasRenderer": true
   },
   {
+    "id": "limits",
+    "title": "Live limits",
+    "description": "Status-bar meters and a hover popover showing your 5-hour and weekly subscription limits for Claude, Codex and Antigravity.",
+    "tier": "recommended",
+    "icon": "gauge",
+    "category": "Agent",
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
     "id": "marketplace",
     "title": "Marketplace",
     "description": "Browse and discover MCP servers, Pi extensions, and agent skills from npm, Anthropic, and the official MCP registry.",
@@ -136,6 +146,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
 export const RENDERER_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ default: RendererModule }>>> = {
   "browser": () => import("@hive-module/browser/renderer"),
   "library": () => import("@hive-module/library/renderer"),
+  "limits": () => import("@hive-module/limits/renderer"),
   "marketplace": () => import("@hive-module/marketplace/renderer"),
   "plan-previewer": () => import("@hive-module/plan-previewer/renderer"),
   "terminal": () => import("@hive-module/terminal/renderer"),

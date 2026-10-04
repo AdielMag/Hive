@@ -6,7 +6,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PiInstallInfo, ProviderQuota, QuotaGroup, QuotaSnapshot } from "@hive/protocol";
-import { piAgentDir } from "../../paths.ts";
 import { resolveCredentials, type ProviderCredential } from "./credentials.ts";
 import { QUOTA_FETCHERS, UnsupportedError } from "./fetchers.ts";
 import { parseQuotaStatusCache } from "./parsers.ts";
@@ -32,6 +31,10 @@ type Fetcher = (apiKey: string) => Promise<QuotaGroup[]>;
 type CacheReader = () => Map<string, { fetchedAt: number; groups: QuotaGroup[] }>;
 
 export interface QuotaServiceDeps {
+  /** Pi's agent dir (auth.json, extension quota cache). Required unless `readAccounts`/`readCache` are given. */
+  agentDir?: () => string;
+  /** Absolute path of the pi-credentials.mjs helper. */
+  helperPath?: string;
   resolveCredentials?: (pi: PiInstallInfo) => Promise<ProviderCredential[]>;
   fetchers?: Record<string, Fetcher>;
   readAccounts?: () => Record<string, string | undefined>;
@@ -46,17 +49,19 @@ export class QuotaService {
   /** Providers that rate-limited us are not re-queried until this time. */
   private readonly backoffUntil = new Map<string, number>();
   private inflight: Promise<QuotaSnapshot> | null = null;
-  private readonly deps: Required<QuotaServiceDeps>;
+  private readonly deps: Required<Omit<QuotaServiceDeps, "agentDir" | "helperPath">>;
 
   constructor(
     private readonly pi: PiInstallInfo | null,
     deps: QuotaServiceDeps = {},
   ) {
+    const agentDir = deps.agentDir ?? (() => "");
+    const helperPath = deps.helperPath ?? "";
     this.deps = {
-      resolveCredentials: deps.resolveCredentials ?? resolveCredentials,
+      resolveCredentials: deps.resolveCredentials ?? ((p) => resolveCredentials(p, helperPath)),
       fetchers: deps.fetchers ?? QUOTA_FETCHERS,
-      readAccounts: deps.readAccounts ?? readAccountLabels,
-      readCache: deps.readCache ?? readQuotaStatusCache,
+      readAccounts: deps.readAccounts ?? (() => readAccountLabels(agentDir())),
+      readCache: deps.readCache ?? (() => readQuotaStatusCache(agentDir())),
       now: deps.now ?? Date.now,
     };
   }
@@ -131,8 +136,9 @@ export class QuotaService {
   }
 }
 
-function readAccountLabels(): Record<string, string | undefined> {
-  const path = join(piAgentDir(), "auth.json");
+function readAccountLabels(agentDir: string): Record<string, string | undefined> {
+  if (!agentDir) return {};
+  const path = join(agentDir, "auth.json");
   if (!existsSync(path)) return {};
   try {
     const data = JSON.parse(readFileSync(path, "utf8")) as Record<string, { email?: string } | undefined>;
@@ -142,8 +148,9 @@ function readAccountLabels(): Record<string, string | undefined> {
   }
 }
 
-function readQuotaStatusCache(): Map<string, { fetchedAt: number; groups: QuotaGroup[] }> {
-  const path = join(piAgentDir(), "pi-quota-status", "state.json");
+function readQuotaStatusCache(agentDir: string): Map<string, { fetchedAt: number; groups: QuotaGroup[] }> {
+  if (!agentDir) return new Map();
+  const path = join(agentDir, "pi-quota-status", "state.json");
   try {
     return existsSync(path) ? parseQuotaStatusCache(JSON.parse(readFileSync(path, "utf8"))) : new Map();
   } catch {

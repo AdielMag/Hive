@@ -41,6 +41,5 @@ export function registerAccountIpc(ctx: AppContext): void {
     ctx.models.saveCompactionSettings(settings),
   );
 
-  handle(IPC.quotaGet, (opts: Force) => ctx.quota.getSnapshot(opts?.force));
   handle(IPC.usageGet, (opts: Force) => ctx.usage.getReport(opts?.force));
 }

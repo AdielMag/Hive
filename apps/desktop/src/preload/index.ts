@@ -270,9 +270,6 @@ const api: StudioApi = {
   },
 
   // Insights
-  getQuota(force?: boolean) {
-    return ipcRenderer.invoke(IPC.quotaGet, { force });
-  },
   getUsage(force?: boolean) {
     return ipcRenderer.invoke(IPC.usageGet, { force });
   },
