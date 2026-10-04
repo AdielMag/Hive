@@ -18,7 +18,10 @@ import { QuotaService } from "./services/quota/index.ts";
 import { UsageService } from "./services/usage.ts";
 import { PiInstallService } from "./services/pi-install.ts";
 import { terminalManager, type TerminalManager } from "./services/terminal.ts";
-import { PlanPreviewerService } from "./services/plan-previewer.ts";
+import { IPC } from "@hive/protocol";
+import { MainModuleHost } from "./modules/host.ts";
+import { MAIN_MODULE_LOADERS, MODULE_MANIFESTS } from "./modules.generated.ts";
+import { moduleRootPath, piAgentDir } from "./paths.ts";
 
 export interface AppContext {
   pi: PiLocateResult;
@@ -35,7 +38,8 @@ export interface AppContext {
   quota: QuotaService;
   usage: UsageService;
   terminals: TerminalManager;
-  planPreviewer: PlanPreviewerService;
+  /** Installable feature modules (enabled set, lifecycle, scoped IPC). Started in index.ts. */
+  modules: MainModuleHost;
 }
 
 export function createAppContext(getWindow: () => BrowserWindow | null): AppContext {
@@ -66,6 +70,15 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     quota: new QuotaService(info),
     usage: new UsageService(join(hiveDataDir, "usage-cache.json")),
     terminals: terminalManager,
-    planPreviewer: new PlanPreviewerService(getWindow),
+    modules: new MainModuleHost({
+      manifests: MODULE_MANIFESTS,
+      loaders: MAIN_MODULE_LOADERS,
+      hiveDataDir,
+      piAgentDir,
+      moduleRoot: moduleRootPath,
+      // Test runs must never touch the real ~/.pi/agent.
+      manageAgentAssets: !testMode || !!process.env.PI_CODING_AGENT_DIR,
+      send: (msg) => getWindow()?.webContents.send(IPC.evtModuleEvent, msg),
+    }),
   };
 }

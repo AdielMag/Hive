@@ -78,6 +78,8 @@ export class MainModuleHost {
   private readonly activating = new Map<string, Promise<void>>();
   private readonly errors = new Map<string, string>();
   private queue: Promise<unknown> = Promise.resolve();
+  /** Settles once startup activation finished (resolved immediately before `start`). */
+  private started: Promise<unknown> = Promise.resolve();
   private readonly log: ModuleLogger;
 
   constructor(private readonly opts: MainModuleHostOptions) {
@@ -161,11 +163,13 @@ export class MainModuleHost {
 
   /** Activates enabled modules (requirements first) and re-syncs agent assets. Call once at startup. */
   start(): Promise<string[]> {
-    return this.run(async () => {
+    const p = this.run(async () => {
       const notices = this.syncAssets();
       for (const id of this.state.enabled) await this.activate(id);
       return notices;
     });
+    this.started = p.catch(() => {});
+    return p;
   }
 
   setEnabled(id: string, enabled: boolean): Promise<SetModulesEnabledResult> {
@@ -186,7 +190,9 @@ export class MainModuleHost {
   async invoke(id: string, method: string, args: readonly unknown[]): Promise<unknown> {
     if (!this.graph.has(id)) throw new Error(`Unknown module "${id}"`);
     if (!this.isEnabled(id)) throw new Error(`Module "${id}" is disabled`);
+    await this.started;
     await this.activating.get(id);
+    if (!this.isEnabled(id)) throw new Error(`Module "${id}" is disabled`);
     const handler = this.active.get(id)?.handlers.get(moduleChannel(id, method));
     if (!handler) throw new Error(`Module "${id}" has no method "${method}"`);
     return handler(...args);

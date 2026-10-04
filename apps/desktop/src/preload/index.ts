@@ -5,7 +5,7 @@ import {
   type CompactionSettings,
   type LibrarySetFieldRequest,
   type PiLocateResult,
-  type PlanFeedbackPayload,
+  type ModuleEventMessage,
   type BridgeActionRequest,
   type BridgeActionResult,
   type BridgeMessage,
@@ -361,25 +361,19 @@ const api: StudioApi = {
     webFrame.setZoomLevel(Math.max(-3, Math.min(4, level)));
   },
 
-  // Plan Previewer
-  getPlanData(filePath: string) {
-    return ipcRenderer.invoke(IPC.planGet, filePath);
-  },
-  submitPlanFeedback(payload: PlanFeedbackPayload) {
-    return ipcRenderer.invoke(IPC.planSubmitFeedback, payload);
-  },
-  savePlanContent(filePath: string, content: string) {
-    return ipcRenderer.invoke(IPC.planSave, filePath, content);
-  },
-  onOpenPlanTab(listener: (data: { filePath: string; context?: string }) => void): () => void {
-    const handler = (_event: Electron.IpcRendererEvent, data: { filePath: string; context?: string }) => listener(data);
-    ipcRenderer.on(IPC.evtOpenPlanTab, handler);
-    return () => ipcRenderer.removeListener(IPC.evtOpenPlanTab, handler);
-  },
-  onPlanUpdated(listener: (data: { filePath: string; fileVersion: number; content?: string }) => void): () => void {
-    const handler = (_event: Electron.IpcRendererEvent, data: { filePath: string; fileVersion: number; content?: string }) => listener(data);
-    ipcRenderer.on(IPC.evtPlanUpdated, handler);
-    return () => ipcRenderer.removeListener(IPC.evtPlanUpdated, handler);
+  modules: {
+    list: () => ipcRenderer.invoke(IPC.modulesList),
+    setEnabled: (moduleId: string, enabled: boolean) => ipcRenderer.invoke(IPC.modulesSetEnabled, moduleId, enabled),
+    setEnabledSet: (moduleIds: string[]) => ipcRenderer.invoke(IPC.modulesSetEnabledSet, moduleIds),
+    markOnboarded: () => ipcRenderer.invoke(IPC.modulesMarkOnboarded),
+    invoke: (moduleId: string, method: string, ...args: unknown[]) => ipcRenderer.invoke(IPC.modulesInvoke, moduleId, method, ...args),
+    on<T = unknown>(moduleId: string, event: string, listener: (payload: T) => void): () => void {
+      const handler = (_event: Electron.IpcRendererEvent, msg: ModuleEventMessage) => {
+        if (msg?.moduleId === moduleId && msg.event === event) listener(msg.payload as T);
+      };
+      ipcRenderer.on(IPC.evtModuleEvent, handler);
+      return () => ipcRenderer.removeListener(IPC.evtModuleEvent, handler);
+    },
   },
 };
 

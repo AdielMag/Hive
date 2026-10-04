@@ -7,6 +7,7 @@ import { createAppContext, type AppContext } from "./context.ts";
 import { registerIpc } from "./ipc/index.ts";
 import { createMainWindow } from "./window.ts";
 import { migrateUserDataDir } from "./migrate-legacy.ts";
+import { appendToProcessPath } from "./paths.ts";
 
 // Migrate legacy userData if needed before touching userData or stores.
 migrateUserDataDir(app);
@@ -37,6 +38,10 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     ctx = createAppContext(() => mainWindow);
     registerIpc(ctx);
+    // Enabled modules only: a disabled module is never imported and starts no services. CLI shims of
+    // enabled modules live in the managed bin dir, appended to PATH so Pi sessions and terminals find them.
+    appendToProcessPath(ctx.modules.binDir);
+    void ctx.modules.start().catch((err) => console.error("Failed to start modules", err));
     // Give models added since the last save their percentage-based compaction values.
     try {
       ctx.models.reapplyCompaction();
@@ -65,10 +70,9 @@ app.on("will-quit", (event) => {
   if (shuttingDown || !ctx) return;
   shuttingDown = true;
   ctx.terminals.disposeAll();
-  ctx.planPreviewer.dispose();
   const sessions = ctx.sessions;
-  if (!sessions) return;
   event.preventDefault();
-  // Give Pi processes a bounded window to exit cleanly, then quit regardless.
-  void Promise.race([sessions.stopAll(), new Promise((r) => setTimeout(r, 3000))]).finally(() => app.quit());
+  // Give modules and Pi processes a bounded window to exit cleanly, then quit regardless.
+  const work = Promise.all([ctx.modules.disposeAll(), sessions ? sessions.stopAll() : Promise.resolve()]);
+  void Promise.race([work, new Promise((r) => setTimeout(r, 3000))]).finally(() => app.quit());
 });
