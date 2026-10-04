@@ -70,6 +70,8 @@ function annotationsSig(a: TranscriptAnnotations): string {
 const TranscriptContext = createContext<{
   annotations: TranscriptAnnotations;
   renderNested: (timeline: Timeline) => React.ReactNode;
+  /** Whether the session is currently executing a run. */
+  sessionRunning: boolean;
 } | null>(null);
 
 export const Transcript: React.FC = () => {
@@ -122,7 +124,11 @@ export const Transcript: React.FC = () => {
     [],
   );
 
-  const ctxValue = useMemo(() => ({ annotations, renderNested }), [annotations, renderNested]);
+  const sessionRunning = transcript.running;
+  const ctxValue = useMemo(
+    () => ({ annotations, renderNested, sessionRunning }),
+    [annotations, renderNested, sessionRunning],
+  );
   const empty = timeline.items.length === 0 && !transcript.running;
 
   return (
@@ -500,6 +506,7 @@ const ToolCall: React.FC<{
       run,
       result,
       subagentIndex: ctx?.annotations.subagents,
+      sessionRunning: ctx?.sessionRunning,
     });
     return <SubagentCard view={view} renderNested={ctx?.renderNested} />;
   }

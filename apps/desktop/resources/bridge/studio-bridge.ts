@@ -14,6 +14,7 @@ import {
   type LinkedProject,
   type RegistrySkill,
   type RegistryTool,
+  type StudioSubagentStopResult,
   type StudioToBridge,
   renderLinkedProjectsSection,
 } from "@hive/protocol";
@@ -139,6 +140,30 @@ export default function studioBridge(pi: ExtensionAPI): void {
     });
   };
 
+  let unsubFromGui: (() => void) | undefined;
+
+  const stopSubagent = (id: string, agentId: string) => {
+    const channel = "subagents:rpc:stop";
+    const requestId = `studio-stop-${id}`;
+    let settled = false;
+    let unsubReply: (() => void) | undefined;
+    const finish = (result: Pick<StudioSubagentStopResult, "ok" | "error">) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubReply?.();
+      const payload: StudioSubagentStopResult = { kind: "subagent_stop_result", id, agentId, ...result };
+      pi.events.emit(BRIDGE_TOPICS.toGui, payload);
+    };
+    // No reply means the pi-subagents extension is not loaded (or is too old to expose the stop RPC).
+    const timer = setTimeout(() => finish({ ok: false, error: "Subagent extension did not respond" }), 5000);
+    unsubReply = pi.events.on(`${channel}:reply:${requestId}`, (raw) => {
+      const reply = raw as { success?: boolean; error?: string } | null;
+      finish(reply?.success ? { ok: true } : { ok: false, error: reply?.error ?? "Failed to stop subagent" });
+    });
+    pi.events.emit(channel, { requestId, agentId });
+  };
+
   const handleStudioMessage = (msg: StudioToBridge) => {
     if (msg.type === "config") {
       linkedProjects = msg.linkedProjects ?? [];
@@ -204,6 +229,14 @@ export default function studioBridge(pi: ExtensionAPI): void {
         topic: BRIDGE_TOPICS.toGui,
         data,
       });
+    });
+
+    // Subagent termination: relay to the pi-subagents extension's cross-extension RPC and report back.
+    unsubFromGui?.();
+    unsubFromGui = pi.events.on(BRIDGE_TOPICS.fromGui, (data) => {
+      const req = data as { kind?: unknown; id?: unknown; agentId?: unknown } | null;
+      if (!req || req.kind !== "subagent_stop" || typeof req.id !== "string" || typeof req.agentId !== "string") return;
+      stopSubagent(req.id, req.agentId);
     });
   });
 
@@ -350,6 +383,8 @@ export default function studioBridge(pi: ExtensionAPI): void {
   });
 
   pi.on("session_shutdown", async () => {
+    unsubFromGui?.();
+    unsubFromGui = undefined;
     socket?.end();
     socket = null;
   });

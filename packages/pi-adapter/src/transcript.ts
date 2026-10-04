@@ -242,8 +242,15 @@ export function applyEvent(state: TranscriptState, event: PiStreamEvent): Transc
     }
     case "tool_execution_update": {
       const id = String(e.toolCallId);
-      const run = state.tools[id];
-      if (!run) return state;
+      // The run may be unknown when the transcript was rebuilt from the session file mid-execution
+      // (tab switch / reopen): adopt it from the update so long-running tools show live progress.
+      const run: ToolRun = state.tools[id] ?? {
+        toolCallId: id,
+        toolName: String(e.toolName ?? ""),
+        args: e.args,
+        status: "running",
+        startedAt: Date.now(),
+      };
       return { ...state, tools: { ...state.tools, [id]: { ...run, partial: e.partialResult } } };
     }
     case "tool_execution_end": {
@@ -612,6 +619,18 @@ export function messagesToTimeline(messages: AnyMessage[], keyPrefix = "msg"): T
 
 export type ContextCategory = "system" | "user" | "assistant" | "thinking" | "tool" | "extension" | "summary";
 
+/** A finer-grained slice inside a category (e.g. one skill inside "System prompt & tools"). */
+export interface ContextBreakdownNode {
+  key: string;
+  label: string;
+  tokens: number;
+  /** Share of the whole context (not of the parent). */
+  percentage: number;
+  count?: number;
+  detail?: string;
+  children?: ContextBreakdownNode[];
+}
+
 export interface ContextCategoryBreakdown {
   /** Stable key (e.g. "system", "tool:bash"). */
   key: string;
@@ -621,6 +640,19 @@ export interface ContextCategoryBreakdown {
   percentage: number;
   /** Number of messages/blocks folded into this bucket (0 for pure overhead). */
   count: number;
+  /** Optional finer split; children always sum to `tokens`. Absent when there is nothing to split. */
+  children?: ContextBreakdownNode[];
+}
+
+/**
+ * Optional description of what lives inside the system prompt, used to split the "System prompt &
+ * tools" bucket. Sizes are chars/4 estimates; anything they don't explain becomes "Base prompt & other".
+ */
+export interface ContextSystemParts {
+  skills?: Array<{ name: string; description?: string; filePath?: string }>;
+  tools?: Array<{ name: string; description?: string; active?: boolean }>;
+  /** Context files (AGENTS.md, SYSTEM.md…) already measured in characters. */
+  contextFiles?: Array<{ label: string; path?: string; chars: number }>;
 }
 
 export interface ContextTopItem {
@@ -656,6 +688,11 @@ function contentChars(content: unknown): number {
     else if (block?.type === "image") chars += ESTIMATED_IMAGE_CHARS;
   }
   return chars;
+}
+
+function imageChars(content: unknown): number {
+  if (!Array.isArray(content)) return 0;
+  return (content as Array<Record<string, unknown>>).filter((b) => b?.type === "image").length * ESTIMATED_IMAGE_CHARS;
 }
 
 function snippet(text: string, max = 48): string {
@@ -703,6 +740,109 @@ function contextMessages(state: TranscriptState): AnyMessage[] {
   return out;
 }
 
+/** JSON-schema scaffolding (parameters, types, required…) we can't see per tool; rough constant. */
+const TOOL_SCHEMA_OVERHEAD_CHARS = 240;
+
+interface RawNode {
+  key: string;
+  label: string;
+  tokens: number;
+  count?: number;
+  detail?: string;
+  children?: RawNode[];
+}
+
+/**
+ * Normalises `nodes` so their (rounded) tokens sum to exactly `target`, recursing into children.
+ * Largest-first; the exact sum is preserved. Returns [] when fewer than `minNodes` survive.
+ */
+function fitNodes(nodes: RawNode[], target: number, total: number, minNodes = 1): ContextBreakdownNode[] {
+  const live = nodes.filter((n) => n.tokens > 0);
+  const sum = live.reduce((a, n) => a + n.tokens, 0);
+  if (live.length === 0 || sum <= 0 || target <= 0) return [];
+  const sorted = [...live].sort((a, b) => b.tokens - a.tokens);
+  // Largest-remainder apportionment: floor everything, hand leftover units to the biggest fractions.
+  const exact = sorted.map((n) => (n.tokens * target) / sum);
+  const targets = exact.map(Math.floor);
+  let left = target - targets.reduce((a, t) => a + t, 0);
+  const byFraction = exact.map((x, i) => ({ i, frac: x - Math.floor(x) })).sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (const { i } of byFraction) {
+    if (left <= 0) break;
+    targets[i]! += 1;
+    left -= 1;
+  }
+  const out: ContextBreakdownNode[] = [];
+  sorted.forEach((n, i) => {
+    const t = targets[i]!;
+    if (t <= 0) return;
+    const kids = n.children?.length ? fitNodes(n.children, t, total) : [];
+    out.push({
+      key: n.key,
+      label: n.label,
+      tokens: t,
+      percentage: total > 0 ? (t / total) * 100 : 0,
+      ...(n.count != null ? { count: n.count } : {}),
+      ...(n.detail ? { detail: n.detail } : {}),
+      ...(kids.length > 0 ? { children: kids } : {}),
+    });
+  });
+  return out.length >= minNodes ? out : [];
+}
+
+const sumTokens = (nodes: RawNode[]) => nodes.reduce((a, n) => a + n.tokens, 0);
+
+/** Estimated token cost of each known piece of the system prompt (unscaled, before reconciling). */
+const partNodesCache = new WeakMap<ContextSystemParts, RawNode[]>();
+
+function systemPartNodes(parts: ContextSystemParts): RawNode[] {
+  const cached = partNodesCache.get(parts);
+  if (cached) return cached;
+  const groups: RawNode[] = [];
+
+  const skills: RawNode[] = (parts.skills ?? []).map((s, i) => ({
+    key: `system:skill:${i}:${s.name}`,
+    label: s.name,
+    // Mirrors the <skill> entry Pi injects: name + description + location.
+    tokens: toTokens(
+      `<skill><name>${s.name}</name><description>${s.description ?? ""}</description><location>${s.filePath ?? ""}</location></skill>`
+        .length,
+    ),
+    ...(s.description ? { detail: snippet(s.description, 80) } : {}),
+  }));
+  if (skills.length > 0) {
+    groups.push({ key: "system:skills", label: "Skills", tokens: sumTokens(skills), count: skills.length, children: skills });
+  }
+
+  const tools: RawNode[] = (parts.tools ?? [])
+    .map((t, i) => ({ t, i }))
+    .filter(({ t }) => t.active !== false)
+    .map(({ t, i }) => ({
+      key: `system:tool:${i}:${t.name}`,
+      label: t.name,
+      // Listed once in the prompt and once as a schema (name + description + parameter scaffolding).
+      tokens: toTokens((t.name.length + (t.description?.length ?? 0)) * 2 + TOOL_SCHEMA_OVERHEAD_CHARS),
+      ...(t.description ? { detail: snippet(t.description, 80) } : {}),
+    }));
+  if (tools.length > 0) {
+    groups.push({ key: "system:tools", label: "Tool definitions", tokens: sumTokens(tools), count: tools.length, children: tools });
+  }
+
+  const files: RawNode[] = (parts.contextFiles ?? [])
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => f.chars > 0)
+    .map(({ f, i }) => ({
+      key: `system:file:${i}:${f.path ?? f.label}`,
+      label: f.label,
+      tokens: toTokens(f.chars),
+      ...(f.path ? { detail: f.path } : {}),
+    }));
+  if (files.length > 0) {
+    groups.push({ key: "system:files", label: "Context files", tokens: sumTokens(files), count: files.length, children: files });
+  }
+  partNodesCache.set(parts, groups);
+  return groups;
+}
+
 /**
  * Splits the context window by source. Message sizes are chars/4 estimates (same heuristic as Pi).
  * When `exactTotalTokens` is known (get_session_stats.contextUsage / last usage), whatever the
@@ -712,14 +852,35 @@ function contextMessages(state: TranscriptState): AnyMessage[] {
 export function estimateContextBreakdown(
   state: TranscriptState,
   exactTotalTokens?: number | null,
+  systemParts?: ContextSystemParts | null,
 ): ContextBreakdownResult {
-  type Bucket = { label: string; category: ContextCategory; tokens: number; count: number };
+  type Bucket = {
+    label: string;
+    category: ContextCategory;
+    tokens: number;
+    count: number;
+    subs: Map<string, RawNode>;
+  };
   const buckets = new Map<string, Bucket>();
-  const add = (key: string, label: string, category: ContextCategory, tokens: number) => {
+  const add = (
+    key: string,
+    label: string,
+    category: ContextCategory,
+    tokens: number,
+    sub?: { key: string; label: string },
+    /** False for the 2nd+ part of one message, so the message is only counted once. */
+    bump = true,
+  ) => {
     if (tokens <= 0) return;
-    const b = buckets.get(key) ?? { label, category, tokens: 0, count: 0 };
+    const b = buckets.get(key) ?? { label, category, tokens: 0, count: 0, subs: new Map<string, RawNode>() };
     b.tokens += tokens;
-    b.count += 1;
+    if (bump) b.count += 1;
+    if (sub) {
+      const n = b.subs.get(sub.key) ?? { key: `${key}:${sub.key}`, label: sub.label, tokens: 0, count: 0 };
+      n.tokens += tokens;
+      if (bump) n.count = (n.count ?? 0) + 1;
+      b.subs.set(sub.key, n);
+    }
     buckets.set(key, b);
   };
   const top: ContextTopItem[] = [];
@@ -736,8 +897,10 @@ export function estimateContextBreakdown(
         break;
       }
       case "user": {
+        const imgChars = imageChars(msg.content);
         const t = toTokens(contentChars(msg.content));
-        add("user", "Your messages", "user", t);
+        add("user", "Your messages", "user", toTokens(contentChars(msg.content) - imgChars), { key: "text", label: "Text" });
+        add("user", "Your messages", "user", toTokens(imgChars), { key: "images", label: "Images / attachments" }, toTokens(contentChars(msg.content) - imgChars) <= 0);
         top.push({ label: "You", detail: snippet(contentText(msg.content).text) || "(attachment)", category: "user", tokens: t });
         break;
       }
@@ -754,7 +917,10 @@ export function estimateContextBreakdown(
           } else if (block.type === "toolCall") {
             const argChars = block.argsText?.length || JSON.stringify(block.arguments ?? {}).length;
             callArgs.set(block.id, argSummary(block.arguments));
-            add(`tool:${block.name}`, `Tool · ${block.name}`, "tool", toTokens(block.name.length + argChars));
+            add(`tool:${block.name}`, `Tool · ${block.name}`, "tool", toTokens(block.name.length + argChars), {
+              key: "calls",
+              label: "Calls (arguments)",
+            });
           }
         }
         add("assistant", "Assistant replies", "assistant", toTokens(text));
@@ -766,27 +932,34 @@ export function estimateContextBreakdown(
       case "toolResult": {
         const name = String(msg.toolName || "tool");
         const t = toTokens(contentChars(msg.content));
-        add(`tool:${name}`, `Tool · ${name}`, "tool", t);
+        add(`tool:${name}`, `Tool · ${name}`, "tool", t, { key: "results", label: "Results (output)" });
         const detail = callArgs.get(String(msg.toolCallId));
         top.push({ label: name, ...(detail ? { detail } : {}), category: "tool", tokens: t });
         break;
       }
       case "bashExecution": {
+        const cmdTokens = toTokens(String(msg.command ?? "").length);
         const t = toTokens(String(msg.command ?? "").length + String(msg.output ?? "").length);
-        add("tool:bash", "Tool · bash", "tool", t);
+        const outTokens = Math.max(0, t - cmdTokens); // parts sum to the original total
+        add("tool:bash", "Tool · bash", "tool", cmdTokens, { key: "calls", label: "Calls (arguments)" });
+        add("tool:bash", "Tool · bash", "tool", outTokens, { key: "results", label: "Results (output)" }, cmdTokens <= 0);
         top.push({ label: "bash", detail: snippet(String(msg.command ?? "")), category: "tool", tokens: t });
         break;
       }
       case "custom": {
         const t = toTokens(contentChars(msg.content));
-        add("extension", "Extension messages", "extension", t);
+        const ext = String(msg.customType ?? "extension");
+        add("extension", "Extension messages", "extension", t, { key: ext, label: ext });
         top.push({ label: String(msg.customType ?? "extension"), category: "extension", tokens: t });
         break;
       }
       case "compactionSummary":
       case "branchSummary": {
         const t = toTokens(String(msg.summary ?? "").length);
-        add("summary", "Summaries", "summary", t);
+        add("summary", "Summaries", "summary", t, {
+          key: msg.role === "compactionSummary" ? "compaction" : "branch",
+          label: msg.role === "compactionSummary" ? "Compaction summary" : "Branch summary",
+        });
         top.push({
           label: msg.role === "compactionSummary" ? "Compaction summary" : "Branch summary",
           category: "summary",
@@ -801,20 +974,34 @@ export function estimateContextBreakdown(
 
   const estimated = [...buckets.values()].reduce((acc, b) => acc + b.tokens, 0);
   const isExact = typeof exactTotalTokens === "number" && exactTotalTokens > 0;
-  const total = isExact ? (exactTotalTokens as number) : estimated;
+  const partNodes = systemParts ? systemPartNodes(systemParts) : [];
+  const partsTokens = sumTokens(partNodes);
+  const newSystemBucket = (): Bucket => ({
+    label: SYSTEM_LABEL,
+    category: "system",
+    tokens: 0,
+    count: 0,
+    subs: new Map<string, RawNode>(),
+  });
+  // Without Pi's exact total there's no residual to subdivide, so count the known parts directly.
+  const total = isExact ? (exactTotalTokens as number) : estimated + partsTokens;
 
   let scale = 1;
   if (isExact) {
     if (total >= estimated) {
       const overhead = total - estimated;
       if (overhead > 0) {
-        const sys = buckets.get("system") ?? { label: SYSTEM_LABEL, category: "system" as const, tokens: 0, count: 0 };
+        const sys = buckets.get("system") ?? newSystemBucket();
         sys.tokens += overhead;
         buckets.set("system", sys);
       }
     } else {
       scale = total / estimated;
     }
+  } else if (partsTokens > 0) {
+    const sys = buckets.get("system") ?? newSystemBucket();
+    sys.tokens += partsTokens;
+    buckets.set("system", sys);
   }
 
   const categories: ContextCategoryBreakdown[] = [...buckets.entries()]
@@ -833,6 +1020,21 @@ export function estimateContextBreakdown(
   const drift = total - categories.reduce((acc, c) => acc + c.tokens, 0);
   if (categories.length > 0 && drift !== 0) categories[0]!.tokens += drift;
   for (const c of categories) c.percentage = total > 0 ? (c.tokens / total) * 100 : 0;
+
+  // Finer split. Children are normalised to the category's final tokens, so they always sum to it.
+  for (const c of categories) {
+    let raw: RawNode[];
+    if (c.key === "system") {
+      raw = [...partNodes];
+      const remainder = c.tokens - partsTokens;
+      // Whatever the known parts don't explain: the base prompt, guidelines, estimation error.
+      if (remainder > 0) raw.push({ key: "system:base", label: "Base prompt & other", tokens: remainder });
+    } else {
+      raw = [...(buckets.get(c.key)?.subs.values() ?? [])];
+    }
+    const kids = fitNodes(raw, c.tokens, total, c.key === "system" && partNodes.length > 0 ? 1 : 2);
+    if (kids.length > 0) c.children = kids;
+  }
 
   const topItems = top
     .filter((t) => t.tokens > 0)

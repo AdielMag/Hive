@@ -47,6 +47,7 @@ export const BRIDGE_CAPABILITIES = [
   "actions:reload",
   "actions:refresh_models",
   "ui:form",
+  "subagents:stop",
 ] as const;
 export type BridgeCapability = (typeof BRIDGE_CAPABILITIES)[number];
 
@@ -104,6 +105,38 @@ export interface StudioFormResult {
   id: string;
   cancelled: boolean;
   answers: StudioFormAnswer[];
+}
+
+/**
+ * Subagent termination (capability "subagents:stop"). Studio asks the bridge to stop a running or queued
+ * subagent; the bridge forwards it to the pi-subagents extension (`subagents:rpc:stop`) and reports back.
+ *   Studio -> bridge on `fromGui`: StudioSubagentStop
+ *   bridge -> Studio on `toGui`:   StudioSubagentStopResult
+ */
+export interface StudioSubagentStop {
+  kind: "subagent_stop";
+  /** Correlates the request with its result. */
+  id: string;
+  agentId: string;
+}
+
+export interface StudioSubagentStopResult {
+  kind: "subagent_stop_result";
+  id: string;
+  agentId: string;
+  ok: boolean;
+  error?: string;
+}
+
+export function isStudioSubagentStopResult(value: unknown): value is StudioSubagentStopResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === "subagent_stop_result" &&
+    typeof (value as { id?: unknown }).id === "string" &&
+    typeof (value as { agentId?: unknown }).agentId === "string" &&
+    typeof (value as { ok?: unknown }).ok === "boolean"
+  );
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;

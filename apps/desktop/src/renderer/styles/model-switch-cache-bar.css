@@ -1,0 +1,99 @@
+/* "Compact before switching models" nudge above the composer (sibling of .composer-queue-bar). */
+.cache-switch-bar {
+  --csb-rgb: var(--accent-rgb);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 5px 6px 5px 10px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(var(--csb-rgb), 0.12), rgba(var(--csb-rgb), 0.04) 70%);
+  border: 1px solid rgba(var(--csb-rgb), 0.26);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  animation: fade-up 0.18s ease;
+}
+
+.cache-switch-bar.is-error {
+  background: rgba(var(--fg-rgb), 0.03);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.cache-switch-bar__icon {
+  flex-shrink: 0;
+  color: var(--accent-base);
+}
+
+.cache-switch-bar.is-done .cache-switch-bar__icon {
+  color: var(--success);
+}
+
+.cache-switch-bar.is-error .cache-switch-bar__icon {
+  color: var(--danger);
+}
+
+.cache-switch-bar__label {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.cache-switch-bar__hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.cache-switch-bar__hint--grow {
+  flex: 1;
+}
+
+.cache-switch-bar__btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 5px;
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: var(--accent-subtle);
+  color: var(--accent-hover);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.cache-switch-bar__btn:hover:not(:disabled) {
+  background: var(--accent-base);
+  color: var(--accent-contrast);
+  border-color: transparent;
+}
+
+.cache-switch-bar__btn:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 1px;
+}
+
+.cache-switch-bar__btn--ghost {
+  width: 22px;
+  padding: 0;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.cache-switch-bar__btn--ghost:hover:not(:disabled) {
+  background: rgba(var(--fg-rgb), 0.08);
+  color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .cache-switch-bar__hint {
+    display: none;
+  }
+}

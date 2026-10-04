@@ -148,9 +148,23 @@ Execution summary here...`;
       arguments: { description: "Scout", subagent_type: "scout", prompt: "x" },
       complete: false,
     };
-    expect(resolveSubagentView({ block }).status).toBe("queued");
+    expect(resolveSubagentView({ block }).status).toBe("running");
     const run = { toolCallId: "call_2", toolName: "Agent", args: {}, status: "running" as const, startedAt: 0 };
     expect(resolveSubagentView({ block, run }).status).toBe("running");
+  });
+
+  it("does not show an orphaned call as queued", () => {
+    const block = {
+      type: "toolCall" as const,
+      id: "call_3",
+      name: "Agent",
+      arguments: { description: "Scout", subagent_type: "scout", prompt: "x" },
+      complete: true,
+    };
+    // Session executing but the run start was missed (tab switch / reload): in flight.
+    expect(resolveSubagentView({ block, sessionRunning: true }).status).toBe("running");
+    // Session idle and no result: nothing is running it any more.
+    expect(resolveSubagentView({ block, sessionRunning: false }).status).toBe("aborted");
   });
 
   it("parses output lines into user prompt and messages", () => {

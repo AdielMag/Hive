@@ -92,7 +92,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 7 }}>
                 <span>AI Usage Insights & Optimization</span>
-                {model && <AiModelChip model={model} clickable={true} />}
+                {model && <AiModelChip model={model} clickable={true} feature="usageAnalysis" />}
               </div>
               <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                 Automated telemetry diagnosis and cost-saving recommendations

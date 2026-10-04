@@ -45,17 +45,22 @@ export const ContextMenu: React.FC<{ menu: ContextMenuState | null; onClose: () 
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     const close = () => onClose();
+    // Let long menus scroll without dismissing themselves.
+    const onWheel = (e: WheelEvent) => {
+      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return;
+      onClose();
+    };
     window.addEventListener("mousedown", onDown, true);
     window.addEventListener("keydown", onKey);
     window.addEventListener("blur", close);
     window.addEventListener("resize", close);
-    window.addEventListener("wheel", close, { passive: true });
+    window.addEventListener("wheel", onWheel, { passive: true });
     return () => {
       window.removeEventListener("mousedown", onDown, true);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("blur", close);
       window.removeEventListener("resize", close);
-      window.removeEventListener("wheel", close);
+      window.removeEventListener("wheel", onWheel);
     };
   }, [menu, onClose]);
 
@@ -66,7 +71,7 @@ export const ContextMenu: React.FC<{ menu: ContextMenuState | null; onClose: () 
       ref={ref}
       className="menu-pop ctx-menu"
       role="menu"
-      style={{ position: "fixed", left: pos?.left ?? menu.x, top: pos?.top ?? menu.y, visibility: pos ? "visible" : "hidden" }}
+      style={{ position: "fixed", zIndex: 10000, left: pos?.left ?? menu.x, top: pos?.top ?? menu.y, visibility: pos ? "visible" : "hidden", maxHeight: "calc(100vh - 12px)", overflowY: "auto" }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {menu.items.map((item, i) =>
@@ -74,7 +79,7 @@ export const ContextMenu: React.FC<{ menu: ContextMenuState | null; onClose: () 
           <div key={`sep-${i}`} className="menu-pop__sep" />
         ) : (
           <button
-            key={item.label}
+            key={`${i}-${item.label}`}
             role="menuitem"
             className={`menu-pop__item ctx-menu__item${item.danger ? " is-danger" : ""}`}
             disabled={item.disabled}

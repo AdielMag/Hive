@@ -6,6 +6,7 @@ import {
   RotateCcw,
   Check,
   RefreshCw,
+  MoreHorizontal,
   Download,
   Upload,
   CloudDownload,
@@ -53,6 +54,18 @@ export const GitPanel: React.FC = () => {
   const [branchFilter, setBranchFilter] = useState("");
   const branchDropdownRef = useRef<HTMLDivElement>(null);
   const branchSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync / actions menu state
+  const [syncMenuOpen, setSyncMenuOpen] = useState(false);
+  const syncMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!syncMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (syncMenuRef.current && !syncMenuRef.current.contains(e.target as Node)) setSyncMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [syncMenuOpen]);
 
   // Collapsible section states
   const [stagedExpanded, setStagedExpanded] = useState(true);
@@ -423,89 +436,98 @@ export const GitPanel: React.FC = () => {
           />
         </button>
 
-        {/* Sync Status & Refresh */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
+        {/* Sync menu: Fetch / Pull / Push / Refresh / Branches (collapsed into one button) */}
+        <div ref={syncMenuRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
             type="button"
-            onClick={() => showLeft("branches")}
-            title="Open dedicated Branches & History window"
+            onClick={() => setSyncMenuOpen((prev) => !prev)}
+            title={
+              status?.behind || status?.ahead
+                ? `Sync & Git actions (${status?.behind || 0} behind, ${status?.ahead || 0} ahead)`
+                : "Sync & Git actions"
+            }
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 3,
-              background: "transparent",
-              border: "1px solid var(--border-subtle)",
-              borderRadius: 4,
-              color: "var(--text-secondary)",
-              padding: "1px 5px",
-              fontSize: 10,
-              cursor: "pointer",
-            }}
-          >
-            <GitBranch size={10} color="var(--accent-base)" />
-            <span>Branches</span>
-          </button>
-          {/* Remote sync: Fetch / Pull / Push */}
-          {(
-            [
-              { op: "fetch", icon: CloudDownload, title: "Fetch from all remotes", badge: 0 },
-              {
-                op: "pull",
-                icon: Download,
-                title: status?.behind ? `Pull from upstream (${status.behind} behind)` : "Pull from upstream",
-                badge: status?.behind || 0,
-              },
-              {
-                op: "push",
-                icon: Upload,
-                title: status?.ahead ? `Push to upstream (${status.ahead} ahead)` : "Push to upstream",
-                badge: status?.ahead || 0,
-              },
-            ] as const
-          ).map(({ op, icon: Icon, title, badge }) => {
-            const busy = syncOp === op;
-            const disabled = !!syncOp || loading;
-            return (
-              <button
-                key={op}
-                type="button"
-                onClick={() => void handleSync(op)}
-                disabled={disabled}
-                title={title}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  background: "transparent",
-                  border: "none",
-                  color: badge > 0 ? (op === "push" ? "var(--accent-base)" : "var(--warning)") : "var(--text-muted)",
-                  cursor: disabled ? "default" : "pointer",
-                  opacity: disabled && !busy ? 0.5 : 1,
-                  padding: 2,
-                  fontSize: 10,
-                  fontWeight: 600,
-                }}
-              >
-                <Icon size={12} className={busy ? "spin" : ""} />
-                {badge > 0 && <span>{badge}</span>}
-              </button>
-            );
-          })}
-          <button
-            onClick={refreshGit}
-            title="Refresh Git status"
-            disabled={loading}
-            style={{
-              background: "transparent",
+              gap: 4,
+              background: syncMenuOpen ? "var(--bg-elevated)" : "transparent",
               border: "none",
+              borderRadius: 4,
               color: "var(--text-muted)",
-              cursor: loading ? "default" : "pointer",
-              display: "flex",
-              padding: 2,
+              cursor: "pointer",
+              padding: "3px 5px",
+              fontSize: 10,
+              fontWeight: 600,
             }}
           >
-            <RefreshCw size={12} className={loading ? "spin" : ""} />
+            {syncOp || loading ? <RefreshCw size={13} className="spin" /> : <MoreHorizontal size={14} />}
+            {!!status?.behind && <span style={{ color: "var(--warning)" }}>↓{status.behind}</span>}
+            {!!status?.ahead && <span style={{ color: "var(--accent-base)" }}>↑{status.ahead}</span>}
           </button>
+          {syncMenuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "100%",
+                right: 0,
+                marginTop: 4,
+                minWidth: 190,
+                background: "var(--bg-elevated)",
+                border: "1px solid var(--border-prominent)",
+                borderRadius: 6,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                zIndex: 100,
+                padding: 4,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              {(
+                [
+                  { key: "fetch", icon: CloudDownload, label: "Fetch", hint: "", sync: "fetch" },
+                  { key: "pull", icon: Download, label: "Pull", hint: status?.behind ? `${status.behind} behind` : "", sync: "pull" },
+                  { key: "push", icon: Upload, label: "Push", hint: status?.ahead ? `${status.ahead} ahead` : "", sync: "push" },
+                  { key: "refresh", icon: RefreshCw, label: "Refresh status", hint: "", sync: null },
+                  { key: "branches", icon: GitBranch, label: "Branches & History", hint: "", sync: null },
+                ] as const
+              ).map(({ key, icon: Icon, label, hint, sync }) => {
+                const disabled = key === "branches" ? false : !!syncOp || loading;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      setSyncMenuOpen(false);
+                      if (sync) void handleSync(sync);
+                      else if (key === "refresh") void refreshGit();
+                      else showLeft("branches");
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      background: "transparent",
+                      border: "none",
+                      borderRadius: 4,
+                      color: "var(--text-primary)",
+                      cursor: disabled ? "default" : "pointer",
+                      opacity: disabled ? 0.5 : 1,
+                      padding: "5px 8px",
+                      fontSize: 12,
+                      textAlign: "left",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <Icon size={13} color="var(--text-muted)" />
+                    <span style={{ flex: 1 }}>{label}</span>
+                    {hint && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{hint}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Branch Dropdown Popover */}
@@ -1102,7 +1124,7 @@ export const GitPanel: React.FC = () => {
               <>
                 <Sparkles size={12} />
                 <span>AI Message</span>
-                <AiModelChip model={resolvedCommitModel} clickable={false} />
+                <AiModelChip model={resolvedCommitModel} clickable={false} feature="gitCommit" />
               </>
             )}
           </button>

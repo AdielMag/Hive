@@ -10,7 +10,6 @@ import {
   FolderKanban,
   GitBranch,
   GitCommit,
-  Globe,
   PieChart,
   Settings,
   ShoppingBag,
@@ -67,7 +66,7 @@ export const WorkbenchLayout: React.FC = () => {
   const settingsShortcut = useShortcut("settings.open");
   const terminalShortcut = useShortcut("view.terminal");
 
-  const { activeProject, tabs, activeTabId, error, openUsageTab, openLibraryTab, openBrowserTab } = useSessionStore(
+  const { activeProject, tabs, activeTabId, error, openUsageTab, openLibraryTab } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
       tabs: s.tabs,
@@ -75,7 +74,6 @@ export const WorkbenchLayout: React.FC = () => {
       error: s.error,
       openUsageTab: s.openUsageTab,
       openLibraryTab: s.openLibraryTab,
-      openBrowserTab: s.openBrowserTab,
     })),
   );
   const ui = useUi(
@@ -137,12 +135,6 @@ export const WorkbenchLayout: React.FC = () => {
             title={libraryShortcut ? `Skills & Agents (${libraryShortcut})` : "Skills & Agents"}
             active={activeTab?.kind === "library"}
             onClick={openLibraryTab}
-          />
-          <RailButton
-            icon={<Globe size={18} />}
-            title="Hive Browser (Ctrl+Shift+B)"
-            active={activeTab?.kind === "browser"}
-            onClick={() => openBrowserTab("https://pi.dev")}
           />
           <RailButton
             icon={<BarChart3 size={18} />}
@@ -209,7 +201,7 @@ export const WorkbenchLayout: React.FC = () => {
 
         {/* Right rail */}
         <nav className="rail rail--right">
-          <RailButton icon={<Wrench size={18} />} title="AI tools" active={ui.right === "tools"} onClick={() => ui.toggleRight("tools")} />
+          <RailButton icon={<Wrench size={18} />} title="Tools breakdown" active={ui.right === "tools"} onClick={() => ui.toggleRight("tools")} />
           <RailButton icon={<PieChart size={18} />} title="Context breakdown" active={ui.right === "context"} onClick={() => ui.toggleRight("context")} />
           <RailButton
             icon={<TerminalIcon size={18} />}

@@ -38,6 +38,8 @@ export interface NotificationDetails {
 export interface SubagentView {
   toolCallId: string;
   agentId?: string;
+  /** Real runner id (never the `name` arg fallback); required to stop the agent. */
+  stopId?: string;
   outputFile?: string;
   type: string;
   description: string;
@@ -154,8 +156,10 @@ export function resolveSubagentView(params: {
   run?: ToolRun;
   result?: ToolResultView;
   subagentIndex?: SubagentIndex;
+  /** Whether the owning session is currently executing (used to interpret a call with no result and no live run). */
+  sessionRunning?: boolean;
 }): SubagentView {
-  const { block, run, result, subagentIndex } = params;
+  const { block, run, result, subagentIndex, sessionRunning } = params;
   const args = block.arguments ?? {};
 
   // Extract details from first available source
@@ -165,7 +169,8 @@ export function resolveSubagentView(params: {
     ((run?.partial as { details?: AgentDetails } | undefined)?.details);
 
   const parsed = parseAgentResultText(result?.text ?? "");
-  const agentId = details?.agentId || parsed.agentId || (typeof args.name === "string" ? args.name : undefined);
+  const stopId = details?.agentId || parsed.agentId;
+  const agentId = stopId || (typeof args.name === "string" ? args.name : undefined);
   const outputFile = parsed.outputFile;
 
   const subagentType = (details?.subagentType || args.subagent_type || block.name) as string;
@@ -176,20 +181,28 @@ export function resolveSubagentView(params: {
   // Model & thinking
   const model = details?.modelName || (args.model as string | undefined);
   let thinking = args.thinking as string | undefined;
-  const tags: string[] = [...(details?.tags ?? [])];
+  const allTags: string[] = [...(details?.tags ?? [])];
+  const isThinkingTag = (t: string) => t.toLowerCase().startsWith("thinking:");
   if (!thinking) {
-    const thinkingTag = tags.find((t) => t.toLowerCase().startsWith("thinking:"));
+    const thinkingTag = allTags.find(isThinkingTag);
     if (thinkingTag) {
       thinking = thinkingTag.slice("thinking:".length).trim();
     }
   }
+  // The thinking level is shown via the brain chip; don't duplicate it as a plain tag.
+  const tags = allTags.filter((t) => !isThinkingTag(t));
 
   // Without a result yet, the call is still streaming/pending — never default to "completed".
+  // No result and no live run: if the session is executing, the call is in flight but we missed its start
+  // (e.g. the transcript was rebuilt from disk); if the session is idle nothing is running it any more
+  // (interrupted / crashed), so don't claim it is "queued" forever.
   const fallbackStatus: SubagentView["status"] = result
     ? result.isError ? "error" : "completed"
     : run
       ? run.status === "running" ? "running" : run.status === "error" ? "error" : "completed"
-      : "queued";
+      : sessionRunning === false && block.complete !== false
+        ? "aborted"
+        : "running";
   let status = (details?.status ?? fallbackStatus) as SubagentView["status"];
   let toolUses = details?.toolUses;
   let turns = details?.turnCount;
@@ -219,6 +232,7 @@ export function resolveSubagentView(params: {
   return {
     toolCallId: block.id,
     agentId,
+    stopId,
     outputFile,
     type: subagentType,
     description,

@@ -103,7 +103,7 @@ export const FileViewerTab: React.FC<{ tab: TabItem }> = ({ tab }) => {
           style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
         >
           <Sparkles size={12} /> Ask Pi
-          <AiModelChip model={activeModel} clickable={false} />
+          <AiModelChip model={activeModel} clickable={false} feature="session" />
         </button>
         <button className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon" onClick={() => void closeTab(tab.id)} title="Close">
           <X size={14} />

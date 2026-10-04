@@ -4,7 +4,6 @@ import {
   Square,
   CornerDownLeft,
   Paperclip,
-  FileText,
   X,
   ChevronDown,
   Brain,
@@ -22,6 +21,8 @@ import { ProviderIcon } from "./ProviderIcon.tsx";
 import { ThinkingPicker } from "./ThinkingPicker.tsx";
 import { ModePicker } from "./ModePicker.tsx";
 import { QueuedMessagesBar } from "./transcript/QueuedMessages.tsx";
+import { ModelSwitchCacheBar } from "./ModelSwitchCacheBar.tsx";
+import { AttachmentTray } from "./AttachmentTray.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import type { AttachedItem } from "@hive/protocol";
 
@@ -326,6 +327,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
         </div>
       ))}
 
+      {/* Mid-session model switch: suggest compacting before the new model re-reads everything uncached */}
+      <ModelSwitchCacheBar />
+
       {/* Queued messages banner if any */}
       <QueuedMessagesBar />
 
@@ -352,79 +356,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
           position: "relative",
         }}
       >
-        {/* Attached Items Preview Chips */}
-        {attachments.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 6,
-              paddingBottom: 4,
-              borderBottom: "1px solid rgba(var(--fg-rgb), 0.06)",
-              maxHeight: 110,
-              overflowY: "auto",
-            }}
-          >
-            {attachments.map((att) => (
-              <div
-                key={att.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "3px 8px",
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: 6,
-                  fontSize: 11,
-                  color: "var(--text-primary)",
-                  maxWidth: 260,
-                }}
-              >
-                {att.kind === "image" && att.previewUrl ? (
-                  <img
-                    src={att.previewUrl}
-                    alt={att.name}
-                    style={{ width: 18, height: 18, borderRadius: 3, objectFit: "cover" }}
-                  />
-                ) : (
-                  <FileText size={14} color="var(--accent-base)" />
-                )}
-                <span
-                  title={att.name}
-                  style={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    maxWidth: 180,
-                  }}
-                >
-                  {att.name}
-                </span>
-                {att.size ? (
-                  <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
-                    ({(att.size / 1024).toFixed(0)}k)
-                  </span>
-                ) : null}
-                <button
-                  onClick={() => removeAttachment(att.id)}
-                  title="Remove attachment"
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    padding: 0,
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Attached items: compact preview tiles */}
+        <AttachmentTray attachments={attachments} onRemove={removeAttachment} />
 
         {/* Textarea */}
         <textarea

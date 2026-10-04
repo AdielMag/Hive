@@ -37,29 +37,53 @@ export const DEFAULT_FEATURE_MODELS: FeatureModelsConfig = {
 };
 
 /**
- * Derives an ultra-compact, recognizable short name for a model (e.g. "haiku", "flash", "opus", "sonnet").
- * Kept strictly under 10 chars so it will never bloat or stretch UI action rows.
+ * Pulls a model version ("4.5", "3", "2.5") out of a model id/name, ignoring provider prefixes,
+ * trailing date stamps (20241022) and parameter sizes (70b). Handles "4-5" and "4.5" spellings.
+ */
+export function extractModelVersion(id?: string, name?: string): string | undefined {
+  for (const source of [id, name]) {
+    if (!source) continue;
+    let s = source.toLowerCase();
+    if (s.includes("/")) s = s.split("/").slice(1).join("/");
+    s = s.replace(/[-_]?\d{8}\b/g, "").replace(/\b\d{4}-\d{2}-\d{2}\b/g, "");
+    const m = /(?<![a-z\d.])v?(\d{1,2})(?:[.\-_ ](\d{1,2}))?(?![\d]|[a-z])/.exec(s);
+    if (m) return m[2] ? `${m[1]}.${m[2]}` : m[1];
+  }
+  return undefined;
+}
+
+/**
+ * Derives a compact, recognizable short name for a model including its version number
+ * (e.g. "haiku 3.5", "sonnet 4.5", "flash 2.5", "opus 4"). Names that already embed their
+ * number (gpt-4o, o1, deepseek-r1) are returned as-is.
  */
 export function getShortModelName(id?: string, name?: string): string {
   if (!id && !name) return "auto";
   const raw = `${id || ""} ${name || ""}`.toLowerCase();
 
+  // Families whose short name already carries its number.
   if (/\b(gpt-4o-mini)\b/i.test(raw)) return "gpt-4o-mini";
   if (/\b(gpt-4o)\b/i.test(raw)) return "gpt-4o";
   if (/\b(o3-mini)\b/i.test(raw)) return "o3-mini";
   if (/\b(o1-mini)\b/i.test(raw)) return "o1-mini";
   if (/\b(o1)\b/i.test(raw)) return "o1";
-  if (/\b(flash-lite)\b/i.test(raw)) return "flash-lite";
-  if (/\b(flash)\b/i.test(raw)) return "flash";
-  if (/\b(haiku)\b/i.test(raw)) return "haiku";
-  if (/\b(sonnet)\b/i.test(raw)) return "sonnet";
-  if (/\b(opus)\b/i.test(raw)) return "opus";
   if (/\b(deepseek-r1|deepseek-reasoner)\b/i.test(raw)) return "deepseek-r1";
-  if (/\b(deepseek)\b/i.test(raw)) return "deepseek";
-  if (/\b(qwen|coder)\b/i.test(raw)) return "coder";
-  if (/\b(llama)\b/i.test(raw)) return "llama";
-  if (/\b(mistral)\b/i.test(raw)) return "mistral";
-  if (/\b(pro)\b/i.test(raw)) return "pro";
+
+  const withVersion = (family: string): string => {
+    const v = extractModelVersion(id, name);
+    return v ? `${family} ${v}` : family;
+  };
+
+  if (/\b(flash-lite)\b/i.test(raw)) return withVersion("flash-lite");
+  if (/\b(flash)\b/i.test(raw)) return withVersion("flash");
+  if (/\b(haiku)\b/i.test(raw)) return withVersion("haiku");
+  if (/\b(sonnet)\b/i.test(raw)) return withVersion("sonnet");
+  if (/\b(opus)\b/i.test(raw)) return withVersion("opus");
+  if (/\b(deepseek)\b/i.test(raw)) return withVersion("deepseek");
+  if (/\b(qwen|coder)\b/i.test(raw)) return withVersion("coder");
+  if (/\b(llama)\b/i.test(raw)) return withVersion("llama");
+  if (/\b(mistral)\b/i.test(raw)) return withVersion("mistral");
+  if (/\b(pro)\b/i.test(raw)) return withVersion("pro");
 
   // Fallback: strip provider and trailing version dates
   let cleaned = (id || name || "").trim();

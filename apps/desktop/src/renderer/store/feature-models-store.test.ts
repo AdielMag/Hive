@@ -31,15 +31,15 @@ describe("feature-models-store", () => {
 
   describe("getShortModelName", () => {
     it("shortens Claude model family correctly", () => {
-      expect(getShortModelName("anthropic/claude-3-5-haiku-20241022", "Claude 3.5 Haiku")).toBe("haiku");
-      expect(getShortModelName("anthropic/claude-3-7-sonnet", "Claude 3.7 Sonnet")).toBe("sonnet");
-      expect(getShortModelName("claude-opus-5-5", "Claude 5.5 Opus")).toBe("opus");
+      expect(getShortModelName("anthropic/claude-3-5-haiku-20241022", "Claude 3.5 Haiku")).toBe("haiku 3.5");
+      expect(getShortModelName("anthropic/claude-3-7-sonnet", "Claude 3.7 Sonnet")).toBe("sonnet 3.7");
+      expect(getShortModelName("claude-opus-5-5", "Claude 5.5 Opus")).toBe("opus 5.5");
     });
 
     it("shortens Gemini models correctly", () => {
-      expect(getShortModelName("antigravity/gemini-3.8-flash", "Gemini 3.8 Flash")).toBe("flash");
-      expect(getShortModelName("antigravity/gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite")).toBe("flash-lite");
-      expect(getShortModelName("antigravity/gemini-3.1-pro", "Gemini 3.1 Pro")).toBe("pro");
+      expect(getShortModelName("antigravity/gemini-3.8-flash", "Gemini 3.8 Flash")).toBe("flash 3.8");
+      expect(getShortModelName("antigravity/gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite")).toBe("flash-lite 3.5");
+      expect(getShortModelName("antigravity/gemini-3.1-pro", "Gemini 3.1 Pro")).toBe("pro 3.1");
     });
 
     it("shortens OpenAI models correctly", () => {
@@ -57,10 +57,22 @@ describe("feature-models-store", () => {
     it("shortens other model providers and handles edge cases", () => {
       expect(getShortModelName("deepseek/deepseek-chat", "DeepSeek Chat")).toBe("deepseek");
       expect(getShortModelName("deepseek-reasoner", "DeepSeek R1")).toBe("deepseek-r1");
-      expect(getShortModelName("qwen/qwen-2.5-coder-32b", "Qwen 2.5 Coder")).toBe("coder");
-      expect(getShortModelName("meta/llama-3.3-70b-instruct", "Llama 3.3 70B")).toBe("llama");
+      expect(getShortModelName("qwen/qwen-2.5-coder-32b", "Qwen 2.5 Coder")).toBe("coder 2.5");
+      expect(getShortModelName("meta/llama-3.3-70b-instruct", "Llama 3.3 70B")).toBe("llama 3.3");
       expect(getShortModelName(undefined, undefined)).toBe("auto");
       expect(getShortModelName("custom/my-model-20241022")).toBe("my-model");
+    });
+  });
+
+  describe("getShortModelName versions", () => {
+    it("handles dashed, dotted, dated and bare versions", () => {
+      expect(getShortModelName("claude-sonnet-4-5-20250929")).toBe("sonnet 4.5");
+      expect(getShortModelName("claude-opus-4-1")).toBe("opus 4.1");
+      expect(getShortModelName("claude-sonnet-4-20250514")).toBe("sonnet 4");
+      expect(getShortModelName("claude-3-opus-20240229")).toBe("opus 3");
+      expect(getShortModelName("google/gemini-2.5-flash")).toBe("flash 2.5");
+      expect(getShortModelName("meta/llama-3-70b-instruct")).toBe("llama 3");
+      expect(getShortModelName("gemini-pro", "Gemini Pro")).toBe("pro");
     });
   });
 
@@ -75,14 +87,14 @@ describe("feature-models-store", () => {
       const activeSession = { id: "claude-3-5-haiku", name: "Claude 3.5 Haiku", provider: "anthropic" };
       const res = resolveFeatureModel({ source: "session" }, activeSession, "claude-opus-5-5", mockCatalog);
       expect(res.id).toBe("anthropic/claude-3-5-haiku");
-      expect(res.shortName).toBe("haiku");
+      expect(res.shortName).toBe("haiku 3.5");
       expect(res.sourceLabel).toBe("Active session");
     });
 
     it("falls back to pi default model with provider when session model is null", () => {
       const res = resolveFeatureModel({ source: "session" }, null, "gemini-3.8-flash", mockCatalog, "antigravity");
       expect(res.id).toBe("antigravity/gemini-3.8-flash");
-      expect(res.shortName).toBe("flash");
+      expect(res.shortName).toBe("flash 3.8");
       expect(res.sourceLabel).toContain("Pi CLI default");
     });
 
@@ -90,7 +102,7 @@ describe("feature-models-store", () => {
       const activeSession = { id: "claude-3-5-haiku", name: "Claude 3.5 Haiku", provider: "anthropic" };
       const res = resolveFeatureModel({ source: "pi-default" }, activeSession, "claude-opus-5-5", mockCatalog, "anthropic");
       expect(res.id).toBe("anthropic/claude-opus-5-5");
-      expect(res.shortName).toBe("opus");
+      expect(res.shortName).toBe("opus 5.5");
       expect(res.sourceLabel).toBe("Pi CLI default");
     });
 
@@ -102,7 +114,7 @@ describe("feature-models-store", () => {
         mockCatalog,
       );
       expect(res.id).toBe("gemini-3.8-flash");
-      expect(res.shortName).toBe("flash");
+      expect(res.shortName).toBe("flash 3.8");
       expect(res.sourceLabel).toBe("Configured in Settings");
     });
 
@@ -114,7 +126,7 @@ describe("feature-models-store", () => {
         mockCatalog,
       );
       expect(res.id).toBe("anthropic/claude-3-5-haiku");
-      expect(res.shortName).toBe("haiku");
+      expect(res.shortName).toBe("haiku 3.5");
       expect(res.sourceLabel).toBe("Configured in Settings");
     });
 

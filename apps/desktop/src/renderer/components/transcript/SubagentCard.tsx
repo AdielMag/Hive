@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Bot,
   Brain,
@@ -8,6 +8,7 @@ import {
   Coins,
   Cpu,
   Loader2,
+  Square,
   Terminal,
   Wrench,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import type { SubagentView } from "../../lib/ai/subagents.ts";
 import { formatCost, formatDuration } from "../../lib/format.ts";
 import { useSubagentOutput } from "../../hooks/useSubagentOutput.ts";
 import { Markdown } from "../code/Markdown.tsx";
+import { useSessionStore } from "../../store/session-store.ts";
 
 export interface SubagentCardProps {
   view: SubagentView;
@@ -33,6 +35,20 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
 
   const isRunning =
     view.status === "running" || view.status === "queued" || view.status === "background";
+
+  // Stop is only possible once the runner has assigned an id (a foreground agent parked on a slot has none yet).
+  const stopSubagent = useSessionStore((s) => s.stopSubagent);
+  const [stopping, setStopping] = useState(false);
+  useEffect(() => {
+    if (!isRunning) setStopping(false);
+  }, [isRunning]);
+  useEffect(() => {
+    if (!stopping) return;
+    // If the stop failed (error is surfaced by the store) let the user retry.
+    const t = setTimeout(() => setStopping(false), 6000);
+    return () => clearTimeout(t);
+  }, [stopping]);
+  const canStop = isRunning && !!view.stopId;
 
   const effectiveDuration = view.durationMs
     ? formatDuration(view.durationMs)
@@ -113,6 +129,29 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
             {isRunning && <Loader2 size={11} className="spin" />}
             {view.status}
           </span>
+          {canStop && (
+            <button
+              type="button"
+              className="ui-btn ui-btn--ghost ui-btn--icon msg-agent-card__stop"
+              title={
+                stopping
+                  ? "Stopping…"
+                  : view.status === "queued"
+                  ? "Cancel this queued subagent"
+                  : "Stop this subagent"
+              }
+              aria-label={`Stop subagent ${view.description}`}
+              disabled={stopping}
+              onClick={(e) => {
+                e.stopPropagation();
+                setStopping(true);
+                void stopSubagent(view.stopId!);
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              {stopping ? <Loader2 size={13} className="spin" /> : <Square size={12} fill="currentColor" />}
+            </button>
+          )}
           <button
             type="button"
             className="ui-btn ui-btn--ghost ui-btn--icon"
