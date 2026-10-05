@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.19.0 — 2026-10-05 · [diff](https://github.com/AdielMag/Hive/compare/v0.18.0...v0.19.0)
+
+### ✨ Features
+
+- **desktop:** add searchable model picker and surface input-waiting state ([`89c5ed2`](https://github.com/AdielMag/Hive/commit/89c5ed2e1a04a817c0b7642a5d91fbd24c76ca6a))
+
 ## v0.18.0 — 2026-10-05 · [diff](https://github.com/AdielMag/Hive/compare/v0.17.0...v0.18.0)
 
 ### ✨ Features
