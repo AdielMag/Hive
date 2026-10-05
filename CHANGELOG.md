@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.17.0 — 2026-10-05 · [diff](https://github.com/AdielMag/Hive/compare/v0.16.1...v0.17.0)
+
+### ✨ Features
+
+- **settings:** redesign modules page with icons, search/filters, and card hierarchy ([`61dbd21`](https://github.com/AdielMag/Hive/commit/61dbd21e8e51c97d813e58eb4aa1f064f897c632))
+
 ## v0.16.1 — 2026-10-04 · [diff](https://github.com/AdielMag/Hive/compare/v0.16.0...v0.16.1)
 
 ### 🧹 Other changes
