@@ -304,8 +304,10 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
         display: "flex",
         flexDirection: "column",
         gap: 8,
-        height: height ?? "auto",
-        minHeight: 120,
+        // `height` is a floor, not a fixed size: widgets above the editor (approval bar, banners)
+        // must grow the composer instead of squeezing the editor out the bottom (clipped by .session-view).
+        minHeight: Math.max(120, height ?? 0),
+        flexShrink: 0,
         boxSizing: "border-box",
       }}
     >

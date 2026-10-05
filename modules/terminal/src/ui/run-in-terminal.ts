@@ -1,5 +1,5 @@
 import type { ModuleHost } from "@hive/module-sdk/renderer";
-import { TERMINAL_PANEL_ID, TerminalMethods, type TerminalSessionInfo } from "../shared.ts";
+import { TERMINAL_PANEL_ID } from "../shared.ts";
 
 export interface RunInTerminalArgs {
   command: string;
@@ -8,19 +8,15 @@ export interface RunInTerminalArgs {
 }
 
 /**
- * `terminal.run` command: show the panel, reuse the first shell (or create one) and type `command` + Enter.
+ * `terminal.run` command: show the panel, reuse the active shell (or create one) and type `command` + Enter.
  * Other modules / core call this through `host.commands.run("terminal.run", { command, cwd })`.
+ * The registry (and xterm with it) is loaded lazily, the first time a command actually runs.
  */
 export async function runInTerminal(host: ModuleHost, args: unknown): Promise<void> {
   const { command, cwd } = (args ?? {}) as Partial<RunInTerminalArgs>;
   if (typeof command !== "string" || !command.trim()) return;
 
   host.panels.open("right", TERMINAL_PANEL_ID);
-  const terms = await host.ipc.invoke<TerminalSessionInfo[]>(TerminalMethods.list);
-  let id = terms[0]?.id;
-  if (!id) {
-    const created = await host.ipc.invoke<TerminalSessionInfo>(TerminalMethods.create, { cwd });
-    id = created.id;
-  }
-  await host.ipc.invoke(TerminalMethods.write, { id, data: command + "\r" });
+  const { runCommand } = await import("./terminal-registry.ts");
+  await runCommand(host, command, cwd);
 }

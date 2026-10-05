@@ -21,6 +21,7 @@
     "dev": "npm --prefix apps/desktop run dev",
     "build": "npm --prefix apps/desktop run build",
     "typecheck": "node scripts/gen-modules.mjs && tsc -p packages/protocol && tsc -p packages/pi-adapter && tsc -p packages/test-provider && tsc -p packages/theme-engine && tsc -p packages/module-sdk && tsc -p modules && npm run typecheck -w @hive/desktop",
+    "lint": "eslint .",
     "test": "vitest run --project unit",
     "test:contract": "vitest run --project contract",
     "gen:modules": "node scripts/gen-modules.mjs",
@@ -34,7 +35,10 @@
     "@earendil-works/pi-ai": "0.87.1",
     "@earendil-works/pi-coding-agent": "0.87.1",
     "@types/node": "^22.19.0",
+    "@typescript-eslint/parser": "^8.71.0",
     "electron-builder": "^26.0.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "typescript": "6.0.3",
     "vitest": "4.1.11"
   }

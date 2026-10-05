@@ -65,7 +65,8 @@
     "icon": "build/icon.png",
     "asarUnpack": [
       "resources/**",
-      "out/bridge/**"
+      "out/bridge/**",
+      "node_modules/@lydell/node-pty*/**"
     ],
     "artifactName": "Hive-${version}-${os}-${arch}.${ext}",
     "nsis": {
@@ -98,6 +99,7 @@
     "@hive/pi-adapter": "0.1.0",
     "@hive/protocol": "0.1.0",
     "@hive/theme-engine": "0.1.0",
+    "@lydell/node-pty": "^1.2.0-beta.15",
     "@shikijs/langs": "^4.5.0",
     "culori": "^4.0.2",
     "lucide-react": "^1.49.0",

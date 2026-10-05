@@ -1,38 +1,31 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
+
+const runCommand = vi.fn(async () => undefined);
+vi.mock("./terminal-registry.ts", () => ({ runCommand }));
+
 import { runInTerminal } from "./run-in-terminal.ts";
 
-function host(existing: Array<{ id: string }>) {
-  const invoke = vi.fn(async (method: string) => {
-    if (method === "list") return existing;
-    if (method === "create") return { id: "t_new", shell: "sh", cwd: "/x" };
-    return undefined;
-  });
+function host() {
   const open = vi.fn();
-  return { h: { ipc: { invoke }, panels: { open } } as unknown as ModuleHost, invoke, open };
+  return { h: { panels: { open } } as unknown as ModuleHost, open };
 }
 
 describe("runInTerminal", () => {
-  it("reuses the first existing shell and types the command with Enter", async () => {
-    const { h, invoke, open } = host([{ id: "t_1" }, { id: "t_2" }]);
+  beforeEach(() => runCommand.mockClear());
+
+  it("opens the panel and hands the command to the registry", async () => {
+    const { h, open } = host();
     await runInTerminal(h, { command: "node a.js", cwd: "/p" });
     expect(open).toHaveBeenCalledWith("right", "terminal");
-    expect(invoke).not.toHaveBeenCalledWith("create", expect.anything());
-    expect(invoke).toHaveBeenCalledWith("write", { id: "t_1", data: "node a.js\r" });
-  });
-
-  it("creates a shell in cwd when none exists", async () => {
-    const { h, invoke } = host([]);
-    await runInTerminal(h, { command: "ls", cwd: "/proj" });
-    expect(invoke).toHaveBeenCalledWith("create", { cwd: "/proj" });
-    expect(invoke).toHaveBeenCalledWith("write", { id: "t_new", data: "ls\r" });
+    expect(runCommand).toHaveBeenCalledWith(h, "node a.js", "/p");
   });
 
   it("ignores missing or blank commands", async () => {
-    const { h, invoke, open } = host([]);
+    const { h, open } = host();
     await runInTerminal(h, undefined);
     await runInTerminal(h, { command: "   " });
     expect(open).not.toHaveBeenCalled();
-    expect(invoke).not.toHaveBeenCalled();
+    expect(runCommand).not.toHaveBeenCalled();
   });
 });

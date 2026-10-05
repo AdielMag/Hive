@@ -84,6 +84,7 @@ const FileTreeNode: React.FC<{
   onToggle: (path: string) => void;
   onOpen: (file: TreeNode) => void;
 }> = ({ node, host, expanded, onToggle, onOpen }) => {
+  const [hovered, setHovered] = useState(false);
   if (node.isDirectory) {
     const isExp = expanded[node.path] ?? false;
     return (
@@ -116,8 +117,6 @@ const FileTreeNode: React.FC<{
       </div>
     );
   }
-
-  const [hovered, setHovered] = useState(false);
 
   const ext = node.name.slice(node.name.lastIndexOf(".")).toLowerCase();
   // "Run in terminal" exists only while a module provides the `terminal.run` command.

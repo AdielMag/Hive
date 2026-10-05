@@ -26,6 +26,27 @@ export interface CommandApprovalBarProps {
 export const CommandApprovalBar: React.FC<CommandApprovalBarProps> = ({ host, pendingUiDialog, respondDialog }) => {
   const [copied, setCopied] = useState(false);
 
+  // Hooks must run on every render (before any early return), so key off the dialog id and bail inside.
+  const activeDialogId = pendingUiDialog && pendingUiDialog.method === "confirm" && parseDangerousBashMessage(pendingUiDialog.message) ? pendingUiDialog.id : null;
+  useEffect(() => {
+    if (!activeDialogId) return;
+    const answer = (confirmed: boolean) => void respondDialog?.({ type: "extension_ui_response", id: activeDialogId, confirmed });
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        answer(false);
+      } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        e.stopPropagation();
+        answer(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDialogId]);
+
   if (!pendingUiDialog || pendingUiDialog.method !== "confirm") {
     return null;
   }
@@ -57,21 +78,6 @@ export const CommandApprovalBar: React.FC<CommandApprovalBarProps> = ({ host, pe
     }
   };
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        handleBlock();
-      } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        e.stopPropagation();
-        handleAllow();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [pendingUiDialog.id]);
 
   return (
     <div className={`command-approval-bar${isCritical ? " command-approval-bar--critical" : ""}`}>

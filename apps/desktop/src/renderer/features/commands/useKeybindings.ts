@@ -10,6 +10,9 @@ import { useKeybindingStore } from "./keybindings-store.ts";
 
 export { openProjectFolder } from "./registry.ts";
 
+/** Chords the terminal itself owns (copy / paste / find); app shortcuts must never steal them while it has focus. */
+const TERMINAL_OWNED = new Set(["Mod+Shift+C", "Mod+Shift+V", "Mod+Shift+F", "Mod+Shift+`"]);
+
 export function useKeybindings(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -39,7 +42,7 @@ export function useKeybindings(): void {
       // or those explicitly flagged `allowInTerminal`.
       const target = e.target as HTMLElement | null;
       const inTerminal = target && (target.closest(".xterm") !== null || target.classList.contains("xterm-helper-textarea"));
-      if (inTerminal && !cmd.allowInTerminal && !chordHasShiftOrAlt(chord)) {
+      if (inTerminal && (TERMINAL_OWNED.has(chord) || (!cmd.allowInTerminal && !chordHasShiftOrAlt(chord)))) {
         return;
       }
 

@@ -7,7 +7,8 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ include: ["electron"] })],
     build: {
       rollupOptions: {
-        external: ["electron"],
+        // The PTY is a native addon (loads a platform .node binary at runtime): it must stay a real require, never bundled.
+        external: ["electron", /^@lydell\/node-pty(-.*)?$/],
         input: {
           index: resolve(__dirname, "src/main/index.ts"),
         },

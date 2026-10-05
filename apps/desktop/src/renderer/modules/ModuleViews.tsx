@@ -13,6 +13,10 @@ export const toModuleTab = (t: TabItem): ModuleTab => ({
   title: t.title,
   projectId: t.projectId,
   filePath: t.filePath,
+  url: t.url,
+  favicon: t.favicon,
+  isSleeping: t.isSleeping,
+  lastActiveAt: t.lastActiveAt,
   data: t.data,
 });
 

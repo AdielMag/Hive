@@ -95,7 +95,15 @@ export function createModuleHost(moduleId: string): ModuleHost {
         useSessionStore.setState((s) => ({
           tabs: s.tabs.map((t) =>
             t.id === tabId
-              ? { ...t, ...(patch.title !== undefined ? { title: patch.title } : {}), ...(patch.data ? { data: { ...t.data, ...patch.data } } : {}) }
+              ? {
+                  ...t,
+                  ...(patch.title !== undefined ? { title: patch.title } : {}),
+                  ...(patch.url !== undefined ? { url: patch.url } : {}),
+                  ...(patch.favicon !== undefined ? { favicon: patch.favicon } : {}),
+                  ...(patch.isSleeping !== undefined ? { isSleeping: patch.isSleeping } : {}),
+                  ...(patch.lastActiveAt !== undefined ? { lastActiveAt: patch.lastActiveAt } : {}),
+                  ...(patch.data ? { data: { ...t.data, ...patch.data } } : {}),
+                }
               : t,
           ),
         })),
