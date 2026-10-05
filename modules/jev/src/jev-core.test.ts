@@ -37,6 +37,16 @@ describe("settings", () => {
     expect(applyPatch(base, { apiKey: "k2" }).apiKey).toBe("k2");
   });
 
+  it("records consent only as a positive timestamp and lets the user revoke it", () => {
+    expect(normalizeSettings({ consentAt: "yes" }).consentAt).toBeNull();
+    expect(normalizeSettings({ consentAt: 0 }).consentAt).toBeNull();
+    const accepted = applyPatch(DEFAULT_SETTINGS, { consentAt: 1_700_000_000_000 });
+    expect(accepted.consentAt).toBe(1_700_000_000_000);
+    expect(toView(accepted).consentAt).toBe(1_700_000_000_000);
+    expect(applyPatch(accepted, { apiKey: "k" }).consentAt).toBe(1_700_000_000_000);
+    expect(applyPatch(accepted, { consentAt: null }).consentAt).toBeNull();
+  });
+
   it("re-anchors the credit estimate only when the credit figure changes", () => {
     const a = applyPatch(DEFAULT_SETTINGS, { creditUsd: 10 });
     expect(a.creditSince).toBeGreaterThan(0);

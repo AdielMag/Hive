@@ -6,7 +6,7 @@ import {
   type PlanPreviewData,
   type SubmitFeedbackResult,
 } from "../shared.ts";
-import { activeViewMarkdown, extractDecisions, extractPlanViews, summarizeDiff, type DecisionItem } from "../plan-utils.ts";
+import { extractDecisions, extractPlanViews, summarizeDiff, type DecisionItem } from "../plan-utils.ts";
 import {
   buildAnswersPayload,
   buildChoicesPayload,
@@ -61,8 +61,9 @@ function initialOutline(): boolean | null {
   return v === "show" ? true : v === "hide" ? false : null;
 }
 
-function decisionsFor(content: string, viewMode: PlanViewMode): DecisionItem[] {
-  return extractDecisions(activeViewMarkdown(extractPlanViews(content), viewMode));
+/** Decisions of the whole plan (inline part, Summary and Full alike), de-duplicated by key. */
+function decisionsFor(content: string): DecisionItem[] {
+  return extractDecisions(content);
 }
 
 function derivePhase(data: PlanPreviewData | null, sent: boolean): PlanPhase {
@@ -98,12 +99,21 @@ interface PlanState {
   dismissedReplyAt: string | null;
   isSubmitting: boolean;
 
-  loadPlan: (filePath: string) => Promise<void>;
+  /** The popup showing the full plan (opened from the inline card). */
+  modalOpen: boolean;
+  /** Absolute plan paths the CLI announced recently (newest first); lets inline cards resolve relative args. */
+  recentPaths: string[];
+
+  /** `agentWaiting`: a live `plan-previewer` call is blocked on the user, so the agent has acted (never "sent"). */
+  loadPlan: (filePath: string, agentWaiting?: boolean) => Promise<void>;
   refresh: () => Promise<void>;
   updateFromDisk: (content: string, fileVersion: number) => void;
   setViewMode: (mode: PlanViewMode) => void;
   setWidthMode: (mode: PlanWidthMode) => void;
   setOutlineOpen: (open: boolean | null) => void;
+  openModal: () => void;
+  closeModal: () => void;
+  addRecentPath: (filePath: string) => void;
 
   selectChoice: (decision: DecisionItem, optionLabel: string) => void;
   setDraftAnswer: (key: string, text: string) => void;
@@ -144,7 +154,10 @@ export const usePlanStore = create<PlanState>((set, get) => ({
   dismissedReplyAt: null,
   isSubmitting: false,
 
-  loadPlan: async (filePath: string) => {
+  modalOpen: false,
+  recentPaths: [],
+
+  loadPlan: async (filePath: string, agentWaiting = false) => {
     const samePlan = get().filePath === filePath && get().planData !== null;
     set({ loading: true, error: null, filePath });
     try {
@@ -157,7 +170,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
       const views = extractPlanViews(data.content);
       let viewMode = get().viewMode;
       if (views.summary && !readStorage(LS_VIEW)) viewMode = "summary";
-      const decisions = decisionsFor(data.content, viewMode);
+      const decisions = decisionsFor(data.content);
 
       // Re-mounting the same plan keeps the review in progress; a different plan starts fresh.
       const reset = samePlan
@@ -172,14 +185,18 @@ export const usePlanStore = create<PlanState>((set, get) => ({
             dismissedReplyAt: null,
           };
 
+      // Re-mounting a plan that is already waiting on the agent must not flip it back to "reviewing".
+      const derived = derivePhase(data, false);
+      const keepSent = !agentWaiting && samePlan && get().phase === "sent" && derived === "reviewing";
+
       set({
         ...reset,
         loading: false,
         planData: data,
         decisions,
         viewMode,
-        sentKind: null,
-        phase: derivePhase(data, false),
+        sentKind: keepSent ? get().sentKind : null,
+        phase: keepSent ? "sent" : derived,
       });
     } catch (err: any) {
       set({ loading: false, error: err?.message || "Failed to load plan" });
@@ -193,7 +210,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
     try {
       const data = await planHost().ipc.invoke<PlanPreviewData | null>(PlanMethods.get, filePath);
       if (!data) return;
-      const decisions = decisionsFor(data.content, get().viewMode);
+      const decisions = decisionsFor(data.content);
       const diff = summarizeDiff(prev.content, data.content);
       set((s) => ({
         planData: data,
@@ -214,7 +231,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
 
     const diff = summarizeDiff(prev.content, content);
     const planData = { ...prev, content, fileVersion, updatedAt: new Date().toISOString() };
-    const decisions = decisionsFor(content, get().viewMode);
+    const decisions = decisionsFor(content);
 
     set((s) => ({
       planData,
@@ -228,14 +245,24 @@ export const usePlanStore = create<PlanState>((set, get) => ({
 
   setViewMode: (viewMode) => {
     writeStorage(LS_VIEW, viewMode);
-    const content = get().planData?.content ?? "";
-    set({ viewMode, decisions: decisionsFor(content, viewMode) });
+    set({ viewMode });
   },
 
   setWidthMode: (widthMode) => {
     writeStorage(LS_WIDTH, widthMode);
     set({ widthMode });
   },
+
+  openModal: () => {
+    // "Show more" means the whole plan; this does not overwrite the user's saved view preference.
+    const views = extractPlanViews(get().planData?.content ?? "");
+    set({ modalOpen: true, ...(views.summary && views.full ? { viewMode: "full" as PlanViewMode } : {}) });
+  },
+
+  closeModal: () => set({ modalOpen: false }),
+
+  addRecentPath: (filePath) =>
+    set((s) => ({ recentPaths: [filePath, ...s.recentPaths.filter((p) => p !== filePath)].slice(0, 8) })),
 
   setOutlineOpen: (outlineOpen) => {
     writeStorage(LS_OUTLINE, outlineOpen === null ? null : outlineOpen ? "show" : "hide");

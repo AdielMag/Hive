@@ -1,5 +1,5 @@
 import React from "react";
-import { FileText, MoreHorizontal, PanelLeft, X } from "lucide-react";
+import { ExternalLink, FileText, MoreHorizontal, PanelLeft, X } from "lucide-react";
 import { usePlanStore, type PlanPhase } from "./plan-store.ts";
 import { PlanMenu, type PlanMenuItem } from "./PlanMenu.tsx";
 
@@ -8,16 +8,20 @@ interface Props {
   outlineVisible: boolean;
   onToggleOutline: () => void;
   onCopyPath: () => void;
+  /** Popup only: closes it. */
+  onClose?: () => void;
+  /** Popup only: moves the review into a regular tab. */
+  onOpenAsTab?: () => void;
 }
 
-const STATUS: Record<PlanPhase, { label: string; tone: string }> = {
+export const STATUS: Record<PlanPhase, { label: string; tone: string }> = {
   reviewing: { label: "Awaiting review", tone: "review" },
   answering: { label: "Needs your input", tone: "input" },
   sent: { label: "Waiting for agent", tone: "sent" },
   approved: { label: "Approved", tone: "approved" },
 };
 
-export const PlanHeader: React.FC<Props> = ({ hasBothViews, outlineVisible, onToggleOutline, onCopyPath }) => {
+export const PlanHeader: React.FC<Props> = ({ hasBothViews, outlineVisible, onToggleOutline, onCopyPath, onClose, onOpenAsTab }) => {
   const planData = usePlanStore((s) => s.planData);
   const phase = usePlanStore((s) => s.phase);
   const viewMode = usePlanStore((s) => s.viewMode);
@@ -105,6 +109,29 @@ export const PlanHeader: React.FC<Props> = ({ hasBothViews, outlineVisible, onTo
           </button>
         )}
       />
+
+      {onOpenAsTab && (
+        <button
+          type="button"
+          className="ui-btn ui-btn--ghost ui-btn--sm"
+          onClick={onOpenAsTab}
+          title="Open this plan in its own tab"
+        >
+          <ExternalLink size={13} aria-hidden="true" />
+          Open as tab
+        </button>
+      )}
+      {onClose && (
+        <button
+          type="button"
+          className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon"
+          onClick={onClose}
+          title="Close (Esc)"
+          aria-label="Close plan"
+        >
+          <X size={15} />
+        </button>
+      )}
     </header>
   );
 };

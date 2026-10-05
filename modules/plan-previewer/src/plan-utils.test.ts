@@ -3,7 +3,13 @@ import {
   cleanTitle,
   createHeadingIdAllocator,
   extractDecisions,
+  extractInlinePart,
   extractPlanViews,
+  parsePlanCommandPath,
+  parseReviewResult,
+  resolvePlanPath,
+  samePlanPath,
+  stripMoreMarker,
   extractTocHeadings,
   segmentPlan,
   slugify,
@@ -205,5 +211,116 @@ Some text.
       expect(diff.additions).toBe(2);
       expect(diff.deletions).toBe(1);
     });
+  });
+});
+
+describe("extractInlinePart", () => {
+  const body = (n: number) => Array.from({ length: n }, (_, i) => `- item ${i}`).join("\n");
+
+  it("cuts at the MORE marker", () => {
+    const r = extractInlinePart("# T\n\nIntro.\n\n<!-- MORE -->\n\n## Details\nx");
+    expect(r).toEqual({ markdown: "# T\n\nIntro.", hasMore: true, source: "marker" });
+  });
+
+  it("MORE at the very end has nothing more", () => {
+    expect(extractInlinePart("# T\n\nIntro.\n<!-- MORE -->\n").hasMore).toBe(false);
+  });
+
+  it("uses SUMMARY when there is no marker", () => {
+    const r = extractInlinePart("<!-- SUMMARY -->\n# T\nshort\n<!-- /SUMMARY -->\n<!-- FULL -->\n# T\nlong\n<!-- /FULL -->");
+    expect(r.source).toBe("summary");
+    expect(r.markdown).toBe("# T\nshort");
+    expect(r.hasMore).toBe(true);
+  });
+
+  it("keeps a short plan whole", () => {
+    const r = extractInlinePart("# T\n\nIntro\n\n## A\n- x");
+    expect(r.source).toBe("whole");
+    expect(r.hasMore).toBe(false);
+  });
+
+  it("truncates a long plan at a blank line", () => {
+    const md = `# T\n\nIntro\n\n## A\n${body(10)}\n\n## B\n${body(30)}`;
+    const r = extractInlinePart(md, 24);
+    expect(r.source).toBe("truncated");
+    expect(r.hasMore).toBe(true);
+    expect(r.markdown.endsWith("- item 9")).toBe(true);
+    expect(r.markdown).not.toContain("## B");
+  });
+
+  it("never cuts inside a code fence or a decision block", () => {
+    const md = [
+      "# T",
+      "",
+      body(18),
+      "",
+      "> [!CHOICE] Pick",
+      "> **Question**: Which?",
+      "> - (x) **A**: a",
+      "",
+      "> - ( ) **B**: b",
+      "",
+      "```",
+      "a",
+      "",
+      "b",
+      "```",
+      body(20),
+    ].join("\n");
+    const r = extractInlinePart(md, 22);
+    const quoteStart = r.markdown.includes("[!CHOICE]");
+    if (quoteStart) expect(r.markdown).toContain("**B**");
+    expect((r.markdown.match(/```/g) ?? []).length % 2).toBe(0);
+  });
+
+  it("has no cut point: returns the whole plan", () => {
+    expect(extractInlinePart(body(40), 24).hasMore).toBe(false);
+  });
+});
+
+describe("stripMoreMarker", () => {
+  it("removes the marker line", () => {
+    expect(stripMoreMarker("a\n<!-- MORE -->\nb")).toBe("a\nb");
+  });
+});
+
+describe("parsePlanCommandPath", () => {
+  it("finds the file argument", () => {
+    expect(parsePlanCommandPath('plan-previewer ./plan.md --context="x y"')).toBe("./plan.md");
+    expect(parsePlanCommandPath('cd /x && "C:/Users/a b/hive/bin/plan-previewer" "docs/my plan.md" --ask="q"')).toBe("docs/my plan.md");
+    expect(parsePlanCommandPath("plan-previewer --context=x plan.md")).toBe("plan.md");
+  });
+  it("ignores other commands", () => {
+    expect(parsePlanCommandPath("ls plan-previewer-notes")).toBeNull();
+    expect(parsePlanCommandPath("cat modules/plan-previewer/src/a.ts")).toBeNull();
+    expect(parsePlanCommandPath("npm test")).toBeNull();
+  });
+});
+
+describe("parseReviewResult", () => {
+  it("reads the settled status", () => {
+    expect(parseReviewResult('\n[PLAN-REVIEW]: status=APPROVED | mode=AUTO-EDIT | comment="None"')).toEqual({ status: "approved", mode: "auto-edit" });
+    expect(parseReviewResult('[PLAN-REVIEW]: status=CHANGES_REQUESTED | comment="x"').status).toBe("changes_requested");
+    expect(parseReviewResult("Plan previewer wait timeout completed after 240s").status).toBe("timeout");
+    expect(parseReviewResult("whatever").status).toBe("unknown");
+  });
+});
+
+describe("resolvePlanPath", () => {
+  it("keeps absolute paths and joins relative ones to the project", () => {
+    expect(resolvePlanPath("C:\\a\\b\\plan.md", "C:/p", [])).toBe("C:/a/b/plan.md");
+    expect(resolvePlanPath("docs/plan.md", "C:\\p", [])).toBe("C:/p/docs/plan.md");
+    expect(resolvePlanPath("./x/../plan.md", "/home/p", [])).toBe("/home/p/plan.md");
+  });
+  it("prefers a path the CLI announced", () => {
+    expect(resolvePlanPath("docs/plan.md", "C:/wrong", ["C:\\Users\\me\\Hive\\docs\\plan.md"])).toBe("C:/Users/me/Hive/docs/plan.md");
+  });
+  it("falls back to the newest announced path with no arg", () => {
+    expect(resolvePlanPath(null, null, ["/a/plan.md"])).toBe("/a/plan.md");
+    expect(resolvePlanPath(null, null, [])).toBeNull();
+  });
+  it("compares paths loosely", () => {
+    expect(samePlanPath("C:\\A\\plan.md", "c:/a/plan.md")).toBe(true);
+    expect(samePlanPath("a", null)).toBe(false);
   });
 });

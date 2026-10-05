@@ -1,22 +1,33 @@
 ---
 name: rich-plan-formatting
-description: MANDATORY whenever you write or revise a plan file (plan.md, PLAN.md, …) for Hive Plan Previewer. Lean, scannable plans sized to the task, with one interactive block per real decision.
+description: MANDATORY whenever you write or revise a plan file (plan.md, PLAN.md, …) for Hive Plan Previewer. Lean, scannable plans written inline-first (a compact card in the session, full text in a popup), with one interactive block per real decision.
 ---
 
 # Writing plans for Hive Plan Previewer
 
-The user reads your plan in a Hive tab and should be able to approve it in about a minute. Optimize for that. Keep it short and concrete, and make every line earn its place. The previewer turns a few blocks into interactive UI (decisions, questions, callouts, file badges). Use those blocks, and don't use anything else that needs special rendering.
+The plan appears **inline in the chat session** as a compact review card. The user decides there, and a **Show more** button opens the whole plan in a popup. Write for that: the card must be enough to approve, and everything else can wait below a marker. Keep it short and concrete. The previewer turns a few blocks into interactive UI (decisions, questions, callouts, file badges), so use those and nothing else that needs special rendering.
+
+## Inline first: the `<!-- MORE -->` marker
+
+Put `<!-- MORE -->` on its own line. **Everything above it is the card**; everything below shows only in the popup.
+
+- **Above the marker (aim for 24 lines or fewer):** the H1 title, a 1–3 sentence opening, `## Approach` (3–5 bullets), `## Decisions`, and a single `> [!WARNING]` if there is a real risk.
+- **Below the marker:** `## Changes`, details, `## Risks`, `## Verify`, and anything long.
+- **Decisions and questions always go above the marker**, so the user can answer them in the card.
+- Don't put tables, code blocks, H3 headings, or more than one callout above the marker.
+- A plan with no marker still works: the card shows the head of the plan, cut near 24 lines at a block boundary. Add the marker anyway, so you decide where the cut falls.
+- Don't write a "Show more" or "see below" line yourself. The card adds that.
 
 ## Rules
 
-1. **Size to the task.** A small change takes 15–40 lines. Leave out any section you have nothing real to say in.
-2. **One H1**, the plan title, with no suffix like "(Summary)". Use H2 for sections and H3 sparingly; the outline is built from them.
+1. **Size to the task.** A small change takes 15–40 lines in total. A plan this short can end with the marker, or skip it entirely.
+2. **One H1**, the plan title, with no suffix like "(Summary)". Use H2 for sections and H3 sparingly (only below the marker); the popup outline is built from them.
 3. **Open with 1–3 plain sentences**: what changes, why, and the rough size. Don't add an "Executive Summary" callout.
 4. **Decisions are for trade-offs the user should own**, at most 3. Write each one **exactly once**, and always preselect your recommendation with `(x)`. Decide the trivial things yourself and state them under Approach.
 5. **Questions only when you're blocked** on information only the user has.
 6. **Callouts: at most 2**, for real risks or invariants.
 7. **Be concrete**: file paths, symbols, commands. Write "add `retry()` to `src/net.ts`", not "improve robustness".
-8. **No emoji and no mermaid** (mermaid shows up as raw code). Use a table, a short list, or a small ASCII sketch in a code block instead.
+8. **No emoji and no mermaid** (mermaid shows up as raw code). Use a table, a short list, or a small ASCII sketch in a code block (below the marker) instead.
 
 ## Default template
 
@@ -36,11 +47,16 @@ The user reads your plan in a Hive tab and should be able to approve it in about
 > - (x) **<Option>**: <why, one line> [Recommended]
 > - ( ) **<Option>**: <trade-off, one line>
 
+<!-- MORE -->
+
 ## Changes
 | File | Change |
 |---|---|
 | `src/a.ts` | `[MODIFY]` add X |
 | `src/b.ts` | `[NEW]` Y service |
+
+## Risks
+- <only when real>
 
 ## Verify
 - `npm test`
@@ -51,7 +67,7 @@ Leave out `## Decisions` when there aren't any. Add `## Risks` only when there i
 
 ## Interactive blocks
 
-**Choice.** Rendered inline as a card with radio options:
+**Choice.** Rendered as a card with radio options, in the inline card and in the popup:
 
 ```markdown
 > [!CHOICE] Cache backend
@@ -63,8 +79,9 @@ Leave out `## Decisions` when there aren't any. Add `## Risks` only when there i
 - Format each option as `**Name**: one-line reason`. The name is shown in bold and the reason muted.
 - `(x)` preselects the option, and the card counts as resolved until the user changes it. `[Recommended]` adds a small tag.
 - Give 2–4 genuinely different options. Don't offer a "do nothing" option unless it's realistic.
+- Keep option reasons to one line. The card is narrow.
 
-**Question.** Rendered inline as a card with a text field:
+**Question.** Rendered as a card with a text field:
 
 ```markdown
 > [!QUESTION] Legacy rows
@@ -86,28 +103,14 @@ For questions you need answered *mid-review*, use `plan-previewer … --ask` (se
 
 Put `` `[NEW]` ``, `` `[MODIFY]` ``, and `` `[DELETE]` `` (in backticks) in the Changes table only. They render as colored badges.
 
-## Large plans: Summary + Full views
+## Legacy: `SUMMARY` / `FULL`
 
-Use this only when the plan would run past about 80 lines or spans several subsystems. Wrap the plan in two sections. The previewer shows a `Summary | Full` toggle and opens on Summary.
-
-```markdown
-<!-- SUMMARY -->
-# <Title>
-<intro> · ## Approach · ## Decisions · ## Milestones   (≤ 30 lines)
-<!-- /SUMMARY -->
-
-<!-- FULL -->
-# <Title>
-## Details · ## Changes · ## Risks · ## Verify
-<!-- /FULL -->
-```
-
-- Put each decision block **in SUMMARY only**. In FULL, refer to it by title ("per *Cache backend*").
-- Don't repeat paragraphs between the two sections. FULL adds depth; it isn't a restatement.
+`<!-- SUMMARY --> … <!-- /SUMMARY -->` plus `<!-- FULL --> … <!-- /FULL -->` still works: Summary is the card and Full is the popup. Prefer `<!-- MORE -->`, which needs no duplicated intro. Never use both in one plan.
 
 ## Avoid
 
 - Boilerplate sections ("Objective & Background", "Data Model") with nothing behind them.
 - Decisions with only one realistic answer, or options that differ only in wording.
 - Bold on every line, risk tags like `[HIGH RISK]` sprinkled through prose, or long option paragraphs.
-- Re-pasting the whole plan into a revision. Edit in place; the tab updates live.
+- A long inline part. If the card needs a scroll to reach the decisions, move prose below the marker.
+- Re-pasting the whole plan into a revision. Edit in place; the card and popup update live.

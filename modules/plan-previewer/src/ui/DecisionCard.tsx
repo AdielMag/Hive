@@ -8,10 +8,12 @@ import { InlineText } from "./InlineText.tsx";
 interface Props {
   item: DecisionItem;
   readOnly: boolean;
+  /** Prefix for DOM ids, so the inline card and the popup never share one. */
+  scope?: string;
 }
 
 /** One inline decision ([!CHOICE] radio group or [!QUESTION] answer). Resolved cards fold to a single line. */
-export const DecisionCard: React.FC<Props> = ({ item, readOnly }) => {
+export const DecisionCard: React.FC<Props> = ({ item, readOnly, scope = "" }) => {
   const selections = usePlanStore((s) => s.selections);
   const answer = usePlanStore((s) => s.draftAnswers[item.key] ?? "");
   const selectChoice = usePlanStore((s) => s.selectChoice);
@@ -26,7 +28,7 @@ export const DecisionCard: React.FC<Props> = ({ item, readOnly }) => {
   const resolved = isChoice ? resolveChoice(item, selections) : null;
   const isResolved = isChoice ? resolved !== null : answer.trim().length > 0;
   const expanded = !readOnly && (!isResolved || editing);
-  const titleId = `decision-${item.key}-title`;
+  const titleId = `${scope}decision-${item.key}-title`;
 
   const fold = () => {
     setEditing(false);
@@ -70,7 +72,7 @@ export const DecisionCard: React.FC<Props> = ({ item, readOnly }) => {
   if (!expanded) {
     const value = isChoice ? resolved?.option.label : answer.trim();
     return (
-      <section ref={rootRef} className="plan-decision is-folded" id={`decision-${item.key}`} data-decision-key={item.key}>
+      <section ref={rootRef} className="plan-decision is-folded" id={`${scope}decision-${item.key}`} data-decision-key={item.key}>
         <div className="plan-decision__line">
           {isResolved ? <Check size={13} className="plan-decision__ok" aria-hidden="true" /> : <span className="plan-decision__dot" />}
           {meta}
@@ -109,7 +111,7 @@ export const DecisionCard: React.FC<Props> = ({ item, readOnly }) => {
     <section
       ref={rootRef}
       className={`plan-decision${isResolved ? " is-resolved" : " is-open"}`}
-      id={`decision-${item.key}`}
+      id={`${scope}decision-${item.key}`}
       data-decision-key={item.key}
       aria-labelledby={titleId}
       onFocus={() => setEditing(true)}

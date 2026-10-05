@@ -1,13 +1,16 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRecentMessages,
   callJev,
+  checkCommandPaths,
   COMPACTION_QUESTIONS,
+  confine,
   extractSignals,
   formatAnswers,
+  isSecretPath,
   loadSettings,
   parseReadOnlyCommand,
   resetBreaker,
@@ -44,13 +47,23 @@ describe("loadSettings", () => {
     const { dir, env } = tmpEnv();
     expect(loadSettings({})).toBeNull();
     expect(loadSettings(env)).toBeNull();
-    writeFileSync(join(dir, "config.json"), JSON.stringify({ apiKey: "  " }));
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ apiKey: "  ", consentAt: 1 }));
     expect(loadSettings(env)).toBeNull();
+  });
+
+  it("stays inert until the privacy notice was accepted", () => {
+    const { dir, env } = tmpEnv();
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ apiKey: "abc" }));
+    expect(loadSettings(env)).toBeNull();
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ apiKey: "abc", consentAt: null }));
+    expect(loadSettings(env)).toBeNull();
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ apiKey: "abc", consentAt: 1_700_000_000_000 }));
+    expect(loadSettings(env)).not.toBeNull();
   });
 
   it("reads key and applies defaults", () => {
     const { dir, env } = tmpEnv();
-    writeFileSync(join(dir, "config.json"), JSON.stringify({ apiKey: " abc ", compact: { floorPct: 55 } }));
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ apiKey: " abc ", consentAt: 1, compact: { floorPct: 55 } }));
     expect(loadSettings(env)).toEqual({
       apiKey: "abc",
       model: "jev-latest",
@@ -167,11 +180,23 @@ describe("ask_jev helpers", () => {
     expect(parseReadOnlyCommand("git diff --stat")).toEqual({ bin: "git", args: ["diff", "--stat"] });
     expect(parseReadOnlyCommand('git log --grep "fix bug" -n 5')?.args).toContain("fix bug");
     expect(parseReadOnlyCommand("ls -la src")).not.toBeNull();
+    for (const ok of ["git branch", "git branch -a", "git branch -vv", "git branch --show-current", "git branch --list 'feat*'", "git branch --contains abc123"]) {
+      expect(parseReadOnlyCommand(ok), ok).not.toBeNull();
+    }
     for (const bad of [
       "rm -rf /",
       "git push",
       "git commit -m x",
       "git branch -D main",
+      "git branch newfeature",
+      "git branch -m old new",
+      "git branch -f main HEAD~1",
+      "git branch --set-upstream-to=origin/main",
+      "cat secrets.txt",
+      "type secrets.txt",
+      "rg -f patterns.txt x",
+      "grep --file=/etc/passwd x",
+      "rg x -- ../outside",
       "git tag v1",
       "git remote add x y",
       "git -c core.pager=evil log",
@@ -215,5 +240,56 @@ describe("ask_jev helpers", () => {
     expect(text).toContain("a: p(yes)=0.980 (leans yes)");
     expect(text).toContain("b: bug (confidence 90%; bug=90%, feat=10%)");
     expect(text).toContain('c: score 1.70 (~"high"), confidence 80%');
+  });
+});
+
+describe("workspace confinement", () => {
+  function workspace() {
+    const root = mkdtempSync(join(tmpdir(), "jev-ws-"));
+    const cwd = join(root, "repo");
+    mkdirSync(join(cwd, "src"), { recursive: true });
+    writeFileSync(join(cwd, "src", "a.ts"), "ok");
+    writeFileSync(join(cwd, ".env"), "SECRET=1");
+    writeFileSync(join(root, "outside.txt"), "nope");
+    return { root, cwd };
+  }
+
+  it("recognises credential-looking paths", () => {
+    for (const bad of [".env", ".env.local", "app/.env.production", "certs/server.pem", "deploy.key", ".ssh/config", "id_rsa", "id_ed25519.pub", ".npmrc", "config/auth.json", "secrets.yaml", ".git/config"]) {
+      expect(isSecretPath(bad), bad).toBe(true);
+    }
+    for (const ok of ["src/a.ts", ".env.example", "docs/keys.md", "monkey.ts", "README.md"]) expect(isSecretPath(ok), ok).toBe(false);
+  });
+
+  it("allows files inside the workspace and rejects escapes and secrets", () => {
+    const { cwd } = workspace();
+    expect(() => confine(cwd, "src/a.ts")).not.toThrow();
+    expect(() => confine(cwd, ".")).not.toThrow();
+    expect(() => confine(cwd, "../outside.txt")).toThrow(/outside the workspace/);
+    expect(() => confine(cwd, join(cwd, "..", "outside.txt"))).toThrow(/outside the workspace/);
+    expect(() => confine(cwd, ".env")).toThrow(/secret/);
+  });
+
+  it("rejects symlinks that point out of the workspace", () => {
+    const { root, cwd } = workspace();
+    try {
+      symlinkSync(join(root, "outside.txt"), join(cwd, "link.txt"), "file");
+    } catch {
+      return; // creating symlinks needs privileges on some Windows setups
+    }
+    expect(() => confine(cwd, "link.txt")).toThrow(/outside the workspace/);
+  });
+
+  it("checks path-like command args but not search patterns", () => {
+    const { cwd } = workspace();
+    const run = (c: string) => checkCommandPaths(parseReadOnlyCommand(c)!, cwd);
+    expect(() => run("git diff --stat")).not.toThrow();
+    expect(() => run("git log origin/main..HEAD")).not.toThrow();
+    expect(() => run("rg foo/bar src")).not.toThrow();
+    expect(() => run("rg foo ../outside.txt")).toThrow(/outside/);
+    expect(() => run("head -n 5 ../outside.txt")).toThrow(/outside/);
+    expect(() => run("head .env")).toThrow(/secret/);
+    expect(() => run("git diff --no-index /etc/passwd src/a.ts")).toThrow(/outside/);
+    expect(() => run("ls --color=../x")).toThrow(/outside/);
   });
 });

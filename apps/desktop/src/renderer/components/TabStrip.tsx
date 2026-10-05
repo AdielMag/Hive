@@ -49,6 +49,8 @@ export const TabStrip: React.FC<TabStripProps> = ({
     sessionActivity,
     tabUi,
     displayedTabId,
+    displayedPendingDialog,
+    displayedPendingForm,
   } = useSessionStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -62,6 +64,8 @@ export const TabStrip: React.FC<TabStripProps> = ({
       sessionActivity: s.sessionActivity,
       tabUi: s.tabUi,
       displayedTabId: s.displayedTabId,
+      displayedPendingDialog: !!s.pendingUiDialog,
+      displayedPendingForm: !!s.pendingForm,
     })),
   );
 
@@ -307,13 +311,20 @@ export const TabStrip: React.FC<TabStripProps> = ({
                 ? "error"
                 : undefined);
           const activity = isSession ? sessionActivity[tab.id] : undefined;
-          const busy = (isSession && (activity === "running" || (active && tab.id === displayedTabId && running))) || subagentRunning;
-          const unseen = !busy && (activity === "done" || activity === "error" ? activity : subagentUnseen);
+          const isRunning = (isSession && (activity === "running" || (active && tab.id === displayedTabId && running))) || subagentRunning;
           // Parked (non-displayed) session state: a question waiting for you, or an unsent draft.
-          const parked = isSession && !active ? tabUi[tab.id] : undefined;
-          const needsInput = !!parked?.pendingUiDialog || !!parked?.pendingForm;
+          const parked = isSession && tab.id !== displayedTabId ? tabUi[tab.id] : undefined;
+          // Waiting on you (question form, or a confirm like the bash-guard approval). The agent is still
+          // "running" while it waits, so this must win over the spinner or the wait is invisible.
+          const needsInput =
+            isSession &&
+            (tab.id === displayedTabId
+              ? displayedPendingDialog || displayedPendingForm
+              : !!parked?.pendingUiDialog || !!parked?.pendingForm);
+          const busy = isRunning && !needsInput;
+          const unseen = !busy && !needsInput && (activity === "done" || activity === "error" ? activity : subagentUnseen);
           const dotKind = needsInput ? "input" : unseen;
-          const draft = hasDraft(parked);
+          const draft = hasDraft(isSession && !active ? tabUi[tab.id] : undefined);
           const stateLabel =
             (needsInput
               ? " (waiting for your input)"

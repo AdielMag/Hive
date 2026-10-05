@@ -178,7 +178,18 @@
 .sb-session__busy {
   color: var(--prj-color, var(--accent-base));
 }
-.sb-session.is-running .sb-session__title {
+.sb-session.is-running /* Project row: one or more of its sessions is waiting on you (always visible, even when collapsed). */
+.sb-project__input {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--warning);
+}
+.sb-session__title {
   color: var(--text-primary);
 }
 .sb-session__dot {

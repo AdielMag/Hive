@@ -100,6 +100,7 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
   const [test, setTest] = useState<TestKeyResult | "testing" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [agree, setAgree] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const alive = useRef(true);
   useEffect(() => () => void (alive.current = false), []);
@@ -143,7 +144,8 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
   const saveKey = async () => {
     const key = keyDraft.trim();
     if (!key) return;
-    await save({ apiKey: key });
+    if (!settings?.consentAt && !agree) return;
+    await save({ apiKey: key, ...(settings?.consentAt ? {} : { consentAt: Date.now() }) });
     setKeyDraft("");
     setShowKey(false);
     await runTest();
@@ -203,9 +205,13 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
             {settings.hasKey ? `Key saved (${settings.keyHint}) · Fast decision model` : "Fast decision model · api.typesafe.ai"}
           </div>
         </div>
-        {settings.hasKey ? (
+        {settings.hasKey && settings.consentAt ? (
           <span className="ui-chip ui-chip--ok">
             <CheckCircle2 size={11} /> Connected
+          </span>
+        ) : settings.hasKey ? (
+          <span className="ui-chip">
+            <CircleAlert size={11} /> Consent needed
           </span>
         ) : (
           <span className="ui-chip">
@@ -229,7 +235,9 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
       {!expanded && (
         <div className="settings__account-actions">
           <span className="ui-row__hint">
-            {settings.hasKey
+            {settings.hasKey && !settings.consentAt
+              ? "Accept the privacy notice to turn Jev on"
+              : settings.hasKey
               ? `${settings.compact.enabled ? "Compaction hints on" : "Compaction off"} · ${settings.askJev.enabled ? "ask_jev on" : "ask_jev off"}${usage?.remainingUsd !== null && usage?.remainingUsd !== undefined ? ` · Est. credit: ${usd(usage.remainingUsd, 2)}` : ""}`
               : "Fast typed decisions for smart compaction and ask_jev tool (requires TypeSafe key)"}
           </span>
@@ -278,6 +286,34 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
               </div>
             </div>
 
+            {settings.consentAt ? (
+              <div className="jev-muted">
+                Privacy notice accepted {new Date(settings.consentAt).toLocaleDateString()}.{" "}
+                <button className="jev-link" type="button" onClick={() => void save({ consentAt: null })}>
+                  Revoke (turns Jev off)
+                </button>
+              </div>
+            ) : (
+              <div className="jev-consent" role="group" aria-label="Privacy notice">
+                <strong>Before you turn this on</strong>
+                <p>
+                  Jev sends content to TypeSafe (<code>api.typesafe.ai</code>) outside your machine: roughly the last 8 messages of the chat (shortened) for
+                  compaction hints, and any text, files or read-only command output the agent passes to <code>ask_jev</code>. Files stay inside the
+                  workspace and credential-looking files are refused, but source code in the workspace can still be sent. Don't enable Jev for code you
+                  can't share with a third party.
+                </p>
+                <label className="jev-consent__check">
+                  <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+                  <span>I understand and agree to send this content to TypeSafe</span>
+                </label>
+                {settings.hasKey && (
+                  <button className="jev-btn" type="button" disabled={!agree} onClick={() => void save({ consentAt: Date.now() })}>
+                    Accept and turn Jev on
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="jev-keyrow">
               <input
                 className="jev-input jev-input--key"
@@ -293,7 +329,7 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
               <button className="jev-btn jev-btn--ghost" type="button" onClick={() => setShowKey((v) => !v)} title={showKey ? "Hide" : "Show"} aria-label={showKey ? "Hide key" : "Show key"}>
                 {showKey ? <EyeOff size={13} /> : <Eye size={13} />}
               </button>
-              <button className="jev-btn" type="button" disabled={!keyDraft.trim()} onClick={() => void saveKey()}>
+              <button className="jev-btn" type="button" disabled={!keyDraft.trim() || (!settings.consentAt && !agree)} onClick={() => void saveKey()}>
                 Save key
               </button>
               <button className="jev-btn jev-btn--ghost" type="button" disabled={!settings.hasKey || test === "testing"} onClick={() => void runTest()}>

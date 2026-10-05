@@ -1,668 +1,609 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   GitBranch,
   Plus,
   Minus,
-  RotateCcw,
+  Undo2,
   Check,
+  CircleCheck,
   RefreshCw,
   MoreHorizontal,
-  Download,
-  Upload,
+  ArrowDown,
+  ArrowUp,
   CloudDownload,
+  CloudUpload,
   Sparkles,
   ChevronDown,
   ChevronRight,
   X,
-  FileCode,
+  FileDiff,
   Search,
+  History,
 } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
+import type { GitFileStatus, GitRepoStatus } from "../shared.ts";
 import { useGitStore } from "./git-store.ts";
 import { gitApi } from "./git-host.ts";
 import { openDiffTab } from "./open-diff.ts";
 
+const STATUS_LETTER: Record<GitFileStatus["status"], string> = {
+  added: "A",
+  modified: "M",
+  deleted: "D",
+  untracked: "U",
+  renamed: "R",
+  conflicted: "!",
+};
+const STATUS_LABEL: Record<GitFileStatus["status"], string> = {
+  added: "Added",
+  modified: "Modified",
+  deleted: "Deleted",
+  untracked: "Untracked",
+  renamed: "Renamed",
+  conflicted: "Merge conflict",
+};
+
+const SUBJECT_SOFT_LIMIT = 72;
+const POLL_MS = 5000;
+
+/** Unsent commit messages survive the panel being closed or the project being switched. */
+const drafts = new Map<string, string>();
+
+const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+/** Closes a popover on outside mousedown / Escape while `open`. */
+function useDismiss(open: boolean, ref: React.RefObject<HTMLElement | null>, close: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, ref, close]);
+}
+
+const DiffStat: React.FC<{ files: GitFileStatus[] }> = ({ files }) => {
+  let add = 0;
+  let del = 0;
+  for (const f of files) {
+    add += f.additions ?? 0;
+    del += f.deletions ?? 0;
+  }
+  if (!add && !del) return null;
+  return (
+    <span className="gp-stat" title={`${add} additions, ${del} deletions`}>
+      <span className="gp-stat__add">+{add}</span>
+      <span className="gp-stat__del">−{del}</span>
+    </span>
+  );
+};
+
+interface IconBtnProps {
+  title: string;
+  onClick: () => void;
+  tone?: "accent" | "danger" | "success";
+  children: React.ReactNode;
+}
+const IconBtn: React.FC<IconBtnProps> = ({ title, onClick, tone, children }) => (
+  <button
+    type="button"
+    className={`gp-ib${tone ? ` gp-ib--${tone}` : ""}`}
+    title={title}
+    aria-label={title}
+    onClick={(e) => {
+      e.stopPropagation();
+      onClick();
+    }}
+  >
+    {children}
+  </button>
+);
+
+interface SectionProps {
+  title: string;
+  count: number;
+  countClass: string;
+  files: GitFileStatus[];
+  expanded: boolean;
+  onToggle: () => void;
+  actions: React.ReactNode;
+  emptyText: string;
+  children: React.ReactNode;
+}
+const Section: React.FC<SectionProps> = ({
+  title,
+  count,
+  countClass,
+  files,
+  expanded,
+  onToggle,
+  actions,
+  emptyText,
+  children,
+}) => (
+  <section className="gp-section">
+    <div className="gp-sec-head">
+      <button type="button" className="gp-sec-toggle" onClick={onToggle} aria-expanded={expanded}>
+        <ChevronRight size={12} className={`gp-sec-chev${expanded ? " gp-sec-chev--open" : ""}`} />
+        <span>{title}</span>
+        <span className={`gp-count ${count > 0 ? countClass : ""}`}>{count}</span>
+        <DiffStat files={files} />
+      </button>
+      {count > 0 && <div className="gp-sec-actions">{actions}</div>}
+    </div>
+    {expanded &&
+      (count === 0 ? <div className="gp-empty">{emptyText}</div> : <div className="gp-rows">{children}</div>)}
+  </section>
+);
+
+interface FileRowProps {
+  file: GitFileStatus;
+  onOpen: () => void;
+  actions: React.ReactNode;
+}
+const FileRow: React.FC<FileRowProps> = ({ file, onOpen, actions }) => {
+  const parts = file.path.split(/[/\\]/);
+  const name = parts.pop() || file.path;
+  const dir = parts.join("/");
+  const hasStat = file.additions !== undefined || file.deletions !== undefined;
+  const tip = [
+    file.path,
+    file.origPath ? `renamed from ${file.origPath}` : "",
+    STATUS_LABEL[file.status],
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div
+      className="gp-row"
+      role="button"
+      tabIndex={0}
+      title={tip}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+    >
+      <span className="gp-badge" data-status={file.status} aria-label={STATUS_LABEL[file.status]}>
+        {STATUS_LETTER[file.status]}
+      </span>
+      <span className="gp-path">
+        <span className={`gp-path__name${file.status === "deleted" ? " gp-path__name--deleted" : ""}`}>{name}</span>
+        {dir && <span className="gp-path__dir">{dir}</span>}
+      </span>
+      {hasStat && (
+        <span className="gp-row__stat">
+          <DiffStat files={[file]} />
+        </span>
+      )}
+      <div className="gp-row__actions">{actions}</div>
+    </div>
+  );
+};
+
 export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const { project: activeProject } = host.hooks.useActiveSession();
+  const projectPath = activeProject?.path;
   const resolvedCommitModel = host.hooks.useFeatureModel("gitCommit");
   const AiModelChip = host.ui.AiModelChip;
-  const [status, setStatus] = useState<any>(null);
+
+  const [status, setStatus] = useState<GitRepoStatus | null>(null);
   const [branches, setBranches] = useState<string[]>([]);
-  const [commitMsg, setCommitMsg] = useState("");
+  const [commitMsg, setCommitMsg] = useState(() => (projectPath ? (drafts.get(projectPath) ?? "") : ""));
   const [loading, setLoading] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [syncOp, setSyncOp] = useState<"fetch" | "pull" | "push" | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Branch switcher state
-  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
-  const [branchFilter, setBranchFilter] = useState("");
-  const branchDropdownRef = useRef<HTMLDivElement>(null);
-  const branchSearchInputRef = useRef<HTMLInputElement>(null);
-
-  // Sync / actions menu state
-  const [syncMenuOpen, setSyncMenuOpen] = useState(false);
-  const syncMenuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!syncMenuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (syncMenuRef.current && !syncMenuRef.current.contains(e.target as Node)) setSyncMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [syncMenuOpen]);
-
-  // Collapsible section states
   const [stagedExpanded, setStagedExpanded] = useState(true);
   const [changesExpanded, setChangesExpanded] = useState(true);
 
-  // Notification / error feedback
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Popovers
+  const [branchOpen, setBranchOpen] = useState(false);
+  const [branchFilter, setBranchFilter] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [commitMenuOpen, setCommitMenuOpen] = useState(false);
+  const headRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const splitRef = useRef<HTMLDivElement>(null);
+  const branchInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const requestId = useRef(0);
 
-  const refreshGit = async () => {
-    if (!activeProject?.path) return;
-    setLoading(true);
-    setErrorMessage(null);
-    try {
-      const [s, b] = await Promise.all([
-        gitApi().getGitStatus(activeProject.path),
-        gitApi().getGitBranches(activeProject.path).catch(() => []),
-      ]);
-      setStatus(s);
-      setBranches(b);
-      if (s && s.isRepo) {
-        useGitStore.getState().setStatus({
-          ahead: s.ahead ?? 0,
-          behind: s.behind ?? 0,
-          branch: s.branch ?? "",
-          upstream: s.upstream,
-          isRepo: true,
-        });
-      } else {
-        useGitStore.getState().setStatus(null);
+  const closeBranch = useCallback(() => {
+    setBranchOpen(false);
+    setBranchFilter("");
+  }, []);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
+  const closeCommitMenu = useCallback(() => setCommitMenuOpen(false), []);
+  useDismiss(branchOpen, headRef, closeBranch);
+  useDismiss(moreOpen, moreRef, closeMore);
+  useDismiss(commitMenuOpen, splitRef, closeCommitMenu);
+
+  const refreshGit = useCallback(
+    async (silent = false) => {
+      if (!projectPath) return;
+      const id = ++requestId.current;
+      if (!silent) {
+        setLoading(true);
+        setErrorMessage(null);
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        const [s, b] = await Promise.all([
+          gitApi().getGitStatus(projectPath),
+          gitApi()
+            .getGitBranches(projectPath)
+            .catch(() => [] as string[]),
+        ]);
+        if (id !== requestId.current) return;
+        setStatus(s);
+        setBranches(b);
+        useGitStore.getState().setStatus(
+          s?.isRepo
+            ? { ahead: s.ahead ?? 0, behind: s.behind ?? 0, branch: s.branch ?? "", upstream: s.upstream, isRepo: true }
+            : null,
+        );
+      } catch (err) {
+        if (!silent && id === requestId.current) setErrorMessage(errText(err));
+      } finally {
+        if (!silent && id === requestId.current) setLoading(false);
+      }
+    },
+    [projectPath],
+  );
 
+  // Initial load + project switch (restores that project's draft message).
   useEffect(() => {
+    setStatus(null);
+    setCommitMsg(projectPath ? (drafts.get(projectPath) ?? "") : "");
     void refreshGit();
-  }, [activeProject?.path]);
+  }, [projectPath, refreshGit]);
 
-  // Click outside to close branch dropdown
+  // Keep the lists fresh while the panel is open: agents edit files behind our back.
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (branchDropdownRef.current && !branchDropdownRef.current.contains(e.target as Node)) {
-        setBranchDropdownOpen(false);
-        setBranchFilter("");
-      }
+    if (!projectPath) return;
+    const tick = () => {
+      if (document.visibilityState === "visible") void refreshGit(true);
     };
-    if (branchDropdownOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      setTimeout(() => branchSearchInputRef.current?.focus(), 50);
-    }
+    const timer = setInterval(tick, POLL_MS);
+    window.addEventListener("focus", tick);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      clearInterval(timer);
+      window.removeEventListener("focus", tick);
     };
-  }, [branchDropdownOpen]);
+  }, [projectPath, refreshGit]);
 
-  const handleStage = async (file: string) => {
-    if (!activeProject) return;
+  useEffect(() => {
+    if (!projectPath) return;
+    if (commitMsg) drafts.set(projectPath, commitMsg);
+    else drafts.delete(projectPath);
+  }, [projectPath, commitMsg]);
+
+  useEffect(() => {
+    if (branchOpen) setTimeout(() => branchInputRef.current?.focus(), 30);
+  }, [branchOpen]);
+
+  // Auto-grow the message box.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+  }, [commitMsg]);
+
+  /** Runs a git action, surfaces failures in the banner and re-reads status. */
+  const act = async (label: string, fn: (cwd: string) => Promise<unknown>) => {
+    if (!projectPath) return;
     try {
-      await gitApi().stageFile(activeProject.path, file);
-      await refreshGit();
-    } catch (err: any) {
-      setErrorMessage(`Stage failed: ${err.message || String(err)}`);
+      await fn(projectPath);
+      await refreshGit(true);
+    } catch (err) {
+      setErrorMessage(`${label} failed: ${errText(err)}`);
     }
   };
 
-  const handleStageAll = async () => {
-    if (!activeProject) return;
-    try {
-      await gitApi().stageAll(activeProject.path);
-      await refreshGit();
-    } catch (err: any) {
-      setErrorMessage(`Stage all failed: ${err.message || String(err)}`);
-    }
+  const handleStage = (file: string) => act("Stage", (cwd) => gitApi().stageFile(cwd, file));
+  const handleStageAll = () => act("Stage all", (cwd) => gitApi().stageAll(cwd));
+  const handleUnstage = (file: string) => act("Unstage", (cwd) => gitApi().unstageFile(cwd, file));
+  const handleUnstageAll = () => act("Unstage all", (cwd) => gitApi().unstageAll(cwd));
+  const handleDiscard = (f: GitFileStatus) => {
+    const what = f.status === "untracked" ? `Delete untracked file ${f.path}?` : `Discard changes in ${f.path}?`;
+    if (confirm(`${what} This cannot be undone.`)) void act("Discard", (cwd) => gitApi().discardFile(cwd, f.path));
   };
-
-  const handleUnstage = async (file: string) => {
-    if (!activeProject) return;
-    try {
-      await gitApi().unstageFile(activeProject.path, file);
-      await refreshGit();
-    } catch (err: any) {
-      setErrorMessage(`Unstage failed: ${err.message || String(err)}`);
-    }
-  };
-
-  const handleUnstageAll = async () => {
-    if (!activeProject) return;
-    try {
-      await gitApi().unstageAll(activeProject.path);
-      await refreshGit();
-    } catch (err: any) {
-      setErrorMessage(`Unstage all failed: ${err.message || String(err)}`);
-    }
-  };
-
-  const handleDiscard = async (file: string) => {
-    if (!activeProject) return;
-    if (confirm(`Discard changes in ${file}?`)) {
-      try {
-        await gitApi().discardFile(activeProject.path, file);
-        await refreshGit();
-      } catch (err: any) {
-        setErrorMessage(`Discard failed: ${err.message || String(err)}`);
-      }
-    }
-  };
-
-  const handleDiscardAll = async () => {
-    if (!activeProject) return;
-    if (confirm("Discard all unstaged changes? This cannot be undone.")) {
-      try {
-        await gitApi().discardAll(activeProject.path);
-        await refreshGit();
-      } catch (err: any) {
-        setErrorMessage(`Discard all failed: ${err.message || String(err)}`);
-      }
+  const handleDiscardAll = () => {
+    if (confirm("Discard all unstaged changes and delete untracked files? This cannot be undone.")) {
+      void act("Discard all", (cwd) => gitApi().discardAll(cwd));
     }
   };
 
   const handleCheckoutBranch = async (branch: string) => {
-    if (!activeProject || branch === status?.branch) {
-      setBranchDropdownOpen(false);
-      return;
-    }
+    if (!projectPath || branch === status?.branch) return closeBranch();
     setLoading(true);
     setErrorMessage(null);
     try {
-      await gitApi().gitCheckout(activeProject.path, branch);
-      setBranchDropdownOpen(false);
-      setBranchFilter("");
+      await gitApi().gitCheckout(projectPath, branch);
+      closeBranch();
       await refreshGit();
-    } catch (err: any) {
-      setErrorMessage(`Checkout failed: ${err.message || String(err)}`);
-    } finally {
+    } catch (err) {
+      setErrorMessage(`Checkout failed: ${errText(err)}`);
       setLoading(false);
     }
   };
 
-  const handleCreateBranch = async (newBranch: string) => {
-    const trimmed = newBranch.trim();
-    if (!activeProject || !trimmed) return;
+  const handleCreateBranch = async (name: string) => {
+    const trimmed = name.trim();
+    if (!projectPath || !trimmed) return;
     setLoading(true);
     setErrorMessage(null);
     try {
-      await gitApi().gitCreateBranch(activeProject.path, trimmed);
-      setBranchDropdownOpen(false);
-      setBranchFilter("");
+      await gitApi().gitCreateBranch(projectPath, trimmed);
+      closeBranch();
       await refreshGit();
-    } catch (err: any) {
-      setErrorMessage(`Create branch failed: ${err.message || String(err)}`);
-    } finally {
+    } catch (err) {
+      setErrorMessage(`Create branch failed: ${errText(err)}`);
       setLoading(false);
     }
   };
 
   const handleViewDiff = (filePath: string, staged: boolean) => {
-    if (!activeProject) return;
-    void openDiffTab(host, activeProject, filePath, staged);
-  };
-
-  const handleGenerateAiCommitMessage = async () => {
-    if (!activeProject || stagedCount === 0 || isGeneratingAi) return;
-    setIsGeneratingAi(true);
-    setErrorMessage(null);
-    try {
-      const generated = await gitApi().generateCommitMessage(
-        activeProject.path,
-        resolvedCommitModel.id || undefined,
-      );
-      if (generated) {
-        setCommitMsg(generated);
-      }
-    } catch (err: any) {
-      setErrorMessage(`AI message generation failed: ${err.message || String(err)}`);
-    } finally {
-      setIsGeneratingAi(false);
-    }
+    if (activeProject) void openDiffTab(host, activeProject, filePath, staged);
   };
 
   const handleSync = async (op: "fetch" | "pull" | "push") => {
-    if (!activeProject || syncOp) return;
+    if (!projectPath || syncOp) return;
     setSyncOp(op);
     setErrorMessage(null);
     try {
-      if (op === "fetch") await gitApi().gitFetch(activeProject.path);
-      else if (op === "pull") await gitApi().gitPull(activeProject.path);
-      else await gitApi().gitPush(activeProject.path);
-      await refreshGit();
-    } catch (err: any) {
-      const label = op.charAt(0).toUpperCase() + op.slice(1);
-      setErrorMessage(`${label} failed: ${err.message || String(err)}`);
+      if (op === "fetch") await gitApi().gitFetch(projectPath);
+      else if (op === "pull") await gitApi().gitPull(projectPath);
+      else await gitApi().gitPush(projectPath);
+      await refreshGit(true);
+    } catch (err) {
+      setErrorMessage(`${op.charAt(0).toUpperCase()}${op.slice(1)} failed: ${errText(err)}`);
     } finally {
       setSyncOp(null);
     }
   };
 
-  const handleCommit = async () => {
-    if (!activeProject || !commitMsg.trim() || stagedCount === 0 || isCommitting) return;
+  const stagedFiles = status?.staged ?? [];
+  const changeFiles = useMemo(() => [...(status?.unstaged ?? []), ...(status?.untracked ?? [])], [status]);
+  const stagedCount = stagedFiles.length;
+  const changeCount = changeFiles.length;
+  const hasMsg = commitMsg.trim().length > 0;
+  const canCommit = hasMsg && stagedCount > 0 && !isCommitting;
+
+  const handleGenerateAiCommitMessage = async () => {
+    if (!projectPath || stagedCount === 0 || isGeneratingAi) return;
+    setIsGeneratingAi(true);
+    setErrorMessage(null);
+    try {
+      const generated = await gitApi().generateCommitMessage(projectPath, resolvedCommitModel.id || undefined);
+      if (generated) setCommitMsg(generated);
+    } catch (err) {
+      setErrorMessage(`AI message generation failed: ${errText(err)}`);
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
+
+  const runCommit = async (mode: "commit" | "push" | "amend") => {
+    setCommitMenuOpen(false);
+    if (!projectPath || !hasMsg || isCommitting) return;
+    if (mode !== "amend" && stagedCount === 0) return;
+    if (mode === "amend" && !confirm("Replace the last commit with these changes and message?")) return;
     setIsCommitting(true);
     setErrorMessage(null);
     try {
-      await gitApi().gitCommit(activeProject.path, commitMsg.trim());
+      await gitApi().gitCommit(projectPath, commitMsg.trim(), mode === "amend");
       setCommitMsg("");
-      await refreshGit();
-    } catch (err: any) {
-      setErrorMessage(`Commit failed: ${err.message || String(err)}`);
+      if (mode === "push") {
+        try {
+          await gitApi().gitPush(projectPath);
+        } catch (err) {
+          setErrorMessage(`Committed, but push failed: ${errText(err)}`);
+        }
+      }
+      await refreshGit(true);
+    } catch (err) {
+      setErrorMessage(`Commit failed: ${errText(err)}`);
     } finally {
       setIsCommitting(false);
     }
   };
 
-  if (!activeProject) {
-    return <div style={{ padding: 16, color: "var(--text-muted)", fontSize: 12 }}>No project open.</div>;
-  }
+  if (!activeProject) return <div className="gp-msg">No project open.</div>;
+  if (status && !status.isRepo) return <div className="gp-msg">This folder is not a Git repository.</div>;
 
-  if (status && !status.isRepo) {
-    return (
-      <div style={{ padding: 16, color: "var(--text-muted)", fontSize: 12 }}>
-        This folder is not a Git repository.
-      </div>
-    );
-  }
+  const needle = branchFilter.trim().toLowerCase();
+  const filteredBranches = branches.filter((b) => b.toLowerCase().includes(needle));
+  const exactMatchExists = branches.some((b) => b.toLowerCase() === needle);
+  const canCreate = needle.length > 0 && !exactMatchExists;
 
-  const stagedCount = status?.staged?.length || 0;
-  const unstagedCount = (status?.unstaged?.length || 0) + (status?.untracked?.length || 0);
-  const filteredBranches = branches.filter((b) =>
-    b.toLowerCase().includes(branchFilter.trim().toLowerCase()),
-  );
-  const exactMatchExists = branches.some(
-    (b) => b.toLowerCase() === branchFilter.trim().toLowerCase(),
-  );
+  const detached = status?.branch === "detached HEAD";
+  const ahead = status?.ahead ?? 0;
+  const behind = status?.behind ?? 0;
+  const primarySync: { op: "push" | "pull"; label: string; count: number; icon: React.ReactNode } | null =
+    ahead > 0
+      ? { op: "push", label: "Push", count: ahead, icon: <ArrowUp size={12} /> }
+      : behind > 0
+        ? { op: "pull", label: "Pull", count: behind, icon: <ArrowDown size={12} /> }
+        : status && !status.upstream && !detached && status.branch
+          ? { op: "push", label: "Publish", count: 0, icon: <CloudUpload size={12} /> }
+          : null;
 
-  const getStatusBadge = (type: string) => {
-    let color = "var(--text-muted)";
-    let bg = "rgba(var(--fg-rgb), 0.05)";
-    let label = "M";
+  const subjectLen = commitMsg.split("\n")[0]?.length ?? 0;
+  const commitTitle =
+    stagedCount === 0
+      ? "Stage files to commit"
+      : !hasMsg
+        ? "Enter a commit message or generate one with AI"
+        : "Commit staged changes (Ctrl+Enter)";
 
-    switch (type) {
-      case "added":
-        color = "#10b981";
-        bg = "rgba(16, 185, 129, 0.15)";
-        label = "A";
-        break;
-      case "modified":
-        color = "#3b82f6";
-        bg = "rgba(59, 130, 246, 0.15)";
-        label = "M";
-        break;
-      case "deleted":
-        color = "#ef4444";
-        bg = "rgba(239, 68, 68, 0.15)";
-        label = "D";
-        break;
-      case "untracked":
-        color = "#f59e0b";
-        bg = "rgba(245, 158, 11, 0.15)";
-        label = "U";
-        break;
-      case "renamed":
-        color = "#a855f7";
-        bg = "rgba(168, 85, 247, 0.15)";
-        label = "R";
-        break;
-    }
-
-    return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 16,
-          height: 16,
-          borderRadius: 3,
-          fontSize: 10,
-          fontWeight: 700,
-          fontFamily: "var(--font-mono)",
-          color,
-          backgroundColor: bg,
-          flexShrink: 0,
-        }}
-      >
-        {label}
-      </span>
-    );
-  };
-
-  const renderPath = (filePath: string) => {
-    const parts = filePath.split(/[/\\]/);
-    const fileName = parts.pop() || filePath;
-    const dir = parts.length > 0 ? parts.join("/") + "/" : "";
-
-    return (
-      <span
-        style={{
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          fontSize: 11,
-          fontFamily: "var(--font-mono)",
-        }}
-        title={filePath}
-      >
-        {dir && <span style={{ color: "var(--text-muted)", opacity: 0.8 }}>{dir}</span>}
-        <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{fileName}</span>
-      </span>
-    );
-  };
+  const syncMenu = [
+    { key: "fetch", icon: CloudDownload, label: "Fetch", hint: "", run: () => handleSync("fetch") },
+    { key: "pull", icon: ArrowDown, label: "Pull", hint: behind ? `${behind} behind` : "", run: () => handleSync("pull") },
+    { key: "push", icon: ArrowUp, label: "Push", hint: ahead ? `${ahead} ahead` : "", run: () => handleSync("push") },
+  ];
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        padding: 12,
-        gap: 10,
-        fontSize: 12,
-        userSelect: "none",
-        position: "relative",
-        boxSizing: "border-box",
-      }}
-    >
-      {/* Branch & Sync Header */}
-      <div
-        ref={branchDropdownRef}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "6px 8px",
-          background: "var(--bg-card)",
-          borderRadius: 6,
-          border: "1px solid var(--border-subtle)",
-          position: "relative",
-          flexShrink: 0,
-        }}
-      >
-        {/* Branch Switcher Trigger Button */}
+    <div className="gp">
+      {/* Branch & sync header */}
+      <div className="gp-head" ref={headRef}>
         <button
-          onClick={() => setBranchDropdownOpen((prev) => !prev)}
-          title="Click to switch or create branch"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontWeight: 600,
-            color: "var(--text-primary)",
-            background: branchDropdownOpen ? "var(--bg-elevated)" : "transparent",
-            border: "none",
-            borderRadius: 4,
-            padding: "3px 6px",
-            cursor: "pointer",
-            maxWidth: "68%",
-          }}
+          type="button"
+          className={`gp-branch${branchOpen ? " gp-branch--open" : ""}`}
+          onClick={() => setBranchOpen((v) => !v)}
+          title="Switch or create branch"
+          aria-haspopup="listbox"
+          aria-expanded={branchOpen}
         >
-          <GitBranch size={13} color="var(--accent-base)" style={{ flexShrink: 0 }} />
-          <span
-            style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              fontSize: 12,
-            }}
-          >
-            {status?.branch || "HEAD"}
-          </span>
-          <ChevronDown
-            size={12}
-            color="var(--text-muted)"
-            style={{
-              transform: branchDropdownOpen ? "rotate(180deg)" : "none",
-              transition: "transform 0.15s ease",
-              flexShrink: 0,
-            }}
-          />
+          <GitBranch size={14} className="gp-branch__icon" />
+          <span className="gp-branch__name">{status?.branch || "HEAD"}</span>
+          <ChevronDown size={13} className="gp-branch__chev" />
         </button>
 
-        {/* Right header actions: Refresh button right next to the 3 dots menu */}
-        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-          {/* Refresh: frequently used, kept outside the dropdown */}
+        {primarySync && (
           <button
             type="button"
+            className={`gp-sync${primarySync.op === "pull" ? " gp-sync--behind" : ""}`}
+            disabled={!!syncOp || loading}
+            onClick={() => void handleSync(primarySync.op)}
+            title={
+              primarySync.label === "Publish"
+                ? "Publish branch to origin"
+                : `${primarySync.label} ${primarySync.count} commit${primarySync.count === 1 ? "" : "s"}${status?.upstream ? ` (${status.upstream})` : ""}`
+            }
+          >
+            {syncOp === "push" || syncOp === "pull" ? <RefreshCw size={12} className="spin" /> : primarySync.icon}
+            <span>{primarySync.count || primarySync.label}</span>
+          </button>
+        )}
+
+        <div className="gp-head__tools" ref={moreRef}>
+          <button
+            type="button"
+            className="gp-ib"
+            style={{ height: 28, minWidth: 28 }}
             onClick={() => void refreshGit()}
             disabled={!!syncOp || loading}
             title="Refresh status"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              background: "transparent",
-              border: "none",
-              borderRadius: 4,
-              color: "var(--text-muted)",
-              cursor: syncOp || loading ? "default" : "pointer",
-              padding: "3px 5px",
-              flexShrink: 0,
-            }}
+            aria-label="Refresh status"
           >
             <RefreshCw size={13} className={syncOp || loading ? "spin" : undefined} />
           </button>
-
-          {/* Sync menu: Fetch / Pull / Push / Branches (collapsed into one button) */}
-          <div ref={syncMenuRef} style={{ position: "relative", flexShrink: 0 }}>
-            <button
-              type="button"
-              onClick={() => setSyncMenuOpen((prev) => !prev)}
-              title={
-                status?.behind || status?.ahead
-                  ? `Sync & Git actions (${status?.behind || 0} behind, ${status?.ahead || 0} ahead)`
-                  : "Sync & Git actions"
-              }
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                background: syncMenuOpen ? "var(--bg-elevated)" : "transparent",
-                border: "none",
-                borderRadius: 4,
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                padding: "3px 5px",
-                fontSize: 10,
-                fontWeight: 600,
-              }}
-            >
-              <MoreHorizontal size={14} />
-              {!!status?.behind && <span style={{ color: "var(--warning)" }}>↓{status.behind}</span>}
-              {!!status?.ahead && <span style={{ color: "var(--accent-base)" }}>↑{status.ahead}</span>}
-            </button>
-            {syncMenuOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  marginTop: 4,
-                  minWidth: 190,
-                  background: "var(--bg-elevated)",
-                  border: "1px solid var(--border-prominent)",
-                  borderRadius: 6,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                  zIndex: 100,
-                  padding: 4,
-                  display: "flex",
-                  flexDirection: "column",
+          <button
+            type="button"
+            className={`gp-ib${moreOpen ? " gp-ib--open" : ""}`}
+            style={{ height: 28, minWidth: 28 }}
+            onClick={() => setMoreOpen((v) => !v)}
+            title="Sync & Git actions"
+            aria-label="Sync & Git actions"
+            aria-haspopup="menu"
+            aria-expanded={moreOpen}
+          >
+            <MoreHorizontal size={15} />
+          </button>
+          {moreOpen && (
+            <div className="gp-pop gp-pop--menu" role="menu">
+              {syncMenu.map(({ key, icon: Icon, label, hint, run }) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="menuitem"
+                  className="gp-item"
+                  disabled={!!syncOp || loading}
+                  onClick={() => {
+                    closeMore();
+                    void run();
+                  }}
+                >
+                  <Icon size={13} />
+                  <span className="gp-item__label">{label}</span>
+                  {hint && <span className="gp-item__hint">{hint}</span>}
+                </button>
+              ))}
+              <div className="gp-sep" />
+              <button
+                type="button"
+                role="menuitem"
+                className="gp-item"
+                onClick={() => {
+                  closeMore();
+                  void host.commands.run("view.branches");
                 }}
               >
-                {(
-                  [
-                    { key: "fetch", icon: CloudDownload, label: "Fetch", hint: "", sync: "fetch" },
-                    { key: "pull", icon: Download, label: "Pull", hint: status?.behind ? `${status.behind} behind` : "", sync: "pull" },
-                    { key: "push", icon: Upload, label: "Push", hint: status?.ahead ? `${status.ahead} ahead` : "", sync: "push" },
-                    { key: "branches", icon: GitBranch, label: "Branches & History", hint: "", sync: null },
-                  ] as const
-                ).map(({ key, icon: Icon, label, hint, sync }) => {
-                  const disabled = key === "branches" ? false : !!syncOp || loading;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => {
-                        setSyncMenuOpen(false);
-                        if (sync) void handleSync(sync);
-                        else void host.commands.run("view.branches");
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        background: "transparent",
-                        border: "none",
-                        borderRadius: 4,
-                        color: "var(--text-primary)",
-                        cursor: disabled ? "default" : "pointer",
-                        opacity: disabled ? 0.5 : 1,
-                        padding: "5px 8px",
-                        fontSize: 12,
-                        textAlign: "left",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      <Icon size={13} color="var(--text-muted)" />
-                      <span style={{ flex: 1 }}>{label}</span>
-                      {hint && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{hint}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                <History size={13} />
+                <span className="gp-item__label">Branches &amp; History</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Branch Dropdown Popover */}
-        {branchDropdownOpen && (
-          <div
-            style={{
-              position: "absolute",
-              top: "100%",
-              left: 0,
-              right: 0,
-              marginTop: 4,
-              background: "var(--bg-elevated)",
-              border: "1px solid var(--border-prominent)",
-              borderRadius: 6,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-              zIndex: 100,
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              maxHeight: 260,
-            }}
-          >
-            {/* Search / Filter Input */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "6px 8px",
-                borderBottom: "1px solid var(--border-subtle)",
-                background: "var(--bg-card)",
-              }}
-            >
-              <Search size={12} color="var(--text-muted)" />
+        {branchOpen && (
+          <div className="gp-pop gp-pop--branches">
+            <div className="gp-search">
+              <Search size={13} />
               <input
-                ref={branchSearchInputRef}
+                ref={branchInputRef}
                 type="text"
                 value={branchFilter}
+                spellCheck={false}
                 onChange={(e) => setBranchFilter(e.target.value)}
-                placeholder="Search or create branch..."
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  color: "var(--text-primary)",
-                  fontSize: 11,
-                  width: "100%",
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  if (canCreate) void handleCreateBranch(branchFilter);
+                  else if (filteredBranches[0]) void handleCheckoutBranch(filteredBranches[0]);
                 }}
+                placeholder="Search or create branch…"
               />
               {branchFilter && (
-                <button
-                  onClick={() => setBranchFilter("")}
-                  style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex", padding: 0 }}
-                >
-                  <X size={11} />
+                <button type="button" className="gp-ib" onClick={() => setBranchFilter("")} aria-label="Clear">
+                  <X size={12} />
                 </button>
               )}
             </div>
-
-            {/* Branch List */}
-            <div style={{ overflowY: "auto", padding: "4px 0", flex: 1 }}>
-              {/* Option to create new branch if filter doesn't match existing */}
-              {branchFilter.trim() && !exactMatchExists && (
-                <div
-                  onClick={() => handleCreateBranch(branchFilter)}
-                  style={{
-                    padding: "6px 10px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    cursor: "pointer",
-                    fontSize: 11,
-                    color: "var(--accent-base)",
-                    borderBottom: "1px solid var(--border-subtle)",
-                    background: "rgba(var(--accent-rgb), 0.08)",
-                  }}
-                >
-                  <Plus size={12} />
-                  <span>Create branch <strong>{branchFilter.trim()}</strong></span>
-                </div>
+            <div className="gp-list" role="listbox">
+              {canCreate && (
+                <button type="button" className="gp-item gp-item--create" onClick={() => void handleCreateBranch(branchFilter)}>
+                  <Plus size={13} />
+                  <span className="gp-item__label">
+                    Create branch <strong>{branchFilter.trim()}</strong>
+                  </span>
+                </button>
               )}
-
-              {filteredBranches.length === 0 && !branchFilter.trim() ? (
-                <div style={{ padding: "8px 10px", color: "var(--text-muted)", fontSize: 11, fontStyle: "italic" }}>
-                  No branches found
-                </div>
+              {filteredBranches.length === 0 && !canCreate ? (
+                <div className="gp-empty-list">No branches found</div>
               ) : (
                 filteredBranches.map((b) => {
                   const isCurrent = b === status?.branch;
                   return (
-                    <div
+                    <button
                       key={b}
-                      onClick={() => handleCheckoutBranch(b)}
-                      style={{
-                        padding: "5px 10px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        cursor: "pointer",
-                        fontSize: 11,
-                        background: isCurrent ? "rgba(var(--accent-rgb), 0.12)" : "transparent",
-                        color: isCurrent ? "var(--accent-base)" : "var(--text-primary)",
-                        fontWeight: isCurrent ? 600 : 400,
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isCurrent) e.currentTarget.style.background = "var(--bg-card-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isCurrent) e.currentTarget.style.background = "transparent";
-                      }}
+                      type="button"
+                      role="option"
+                      aria-selected={isCurrent}
+                      className={`gp-item${isCurrent ? " gp-item--current" : ""}`}
+                      onClick={() => void handleCheckoutBranch(b)}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden", textOverflow: "ellipsis" }}>
-                        <GitBranch size={11} color={isCurrent ? "var(--accent-base)" : "var(--text-muted)"} />
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b}</span>
-                      </div>
-                      {isCurrent && <Check size={12} color="var(--accent-base)" />}
-                    </div>
+                      <GitBranch size={12} />
+                      <span className="gp-item__label">{b}</span>
+                      {isCurrent && <Check size={13} />}
+                    </button>
                   );
                 })
               )}
@@ -671,526 +612,212 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         )}
       </div>
 
-      {/* Error Banner */}
       {errorMessage && (
-        <div
-          style={{
-            padding: "6px 8px",
-            background: "rgba(229, 83, 75, 0.15)",
-            border: "1px solid rgba(229, 83, 75, 0.3)",
-            borderRadius: 4,
-            color: "var(--danger)",
-            fontSize: 11,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{errorMessage}</span>
-          <button
-            onClick={() => setErrorMessage(null)}
-            style={{ background: "transparent", border: "none", color: "var(--danger)", cursor: "pointer", display: "flex", padding: 0 }}
-          >
+        <div className="gp-error" role="alert">
+          <span className="gp-error__text">{errorMessage}</span>
+          <button type="button" className="gp-ib" onClick={() => setErrorMessage(null)} aria-label="Dismiss">
             <X size={12} />
           </button>
         </div>
       )}
 
-      {/* Scrollable File Changes Section */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          flex: 1,
-          overflowY: "auto",
-          minHeight: 120,
-        }}
-      >
-        {/* Staged Changes Section */}
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 4,
-            }}
-          >
-            <div
-              onClick={() => setStagedExpanded((prev) => !prev)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                cursor: "pointer",
-                fontSize: 10,
-                fontWeight: 700,
-                color: "var(--text-secondary)",
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-              }}
-            >
-              <ChevronRight
-                size={11}
-                style={{
-                  transform: stagedExpanded ? "rotate(90deg)" : "none",
-                  transition: "transform 0.15s ease",
-                }}
-              />
-              <span>Staged Changes</span>
-              <span
-                style={{
-                  padding: "1px 5px",
-                  borderRadius: 8,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  backgroundColor: stagedCount > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(var(--fg-rgb), 0.05)",
-                  color: stagedCount > 0 ? "var(--success)" : "var(--text-muted)",
-                }}
-              >
-                {stagedCount}
-              </span>
-            </div>
-
-            {stagedCount > 0 && (
-              <button
-                onClick={handleUnstageAll}
-                title="Unstage all changes"
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  padding: 2,
-                  borderRadius: 3,
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-              >
-                <Minus size={13} />
-              </button>
-            )}
+      {/* File lists */}
+      <div className="gp-scroll">
+        {status && stagedCount === 0 && changeCount === 0 ? (
+          <div className="gp-clean">
+            <CircleCheck size={26} />
+            <span className="gp-clean__title">Working tree clean</span>
+            <span className="gp-clean__sub">
+              {behind > 0 ? `${behind} commit${behind === 1 ? "" : "s"} to pull` : ahead > 0 ? `${ahead} commit${ahead === 1 ? "" : "s"} to push` : "Nothing to commit"}
+            </span>
           </div>
-
-          {stagedExpanded && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {stagedCount === 0 ? (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "var(--text-muted)",
-                    fontStyle: "italic",
-                    padding: "6px 8px",
-                    borderRadius: 4,
-                    border: "1px dashed var(--border-subtle)",
-                    textAlign: "center",
-                  }}
-                >
-                  No staged changes
-                </div>
-              ) : (
-                status?.staged?.map((f: any) => {
-                  return (
-                    <div
-                      key={f.path}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "3px 6px",
-                        borderRadius: 4,
-                        cursor: "pointer",
-                        gap: 6,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "var(--bg-card-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <div
-                        onClick={() => handleViewDiff(f.path, true)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          overflow: "hidden",
-                          flex: 1,
-                        }}
-                      >
-                        {getStatusBadge(f.status)}
-                        {renderPath(f.path)}
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-                        <button
-                          onClick={() => handleViewDiff(f.path, true)}
-                          title="Open staged diff tab"
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--text-muted)",
-                            cursor: "pointer",
-                            display: "flex",
-                            padding: 2,
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-base)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                        >
-                          <FileCode size={11} />
-                        </button>
-                        <button
-                          onClick={() => handleUnstage(f.path)}
-                          title="Unstage file"
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--text-muted)",
-                            cursor: "pointer",
-                            display: "flex",
-                            padding: 2,
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                        >
-                          <Minus size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Changes (Unstaged & Untracked) Section */}
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 4,
-            }}
-          >
-            <div
-              onClick={() => setChangesExpanded((prev) => !prev)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                cursor: "pointer",
-                fontSize: 10,
-                fontWeight: 700,
-                color: "var(--text-secondary)",
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-              }}
+        ) : (
+          <>
+            <Section
+              title="Staged"
+              count={stagedCount}
+              countClass="gp-count--staged"
+              files={stagedFiles}
+              expanded={stagedExpanded}
+              onToggle={() => setStagedExpanded((v) => !v)}
+              emptyText="Stage files below to include them in the commit"
+              actions={
+                <IconBtn title="Unstage all" onClick={() => void handleUnstageAll()}>
+                  <Minus size={14} />
+                </IconBtn>
+              }
             >
-              <ChevronRight
-                size={11}
-                style={{
-                  transform: changesExpanded ? "rotate(90deg)" : "none",
-                  transition: "transform 0.15s ease",
-                }}
-              />
-              <span>Changes</span>
-              <span
-                style={{
-                  padding: "1px 5px",
-                  borderRadius: 8,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  backgroundColor: unstagedCount > 0 ? "rgba(59, 130, 246, 0.15)" : "rgba(var(--fg-rgb), 0.05)",
-                  color: unstagedCount > 0 ? "var(--accent-base)" : "var(--text-muted)",
-                }}
-              >
-                {unstagedCount}
-              </span>
-            </div>
+              {stagedFiles.map((f) => (
+                <FileRow
+                  key={`s:${f.path}`}
+                  file={f}
+                  onOpen={() => handleViewDiff(f.path, true)}
+                  actions={
+                    <>
+                      <IconBtn title="Open staged diff" tone="accent" onClick={() => handleViewDiff(f.path, true)}>
+                        <FileDiff size={13} />
+                      </IconBtn>
+                      <IconBtn title="Unstage file" tone="danger" onClick={() => void handleUnstage(f.path)}>
+                        <Minus size={14} />
+                      </IconBtn>
+                    </>
+                  }
+                />
+              ))}
+            </Section>
 
-            {unstagedCount > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <button
-                  onClick={handleDiscardAll}
-                  title="Discard all unstaged changes"
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    padding: 2,
-                    borderRadius: 3,
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                >
-                  <RotateCcw size={11} />
-                </button>
-                <button
-                  onClick={handleStageAll}
-                  title="Stage all changes"
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    padding: 2,
-                    borderRadius: 3,
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-base)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                >
-                  <Plus size={13} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {changesExpanded && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {unstagedCount === 0 ? (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "var(--text-muted)",
-                    fontStyle: "italic",
-                    padding: "6px 8px",
-                    borderRadius: 4,
-                    border: "1px dashed var(--border-subtle)",
-                    textAlign: "center",
-                  }}
-                >
-                  No unstaged changes
-                </div>
-              ) : (
-                [...(status?.unstaged || []), ...(status?.untracked || [])].map((f: any) => {
-                  return (
-                    <div
-                      key={f.path}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "3px 6px",
-                        borderRadius: 4,
-                        cursor: "pointer",
-                        gap: 6,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "var(--bg-card-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <div
-                        onClick={() => handleViewDiff(f.path, false)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          overflow: "hidden",
-                          flex: 1,
-                        }}
+            <Section
+              title="Changes"
+              count={changeCount}
+              countClass="gp-count--changes"
+              files={changeFiles}
+              expanded={changesExpanded}
+              onToggle={() => setChangesExpanded((v) => !v)}
+              emptyText="No unstaged changes"
+              actions={
+                <>
+                  <IconBtn title="Discard all changes" tone="danger" onClick={handleDiscardAll}>
+                    <Undo2 size={13} />
+                  </IconBtn>
+                  <IconBtn title="Stage all" tone="success" onClick={() => void handleStageAll()}>
+                    <Plus size={14} />
+                  </IconBtn>
+                </>
+              }
+            >
+              {changeFiles.map((f) => (
+                <FileRow
+                  key={`${f.status === "untracked" ? "u" : "c"}:${f.path}`}
+                  file={f}
+                  onOpen={() => handleViewDiff(f.path, false)}
+                  actions={
+                    <>
+                      <IconBtn title="Open diff" tone="accent" onClick={() => handleViewDiff(f.path, false)}>
+                        <FileDiff size={13} />
+                      </IconBtn>
+                      <IconBtn
+                        title={f.status === "untracked" ? "Delete file" : "Discard changes"}
+                        tone="danger"
+                        onClick={() => handleDiscard(f)}
                       >
-                        {getStatusBadge(f.status)}
-                        {renderPath(f.path)}
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
-                        <button
-                          onClick={() => handleViewDiff(f.path, false)}
-                          title="Open diff tab"
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--text-muted)",
-                            cursor: "pointer",
-                            display: "flex",
-                            padding: 2,
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-base)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                        >
-                          <FileCode size={11} />
-                        </button>
-                        <button
-                          onClick={() => handleDiscard(f.path)}
-                          title="Discard changes"
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--text-muted)",
-                            cursor: "pointer",
-                            display: "flex",
-                            padding: 2,
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                        >
-                          <RotateCcw size={11} />
-                        </button>
-                        <button
-                          onClick={() => handleStage(f.path)}
-                          title="Stage file"
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--text-muted)",
-                            cursor: "pointer",
-                            display: "flex",
-                            padding: 2,
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-base)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                        >
-                          <Plus size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </div>
+                        <Undo2 size={13} />
+                      </IconBtn>
+                      <IconBtn title="Stage file" tone="success" onClick={() => void handleStage(f.path)}>
+                        <Plus size={14} />
+                      </IconBtn>
+                    </>
+                  }
+                />
+              ))}
+            </Section>
+          </>
+        )}
       </div>
 
-      {/* Commit Box — Pinned At Bottom */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          marginTop: "auto",
-          paddingTop: 8,
-          borderTop: "1px solid var(--border-subtle)",
-          flexShrink: 0,
-        }}
-      >
-        <textarea
-          rows={3}
-          value={commitMsg}
-          onChange={(e) => setCommitMsg(e.target.value)}
-          onKeyDown={(e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-              e.preventDefault();
-              void handleCommit();
-            }
-          }}
-          placeholder="Commit message (Ctrl+Enter to commit)..."
-          style={{
-            padding: "6px 8px",
-            background: "var(--bg-input)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: 6,
-            fontSize: 11,
-            color: "var(--text-primary)",
-            resize: "vertical",
-            minHeight: 52,
-            maxHeight: 140,
-            outline: "none",
-            fontFamily: "var(--font-sans)",
-            lineHeight: 1.4,
-          }}
-        />
-
-        {/* Action Row: AI Generate & Commit Button */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-          {/* AI Commit Message Button — strictly requires staged files */}
-          <button
-            onClick={handleGenerateAiCommitMessage}
-            disabled={stagedCount === 0 || isGeneratingAi}
-            title={
-              stagedCount === 0
-                ? `Stage files first to generate commit message with AI (${resolvedCommitModel.name || resolvedCommitModel.id})`
-                : `Generate commit message with AI · Using ${resolvedCommitModel.name || resolvedCommitModel.id} (${resolvedCommitModel.sourceLabel})`
-            }
-            style={{
-              padding: "5px 9px",
-              background: stagedCount > 0 ? "rgba(var(--accent-rgb), 0.12)" : "var(--bg-card)",
-              color: stagedCount > 0 ? "var(--accent-base)" : "var(--text-muted)",
-              border: `1px solid ${stagedCount > 0 ? "rgba(var(--accent-rgb), 0.3)" : "var(--border-subtle)"}`,
-              borderRadius: 4,
-              cursor: stagedCount > 0 && !isGeneratingAi ? "pointer" : "not-allowed",
-              fontWeight: 500,
-              fontSize: 11,
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              opacity: stagedCount > 0 ? 1 : 0.5,
-              transition: "all 0.15s ease",
+      {/* Commit box */}
+      <div className="gp-commit">
+        <div className="gp-compose">
+          <textarea
+            ref={textareaRef}
+            rows={2}
+            value={commitMsg}
+            spellCheck
+            onChange={(e) => setCommitMsg(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
+                void runCommit("commit");
+              }
             }}
-          >
-            {isGeneratingAi ? (
-              <>
-                <RefreshCw size={12} className="spin" />
-                <span>Generating...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={12} />
-                <span>AI Message</span>
-                <AiModelChip model={resolvedCommitModel} clickable={false} feature="gitCommit" />
-              </>
+            placeholder="Message (Ctrl+Enter to commit)"
+          />
+          <div className="gp-compose__bar">
+            <button
+              type="button"
+              className="gp-ai"
+              onClick={() => void handleGenerateAiCommitMessage()}
+              disabled={stagedCount === 0 || isGeneratingAi}
+              title={
+                stagedCount === 0
+                  ? `Stage files first to generate a message with AI (${resolvedCommitModel.name || resolvedCommitModel.id})`
+                  : `Generate commit message with AI · ${resolvedCommitModel.name || resolvedCommitModel.id} (${resolvedCommitModel.sourceLabel})`
+              }
+            >
+              {isGeneratingAi ? (
+                <>
+                  <RefreshCw size={12} className="spin" />
+                  <span>Writing…</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={12} />
+                  <span>Generate</span>
+                  <AiModelChip model={resolvedCommitModel} clickable={false} feature="gitCommit" />
+                </>
+              )}
+            </button>
+            {subjectLen > 0 && (
+              <span
+                className={`gp-counter${subjectLen > SUBJECT_SOFT_LIMIT ? " gp-counter--warn" : ""}`}
+                title={`Subject line length (aim for ≤ ${SUBJECT_SOFT_LIMIT})`}
+              >
+                {subjectLen}/{SUBJECT_SOFT_LIMIT}
+              </span>
             )}
-          </button>
+          </div>
+        </div>
 
-          {/* Commit Button */}
+        <div className="gp-split" ref={splitRef}>
           <button
-            onClick={handleCommit}
-            disabled={!commitMsg.trim() || stagedCount === 0 || isCommitting}
-            title={
-              stagedCount === 0
-                ? "No files staged to commit"
-                : !commitMsg.trim()
-                ? "Enter a commit message or generate with AI"
-                : "Commit staged changes (Ctrl+Enter)"
-            }
-            style={{
-              padding: "5px 12px",
-              background:
-                commitMsg.trim() && stagedCount > 0 && !isCommitting
-                  ? "var(--accent-base)"
-                  : "var(--bg-card)",
-              color: commitMsg.trim() && stagedCount > 0 ? "#fff" : "var(--text-muted)",
-              border: "none",
-              borderRadius: 4,
-              cursor:
-                commitMsg.trim() && stagedCount > 0 && !isCommitting ? "pointer" : "default",
-              fontWeight: 600,
-              fontSize: 11,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              opacity: commitMsg.trim() && stagedCount > 0 ? 1 : 0.6,
-              transition: "all 0.15s ease",
-            }}
+            type="button"
+            className="gp-commit-btn"
+            onClick={() => void runCommit("commit")}
+            disabled={!canCommit}
+            title={commitTitle}
           >
             {isCommitting ? (
               <>
-                <RefreshCw size={12} className="spin" />
-                <span>Committing...</span>
+                <RefreshCw size={13} className="spin" />
+                <span>Committing…</span>
               </>
             ) : (
               <>
-                <Check size={12} />
-                <span>Commit ({stagedCount})</span>
+                <Check size={14} />
+                <span>Commit</span>
+                {stagedCount > 0 && <span className="gp-commit-btn__n">{stagedCount}</span>}
               </>
             )}
           </button>
+          <button
+            type="button"
+            className="gp-commit-caret"
+            onClick={() => setCommitMenuOpen((v) => !v)}
+            disabled={!hasMsg || isCommitting}
+            title="More commit options"
+            aria-label="More commit options"
+            aria-haspopup="menu"
+            aria-expanded={commitMenuOpen}
+          >
+            <ChevronDown size={14} />
+          </button>
+          {commitMenuOpen && (
+            <div className="gp-pop gp-pop--menu gp-pop--menu-up" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                className="gp-item"
+                disabled={stagedCount === 0}
+                onClick={() => void runCommit("push")}
+              >
+                <CloudUpload size={13} />
+                <span className="gp-item__label">Commit &amp; Push</span>
+              </button>
+              <button type="button" role="menuitem" className="gp-item" onClick={() => void runCommit("amend")}>
+                <Undo2 size={13} />
+                <span className="gp-item__label">Amend last commit</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

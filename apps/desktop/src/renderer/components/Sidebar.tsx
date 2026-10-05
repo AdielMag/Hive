@@ -52,6 +52,8 @@ export const Sidebar: React.FC = () => {
     sessionActivity,
     tabUi,
     activeRunning,
+    displayedTabId,
+    displayedNeedsInput,
   } = useSessionStore(
     useShallow((s) => ({
       projects: s.projects,
@@ -68,22 +70,33 @@ export const Sidebar: React.FC = () => {
       sessionActivity: s.sessionActivity,
       tabUi: s.tabUi,
       activeRunning: s.transcript.running,
+      displayedTabId: s.displayedTabId,
+      displayedNeedsInput: !!s.pendingUiDialog || !!s.pendingForm,
     })),
   );
 
-  // Live agent state per session file, mirroring the tab strip: running / waiting for input / unseen result.
-  const sessionState = useMemo(() => {
+  // Live agent state per session file, mirroring the tab strip: waiting for input / running / unseen result.
+  // "Waiting for input" (question form, bash-guard approval) wins over "running": the agent is still
+  // running while it waits, and the wait is what the user needs to notice.
+  const { sessionState, inputByProject } = useMemo(() => {
     const out: Record<string, SessionBadge> = {};
+    const byProject: Record<string, number> = {};
     for (const t of tabs) {
       if ((t.kind && t.kind !== "session") || !t.sessionPath) continue;
       const active = t.id === activeTabId;
       const activity = sessionActivity[t.id];
-      if (activity === "running" || (active && activeRunning)) out[t.sessionPath] = "running";
-      else if (!active && (tabUi[t.id]?.pendingUiDialog || tabUi[t.id]?.pendingForm)) out[t.sessionPath] = "input";
+      const needsInput =
+        t.id === displayedTabId
+          ? displayedNeedsInput
+          : !!tabUi[t.id]?.pendingUiDialog || !!tabUi[t.id]?.pendingForm;
+      if (needsInput) {
+        out[t.sessionPath] = "input";
+        if (t.projectId) byProject[t.projectId] = (byProject[t.projectId] ?? 0) + 1;
+      } else if (activity === "running" || (active && activeRunning)) out[t.sessionPath] = "running";
       else if (activity === "done" || activity === "error") out[t.sessionPath] = activity;
     }
-    return out;
-  }, [tabs, activeTabId, sessionActivity, tabUi, activeRunning]);
+    return { sessionState: out, inputByProject: byProject };
+  }, [tabs, activeTabId, sessionActivity, tabUi, activeRunning, displayedTabId, displayedNeedsInput]);
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [showAllSessions, setShowAllSessions] = useState<Record<string, boolean>>({});
@@ -280,6 +293,7 @@ export const Sidebar: React.FC = () => {
           const remaining = sessions.length - VISIBLE_SESSIONS;
           const archivedOpen = showArchived[project.id] ?? false;
           const links = project.links ?? [];
+          const inputCount = inputByProject[project.id] ?? 0;
 
           return (
             <div key={project.id} className="sb-project" style={{ ["--prj-color" as string]: project.color }}>
@@ -294,6 +308,16 @@ export const Sidebar: React.FC = () => {
                 </span>
                 <span className="sb-project__avatar">{project.name.slice(0, 1).toUpperCase()}</span>
                 <span className="sb-project__name">{project.name}</span>
+                {inputCount > 0 && (
+                  <span
+                    className="sb-project__input"
+                    title={`${inputCount} session(s) waiting for your input`}
+                    aria-label={`${inputCount} session(s) waiting for your input`}
+                  >
+                    <span className="sb-session__dot sb-session__dot--input" aria-hidden />
+                    {inputCount > 1 && inputCount}
+                  </span>
+                )}
 
                 {links.length > 0 && (
                   <button

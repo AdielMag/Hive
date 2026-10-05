@@ -45,6 +45,8 @@ export interface JevSettings {
   pricePerMTokUsd: number | null;
   /** User-entered credit they have loaded, in USD; remaining is estimated from usage since `creditSince`. */
   creditUsd: number | null;
+  /** Epoch ms the user accepted the privacy notice (conversation text goes to api.typesafe.ai). Null keeps Jev inert. */
+  consentAt: number | null;
   /** Epoch ms the credit figure was entered (spend before it is ignored). */
   creditSince: number | null;
 }
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: JevSettings = {
   maxCallsPerDay: 500,
   pricePerMTokUsd: null,
   creditUsd: null,
+  consentAt: null,
   creditSince: null,
 };
 
@@ -81,6 +84,7 @@ export function normalizeSettings(raw: unknown): JevSettings {
     maxCallsPerDay: Math.round(num(r.maxCallsPerDay, DEFAULT_SETTINGS.maxCallsPerDay, 0, 1_000_000)),
     pricePerMTokUsd: optNum(r.pricePerMTokUsd),
     creditUsd: optNum(r.creditUsd),
+    consentAt: typeof r.consentAt === "number" && r.consentAt > 0 ? r.consentAt : null,
     creditSince: optNum(r.creditSince),
   };
 }

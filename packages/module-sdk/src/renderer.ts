@@ -246,6 +246,29 @@ export interface TabKindContribution {
   component: ComponentType<{ tab: ModuleTab; host: ModuleHost }>;
 }
 
+/** A tool call as a tool card sees it. */
+export interface ToolCardCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  /** True once the call's arguments have fully streamed in. */
+  complete: boolean;
+  /** True while the tool is executing (no result yet). */
+  running: boolean;
+  /** Final tool output; undefined until the call settles. */
+  result?: { text: string; isError: boolean };
+}
+
+/**
+ * Replaces the generic transcript row of matching tool calls with a module-owned card (e.g. an inline review).
+ * The first contribution whose `match` returns true wins.
+ */
+export interface ToolCardContribution extends ContributionBase {
+  id: string;
+  match(call: Pick<ToolCardCall, "name" | "arguments">): boolean;
+  component: ComponentType<{ host: ModuleHost; call: ToolCardCall }>;
+}
+
 export interface SettingsContribution extends ContributionBase {
   id: string;
   /** Nav label. */
@@ -306,6 +329,7 @@ export interface RendererContributions {
   leftPanels?: PanelContribution[];
   rightPanels?: PanelContribution[];
   tabKinds?: TabKindContribution[];
+  toolCards?: ToolCardContribution[];
   railItems?: RailItemContribution[];
   settings?: SettingsContribution[];
   commands?: CommandContribution[];

@@ -6,20 +6,22 @@ import { usePlanStore } from "./plan-store.ts";
 
 interface Props {
   rounds: PlanQuestionRound[];
+  /** Prefix for DOM ids, so the inline card and the popup never share one. */
+  scope?: string;
 }
 
 /** Agent `--ask` questions, pinned at the top of the document while they are pending. */
-export const PlanAskCard: React.FC<Props> = ({ rounds }) => {
+export const PlanAskCard: React.FC<Props> = ({ rounds, scope = "" }) => {
   const agentAnswers = usePlanStore((s) => s.agentAnswers);
   const setAgentAnswer = usePlanStore((s) => s.setAgentAnswer);
   const total = rounds.reduce((n, r) => n + r.questions.length, 0);
   if (total === 0) return null;
 
   return (
-    <section className="plan-ask" id="plan-ask" aria-labelledby="plan-ask-title">
+    <section className="plan-ask" id={`${scope}plan-ask`} aria-labelledby={`${scope}plan-ask-title`}>
       <div className="plan-ask__head">
         <MessageCircleQuestion size={15} aria-hidden="true" />
-        <span id="plan-ask-title">
+        <span id={`${scope}plan-ask-title`}>
           The agent needs your input {total > 1 ? `(${total} questions)` : ""}
         </span>
       </div>
@@ -30,7 +32,7 @@ export const PlanAskCard: React.FC<Props> = ({ rounds }) => {
             question={q}
             value={agentAnswers[agentAnswerKey(round.roundId, q.id)] ?? ""}
             onChange={(v) => setAgentAnswer(agentAnswerKey(round.roundId, q.id), v)}
-            idBase={`ask-${round.roundId}-${q.id}`}
+            idBase={`${scope}ask-${round.roundId}-${q.id}`}
           />
         )),
       )}

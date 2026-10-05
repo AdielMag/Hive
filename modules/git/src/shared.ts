@@ -9,7 +9,10 @@ export interface GitFileStatus {
   path: string;
   origPath?: string;
   staged: boolean;
-  status: "modified" | "added" | "deleted" | "renamed" | "untracked";
+  status: "modified" | "added" | "deleted" | "renamed" | "untracked" | "conflicted";
+  /** Line counts from `git diff --numstat`; absent for untracked, binary and renamed files. */
+  additions?: number;
+  deletions?: number;
 }
 
 export interface GitRepoStatus {

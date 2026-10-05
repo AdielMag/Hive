@@ -46,6 +46,8 @@ export function loadSettings(env: Env = process.env): Settings | null {
     const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, any>;
     const apiKey = typeof raw.apiKey === "string" ? raw.apiKey.trim() : "";
     if (!apiKey) return null;
+    // Conversation text leaves the machine, so Jev stays inert until the user accepted the privacy notice in Settings.
+    if (typeof raw.consentAt !== "number" || !(raw.consentAt > 0)) return null;
     return {
       apiKey,
       model: typeof raw.model === "string" && raw.model.trim() ? raw.model.trim() : "jev-latest",
@@ -334,7 +336,8 @@ export function turnEndedForUser(event: any): boolean {
 // ask_jev helpers
 // ---------------------------------------------------------------------------------------------------------
 
-const READ_ONLY_BINS = new Set(["ls", "dir", "cat", "head", "tail", "wc", "grep", "rg", "find", "git", "pwd", "type", "tree"]);
+// No cat/type: file contents go through the confined `files` parameter instead.
+const READ_ONLY_BINS = new Set(["ls", "dir", "head", "tail", "wc", "grep", "rg", "find", "git", "pwd", "tree"]);
 const READ_ONLY_GIT = new Set(["status", "diff", "log", "show", "ls-files", "branch", "rev-parse", "blame", "grep", "describe", "shortlog", "ls-tree", "cat-file", "remote", "tag"]);
 
 /** Splits a command into args (honouring simple quotes) when it is a plain read-only invocation, else null. */
@@ -349,19 +352,109 @@ export function parseReadOnlyCommand(command: string): { bin: string; args: stri
     const sub = args.find((a) => !a.startsWith("-"));
     if (!sub || !READ_ONLY_GIT.has(sub)) return null;
     if (args.some((a) => /^(--output|--ext-diff|--textconv|-c|--exec-path)/.test(a))) return null;
-    if (sub === "branch" && args.some((a) => /^-(d|D|m|M|c|C)\b|--delete|--move|--copy/.test(a))) return null;
+    if (sub === "branch") {
+      // Listing only: any write flag, or a bare name (which would create a branch), is refused.
+      const writes = (a: string) => (/^-[a-zA-Z]+$/.test(a) && /[dDmMcCfut]/.test(a)) || /^--(delete|move|copy|force|set-upstream-to|unset-upstream|edit-description|track|no-track|create-reflog)/.test(a);
+      if (args.some(writes)) return null;
+      const listing = args.some((a) => /^(-l|--list|--contains|--no-contains|--merged|--no-merged|--points-at)(=|$)/.test(a));
+      if (!listing && args.some((a) => a !== sub && !a.startsWith("-"))) return null;
+    }
     if (sub === "tag" && args.some((a) => !a.startsWith("-") && a !== "tag") ) return null;
     if (sub === "remote" && args.some((a) => /^(add|remove|rm|rename|set-url|prune|update)$/.test(a))) return null;
   }
   if ((bin === "find" || bin === "rg" || bin === "grep") && args.some((a) => /^(-delete|-exec|-execdir|-ok|--pre|-fprint|-fls)/.test(a))) return null;
+  // Pattern/ignore files are read from arbitrary paths, and a bare `--` would let later args dodge the exclusions.
+  if ((bin === "rg" || bin === "grep") && args.some((a) => a === "--" || /^(-f|--file|--ignore-file|--exclude-from|--include-from)(=|$)/.test(a))) return null;
   return { bin: bin!, args };
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Workspace confinement: whatever the agent points ask_jev at is sent to a third party, so keep it in the cwd
+// and away from files that look like credentials.
+// ---------------------------------------------------------------------------------------------------------
+
+const SECRET_SEGMENT = [
+  /^\.(ssh|aws|gnupg|git)$/i,
+  /^\.env$/i,
+  /^\.env\.(?!example$|sample$|template$|dist$).+/i,
+  /\.(pem|key|p12|pfx|jks|keystore|ppk)$/i,
+  /^id_(rsa|dsa|ecdsa|ed25519)/i,
+  /^\.(npmrc|netrc|pypirc|git-credentials)$/i,
+  /^(auth|credentials|secrets?)\.(json|ya?ml|toml)$/i,
+];
+
+/** True when any segment of a workspace-relative path looks like a credential file or directory. */
+export function isSecretPath(rel: string): boolean {
+  return rel.split(/[\\/]/).some((seg) => seg !== "" && SECRET_SEGMENT.some((re) => re.test(seg)));
+}
+
+const realOrSelf = (p: string): string => {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return p;
+  }
+};
+
+/** Resolves `p` against `cwd` (following symlinks) and throws unless it stays inside the workspace and is not secret. */
+export function confine(cwd: string, p: string): string {
+  const root = realOrSelf(path.resolve(cwd));
+  const real = realOrSelf(path.resolve(root, p));
+  const rel = path.relative(root, real);
+  if (rel === "") return real;
+  if (rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) throw new Error(`${p} is outside the workspace`);
+  if (isSecretPath(rel)) throw new Error(`${p} looks like a secret file`);
+  return real;
+}
+
+const PATHISH = /[\\/]|^~|^\.\.$|^[a-zA-Z]:/;
+
+/**
+ * Every path argument must stay inside the workspace and not look like a credential. For git, only path-like args
+ * (revs such as `HEAD~2` are fine); for everything else every positional arg counts, so a bare `.env` is caught.
+ * `--flag=value` values are checked when path-like.
+ */
+export function checkCommandPaths(parsed: { bin: string; args: string[] }, cwd: string): void {
+  const { bin, args } = parsed;
+  // grep/rg: the first positional is the search pattern, not a path (unless given with -e/--regexp).
+  let skipPattern = (bin === "grep" || bin === "rg") && !args.some((a) => /^(-e|--regexp)(=|$)/.test(a));
+  for (const arg of args) {
+    let v = arg;
+    let positional = true;
+    if (v.startsWith("-")) {
+      const i = v.indexOf("=");
+      if (i < 0) continue;
+      v = v.slice(i + 1);
+      positional = false;
+    } else if (skipPattern) {
+      skipPattern = false;
+      continue;
+    }
+    if (v && ((positional && bin !== "git") || PATHISH.test(v))) confine(cwd, v);
+  }
+}
+
+/** Appended after the user's args so they win over any `--glob`/`--include` the agent adds. */
+function secretExcludes(bin: string): string[] {
+  if (bin === "rg") return [".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", ".npmrc", ".netrc", "auth.json", ".ssh", ".aws", ".git-credentials"].flatMap((g) => ["--glob", `!${g}`]);
+  if (bin === "grep") {
+    return [".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", ".npmrc", ".netrc", "auth.json", ".git-credentials"]
+      .map((g) => `--exclude=${g}`)
+      .concat(["--exclude-dir=.ssh", "--exclude-dir=.aws", "--exclude-dir=.git"]);
+  }
+  return [];
 }
 
 function runReadOnly(command: string, cwd: string, signal?: AbortSignal): Promise<string> {
   const parsed = parseReadOnlyCommand(command);
   if (!parsed) return Promise.reject(new Error("command is not an allowed read-only command (no pipes, redirects or write operations)"));
+  try {
+    checkCommandPaths(parsed, cwd);
+  } catch (err) {
+    return Promise.reject(err);
+  }
   return new Promise((resolve, reject) => {
-    execFile(parsed.bin, parsed.args, { cwd, timeout: 15_000, maxBuffer: MAX_FILE_BYTES, signal, windowsHide: true }, (err, stdout, stderr) => {
+    execFile(parsed.bin, [...parsed.args, ...secretExcludes(parsed.bin)], { cwd, timeout: 15_000, maxBuffer: MAX_FILE_BYTES, signal, windowsHide: true }, (err, stdout, stderr) => {
       if (err && !stdout) reject(new Error(String(stderr || err.message).slice(0, 300)));
       else resolve(String(stdout));
     });
@@ -423,7 +516,7 @@ async function readFiles(files: string[], cwd: string): Promise<Record<string, s
   const out: Record<string, string> = {};
   let total = 0;
   for (const f of files) {
-    const abs = path.resolve(cwd, f);
+    const abs = confine(cwd, f);
     const buf = await fs.promises.readFile(abs);
     if (buf.includes(0)) throw new Error(`${f} looks binary`);
     const text = buf.subarray(0, MAX_FILE_BYTES).toString("utf8");

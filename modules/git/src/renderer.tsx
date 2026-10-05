@@ -9,6 +9,7 @@ import { GitBadge, useGitRailTitle } from "./ui/GitBadge.tsx";
 import { StageButton } from "./ui/StageButton.tsx";
 import { openDiffTab } from "./ui/open-diff.ts";
 import "./ui/git.css";
+import "./ui/git-panel.css";
 
 const GitPanel = lazy(() => import("./ui/GitPanel.tsx").then((m) => ({ default: m.GitPanel })));
 

@@ -54,73 +54,127 @@ export async function gitPush(cwd: string): Promise<string> {
   return runGitNetwork(["push"], cwd);
 }
 
+/** Pure parser for `git status --porcelain=v2 --branch` output (exported for tests). */
+export function parseStatusV2(raw: string): Omit<GitRepoStatus, "isRepo"> {
+  let branch = "HEAD";
+  let upstream: string | undefined;
+  let ahead = 0;
+  let behind = 0;
+
+  const staged: GitFileStatus[] = [];
+  const unstaged: GitFileStatus[] = [];
+  const untracked: GitFileStatus[] = [];
+
+  for (const line of raw.split("\n")) {
+    if (!line) continue;
+    if (line.startsWith("# branch.head ")) {
+      branch = line.slice(14);
+    } else if (line.startsWith("# branch.upstream ")) {
+      upstream = line.slice(18);
+    } else if (line.startsWith("# branch.ab ")) {
+      const parts = line.slice(12).split(" ");
+      ahead = parseInt(parts[0]?.slice(1) ?? "0", 10) || 0;
+      behind = parseInt(parts[1]?.slice(1) ?? "0", 10) || 0;
+    } else if (line.startsWith("1 ") || line.startsWith("2 ")) {
+      // 1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
+      // 2 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <X><score> <path>	<origPath>
+      const parts = line.split(" ");
+      const xy = parts[1] ?? "..";
+      const stagedCode = xy[0];
+      const unstagedCode = xy[1];
+      let filePath: string;
+      let origPath: string | undefined;
+      if (line.startsWith("2 ")) {
+        const [p = "", o] = parts.slice(9).join(" ").split("\t");
+        filePath = p;
+        origPath = o;
+      } else {
+        filePath = parts.slice(8).join(" ");
+      }
+
+      if (stagedCode && stagedCode !== ".") {
+        staged.push({
+          path: filePath,
+          ...(origPath ? { origPath } : {}),
+          staged: true,
+          status:
+            stagedCode === "A" || stagedCode === "C"
+              ? "added"
+              : stagedCode === "D"
+                ? "deleted"
+                : stagedCode === "R"
+                  ? "renamed"
+                  : "modified",
+        });
+      }
+      if (unstagedCode && unstagedCode !== ".") {
+        unstaged.push({
+          path: filePath,
+          staged: false,
+          status: unstagedCode === "D" ? "deleted" : "modified",
+        });
+      }
+    } else if (line.startsWith("u ")) {
+      // u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
+      unstaged.push({ path: line.split(" ").slice(10).join(" "), staged: false, status: "conflicted" });
+    } else if (line.startsWith("? ")) {
+      untracked.push({ path: line.slice(2), staged: false, status: "untracked" });
+    }
+  }
+
+  const byPath = (a: GitFileStatus, b: GitFileStatus) => a.path.localeCompare(b.path);
+  staged.sort(byPath);
+  unstaged.sort(byPath);
+  untracked.sort(byPath);
+
+  return {
+    branch: branch === "(detached)" ? "detached HEAD" : branch,
+    upstream,
+    ahead,
+    behind,
+    staged,
+    unstaged,
+    untracked,
+  };
+}
+
+/** Parses `git diff --numstat --no-renames` into per-path line counts (binary files are skipped). */
+export function parseNumstat(raw: string): Map<string, { additions: number; deletions: number }> {
+  const out = new Map<string, { additions: number; deletions: number }>();
+  for (const line of raw.split("\n")) {
+    const [add = "", del = "", ...rest] = line.split("\t");
+    const path = rest.join("\t");
+    if (!path || add === "-" || del === "-") continue;
+    out.set(path, { additions: Number(add) || 0, deletions: Number(del) || 0 });
+  }
+  return out;
+}
+
+async function numstat(cwd: string, staged: boolean): Promise<Map<string, { additions: number; deletions: number }>> {
+  try {
+    return parseNumstat(await runGit(["diff", ...(staged ? ["--cached"] : []), "--numstat", "--no-renames"], cwd));
+  } catch {
+    return new Map();
+  }
+}
+
 export async function getGitStatus(cwd: string): Promise<GitRepoStatus> {
   try {
     const raw = await runGit(["status", "--porcelain=v2", "--branch"], cwd);
-    const lines = raw.split("\n").filter(Boolean);
-
-    let branch = "HEAD";
-    let upstream: string | undefined;
-    let ahead = 0;
-    let behind = 0;
-
-    const staged: GitFileStatus[] = [];
-    const unstaged: GitFileStatus[] = [];
-    const untracked: GitFileStatus[] = [];
-
-    for (const line of lines) {
-      if (line.startsWith("# branch.head ")) {
-        branch = line.slice(14);
-      } else if (line.startsWith("# branch.upstream ")) {
-        upstream = line.slice(18);
-      } else if (line.startsWith("# branch.ab ")) {
-        const parts = line.slice(12).split(" ");
-        ahead = parseInt(parts[0]?.slice(1) ?? "0", 10) || 0;
-        behind = parseInt(parts[1]?.slice(1) ?? "0", 10) || 0;
-      } else if (line.startsWith("1 ") || line.startsWith("2 ")) {
-        // Tracked changed file
-        // 1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
-        const parts = line.split(" ");
-        const xy = parts[1] ?? "..";
-        const stagedCode = xy[0];
-        const unstagedCode = xy[1];
-        const filePath = parts.slice(8).join(" ");
-
-        if (stagedCode && stagedCode !== ".") {
-          staged.push({
-            path: filePath,
-            staged: true,
-            status: stagedCode === "A" ? "added" : stagedCode === "D" ? "deleted" : "modified",
-          });
-        }
-        if (unstagedCode && unstagedCode !== ".") {
-          unstaged.push({
-            path: filePath,
-            staged: false,
-            status: unstagedCode === "D" ? "deleted" : "modified",
-          });
-        }
-      } else if (line.startsWith("? ")) {
-        // Untracked file
-        const filePath = line.slice(2);
-        untracked.push({
-          path: filePath,
-          staged: false,
-          status: "untracked",
-        });
+    const parsed = parseStatusV2(raw);
+    const [stagedStats, unstagedStats] = await Promise.all([
+      parsed.staged.length ? numstat(cwd, true) : Promise.resolve(new Map()),
+      parsed.unstaged.length ? numstat(cwd, false) : Promise.resolve(new Map()),
+    ]);
+    const decorate = (files: GitFileStatus[], stats: Map<string, { additions: number; deletions: number }>) => {
+      for (const f of files) {
+        const st = f.status === "renamed" ? undefined : stats.get(f.path);
+        if (st) Object.assign(f, st);
       }
-    }
-
-    return {
-      isRepo: true,
-      branch: branch === "(detached)" ? "detached HEAD" : branch,
-      upstream,
-      ahead,
-      behind,
-      staged,
-      unstaged,
-      untracked,
     };
+    decorate(parsed.staged, stagedStats);
+    decorate(parsed.unstaged, unstagedStats);
+    return { isRepo: true, ...parsed };
   } catch {
     return {
       isRepo: false,

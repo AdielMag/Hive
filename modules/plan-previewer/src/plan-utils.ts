@@ -331,3 +331,124 @@ export function summarizeDiff(oldText: string, newText: string): { additions: nu
 
   return { additions, deletions };
 }
+
+// ---------- Inline part (the compact card in the session) ----------
+
+/** Line cap for the inline part when a plan has no `<!-- MORE -->` marker and no SUMMARY section. */
+export const INLINE_MAX_LINES = 24;
+
+const MORE_MARKER = /^[ \t]*<!--\s*MORE\s*-->[ \t]*$/im;
+
+/** The plan without its `<!-- MORE -->` marker line(s): what the popup / tab renders for a single-view plan. */
+export function stripMoreMarker(content: string): string {
+  return content.replace(/^[ \t]*<!--\s*MORE\s*-->[ \t]*\r?\n?/gim, "");
+}
+
+export interface InlinePart {
+  markdown: string;
+  /** True when the popup has content the inline part leaves out. */
+  hasMore: boolean;
+  source: "marker" | "summary" | "truncated" | "whole";
+}
+
+/**
+ * The part of a plan shown inline in the session card. Precedence: everything above `<!-- MORE -->`; else the
+ * SUMMARY section; else the head of the plan cut at a block boundary near `maxLines` (never inside a code fence
+ * or a blockquote, so decision blocks stay whole).
+ */
+export function extractInlinePart(content: string, maxLines = INLINE_MAX_LINES): InlinePart {
+  const text = content ?? "";
+  const marker = MORE_MARKER.exec(text);
+  if (marker) {
+    const markdown = text.slice(0, marker.index).trim();
+    if (markdown) return { markdown, hasMore: text.slice(marker.index + marker[0].length).trim().length > 0, source: "marker" };
+  }
+
+  const views = extractPlanViews(text);
+  if (views.summary) return { markdown: views.summary, hasMore: Boolean(views.full), source: "summary" };
+
+  const lines = text.replace(/\s+$/, "").split(/\r?\n/);
+  if (lines.length <= maxLines) return { markdown: lines.join("\n"), hasMore: false, source: "whole" };
+
+  // Collect safe cut points: blank lines outside fences and blockquotes.
+  const inFence = createFenceTracker();
+  const cuts: number[] = [];
+  let prevQuote = false;
+  lines.forEach((line, i) => {
+    const fenced = inFence(line);
+    const quote = !fenced && QUOTE_LINE.test(line);
+    if (!fenced && !quote && line.trim() === "" && !prevQuote) cuts.push(i);
+    prevQuote = quote;
+  });
+  const before = cuts.filter((i) => i > 0 && i <= maxLines);
+  const cut = before.length > 0 ? before[before.length - 1]! : cuts.find((i) => i > maxLines);
+  if (cut === undefined) return { markdown: lines.join("\n"), hasMore: false, source: "whole" };
+  const markdown = lines.slice(0, cut).join("\n").trim();
+  return { markdown, hasMore: lines.slice(cut).join("").trim().length > 0, source: "truncated" };
+}
+
+/** Plan path from a `plan-previewer <file> [--flags]` shell command, or null. */
+export function parsePlanCommandPath(command: string): string | null {
+  if (!/(^|[\s/\\;&|])plan-previewer(\.cmd|\.js)?["']?(\s|$)/i.test(command)) return null;
+  const tokens = command.match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
+  const idx = tokens.findIndex((t) => /(^|[/\\])plan-previewer(\.cmd|\.js)?["']?$/i.test(t));
+  if (idx < 0) return null;
+  for (const raw of tokens.slice(idx + 1)) {
+    if (raw.startsWith("-")) continue;
+    if (/^[;&|]/.test(raw)) break;
+    return raw.replace(/^["']|["']$/g, "");
+  }
+  return null;
+}
+
+/** Status line the CLI prints when the review settles: `[PLAN-REVIEW]: status=APPROVED | mode=AUTO-EDIT | …`. */
+export function parseReviewResult(text: string): { status: "approved" | "changes_requested" | "answered" | "dismissed" | "timeout" | "unknown"; mode?: string } {
+  const m = text.match(/\[PLAN-REVIEW\]:\s*status=([A-Z_]+)(?:\s*\|\s*mode=([A-Z-]+))?/i);
+  if (m) {
+    const status = m[1]!.toLowerCase();
+    if (status === "approved" || status === "changes_requested" || status === "answered") return { status, mode: m[2]?.toLowerCase() };
+  }
+  if (/\[PLAN-ANSWERS\]/.test(text)) return { status: "answered" };
+  if (/dismissed by the user/i.test(text)) return { status: "dismissed" };
+  if (/wait timeout completed/i.test(text)) return { status: "timeout" };
+  return { status: "unknown" };
+}
+
+const isAbsolutePath = (p: string) => /^([a-zA-Z]:[\\/]|\/|\\\\)/.test(p);
+
+/** Forward-slash path with `.` / `..` segments resolved (pure; works for Windows and POSIX roots). */
+export function normalizePlanPath(p: string): string {
+  const slashed = p.replace(/\\/g, "/");
+  const m = slashed.match(/^([a-zA-Z]:)?(\/*)/);
+  const root = `${m?.[1] ?? ""}${m?.[2] ? "/" : ""}`;
+  const out: string[] = [];
+  for (const seg of slashed.slice(m?.[0].length ?? 0).split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === ".." && out.length > 0 && out[out.length - 1] !== "..") out.pop();
+    else out.push(seg);
+  }
+  return root + out.join("/");
+}
+
+/**
+ * Absolute path of the plan a `plan-previewer <arg>` call refers to. Absolute args win; a relative arg matches a
+ * path the CLI recently announced (exact, by suffix); otherwise it is joined to the project folder.
+ */
+export function resolvePlanPath(arg: string | null, projectPath: string | null | undefined, recent: string[]): string | null {
+  if (!arg) return recent[0] ?? null;
+  if (isAbsolutePath(arg)) return normalizePlanPath(arg);
+  const rel = normalizePlanPath(arg);
+  const lower = rel.toLowerCase();
+  const hit = recent.map(normalizePlanPath).find((p) => p.toLowerCase().endsWith(`/${lower}`));
+  if (hit) return hit;
+  return projectPath ? normalizePlanPath(`${projectPath}/${arg}`) : rel;
+}
+
+/** Case-insensitive, separator-insensitive path equality. */
+export const samePlanPath = (a?: string | null, b?: string | null): boolean =>
+  Boolean(a && b) && normalizePlanPath(a!).toLowerCase() === normalizePlanPath(b!).toLowerCase();
+
+/** File name of a plan path (tab title / card header). */
+export function planFileName(filePath: string): string {
+  return filePath.replace(/\\/g, "/").split("/").pop() || "plan.md";
+}

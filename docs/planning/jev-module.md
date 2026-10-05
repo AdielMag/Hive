@@ -1,186 +1,115 @@
-<!-- SUMMARY -->
-# Jev Support: Smart Compaction, ask_jev, Model Router (Executive Summary)
+# Jev Module: Smart Compaction and ask_jev (as built)
 
-> [!NOTE]
-> **Executive Summary**: Add a `jev` Hive module. It does two things. First, it adds a small Jev client (OpenRouter `~typesafe/jev-latest`, alpha endpoint) and a settings page for the key. Second, it ships Pi extensions and UI for three features: smart compaction, an `ask_jev` tool, and a prompt model router. Version 1 is smart compaction (advise-only) plus `ask_jev`. The router comes in version 2.
+The `jev` module adds TypeSafe's Jev decision model to Hive. It ships a settings page for the API key and two Pi-side features: a smart compaction hint and an `ask_jev` agent tool. The prompt model router is deferred to v2. This document describes what is implemented; the original plan targeted OpenRouter and was changed during the build.
 
-## High-Level Strategy
-- **One module, `modules/jev/`**, off by default (bonus tier). It follows the `bash-guard` pattern: a manifest, `agent/extensions/*.ts` that Pi loads, `src/main.ts`, `src/renderer.tsx`.
-- **One shared client** (`jev-client.ts`) for typed `noul`, `choice` and `score` calls. It adds timeouts, fail-open behavior, and cost logging.
-- **Smart compaction replaces the blind 90% rule.** Jev judges "is this a natural boundary?". Code combines that with token usage and prompt-cache age (Hive already tracks this in `cache-switch.ts`).
-- **Hive shows the decision in its own UI**, as a "Good time to compact" hint on the context meter. It does not quietly prompt the model.
-- **Fail open everywhere.** If there is no key, no network, or the alpha API changes, Pi behaves exactly as it does today.
+## Status
 
-## Key Decisions
+- [x] Module skeleton, API client, key handling and Settings page
+- [x] Smart compaction extension, tiering, composer hint with "Compact" and "Dismiss"
+- [x] `ask_jev` tool with usage and cost tracking
+- [x] Privacy consent gate and workspace confinement for `ask_jev`
+- [x] Unit and flow tests (fake `pi`, mocked `fetch`)
+- [ ] (v2) Model router in the composer, cache-aware
 
-> [!CHOICE] D1: Where does the Jev key come from?
-> **Question**: How should Hive get the OpenRouter key?
-> - (x) **Option A**: Pi `auth.json` `openrouter` api_key entry, shown in Settings → Accounts. Reuses the existing credential store. [Recommended]
-> - ( ) **Option B**: `OPENROUTER_API_KEY` env var only
-> - ( ) **Option C**: Separate key field stored in the Jev module settings
+## What Jev is
 
-> [!CHOICE] D2: Compaction behavior
-> **Question**: Should Jev only advise, or trigger compaction itself?
-> - (x) **Option A**: Advise-only in v1 (UI hint plus an optional one-click "Compact now"). Opt-in auto-trigger in a later setting. [Recommended]
-> - ( ) **Option B**: Auto-trigger from day one above a usage floor
-
-> [!CHOICE] D3: What does "ask Jev before the LLM" mean?
-> **Question**: Which should we build first?
-> - (x) **Option A**: `ask_jev` agent tool in v1, then the model router in v2 (the router interacts with the prompt cache) [Recommended]
-> - ( ) **Option B**: Router first
-> - ( ) **Option C**: Both in v1
-
-> [!QUESTION] Q1: Privacy
-> **Question**: Jev sees conversation text (last turn plus summaries) through OpenRouter. Is that acceptable by default, or should Hive show a one-time consent notice when the module is enabled?
-
-## Execution Milestones
-- [x] 1. Module skeleton, Jev client, key handling and Settings page, with tests using a mocked endpoint
-- [x] 2. `jev-compact.ts` Pi extension, with thresholds taken from Hive's compaction settings
-- [x] 3. Renderer: context-meter hint, "Compact now" action, decision log
-- [x] 4. `ask_jev.ts` tool, with cost tracking
-- [ ] 5. (v2) Model router in the composer, cache-aware — deferred to v2 as agreed
-- [x] 6. Verification, docs, CHANGELOG
-<!-- /SUMMARY -->
-
-<!-- FULL -->
-# Jev Support (Full Specification)
-
-## 1. Objective & Background
-
-Jev is a typed decision model, not a chat model. A request carries a `state` (text or JSON) and typed questions. The reply carries typed answers with probabilities in about 300 ms for a fraction of a cent.
+Jev is a typed decision model, not a chat model. A request carries a `state` and named typed questions. The reply carries typed answers.
 
 | Type | Returns |
 |---|---|
 | `noul` | Probability of yes. The caller picks the threshold. |
-| `choice` | One of up to 255 caller-defined options. It cannot invent one. |
-| `score` | A position on 2–10 described levels, plus confidence. |
+| `choice` | One of 2-255 caller-defined options, with confidence and probabilities. |
+| `score` | A position on 2-10 described levels, plus confidence. |
 
-Endpoint: `POST https://openrouter.ai/api/alpha/decisions`, model `~typesafe/jev-latest`, `Authorization: Bearer <OPENROUTER_API_KEY>`.
+API: `POST https://api.typesafe.ai/v1/systemone` with `Authorization: Bearer <key>`, model `jev-latest`. `GET /v1/models` validates a key. The API exposes no balance or pricing, so Hive estimates spend from the input tokens each call reports and a price the user enters. Spec: `https://api.typesafe.ai/openapi.json`.
 
-> [!WARNING]
-> The endpoint is **alpha**. The exact request and response schema must be confirmed against the Jev repo (`apps/ten-levels/extensions/`) and a live call before coding. Isolate it behind one file (`jev-client.ts`) so a schema change touches one place.
+## Architecture
 
-**Problem today.** Hive compacts at a fixed percentage of the context window (`CompactionSettingsContent.tsx`, written to Pi `compaction.modelOverrides` by `services/models.ts`). That often fires mid-task. There is no smart pre-LLM routing.
-
-## 2. Architecture & Component Flow
-
-```mermaid
-graph TD
-    subgraph Pi process
-      P[Pi agent] --> C[jev-compact.ts<br/>turn_end hook]
-      P --> A[ask-jev.ts<br/>ask_jev tool]
-      C --> K[jev-client.ts]
-      A --> K
-    end
-    K -->|POST /api/alpha/decisions| OR[(OpenRouter: jev-latest)]
-    C -->|bridge message: jev_compact_advice| B[studio-bridge / bridge-server]
-    B --> M[Main: modules/jev main.ts]
-    M --> R[Renderer: context-meter hint]
-    R -->|Compact now| P
-    S[Settings: Jev page] --> M
-    M -->|env: OPENROUTER_API_KEY, JEV_CONFIG| P
+```text
+Pi process                                  Hive main                 Hive renderer
+ agent/extensions/jev.ts                     modules/jev/src/main.ts   modules/jev/src/renderer.tsx
+  turn_end -> callJev -> jev_advice --------------bridge event---------> jev-store -> JevAdviceBar
+  ask_jev tool -> callJev                    config.json (key, consent)  JevSettings (settings.accounts slot)
+  jev_compact <---------------------------------bridge event---------- "Compact" button
+        |  reads HIVE_JEV_CONFIG, appends HIVE_JEV_USAGE
+        v
+   api.typesafe.ai
 ```
 
-## 3. Decisions & Trade-Offs
+- **One extension file.** `agent/extensions/jev.ts` is installed as a single file into Pi's extensions dir, so it cannot import Hive code. Shapes marked "mirrored" copy `src/shared.ts`.
+- **Key and settings.** Main owns `config.json` in the module data dir (mode 0600). It sets `HIVE_JEV_CONFIG` and `HIVE_JEV_USAGE` on its own process env, so Pi sessions spawned afterwards inherit them. Sessions that were already running keep the old env until restarted. The renderer only sees a view without the key.
+- **Bridge.** Advice and the compact request travel as generic bridge records (`jev_advice` on `studio:to-gui`, `jev_compact` on `studio:from-gui`) through `pi.events`. No protocol package change was needed.
+- **Fail open.** No key, no consent, a network error, a bad response or a paused breaker all leave Pi behaving as if the module were absent.
 
-> [!CHOICE] D4: Packaging
-> **Question**: Where should the Pi extensions live?
-> - (x) **Option A**: Separate `modules/jev` module with its own extensions, loaded through the module manifest `agent.extensions`. It can be switched off and keeps `studio-bridge.ts` small. [Recommended]
-> - ( ) **Option B**: Inside `studio-bridge.ts`
+## Privacy consent
 
-> [!CHOICE] D5: How does the compaction advice reach the UI?
-> **Question**: What carries the decision from the Pi extension to Hive?
-> - (x) **Option A**: A new bridge message type `jev_advice` in `packages/protocol/src/bridge.ts`. The extension sends it through the existing bridge socket. [Recommended]
-> - ( ) **Option B**: Pi `ctx.ui.setStatus` or widget text only. This needs no protocol change, but the UI is poor.
+Jev sends content to a third party, so it stays inert until the user accepts a notice in Settings.
 
-> [!NOTE]
-> Open question to confirm in code: can a module-shipped Pi extension reach the bridge socket? If not, the bridge exposes a small `sendToGui` helper through the shared env (`bridge.env`).
+- `JevSettings.consentAt` (epoch ms, `null` by default). Saving a key requires ticking the notice. Existing keys without consent do nothing until the user clicks "Accept and turn Jev on".
+- `loadSettings()` in the extension returns `null` without a positive `consentAt`, so no compaction call is made and `ask_jev` is not registered.
+- The notice says what leaves the machine: about the last 8 messages (shortened) for compaction, and any text, files or read-only command output given to `ask_jev`. "Revoke" sets `consentAt` back to `null`.
 
-## 4. Feature Design
+## Smart compaction
 
-### 4.1 Jev client (`modules/jev/agent/lib/jev-client.ts`)
-- `decide({ state, questions, timeoutMs = 4000 })` returns typed answers or `null` on failure (fail open).
-- Reads `OPENROUTER_API_KEY` from env. Hive sets it when spawning Pi, from the `auth.json` entry (D1).
-- Records `{ts, feature, latencyMs, cost?}` into a bounded in-memory ring and into the Hive analytics log.
-- Circuit breaker: 3 consecutive failures disable calls for 5 minutes.
-
-### 4.2 Smart compaction (`jev-compact.ts`)
-After each `turn_end` it makes one call with four questions:
+After a `turn_end` that hands control back to the user (no tool calls pending, not an error or abort), and only above the configured context floor (default 40%), the extension asks four questions:
 
 | Question | Type | Meaning |
 |---|---|---|
 | `switched_gears` | noul | The user started a new task |
 | `at_boundary` | noul | The last turn finished a unit of work |
-| `needs_history` | score (3 levels) | How much earlier context the next step needs |
 | `mid_operation` | noul | A multi-step edit is half done |
+| `needs_history` | score (3 levels) | How much earlier context the next step needs |
 
-Decision in code (not in Jev), producing a tier of `silent | notice | recommend | request`:
+It emits a `jev_advice` record with the four signals plus usage. Hive decides what to show, in `src/tiering.ts` (pure, tested):
 
 ```text
-usage = contextTokens / contextWindow            // from Hive compaction settings, not demo constants
-floor = max(settings.jevFloorPct (default 40%), 0)
-if usage < floor                                  -> silent
-if mid_operation > 0.5                            -> silent
-boundary = switched_gears>0.7 || at_boundary>0.7
-cacheCold = promptCacheExpired (cache-switch.ts)  // compaction is nearly free
-needs_low = needs_history is low
-score = usage + (boundary?0.15:0) + (cacheCold?0.10:0) + (needs_low?0.10:0)
-score>=0.85 request | >=0.65 recommend | >=0.50 notice | else silent
+silent if tokens < 8k, usage < floor, or mid_operation > 0.5
+score = usage + 0.15 (task boundary) + 0.10 (cache cold) + 0.10 (next step needs little history)
+with a boundary: >= 0.85 request, >= 0.65 recommend, >= 0.50 notice
+without a boundary: notice at most (Pi's own threshold stays the safety net)
 ```
 
-- v1 only emits advice (D2). The renderer shows it. "Compact now" calls the existing Pi compact RPC.
-- Hive's existing hard compaction threshold stays as the safety net.
-- Optional: ask Jev (`choice`) which recent turn the current task starts from, and pass it as a custom instruction for the summary (keep that part in detail). Behind a flag, v1.1.
+- **Cache signal.** "Cache cold" means the session was idle for 5 minutes since the advice (Anthropic's default cache TTL). It does not read `lib/models/cache-switch.ts`, so it is wrong for providers with other cache lifetimes.
+- **Advice only.** The bar offers "Compact", which sends `jev_compact`; the extension then calls `ctx.compact()`. Nothing compacts automatically. Advice is cleared on `agent_start` and `compaction_end`.
+- **Not built.** Asking Jev which turn the task started at and passing it as a summary instruction (planned for v1.1).
 
-### 4.3 `ask_jev` tool (`ask-jev.ts`)
-- The agent supplies questions plus optional file paths or a read-only command. The code reads the files or runs the command (read-only allowlist, size cap), so the contents never enter the agent context.
-- Returns typed answers only. Logs each call and its cost.
-- The tool description tells the model when to use it: classification, routing and yes/no checks over big inputs.
+## ask_jev tool
 
-### 4.4 Model router (v2)
-- Before send, `choice` picks `fast | powerful` and `score` picks reasoning effort.
-- UI: a suggestion chip in the composer ("simple prompt, use Flash?"). It never switches silently.
-- It must read `lib/models/cache-switch.ts`. If the cache is warm, show the cost of losing it, and only suggest a switch when it nets out positive.
+Registered only when a key with consent exists and the feature is on (checked at load; re-checked on every call). The agent supplies named questions plus `state` text, `files` and/or a read-only `command`. File and command contents go straight to Jev and never enter the agent context. The reply is typed answers formatted with probabilities.
 
-### 4.5 Settings page (Jev module)
-Key status (connected, test call), enable toggles per feature, compaction floor %, per-day call budget, and a "what Jev saw" log. Include a privacy notice (Q1).
+Safeguards:
 
-## 5. Step-by-Step Implementation
-1. **Recon.** Confirm the live API schema with one curl call, and check module extension loading and bridge reachability from a module extension.
-2. **Skeleton.** `modules/jev/package.json` (`tier: bonus`, `recommended: false`), `src/shared.ts`, `src/main.ts`, `src/renderer.tsx`.
-3. **Client and key.** Add `openrouter` to the provider list in `services/auth.ts`. Pass the key into the Pi env when the module is on.
-4. **Compaction extension and protocol message.**
-5. **Renderer hint and action.**
-6. **`ask_jev`.**
-7. **Router (v2).**
+- **Workspace confinement.** Each file path is resolved with `realpath` and must stay inside the session `cwd`, so `..`, absolute paths and symlinks that escape are rejected (`confine()`).
+- **Secret blocklist.** Credential-looking names are refused even inside the workspace: `.env` and `.env.*` (not `.example`, `.sample`, `.template`, `.dist`), `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `id_rsa*` and friends, `.npmrc`, `.netrc`, `.pypirc`, `.git-credentials`, `auth.json`, `credentials.*`, `secrets.*`, and anything under `.ssh`, `.aws`, `.gnupg` or `.git`.
+- **Command allowlist.** No shell: a command is parsed and run with `execFile`. Allowed binaries are `ls dir head tail wc grep rg find git pwd tree` (no `cat` or `type`; use `files`). Pipes, redirects, substitution and write flags (`find -delete/-exec`, `rg --pre`, `git -c`, `git branch <name>`, `git tag <name>`) are rejected. `git branch` is listing-only. `rg` and `grep` may not use `-f`/`--file` or a bare `--`.
+- **Command paths.** For non-git commands every positional argument (except the grep/rg search pattern) must pass `confine()`. For git, path-like arguments and `--flag=path` values must. `rg` and `grep` get secret-file exclusions appended after the agent's own arguments.
+- **Size caps.** 200 KB per file, 400 KB total, 15 s command timeout, binary files refused.
+- **Residual risk.** Workspace source code can still be sent, and tracked secrets can appear in `git diff`, `git show` or `git log -p` output because git is not path-filtered. The consent notice says so.
 
-## 6. File Changes Breakdown
+## Reliability and cost
 
-| File | Action | Description |
-|---|---|---|
-| `modules/jev/package.json` | `[NEW]` | Manifest, `agent.extensions` list |
-| `modules/jev/agent/lib/jev-client.ts` | `[NEW]` | Typed OpenRouter client |
-| `modules/jev/agent/extensions/jev-compact.ts` | `[NEW]` | Boundary detection, tiering, advice |
-| `modules/jev/agent/extensions/ask-jev.ts` | `[NEW]` | `ask_jev` tool |
-| `modules/jev/src/main.ts`, `shared.ts` | `[NEW]` | Key and env wiring, settings IPC |
-| `modules/jev/src/renderer.tsx` + `ui/*` | `[NEW]` | Settings page, context-meter hint, log |
-| `modules/jev/src/tiering.ts` + `.test.ts` | `[NEW]` | Pure decision logic, unit tests |
-| `packages/protocol/src/bridge.ts` | `[MODIFY]` | Add `jev_advice` message |
-| `apps/desktop/src/main/services/auth.ts` | `[MODIFY]` | Add `openrouter` account |
-| `apps/desktop/src/renderer/components/` context meter | `[MODIFY]` | Slot for the module hint |
-| `CHANGELOG.md`, `docs/` | `[MODIFY]` | Document the feature |
+- **Timeout** 6 s per call. **Circuit breaker:** 3 straight failures pause calls for 5 minutes; 401, 402 or 403 pause them for 30 minutes.
+- **Daily cap** (default 500 calls, 0 = unlimited), counted across sessions from the shared `usage.jsonl`.
+- **Usage log** `usage.jsonl`: one record per call (feature, tokens, latency, ok, error). Main trims it to its newest half past 2 MB.
 
-## 7. Verification & Test Plan
-- Unit: `tiering.ts` (table-driven), `jev-client.ts` (mock fetch: success, timeout, 4xx, malformed, breaker).
-- Contract: the bridge message round-trips.
-- Manual: with no key, the module is inert and Pi is unchanged. With a key, finish a task and see the hint. Mid-edit shows no hint. Click "Compact now".
-- `ask_jev`: confirm file contents never appear in the transcript.
-- Run `pnpm test` and the typecheck for `apps/desktop`.
+## Files
 
-## 8. Risks
+| File | Role |
+|---|---|
+| `modules/jev/package.json` | Manifest (`tier: bonus`, `recommended: false`, `agent.extensions`) |
+| `modules/jev/agent/extensions/jev.ts` | Client, breaker, compaction advice, `ask_jev`, confinement |
+| `modules/jev/src/shared.ts` | Settings, view, usage summary, mirrored shapes |
+| `modules/jev/src/main.ts` | Config file, env wiring, IPC, key test, usage log |
+| `modules/jev/src/tiering.ts` | Pure tier decision |
+| `modules/jev/src/renderer.tsx`, `src/ui/*` | Settings page, advice bar, store |
+| `modules/jev/src/*.test.ts`, `src/ui/jev-store.test.ts` | Unit and flow tests |
 
-> [!WARNING]
-> - **Alpha API** may change or vanish. Mitigations: one client file, fail open, feature flag.
-> - **Latency and cost** on every turn. Mitigations: one call per turn, a daily call budget, skip when usage is below the floor.
-> - **Privacy**: conversation text goes to OpenRouter. Mitigation: consent notice, opt-in module.
-<!-- /FULL -->
+## v2: model router (not started)
+
+Before send, a `choice` picks `fast` or `powerful` and a `score` picks reasoning effort. The composer shows a suggestion chip and never switches silently. It must read `lib/models/cache-switch.ts` and only suggest a switch when the saved cost outweighs losing a warm cache.
+
+## Risks
+
+- **Alpha-style API.** One client function (`callJev`) isolates the schema; failures are swallowed and the breaker stops repeated calls.
+- **Latency and cost.** One call per finished turn above the floor, plus the daily cap.
+- **Privacy.** Content goes to TypeSafe. Mitigations: opt-in module, consent gate, confinement, secret blocklist.

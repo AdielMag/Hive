@@ -43,6 +43,8 @@ import { formatCost, formatTokens } from "../lib/format.ts";
 import { QueuedMessagesList } from "./transcript/QueuedMessages.tsx";
 import { AuthErrorActions } from "./AuthErrorActions.tsx";
 import { detectAuthError } from "../lib/auth-errors.ts";
+import { useContributions } from "../modules/registry.ts";
+import { ModuleToolCard } from "../modules/ModuleViews.tsx";
 
 export function scrollToToolCall(id: string): void {
   const sel = CSS.escape(id);
@@ -572,6 +574,7 @@ const ToolCall: React.FC<{
 }> = ({ block, result, run, running }) => {
   const ctx = useContext(TranscriptContext);
   const [open, setOpen] = useState(false);
+  const toolCards = useContributions("toolCards");
 
   // 1. Skill load card
   if (ctx?.annotations.skills.loads.has(block.id)) {
@@ -612,7 +615,25 @@ const ToolCall: React.FC<{
     );
   }
 
-  // 4. Standard tool call
+  // 4. Module-owned card (e.g. the inline plan review)
+  const moduleCard = toolCards.find((c) => c.match({ name: block.name, arguments: block.arguments ?? {} }));
+  if (moduleCard) {
+    return (
+      <ModuleToolCard
+        card={moduleCard}
+        call={{
+          id: block.id,
+          name: block.name,
+          arguments: block.arguments ?? {},
+          complete: block.complete,
+          running,
+          result: result ? { text: result.text, isError: result.isError } : undefined,
+        }}
+      />
+    );
+  }
+
+  // 5. Standard tool call
   const meta = TOOL_META[block.name] ?? { icon: <Wrench size={13} />, label: block.name };
   const summary = toolSummary(block.name, block.arguments ?? {});
   const path = str(block.arguments?.path ?? block.arguments?.file_path);

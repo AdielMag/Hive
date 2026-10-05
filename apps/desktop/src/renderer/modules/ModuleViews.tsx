@@ -2,7 +2,8 @@
 import React from "react";
 import { Loader2, PackageOpen, Puzzle } from "lucide-react";
 import type { TabItem } from "@hive/protocol";
-import type { ModuleTab, PanelContribution, RailItemContribution } from "@hive/module-sdk/renderer";
+import type { ModuleTab, PanelContribution, RailItemContribution, ToolCardCall, ToolCardContribution } from "@hive/module-sdk/renderer";
+import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import { ownerOfPanel, ownerOfTabKind } from "./manifests.ts";
 import { useContributions, useModuleHost, useModules, useSlot } from "./registry.ts";
@@ -175,3 +176,20 @@ export function useModuleTabTitle(tab: TabItem): string {
   const k = kinds.find((x) => x.kind === tab.kind);
   return k?.title ? k.title(toModuleTab(tab)) : tab.title;
 }
+
+/** Module-owned replacement for a tool call's transcript row (see `RendererContributions.toolCards`). */
+export const ModuleToolCard: React.FC<{
+  card: ToolCardContribution & { moduleId: string };
+  call: ToolCardCall;
+}> = ({ card, call }) => {
+  const host = useModuleHost(card.moduleId);
+  if (!host) return null;
+  const View = card.component;
+  return (
+    <ErrorBoundary label="Tool card" resetKey={call.id}>
+      <div data-tool-call-id={call.id}>
+        <View host={host} call={call} />
+      </div>
+    </ErrorBoundary>
+  );
+};
