@@ -2,6 +2,13 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.19.1 — 2026-10-05 · [diff](https://github.com/AdielMag/Hive/compare/v0.19.0...v0.19.1)
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`99f9e26`](https://github.com/AdielMag/Hive/commit/99f9e26c978e8c3486562afc31f7ad166a8e4cd1))
+- readme changes ([`6761a3b`](https://github.com/AdielMag/Hive/commit/6761a3b2c46454430ba2d78525ccc80a06251a6e))
+
 ## v0.19.0 — 2026-10-05 · [diff](https://github.com/AdielMag/Hive/compare/v0.18.0...v0.19.0)
 
 ### ✨ Features
