@@ -5,7 +5,7 @@
  * first lets the next request start from a summary + recent turns. See lib/models/cache-switch.ts.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Loader2, Minimize2, TriangleAlert, X, Zap } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Minimize2, Snowflake, TriangleAlert, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { Model } from "@hive/protocol";
 import { applyCompactionResult, useSessionStore } from "../store/session-store.ts";
@@ -28,6 +28,23 @@ const fmtK = (n: number) => {
   return String(Math.round(n));
 };
 const modelName = (m: Pick<Model<any>, "id" | "name"> | null | undefined, fallback: string) => m?.name || m?.id || fallback;
+
+/** Before → after context size with a proportional meter (the filled part is what remains after compaction). */
+const TokenDelta: React.FC<{ before: number; after: number; className?: string }> = ({ before, after, className }) => {
+  const pct = before > 0 ? Math.min(100, Math.max(4, Math.round((after / before) * 100))) : 100;
+  return (
+    <span className={`cache-switch-bar__delta${className ? ` ${className}` : ""}`} title={`${fmtK(before)} → ~${fmtK(after)} tokens`}>
+      <span className="cache-switch-bar__delta-nums">
+        <span className="cache-switch-bar__num cache-switch-bar__num--before">{fmtK(before)}</span>
+        <ArrowRight size={10} />
+        <span className="cache-switch-bar__num">~{fmtK(after)}</span>
+      </span>
+      <span className="cache-switch-bar__meter" aria-hidden>
+        <span className="cache-switch-bar__meter-fill" style={{ width: `${pct}%` }} />
+      </span>
+    </span>
+  );
+};
 
 /** Dismissed (tab, last response, target model) combos; module-level so remounts don't resurrect them. */
 const dismissed = new Set<string>();
@@ -176,10 +193,12 @@ export const ModelSwitchCacheBar: React.FC = () => {
   if (phaseHere?.kind === "compacting") {
     return (
       <div className="cache-switch-bar is-busy" role="status">
-        <Loader2 size={13} className="cache-switch-bar__icon spin" />
-        <span className="cache-switch-bar__label">Compacting to save ~{fmtK(phaseHere.saved)} tokens…</span>
-        <span className="cache-switch-bar__hint cache-switch-bar__hint--grow">
-          Summarizing earlier turns so {phaseHere.toName} doesn't re-read the full history
+        <span className="cache-switch-bar__badge">
+          <Loader2 size={14} className="spin" />
+        </span>
+        <span className="cache-switch-bar__text">
+          <span className="cache-switch-bar__title">Compacting to save ~{fmtK(phaseHere.saved)} tokens…</span>
+          <span className="cache-switch-bar__sub">Summarizing earlier turns so {phaseHere.toName} doesn't re-read the full history</span>
         </span>
       </div>
     );
@@ -188,13 +207,14 @@ export const ModelSwitchCacheBar: React.FC = () => {
   if (phaseHere?.kind === "done") {
     return (
       <div className="cache-switch-bar is-done" role="status">
-        <CheckCircle2 size={13} className="cache-switch-bar__icon" />
-        <span className="cache-switch-bar__label">
-          Compacted {fmtK(phaseHere.before)} → ~{fmtK(phaseHere.tokens)} tokens
+        <span className="cache-switch-bar__badge">
+          <CheckCircle2 size={14} />
         </span>
-        <span className="cache-switch-bar__hint cache-switch-bar__hint--grow">
-          Freed ~{fmtK(Math.max(0, phaseHere.before - phaseHere.tokens))} · {phaseHere.toName} starts from the summary instead of the full history
+        <span className="cache-switch-bar__text">
+          <span className="cache-switch-bar__title">Compacted — freed ~{fmtK(Math.max(0, phaseHere.before - phaseHere.tokens))} tokens</span>
+          <span className="cache-switch-bar__sub">{phaseHere.toName} starts from the summary instead of the full history</span>
         </span>
+        <TokenDelta before={phaseHere.before} after={phaseHere.tokens} />
       </div>
     );
   }
@@ -202,13 +222,17 @@ export const ModelSwitchCacheBar: React.FC = () => {
   if (phaseHere?.kind === "error") {
     return (
       <div className="cache-switch-bar is-error" role="alert">
-        <TriangleAlert size={13} className="cache-switch-bar__icon" />
-        <span className="cache-switch-bar__label">Compaction failed</span>
-        <span className="cache-switch-bar__hint cache-switch-bar__hint--grow" title={phaseHere.message}>
-          {phaseHere.message}
+        <span className="cache-switch-bar__badge">
+          <TriangleAlert size={14} />
+        </span>
+        <span className="cache-switch-bar__text">
+          <span className="cache-switch-bar__title">Compaction failed</span>
+          <span className="cache-switch-bar__sub" title={phaseHere.message}>
+            {phaseHere.message}
+          </span>
         </span>
         <button className="cache-switch-bar__btn cache-switch-bar__btn--ghost" onClick={clearResult} title="Dismiss">
-          <X size={11} />
+          <X size={12} />
         </button>
       </div>
     );
@@ -242,27 +266,48 @@ export const ModelSwitchCacheBar: React.FC = () => {
       `Compacting summarizes the earlier turns once, so from then on each request carries ~${fmtK(advice.afterCompactTokens)} tokens instead.`;
 
   return (
-    <div className="cache-switch-bar" title={tooltip} role="status">
-      <Zap size={13} className="cache-switch-bar__icon" />
-      <span className="cache-switch-bar__label">
-        {switched ? "Compact first" : "Cache is cold — compact first"} to save ~{fmtK(advice.savedTokens)} tokens per message
+    <div className={`cache-switch-bar ${switched ? "is-switch" : "is-idle"}`} title={tooltip} role="status">
+      <span className="cache-switch-bar__badge">
+        <Snowflake size={14} />
       </span>
-      <span className="cache-switch-bar__hint cache-switch-bar__hint--grow">
-        {switched
-          ? `${toName} starts with a cold cache and would re-read all ${fmtK(advice.contextTokens)}`
-          : `Idle ${idleMin}m (cache lasts ${CACHE_TTL_MS / 60_000}m) — the next message would re-read all ${fmtK(advice.contextTokens)} uncached`}
+      <span className="cache-switch-bar__text">
+        <span className="cache-switch-bar__title">{switched ? "Cold cache on the new model" : "Prompt cache went cold"}</span>
+        <span className="cache-switch-bar__sub">
+          {switched ? (
+            <>
+              <span className="cache-switch-bar__chip">{last?.model}</span>
+              <ArrowRight size={10} className="cache-switch-bar__sub-arrow" />
+              <span className="cache-switch-bar__chip cache-switch-bar__chip--to">{toName}</span>
+              <span className="cache-switch-bar__sep">·</span>
+              next message re-reads all {fmtK(advice.contextTokens)} uncached
+            </>
+          ) : (
+            <>
+              <span className="cache-switch-bar__chip">
+                idle {idleMin}m
+              </span>
+              <span className="cache-switch-bar__sep">·</span>
+              cache lasts {CACHE_TTL_MS / 60_000}m — next message re-reads all {fmtK(advice.contextTokens)} uncached
+            </>
+          )}
+        </span>
       </span>
+      <TokenDelta before={advice.contextTokens} after={advice.afterCompactTokens} />
       <button
         className="cache-switch-bar__btn"
         onClick={() => void compactFirst()}
         disabled={busyElsewhere}
-        title={busyElsewhere ? "Another session is compacting" : "Summarize earlier turns now"}
+        title={busyElsewhere ? "Another session is compacting" : `Summarize earlier turns now and save ~${fmtK(advice.savedTokens)} tokens per message`}
       >
         <Minimize2 size={11} />
-        Compact first
+        Compact · −{fmtK(advice.savedTokens)}
       </button>
-      <button className="cache-switch-bar__btn cache-switch-bar__btn--ghost" onClick={dismiss} title="Keep the full history on the new model">
-        <X size={11} />
+      <button
+        className="cache-switch-bar__btn cache-switch-bar__btn--ghost"
+        onClick={dismiss}
+        title={switched ? "Keep the full history on the new model" : "Keep the full history"}
+      >
+        <X size={12} />
       </button>
     </div>
   );
