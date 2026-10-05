@@ -9,21 +9,15 @@ import { useHoverPopover } from "./useHoverPopover.ts";
 import { buildMeters } from "./meters.ts";
 
 const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "openai-codex": "Codex" };
+const POOL_TAG: Record<string, string> = { Gemini: "Gem", "Claude·GPT": "3P" };
 const TONE_COLOR = { ok: "#3fb27f", warn: "#e0a43a", danger: "#e5534b" } as const;
 
-const Mini: React.FC<{ label: string; used: number }> = ({ label, used }) => {
-  const tone = usageTone(used);
-  return (
-    <span className="sb-quota__item" title={`${label}: ${Math.round(used)}% used`}>
-      <span className="sb-quota__mini">
-        <i style={{ width: `${Math.max(4, used)}%`, background: TONE_COLOR[tone] }} />
-      </span>
-      <span className="mono" style={{ opacity: 0.8 }}>
-        {label} {Math.round(used)}%
-      </span>
-    </span>
-  );
-};
+/** One thin track; the 5h bar sits above the 7d bar so a subscription costs ~one icon + 28px + a number. */
+const Track: React.FC<{ used?: number }> = ({ used }) => (
+  <span className="sb-quota__track">
+    {used !== undefined && <i style={{ width: `${Math.min(100, Math.max(4, used))}%`, background: TONE_COLOR[usageTone(used)] }} />}
+  </span>
+);
 
 /** Status-bar meters + the hover/pin popover with full window details. */
 export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
@@ -32,6 +26,7 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const refreshQuota = useLimits((s) => s.refresh);
   const now = useNow(30_000);
   const quotaPop = useHoverPopover();
+  const ProviderIcon = host.ui.ProviderIcon;
 
   const model = host.hooks.useActiveSession().model;
   const meters = useMemo(
@@ -56,18 +51,29 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
           aria-haspopup="dialog"
           aria-expanded={quotaPop.open}
         >
-          {meters.map((m) => (
-            <span
-              key={m.key}
-              className="sb-quota__item"
-              style={m.active === false ? { opacity: 0.5 } : undefined}
-              title={m.active === true ? "Pool used by the active model" : undefined}
-            >
-              <span style={m.active ? { fontWeight: 600 } : undefined}>{m.label}</span>
-              {m.w5 && <Mini label="5h" used={m.w5.usedPercent} />}
-              {m.wk && <Mini label="7d" used={m.wk.usedPercent} />}
-            </span>
-          ))}
+          {meters.map((m) => {
+            const used5 = m.w5?.usedPercent;
+            const usedWk = m.wk?.usedPercent;
+            const worst = Math.max(used5 ?? 0, usedWk ?? 0);
+            const tone = usageTone(worst);
+            const detail = [used5 !== undefined && `5h ${Math.round(used5)}%`, usedWk !== undefined && `7d ${Math.round(usedWk)}%`].filter(Boolean).join(" · ");
+            const tip = `${m.label} — ${detail}${m.active === true ? " (active model)" : ""}`;
+            return (
+              <span
+                key={m.key}
+                className={`sb-quota__item${m.active === true ? " is-active-pool" : ""}${m.active === false ? " is-idle-pool" : ""}`}
+                title={tip}
+              >
+                <ProviderIcon provider={m.providerId} size={12} />
+                {m.pool && <span className="sb-quota__pool">{POOL_TAG[m.pool] ?? m.pool}</span>}
+                <span className="sb-quota__tracks" aria-hidden>
+                  <Track used={used5} />
+                  <Track used={usedWk} />
+                </span>
+                <span className={`sb-quota__pct sb-quota__pct--${tone} mono`}>{Math.round(worst)}%</span>
+              </span>
+            );
+          })}
         </button>
       )}
 

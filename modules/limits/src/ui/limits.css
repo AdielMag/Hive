@@ -173,33 +173,72 @@
 .sb-quota {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  height: 100%;
-  padding: 0 6px;
+  gap: 2px;
+  height: 20px;
+  padding: 0 3px;
   border: none;
   background: transparent;
   color: inherit;
   cursor: pointer;
   border-radius: 5px;
 }
-.sb-quota:hover {
+.sb-quota:hover,
+.sb-quota.is-active {
   background: var(--frame-hover);
 }
+/* One compact cell per subscription (icon · [pool] · stacked 5h/7d bars · worst %), hairline-separated. */
 .sb-quota__item {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 0 7px;
+  white-space: nowrap;
 }
-.sb-quota__mini {
-  width: 26px;
-  height: 4px;
+.sb-quota__item + .sb-quota__item {
+  border-left: 1px solid rgba(var(--fg-rgb), 0.14);
+}
+.sb-quota__item.is-idle-pool {
+  opacity: 0.5;
+}
+.sb-quota__pool {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+.sb-quota__item.is-active-pool .sb-quota__pool {
+  opacity: 1;
+  font-weight: 600;
+  color: var(--frame-text);
+}
+.sb-quota__tracks {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb-quota__track {
+  display: block;
+  width: 28px;
+  height: 3px;
   border-radius: 999px;
-  background: rgba(var(--fg-rgb), 0.15);
+  background: rgba(var(--fg-rgb), 0.18);
   overflow: hidden;
 }
-.sb-quota__mini i {
+.sb-quota__track i {
   display: block;
   height: 100%;
+  border-radius: inherit;
+}
+.sb-quota__pct {
+  min-width: 3ch;
+  text-align: right;
+  font-weight: 600;
+  color: var(--frame-text);
+}
+.sb-quota__pct--warn {
+  color: #e0a43a;
+}
+.sb-quota__pct--danger {
+  color: #e5534b;
 }
 
 /* Cards/meters inside the popover: lighter panels with clear edges and readable tracks. */
