@@ -2,6 +2,17 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.18.0 — 2026-10-05 · [diff](https://github.com/AdielMag/Hive/compare/v0.17.0...v0.18.0)
+
+### ✨ Features
+
+- **terminal:** replace pipe shells with a real PTY and add standard terminal features ([`ac4ce44`](https://github.com/AdielMag/Hive/commit/ac4ce44941d7c3910bf7ec0da47783347dc5f638))
+- **limits:** compact status bar subscription meters ([`b558f87`](https://github.com/AdielMag/Hive/commit/b558f87fae8866f84a69d08d3d3d1d267cc447f9))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`445eddb`](https://github.com/AdielMag/Hive/commit/445eddbc8d948c7a051b7b642b44e45dcc3cdf3b))
+
 ## v0.17.0 — 2026-10-05 · [diff](https://github.com/AdielMag/Hive/compare/v0.16.1...v0.17.0)
 
 ### ✨ Features
