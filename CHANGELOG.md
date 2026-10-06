@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.21.0 — 2026-10-06 · [diff](https://github.com/AdielMag/Hive/compare/v0.20.0...v0.21.0)
+
+### ✨ Features
+
+- **desktop:** per-session reload button and progress strip in the composer ([`7532cfc`](https://github.com/AdielMag/Hive/commit/7532cfccaea7f389509c0cc937217ce80e47cc37))
+
 ## v0.20.0 — 2026-10-06 · [diff](https://github.com/AdielMag/Hive/compare/v0.19.1...v0.20.0)
 
 ### ✨ Features
