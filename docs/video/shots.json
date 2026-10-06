@@ -1,0 +1,189 @@
+{
+  "style": "Cinematic product film, near-black environment, soft volumetric light, shallow depth of field, subtle bloom on screen glow, smooth slow camera motion, premium Apple keynote aesthetic, no text overlays, no watermarks, no extra UI elements.",
+  "fps": 24,
+  "size": [
+    1920,
+    1080
+  ],
+  "fontRegular": "docs/video/work/fonts/extras/ttf/Inter-Regular.ttf",
+  "fontSemiBold": "docs/video/work/fonts/extras/ttf/Inter-SemiBold.ttf",
+  "shots": [
+    {
+      "id": "S1",
+      "duration": 5,
+      "finalResolution": "1080p",
+      "mode": "t2v",
+      "prompt": "A dim developer desk at night seen from behind. Terminal windows with scrolling green and white code multiply and overlap across a wide monitor, a sense of overwhelm and noise. Slow push-in, focus drifts, the screen glow lights the room.",
+      "text": [
+        {
+          "t": "Agents write the code.",
+          "at": 1.2,
+          "to": 4.7,
+          "size": 76
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "duration": 5,
+      "finalResolution": "1080p",
+      "mode": "omni_reference",
+      "endImage": "icon-on-black.png",
+      "prompt": "Glowing translucent amber honey hexagon cells drift in total darkness, snap together into a honeycomb cluster, then a glossy rounded-square tile of dark honey forms around them and the glow softly settles. Slow dolly in, the final frame matches the reference image exactly.",
+      "text": [
+        {
+          "t": "Now watch them work.",
+          "at": 1,
+          "to": 4.7,
+          "size": 68,
+          "y": "bottom"
+        }
+      ]
+    },
+    {
+      "id": "S3",
+      "duration": 7,
+      "finalResolution": "720p",
+      "mode": "omni_reference",
+      "startImage": "workbench.png",
+      "prompt": "The app window floats in a dark void with a faint reflection. The camera slowly pushes in toward the left sidebar, the colored project badges glow gently. The interface stays perfectly still, crisp and unchanged, only the camera moves.",
+      "text": [
+        {
+          "t": "Every project. One hive.",
+          "at": 0.8,
+          "to": 6.6,
+          "size": 64
+        }
+      ]
+    },
+    {
+      "id": "S4",
+      "duration": 7,
+      "finalResolution": "720p",
+      "mode": "omni_reference",
+      "startImage": "transcript.png",
+      "prompt": "The app window floats in a dark void. The camera slowly tilts up along the conversation and settles on the green COMPLETED subagent card. The interface stays perfectly still, crisp and unchanged, only the camera moves, gentle depth of field.",
+      "text": [
+        {
+          "t": "Every thought. Every tool. Every diff.",
+          "at": 0.8,
+          "to": 6.6,
+          "size": 60
+        }
+      ]
+    },
+    {
+      "id": "S5",
+      "duration": 6,
+      "finalResolution": "720p",
+      "mode": "omni_reference",
+      "startImage": "limits.png",
+      "prompt": "The app window floats in a dark void. The camera slowly pushes toward the bottom right where the usage limit meters glow, a soft light sweeps across the surface. The interface stays perfectly still, crisp and unchanged, only the camera moves.",
+      "text": [
+        {
+          "t": "Know your limits before you hit them.",
+          "at": 0.8,
+          "to": 5.6,
+          "size": 60
+        }
+      ]
+    },
+    {
+      "id": "S6",
+      "duration": 6,
+      "finalResolution": "720p",
+      "mode": "omni_reference",
+      "startImage": "usage.png",
+      "prompt": "The app window floats in a dark void. Gentle parallax over the analytics dashboard, the chart lines glow, the camera drifts slowly to the right. The interface stays perfectly still, crisp and unchanged, only the camera moves.",
+      "text": [
+        {
+          "t": "Know every cent.",
+          "at": 0.8,
+          "to": 5.6,
+          "size": 64,
+          "y": "bottom"
+        },
+        {
+          "t": "Computed locally. Zero telemetry.",
+          "at": 1.6,
+          "to": 5.6,
+          "size": 32,
+          "sub": true,
+          "y": "bottom2"
+        }
+      ]
+    },
+    {
+      "id": "S7",
+      "duration": 6,
+      "finalResolution": "720p",
+      "mode": "omni_reference",
+      "startImage": "git.png",
+      "prompt": "The app window floats in a dark void, wide framing with the whole window visible. The camera makes a very small, slow drift toward the left side where the staged changes and the commit message box are, a soft glow lights the commit box. Minimal zoom, the interface stays perfectly still, crisp and unchanged, only the camera moves.",
+      "text": [
+        {
+          "t": "Commit with a sentence.",
+          "at": 0.8,
+          "to": 5.6,
+          "size": 64
+        }
+      ]
+    },
+    {
+      "id": "S8",
+      "duration": 5,
+      "finalResolution": "720p",
+      "mode": "omni_reference",
+      "startImage": "appearance.png",
+      "prompt": "The settings window floats in a dark void, the color palette pad glows, the camera eases slowly back. The interface stays perfectly still, crisp and unchanged, only the camera moves.",
+      "text": [
+        {
+          "t": "Make it yours.",
+          "at": 0.6,
+          "to": 4.6,
+          "size": 64
+        }
+      ]
+    },
+    {
+      "id": "S9",
+      "duration": 6,
+      "finalResolution": "1080p",
+      "mode": "omni_reference",
+      "startImage": "icon-on-black.png",
+      "prompt": "The glossy honey-hexagon app icon centered on black, slow pull-back, a faint reflective floor, tiny warm embers drift upward. The icon stays exactly as in the reference image.",
+      "text": [
+        {
+          "t": "Hive",
+          "at": 0.5,
+          "to": 3,
+          "size": 72,
+          "y": "bottom"
+        },
+        {
+          "t": "The workbench for Pi.",
+          "at": 0.9,
+          "to": 3,
+          "size": 36,
+          "sub": true,
+          "y": "bottom2"
+        },
+        {
+          "t": "Free. Local. Open source.",
+          "at": 3.2,
+          "to": 5.9,
+          "size": 48,
+          "y": "bottom"
+        },
+        {
+          "t": "github.com/AdielMag/Hive",
+          "at": 3.6,
+          "to": 5.9,
+          "size": 32,
+          "sub": true,
+          "y": "bottom2"
+        }
+      ]
+    }
+  ]
+}

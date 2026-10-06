@@ -3,6 +3,7 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   Bot,
   Columns2,
+  FolderOpen,
   Loader2,
   MessageSquare,
   Moon,
@@ -266,6 +267,17 @@ export const TabStrip: React.FC<TabStripProps> = ({
       }
     }
 
+    if (tab.filePath) {
+      items.push({ kind: "separator" });
+      items.push({
+        label: "Show in Folder",
+        icon: <FolderOpen size={14} />,
+        onSelect: () => {
+          if (tab.filePath) void window.studio.showItemInFolder(tab.filePath);
+        },
+      });
+    }
+
     setMenu({
       x: e.clientX,
       y: e.clientY,
@@ -369,23 +381,20 @@ export const TabStrip: React.FC<TabStripProps> = ({
                   <PenLine size={11} />
                 </span>
               )}
-              {busy ? (
-                <Loader2 size={12} className="spin tab__busy" />
-              ) : (
-                <span className="tab__end">
-                  {dotKind && <span className={`tab__dot tab__dot--${dotKind}`} aria-hidden />}
-                  <button
-                    className="tab__close"
-                    aria-label={`Close ${tab.title}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleClose(tab.id);
-                    }}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              )}
+              <span className="tab__end">
+                {busy && <Loader2 size={12} className="spin tab__busy" aria-hidden />}
+                {!busy && dotKind && <span className={`tab__dot tab__dot--${dotKind}`} aria-hidden />}
+                <button
+                  className="tab__close"
+                  aria-label={`Close ${tab.title}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleClose(tab.id);
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </span>
             </div>
           );
         })}

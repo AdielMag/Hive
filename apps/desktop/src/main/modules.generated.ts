@@ -156,7 +156,8 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
       "diff-viewer"
     ],
     "optionalDeps": [
-      "terminal"
+      "terminal",
+      "git"
     ],
     "contributes": {
       "leftPanels": [
@@ -173,7 +174,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
         }
       ]
     },
-    "hasMain": false,
+    "hasMain": true,
     "hasRenderer": true
   },
   {
@@ -365,6 +366,7 @@ export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ defaul
   "analytics": () => import("@hive-module/analytics/main"),
   "bash-guard": () => import("@hive-module/bash-guard/main"),
   "browser": () => import("@hive-module/browser/main"),
+  "files": () => import("@hive-module/files/main"),
   "git": () => import("@hive-module/git/main"),
   "jev": () => import("@hive-module/jev/main"),
   "library": () => import("@hive-module/library/main"),

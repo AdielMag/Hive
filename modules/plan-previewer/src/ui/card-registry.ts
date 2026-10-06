@@ -14,4 +14,11 @@ export function registerInlineCard(filePath: string): () => void {
   };
 }
 
-export const hasInlineCard = (filePath: string): boolean => mounted.has(key(filePath));
+export const hasInlineCard = (filePath: string): boolean => {
+  const k = key(filePath);
+  if (mounted.has(k)) return true;
+  for (const m of mounted.keys()) {
+    if (m.endsWith(`/${k}`) || k.endsWith(`/${m}`)) return true;
+  }
+  return false;
+};

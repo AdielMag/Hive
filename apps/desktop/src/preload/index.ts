@@ -146,6 +146,9 @@ const api: StudioApi = {
   readMediaFile(filePath: string) {
     return ipcRenderer.invoke(IPC.filesReadMedia, { filePath });
   },
+  showItemInFolder(filePath: string) {
+    return ipcRenderer.invoke(IPC.filesShowInFolder, { filePath });
+  },
   pickFiles(options?: { allowImagesOnly?: boolean }) {
     return ipcRenderer.invoke(IPC.pickFiles, options);
   },

@@ -11,7 +11,7 @@ import { HighlightedSource } from "../components/code/HighlightedSource.tsx";
 import { DiffView } from "../components/code/DiffView.tsx";
 import { languageFromPath, languageLabel, resolveLanguage } from "../lib/highlight/languages.ts";
 import { ProviderIcon } from "../components/ProviderIcon.tsx";
-import { copyText } from "../lib/clipboard.ts";
+import { copyImageToClipboard, copyText } from "../lib/clipboard.ts";
 import { scrollToToolCall } from "../components/Transcript.tsx";
 import { useActiveRegistry } from "../store/ai-registry-store.ts";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
@@ -147,7 +147,12 @@ export function createModuleHost(moduleId: string): ModuleHost {
       resolve: (name) => resolveLanguage(name),
       label: (language, raw) => languageLabel(language, raw),
     },
-    files: { read: (filePath) => window.studio.readFile(filePath), list: (dirPath) => window.studio.listFiles(dirPath) },
+    files: {
+      read: (filePath) => window.studio.readFile(filePath),
+      readMedia: (filePath) => window.studio.readMediaFile(filePath),
+      showInFolder: (filePath) => window.studio.showItemInFolder(filePath),
+      list: (dirPath) => window.studio.listFiles(dirPath),
+    },
     models: {
       catalog: () => useSessionStore.getState().allCatalogModels,
       enabledKeys: () => useSessionStore.getState().enabledModelKeys,
@@ -157,6 +162,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
     hooks: { useSessionCatalog, useFeatureModel, useActiveSession, useTheme },
     clipboard: {
       copy: copyText,
+      copyImage: copyImageToClipboard,
     },
     theme: {
       isDark,

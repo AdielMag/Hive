@@ -153,6 +153,8 @@ kbd {
   }
 }
 .spin {
+  transform-origin: 50% 50%;
+  will-change: transform;
   animation: spin 0.9s linear infinite;
 }
 

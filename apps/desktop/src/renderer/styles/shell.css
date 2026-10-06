@@ -479,10 +479,16 @@
   color: var(--text-primary);
 }
 .tab__busy {
+  position: absolute;
+  inset: 0;
+  margin: auto;
   color: var(--accent-base);
-  flex-shrink: 0;
-  margin-right: 4px;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
 }
+/* Running: the spinner sits where the close button is; hover swaps it for the close button. */
+.tab.is-running:not(:hover) .tab__close { opacity: 0; pointer-events: none; }
+.tab.is-running:hover .tab__busy { opacity: 0; }
 
 /* Running: a light sweeps along the bottom of the tab, and the icon breathes. */
 .tab.is-running::before {

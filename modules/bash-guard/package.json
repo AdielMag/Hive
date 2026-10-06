@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "build:extension": "node scripts/build-extension.mjs",
+    "check:extension": "node scripts/build-extension.mjs --check",
+    "test": "vitest run --root ../.. --project unit modules/bash-guard"
+  },
   "description": "Hive module: safety guard for destructive bash commands with inline composer approval",
   "exports": {
     "./main": "./src/main.ts",

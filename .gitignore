@@ -18,3 +18,6 @@ RELEASE_NOTES.md
 icon-options/
 apps/desktop/run*.log
 .tmp-*
+
+# Showcase film working files (frames, drafts, fonts, jobs)
+docs/video/work/

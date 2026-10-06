@@ -444,9 +444,15 @@ export function resolvePlanPath(arg: string | null, projectPath: string | null |
   return projectPath ? normalizePlanPath(`${projectPath}/${arg}`) : rel;
 }
 
-/** Case-insensitive, separator-insensitive path equality. */
-export const samePlanPath = (a?: string | null, b?: string | null): boolean =>
-  Boolean(a && b) && normalizePlanPath(a!).toLowerCase() === normalizePlanPath(b!).toLowerCase();
+/** Case-insensitive, separator-insensitive path equality (supports relative vs absolute suffix matches). */
+export function samePlanPath(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  const an = normalizePlanPath(a).toLowerCase();
+  const bn = normalizePlanPath(b).toLowerCase();
+  if (an === bn) return true;
+  if (an.endsWith(`/${bn}`) || bn.endsWith(`/${an}`)) return true;
+  return false;
+}
 
 /** File name of a plan path (tab title / card header). */
 export function planFileName(filePath: string): string {

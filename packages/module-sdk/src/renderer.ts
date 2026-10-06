@@ -34,6 +34,11 @@ export interface OpenTabSpec {
   lastActiveAt?: number;
   data?: Record<string, unknown>;
   /**
+   * Open the tab where the Pi session that triggered it lives: same project, same pane, right after that
+   * session's tab. Falls back to the project containing `cwd`, then to the active project.
+   */
+  origin?: { sessionFile?: string; sessionId?: string; cwd?: string };
+  /**
    * Reuse an existing tab of the same kind instead of opening a duplicate. Defaults to matching `filePath`
    * when given, else `id`.
    */
@@ -185,7 +190,9 @@ export interface ModuleHost {
   };
   /** Read-only file access routed through core (the same IPC the composer uses for attachments). */
   files: {
-    read(filePath: string): Promise<{ content: string; language: string; [key: string]: unknown }>;
+    read(filePath: string): Promise<{ content: string; language: string; mimeType?: string; isBinary?: boolean; dataUrl?: string; [key: string]: unknown }>;
+    readMedia?(filePath: string): Promise<{ data: string; mimeType: string; size: number; name: string }>;
+    showInFolder?(filePath: string): Promise<void>;
     /** Directory tree of `dirPath` (nodes: `{ name, path, relativePath?, isDirectory, children? }`). */
     list(dirPath: string): Promise<FileTreeNode[]>;
   };
@@ -196,6 +203,7 @@ export interface ModuleHost {
   };
   clipboard: {
     copy(text: string): Promise<boolean>;
+    copyImage?(src: string): Promise<boolean>;
   };
   theme: {
     isDark(): boolean;

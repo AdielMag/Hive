@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Hive module: project file tree in the left panel",
   "exports": {
+    "./main": "./src/main.ts",
     "./renderer": "./src/renderer.tsx",
     "./shared": "./src/shared.ts"
   },
@@ -19,7 +20,8 @@
       "diff-viewer"
     ],
     "optionalDeps": [
-      "terminal"
+      "terminal",
+      "git"
     ],
     "contributes": {
       "leftPanels": [
@@ -39,6 +41,7 @@
   },
   "dependencies": {
     "@hive-module/diff-viewer": "0.1.0",
+    "@hive-module/git": "0.1.0",
     "@hive/module-sdk": "0.1.0",
     "lucide-react": "^1.49.0",
     "react": "^19.0.0"

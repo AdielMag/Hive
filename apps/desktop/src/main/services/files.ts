@@ -16,6 +16,9 @@ export interface FileContentResult {
   content: string;
   language: string;
   size: number;
+  mimeType?: string;
+  isBinary?: boolean;
+  dataUrl?: string;
 }
 
 const IGNORED_DIRS = new Set([".git", "node_modules", "dist", "out", ".pi-node", "build"]);
@@ -101,6 +104,17 @@ export function detectLanguage(filePath: string): string {
     case ".yaml":
     case ".yml":
       return "yaml";
+    case ".png":
+    case ".jpg":
+    case ".jpeg":
+    case ".webp":
+    case ".gif":
+    case ".bmp":
+    case ".ico":
+    case ".avif":
+      return "image";
+    case ".svg":
+      return "xml";
     default:
       return "text";
   }
@@ -122,6 +136,10 @@ export function detectMimeType(filePath: string): string {
       return "image/svg+xml";
     case ".bmp":
       return "image/bmp";
+    case ".ico":
+      return "image/x-icon";
+    case ".avif":
+      return "image/avif";
     case ".pdf":
       return "application/pdf";
     case ".json":
@@ -150,19 +168,48 @@ export function readMediaFile(filePath: string): { data: string; mimeType: strin
   };
 }
 
+const RASTER_IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".ico", ".avif"]);
+
+export function isRasterImageFile(filePath: string): boolean {
+  return RASTER_IMAGE_EXTS.has(extname(filePath).toLowerCase());
+}
+
 export function readFileContent(filePath: string): FileContentResult {
   if (!existsSync(filePath)) {
     throw new Error(`File not found: ${filePath}`);
   }
   const stat = statSync(filePath);
-  if (stat.size > 2 * 1024 * 1024) {
+  const ext = extname(filePath).toLowerCase();
+  const isRasterImg = RASTER_IMAGE_EXTS.has(ext);
+  const isSvg = ext === ".svg";
+  const maxSize = isRasterImg ? 20 * 1024 * 1024 : 2 * 1024 * 1024;
+  if (stat.size > maxSize) {
     throw new Error(`File too large (${(stat.size / 1024 / 1024).toFixed(1)}MB) to view inline`);
   }
+
+  const mimeType = detectMimeType(filePath);
+
+  if (isRasterImg) {
+    const buffer = readFileSync(filePath);
+    const data = buffer.toString("base64");
+    return {
+      path: filePath.replace(/\\/g, "/"),
+      content: "",
+      language: "image",
+      size: stat.size,
+      mimeType,
+      isBinary: true,
+      dataUrl: `data:${mimeType};base64,${data}`,
+    };
+  }
+
   const content = readFileSync(filePath, "utf8");
   return {
     path: filePath.replace(/\\/g, "/"),
     content,
     language: detectLanguage(filePath),
     size: stat.size,
+    mimeType,
+    ...(isSvg ? { dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(content)}` } : {}),
   };
 }

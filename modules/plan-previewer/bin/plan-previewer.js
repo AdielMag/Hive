@@ -290,6 +290,12 @@ async function main() {
     context: options.context,
     response: options.response,
     questions: options.questions,
+    // Lets Hive open the plan tab next to the Pi session that ran this command (Pi exports these to its tools).
+    origin: {
+      sessionFile: process.env.PI_SESSION_FILE,
+      sessionId: process.env.PI_SESSION_ID,
+      cwd: process.cwd(),
+    },
   });
 
   if (notifyRes && notifyRes.success) {

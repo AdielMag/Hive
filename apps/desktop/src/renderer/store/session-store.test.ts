@@ -1,11 +1,14 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   applyCompactionResult,
+  handleCompactionEvent,
   hasDraft,
   readCompactionOutcome,
+  setCompactionState,
   useSessionStore,
   withCompactionEstimate,
   __resetCompactionEstimates,
+  __resetCompactionStates,
   __test,
 } from "./session-store.ts";
 
@@ -581,6 +584,154 @@ describe("reloadPi", () => {
     } as never);
     await useSessionStore.getState().sendPrompt();
     expect(rpc).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("compactionStates and compactSession", () => {
+  beforeEach(() => {
+    __resetCompactionStates();
+    __resetCompactionEstimates();
+  });
+
+  it("sets and dismisses compaction state", () => {
+    setCompactionState("k1", { phase: "compacting", saved: 15_000, toName: "Claude 3.5 Sonnet" });
+    expect(useSessionStore.getState().compactionStates.k1).toEqual({
+      phase: "compacting",
+      saved: 15_000,
+      toName: "Claude 3.5 Sonnet",
+    });
+
+    useSessionStore.getState().dismissCompaction("k1");
+    expect(useSessionStore.getState().compactionStates.k1).toBeUndefined();
+  });
+
+  it("compactSession sets compacting, then done with before and tokens count", async () => {
+    let seenPhaseDuringRpc: string | undefined;
+    const rpc = vi.fn(async (_key: string, cmd: { type: string }) => {
+      if (cmd.type === "compact") {
+        seenPhaseDuringRpc = useSessionStore.getState().compactionStates.k1?.phase;
+        return { ok: true, data: { tokensBefore: 120_000, estimatedTokensAfter: 25_000 } };
+      }
+      return { ok: true, data: {} };
+    });
+    vi.stubGlobal("window", { studio: { rpc } });
+
+    useSessionStore.setState({
+      activeKey: "k1",
+      tabs: [{ id: "t1", activeKey: "k1", model: { id: "claude-3-5-sonnet", name: "Sonnet" } }],
+      transcript: { running: false, lastUsage: { totalTokens: 120_000 } },
+      stats: { contextUsage: { tokens: 120_000, contextWindow: 200_000, percent: 60 } },
+      compactionStates: {},
+    } as never);
+
+    const outcome = await useSessionStore.getState().compactSession("k1", {
+      saved: 95_000,
+      fallbackTokensAfter: 25_000,
+      toName: "Sonnet",
+    });
+
+    expect(seenPhaseDuringRpc).toBe("compacting");
+    expect(rpc).toHaveBeenCalledWith("k1", { type: "compact" });
+    expect(outcome).toEqual({ tokensBefore: 120_000, tokensAfter: 25_000 });
+
+    const state = useSessionStore.getState().compactionStates.k1;
+    expect(state).toEqual({
+      phase: "done",
+      before: 120_000,
+      tokens: 25_000,
+      toName: "Sonnet",
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("compactSession handles rpc errors and transitions to error phase", async () => {
+    const rpc = vi.fn(async () => ({ ok: false, error: "Out of context memory" }));
+    vi.stubGlobal("window", { studio: { rpc } });
+
+    useSessionStore.setState({
+      activeKey: "k1",
+      tabs: [{ id: "t1", activeKey: "k1" }],
+      transcript: { running: false },
+      compactionStates: {},
+    } as never);
+
+    await expect(useSessionStore.getState().compactSession("k1")).rejects.toThrow("Out of context memory");
+
+    const state = useSessionStore.getState().compactionStates.k1;
+    expect(state).toEqual({
+      phase: "error",
+      message: "Out of context memory",
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("compactSession does not start when session is already running or compacting", async () => {
+    const rpc = vi.fn(async () => ({ ok: true, data: {} }));
+    vi.stubGlobal("window", { studio: { rpc } });
+
+    useSessionStore.setState({
+      activeKey: "k1",
+      transcript: { running: true },
+      compactionStates: {},
+    } as never);
+
+    const res1 = await useSessionStore.getState().compactSession("k1");
+    expect(res1).toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+
+    useSessionStore.setState({
+      activeKey: "k1",
+      transcript: { running: false },
+      compactionStates: { k1: { phase: "compacting" } },
+    } as never);
+
+    const res2 = await useSessionStore.getState().compactSession("k1");
+    expect(res2).toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("handleCompactionEvent responds to compaction_start and compaction_end", async () => {
+    useSessionStore.setState({
+      activeKey: "k1",
+      tabs: [{ id: "t1", activeKey: "k1", model: { id: "m1", name: "Claude 3.7 Sonnet" } }],
+      compactionStates: {},
+    } as never);
+
+    handleCompactionEvent("k1", { type: "compaction_start" });
+    expect(useSessionStore.getState().compactionStates.k1).toEqual({
+      phase: "compacting",
+      toName: "Claude 3.7 Sonnet",
+    });
+
+    // Test error
+    handleCompactionEvent("k1", { type: "compaction_end", errorMessage: "Failed to summarize" });
+    expect(useSessionStore.getState().compactionStates.k1).toEqual({
+      phase: "error",
+      message: "Failed to summarize",
+    });
+
+    // Test aborted
+    await handleCompactionEvent("k1", { type: "compaction_end", aborted: true });
+    expect(useSessionStore.getState().compactionStates.k1).toBeUndefined();
+
+    // Test success with result
+    const rpc = vi.fn(async () => ({ ok: true, data: {} }));
+    vi.stubGlobal("window", { studio: { rpc } });
+
+    await handleCompactionEvent("k1", {
+      type: "compaction_end",
+      result: { tokensBefore: 80_000, estimatedTokensAfter: 15_000 },
+    });
+
+    expect(useSessionStore.getState().compactionStates.k1).toEqual({
+      phase: "done",
+      before: 80_000,
+      tokens: 15_000,
+      toName: "Claude 3.7 Sonnet",
+    });
+
     vi.unstubAllGlobals();
   });
 });

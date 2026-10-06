@@ -169,6 +169,7 @@ export const IPC = {
   filesList: "files:list",
   filesRead: "files:read",
   filesReadMedia: "files:read-media",
+  filesShowInFolder: "files:show-in-folder",
   pickFiles: "studio:pick-files",
   // Window controls
   windowMinimize: "window:minimize",
@@ -394,6 +395,7 @@ export interface StudioApi {
   listFiles(dirPath: string): Promise<any[]>;
   readFile(filePath: string): Promise<any>;
   readMediaFile(filePath: string): Promise<{ data: string; mimeType: string; size: number; name: string }>;
+  showItemInFolder(filePath: string): Promise<void>;
   pickFiles(options?: { allowImagesOnly?: boolean }): Promise<string[]>;
   // Marketplace operations
 

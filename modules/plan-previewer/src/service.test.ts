@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { PlanPreviewerService } from "./service.ts";
+import { PlanPreviewerService, sanitizeOrigin } from "./service.ts";
 
 describe("PlanPreviewerService", () => {
   let tempDir = "";
@@ -86,5 +86,17 @@ describe("PlanPreviewerService", () => {
       body: JSON.stringify({ filePath: planFile, context: "ctx" }),
     });
     expect(events).toEqual([["openPlanTab", { filePath: path.resolve(planFile), context: "ctx" }]]);
+  });
+});
+
+describe("sanitizeOrigin", () => {
+  it("keeps only non-empty string fields", () => {
+    expect(sanitizeOrigin({ sessionFile: "/s.jsonl", sessionId: 5, cwd: " " })).toEqual({ sessionFile: "/s.jsonl", sessionId: undefined, cwd: undefined });
+  });
+
+  it("returns undefined when nothing usable is sent", () => {
+    expect(sanitizeOrigin(undefined)).toBeUndefined();
+    expect(sanitizeOrigin("x")).toBeUndefined();
+    expect(sanitizeOrigin({ cwd: "" })).toBeUndefined();
   });
 });

@@ -158,7 +158,7 @@ export class PlanPreviewerService {
 
     if (req.method === "POST" && pathname === "/api/notify") {
       this.readBody(req, (body) => {
-        const { filePath, context, response, questions } = body ?? {};
+        const { filePath, context, response, questions, origin } = body ?? {};
         if (filePath) {
           const resolvedPath = path.resolve(filePath);
           this.setActivePlan(resolvedPath, context);
@@ -178,7 +178,11 @@ export class PlanPreviewerService {
 
         // Notify the renderer to open/focus the plan tab
         if (this.activePlanPath) {
-          this.emit(PlanEvents.openTab, { filePath: this.activePlanPath, context: this.sessionContext });
+          this.emit(PlanEvents.openTab, {
+            filePath: this.activePlanPath,
+            context: this.sessionContext,
+            origin: sanitizeOrigin(origin),
+          });
         }
 
         this.json(res, {
@@ -451,6 +455,15 @@ export class PlanPreviewerService {
       this.server = null;
     }
   }
+}
+
+/** Keep only string fields of the CLI-supplied origin (untrusted JSON from localhost). */
+export function sanitizeOrigin(raw: unknown): OpenPlanTabEvent["origin"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const pick = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined);
+  const origin = { sessionFile: pick(o.sessionFile), sessionId: pick(o.sessionId), cwd: pick(o.cwd) };
+  return origin.sessionFile || origin.sessionId || origin.cwd ? origin : undefined;
 }
 
 function extractDerivedContext(filePath: string, content?: string): string {

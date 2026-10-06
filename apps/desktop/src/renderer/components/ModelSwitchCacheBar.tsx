@@ -54,14 +54,14 @@ const dismissed = new Set<string>();
  */
 const compactedAfter = new Set<string>();
 
-interface KeepRecent {
+export interface KeepRecent {
   percent: number;
   /** Ceiling on the verbatim tail in tokens (0 = none). */
   maxTokens: number;
 }
-const DEFAULT_KEEP_RECENT: KeepRecent = { percent: DEFAULT_KEEP_RECENT_PERCENT, maxTokens: DEFAULT_KEEP_RECENT_MAX_TOKENS };
+export const DEFAULT_KEEP_RECENT: KeepRecent = { percent: DEFAULT_KEEP_RECENT_PERCENT, maxTokens: DEFAULT_KEEP_RECENT_MAX_TOKENS };
 let keepRecentCache: KeepRecent | null = null;
-function useKeepRecent(): KeepRecent {
+export function useKeepRecent(): KeepRecent {
   const [keep, setKeep] = useState(keepRecentCache ?? DEFAULT_KEEP_RECENT);
   useEffect(() => {
     if (keepRecentCache !== null || !window.studio?.getCompactionSettings) return;
@@ -83,26 +83,32 @@ function useKeepRecent(): KeepRecent {
   return keep;
 }
 
-/** Action state, scoped to the session (Pi process key) it was started in. */
-type Phase =
-  | { kind: "idle" }
-  | { kind: "compacting"; key: string; saved: number; toName: string }
-  | { kind: "done"; key: string; before: number; tokens: number; toName: string }
-  | { kind: "error"; key: string; message: string };
-
 export const ModelSwitchCacheBar: React.FC = () => {
-  const { transcript, stats, selectedModel, activeKey, activeTabId } = useSessionStore(
+  const {
+    transcript,
+    stats,
+    selectedModel,
+    activeKey,
+    activeTabId,
+    compactionStates,
+    compactSession,
+    dismissCompaction,
+  } = useSessionStore(
     useShallow((s) => ({
       transcript: s.transcript,
       stats: s.stats,
       selectedModel: s.selectedModel,
       activeKey: s.activeKey,
       activeTabId: s.activeTabId,
+      compactionStates: s.compactionStates,
+      compactSession: s.compactSession,
+      dismissCompaction: s.dismissCompaction,
     })),
   );
   const keepRecent = useKeepRecent();
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [, bump] = useState(0);
+
+  const currentCompaction = activeKey ? compactionStates[activeKey] : undefined;
 
   // Nothing to advise mid-turn; skip the branch walk on every streamed delta.
   const last = useMemo(() => (transcript.running ? null : lastResponse(transcript)), [transcript]);
@@ -138,7 +144,7 @@ export const ModelSwitchCacheBar: React.FC = () => {
   }, [coldCache, last, contextTokens, ctxWindow, keepRecent]);
 
   // Any compaction (manual, auto, or ours) supersedes the advice for the response it followed.
-  const compacting = !!transcript.compaction;
+  const compacting = !!transcript.compaction || currentCompaction?.phase === "compacting";
   useEffect(() => {
     if (!compacting) return;
     const s = useSessionStore.getState();
@@ -146,80 +152,79 @@ export const ModelSwitchCacheBar: React.FC = () => {
     if (before) compactedAfter.add(`${s.activeTabId}|${before.key}`);
   }, [compacting]);
 
-  // Result lines fade out on their own.
-  useEffect(() => {
-    if (phase.kind !== "done" && phase.kind !== "error") return;
-    const t = setTimeout(() => setPhase({ kind: "idle" }), phase.kind === "done" ? 5000 : 15000);
-    return () => clearTimeout(t);
-  }, [phase]);
-
   const toName = modelName(selectedModel, "the new model");
-  const phaseHere = phase.kind !== "idle" && phase.key === activeKey ? phase : null;
 
   // Only one compaction at a time (the phase slot is shared by all tabs).
-  const busyElsewhere = phase.kind === "compacting" && phase.key !== activeKey;
+  const busyElsewhere = Object.entries(compactionStates).some(([k, s]) => k !== activeKey && s?.phase === "compacting");
 
   const dismiss = () => {
     if (dismissKey) dismissed.add(dismissKey);
     bump((n) => n + 1);
   };
   const clearResult = () => {
-    if (phaseHere) setPhase({ kind: "idle" });
+    if (activeKey) dismissCompaction(activeKey);
   };
 
   const compactFirst = async () => {
-    if (!activeKey || !advice || phase.kind === "compacting" || transcript.running) return;
+    if (!activeKey || !advice || currentCompaction?.phase === "compacting" || transcript.running) return;
     const key = activeKey;
     const doneKey = responseKey;
-    setPhase({ kind: "compacting", key, saved: advice.savedTokens, toName });
+    if (doneKey) compactedAfter.add(doneKey);
     try {
-      const res = await window.studio.rpc(key, { type: "compact" });
-      if (!res.ok) throw new Error(res.error || "compaction failed");
-      if (doneKey) compactedAfter.add(doneKey);
-      // Updates the context widgets (stats + transcript) and tells us what Pi actually compacted.
-      const outcome = await applyCompactionResult(key, res.data, advice.afterCompactTokens);
-      setPhase({
-        kind: "done",
-        key,
-        before: outcome?.tokensBefore ?? advice.contextTokens,
-        tokens: outcome?.tokensAfter ?? advice.afterCompactTokens,
+      await compactSession(key, {
+        saved: advice.savedTokens,
+        fallbackTokensAfter: advice.afterCompactTokens,
         toName,
       });
-    } catch (err) {
-      setPhase({ kind: "error", key, message: err instanceof Error ? err.message : String(err) });
+    } catch {
+      // Error handled in store state
     }
   };
 
-  if (phaseHere?.kind === "compacting") {
+  if (currentCompaction?.phase === "compacting") {
+    const saved = currentCompaction.saved;
+    const modelLabel = currentCompaction.toName || toName;
     return (
       <div className="cache-switch-bar is-busy" role="status">
         <span className="cache-switch-bar__badge">
           <Loader2 size={14} className="spin" />
         </span>
         <span className="cache-switch-bar__text">
-          <span className="cache-switch-bar__title">Compacting to save ~{fmtK(phaseHere.saved)} tokens…</span>
-          <span className="cache-switch-bar__sub">Summarizing earlier turns so {phaseHere.toName} doesn't re-read the full history</span>
+          <span className="cache-switch-bar__title">
+            {saved && saved > 0 ? `Compacting to save ~${fmtK(saved)} tokens…` : "Compacting context window…"}
+          </span>
+          <span className="cache-switch-bar__sub">
+            Summarizing earlier turns so {modelLabel} doesn't re-read the full history
+          </span>
         </span>
       </div>
     );
   }
 
-  if (phaseHere?.kind === "done") {
+  if (currentCompaction?.phase === "done") {
+    const before = currentCompaction.before ?? 0;
+    const tokens = currentCompaction.tokens ?? 0;
+    const saved = Math.max(0, before - tokens);
+    const modelLabel = currentCompaction.toName || toName;
     return (
       <div className="cache-switch-bar is-done" role="status">
         <span className="cache-switch-bar__badge">
           <CheckCircle2 size={14} />
         </span>
         <span className="cache-switch-bar__text">
-          <span className="cache-switch-bar__title">Compacted — freed ~{fmtK(Math.max(0, phaseHere.before - phaseHere.tokens))} tokens</span>
-          <span className="cache-switch-bar__sub">{phaseHere.toName} starts from the summary instead of the full history</span>
+          <span className="cache-switch-bar__title">
+            {saved > 0 ? `Compacted — saved ~${fmtK(saved)} tokens` : "Compacted context window"}
+          </span>
+          <span className="cache-switch-bar__sub">
+            {modelLabel} starts from the summary instead of the full history
+          </span>
         </span>
-        <TokenDelta before={phaseHere.before} after={phaseHere.tokens} />
+        <TokenDelta before={before} after={tokens} />
       </div>
     );
   }
 
-  if (phaseHere?.kind === "error") {
+  if (currentCompaction?.phase === "error") {
     return (
       <div className="cache-switch-bar is-error" role="alert">
         <span className="cache-switch-bar__badge">
@@ -227,8 +232,8 @@ export const ModelSwitchCacheBar: React.FC = () => {
         </span>
         <span className="cache-switch-bar__text">
           <span className="cache-switch-bar__title">Compaction failed</span>
-          <span className="cache-switch-bar__sub" title={phaseHere.message}>
-            {phaseHere.message}
+          <span className="cache-switch-bar__sub" title={currentCompaction.message}>
+            {currentCompaction.message}
           </span>
         </span>
         <button className="cache-switch-bar__btn cache-switch-bar__btn--ghost" onClick={clearResult} title="Dismiss">

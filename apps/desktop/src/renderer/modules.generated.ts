@@ -156,7 +156,8 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
       "diff-viewer"
     ],
     "optionalDeps": [
-      "terminal"
+      "terminal",
+      "git"
     ],
     "contributes": {
       "leftPanels": [
@@ -173,7 +174,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
         }
       ]
     },
-    "hasMain": false,
+    "hasMain": true,
     "hasRenderer": true
   },
   {

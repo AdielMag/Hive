@@ -82,6 +82,8 @@ export interface PlanFeedbackPayload {
 export interface OpenPlanTabEvent {
   filePath: string;
   context?: string;
+  /** The Pi session (and folder) that ran the CLI, so the tab opens next to it. */
+  origin?: { sessionFile?: string; sessionId?: string; cwd?: string };
 }
 
 export interface PlanUpdatedEvent {

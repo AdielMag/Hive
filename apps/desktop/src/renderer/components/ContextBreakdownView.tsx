@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Minimize2, Loader2, CheckCircle2, Info, Brain, ChevronRight, Sparkles } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { applyCompactionResult, useSessionStore, type CompactionOutcome } from "../store/session-store.ts";
+import { useSessionStore, type CompactionOutcome } from "../store/session-store.ts";
+import { estimateSwitchSavings, lastResponse } from "../lib/models/cache-switch.ts";
+import { useKeepRecent } from "./ModelSwitchCacheBar.tsx";
 import {
   estimateContextBreakdown,
   type ContextBreakdownNode,
@@ -336,12 +338,17 @@ const SubRows: React.FC<{
 );
 
 export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({ data }) => {
-  const { selectedModel, activeKey } = useSessionStore(
+  const { selectedModel, activeKey, transcript, compactionStates, compactSession } = useSessionStore(
     useShallow((s) => ({
       selectedModel: s.selectedModel,
       activeKey: s.activeKey,
+      transcript: s.transcript,
+      compactionStates: s.compactionStates,
+      compactSession: s.compactSession,
     })),
   );
+  const keepRecent = useKeepRecent();
+  const currentCompaction = activeKey ? compactionStates[activeKey] : undefined;
   const { breakdown, contextTokens, contextWindow, percent } = data;
   const [compacting, setCompacting] = useState(false);
   const [compactDone, setCompactDone] = useState(false);
@@ -357,6 +364,9 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
       return next;
     });
   const shownTokens = useAnimatedNumber(contextTokens);
+
+  const isCompacting = currentCompaction?.phase === "compacting" || compacting;
+  const isDone = currentCompaction?.phase === "done" || compactDone;
 
   const toolIndex = useMemo(() => {
     const m = new Map<string, number>();
@@ -389,13 +399,28 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
   const hasReasoning = Boolean(selectedModel?.reasoning) && levels.length > 0;
 
   const handleCompact = async () => {
-    if (!activeKey || compacting) return;
+    if (!activeKey || isCompacting) return;
     setCompacting(true);
     setCompactDone(false);
     try {
-      const res = await window.studio.rpc(activeKey, { type: "compact" });
-      if (res.ok) {
-        setCompactResult(await applyCompactionResult(activeKey, res.data));
+      const last = lastResponse(transcript);
+      const systemTokens = breakdown.categories.find((c) => c.category === "system")?.tokens ?? 0;
+      const advice = estimateSwitchSavings({
+        contextTokens,
+        baselineTokens: last?.baselineTokens ?? systemTokens,
+        keepRecentTokens: Math.min(
+          Math.round((contextWindow * keepRecent.percent) / 100),
+          keepRecent.maxTokens > 0 ? keepRecent.maxTokens : Infinity,
+        ),
+      });
+      const toName = selectedModel?.name || selectedModel?.id || "the model";
+      const outcome = await compactSession(activeKey, {
+        saved: advice.savedTokens,
+        fallbackTokensAfter: advice.afterCompactTokens,
+        toName,
+      });
+      if (outcome) {
+        setCompactResult(outcome);
         setCompactDone(true);
         setTimeout(() => setCompactDone(false), 8000);
       }
@@ -406,7 +431,7 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
     }
   };
 
-  const compactDisabled = compacting || !activeKey || empty;
+  const compactDisabled = isCompacting || !activeKey || empty;
 
   return (
     <>
@@ -445,20 +470,35 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
         )}
 
         <button
-          className={`ctx-compact${compactDone ? " is-done" : percent >= 60 && !compactDisabled ? " is-urgent" : ""}`}
+          className={`ctx-compact${isDone ? " is-done" : percent >= 60 && !compactDisabled ? " is-urgent" : ""}`}
           onClick={handleCompact}
           disabled={compactDisabled}
           title="Summarizes earlier turns to free up space"
         >
-          {compacting ? (
+          {isCompacting ? (
             <>
               <Loader2 size={14} className="spin" /> Compacting…
             </>
-          ) : compactDone ? (
+          ) : isDone ? (
             <>
               <CheckCircle2 size={14} /> Compacted
-              {compactResult &&
-                ` · ${fmtK(compactResult.tokensBefore)} → ${compactResult.tokensAfter != null ? `~${fmtK(compactResult.tokensAfter)}` : "?"}`}
+              {(() => {
+                const before = compactResult?.tokensBefore ?? currentCompaction?.before;
+                const after = compactResult?.tokensAfter ?? currentCompaction?.tokens;
+                if (before != null && after != null) {
+                  const saved = before - after;
+                  return (
+                    <>
+                      {saved > 0 && <> · saved ~{fmtK(saved)}</>}
+                      {" "}({fmtK(before)} → ~{fmtK(after)})
+                    </>
+                  );
+                }
+                if (before != null) {
+                  return <> · {fmtK(before)} → ?</>;
+                }
+                return null;
+              })()}
             </>
           ) : (
             <>

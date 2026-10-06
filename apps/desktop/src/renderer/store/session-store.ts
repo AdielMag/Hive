@@ -29,6 +29,8 @@ import {
   type TranscriptState,
 } from "@hive/pi-adapter";
 import { emitSessionEvents } from "../modules/session-bus.ts";
+import { usePaneLayoutStore, findLeafForTab } from "./pane-layout-store.ts";
+import { findOriginProject, findOriginTab } from "../lib/tab-origin.ts";
 import { openLink } from "../modules/link-bus.ts";
 import type { OpenTabSpec } from "@hive/module-sdk/renderer";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
@@ -116,6 +118,99 @@ function setReloadState(key: string, state: ReloadState | null): void {
   }
 }
 
+/** Compaction progress and outcome state for a session. */
+export interface CompactionState {
+  phase: "compacting" | "done" | "error";
+  saved?: number;
+  before?: number;
+  tokens?: number;
+  toName?: string;
+  message?: string;
+}
+
+const COMPACTION_DONE_MS = 5000;
+const COMPACTION_ERROR_MS = 15000;
+const compactionClearTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function setCompactionState(key: string, state: CompactionState | null): void {
+  const timer = compactionClearTimers.get(key);
+  if (timer) {
+    clearTimeout(timer);
+    compactionClearTimers.delete(key);
+  }
+  useSessionStore.setState((s) => {
+    const next = { ...s.compactionStates };
+    if (state) next[key] = state;
+    else delete next[key];
+    return { compactionStates: next };
+  });
+  if (state?.phase === "done") {
+    compactionClearTimers.set(
+      key,
+      setTimeout(() => {
+        compactionClearTimers.delete(key);
+        if (useSessionStore.getState().compactionStates[key]?.phase === "done") {
+          setCompactionState(key, null);
+        }
+      }, COMPACTION_DONE_MS),
+    );
+  } else if (state?.phase === "error") {
+    compactionClearTimers.set(
+      key,
+      setTimeout(() => {
+        compactionClearTimers.delete(key);
+        if (useSessionStore.getState().compactionStates[key]?.phase === "error") {
+          setCompactionState(key, null);
+        }
+      }, COMPACTION_ERROR_MS),
+    );
+  }
+}
+
+export const __resetCompactionStates = () => {
+  compactionClearTimers.forEach(clearTimeout);
+  compactionClearTimers.clear();
+  useSessionStore.setState({ compactionStates: {} });
+};
+
+export async function handleCompactionEvent(key: string, ev: unknown): Promise<void> {
+  const e = ev as {
+    type: string;
+    reason?: string;
+    aborted?: boolean;
+    errorMessage?: string;
+    result?: unknown;
+  };
+  if (e.type === "compaction_start") {
+    const current = useSessionStore.getState().compactionStates[key];
+    if (!current || current.phase !== "compacting") {
+      const s = useSessionStore.getState();
+      const model = s.tabs.find((t) => t.activeKey === key)?.model ?? s.selectedModel;
+      const toName = model?.name || model?.id || "the model";
+      setCompactionState(key, { phase: "compacting", toName });
+    }
+  } else if (e.type === "compaction_end") {
+    if (e.errorMessage) {
+      setCompactionState(key, { phase: "error", message: String(e.errorMessage) });
+    } else if (!e.aborted && e.result) {
+      const outcome = await applyCompactionResult(key, e.result);
+      if (outcome) {
+        const s = useSessionStore.getState();
+        const model = s.tabs.find((t) => t.activeKey === key)?.model ?? s.selectedModel;
+        const toName = model?.name || model?.id || "the model";
+        setCompactionState(key, {
+          phase: "done",
+          before: outcome.tokensBefore,
+          tokens: outcome.tokensAfter ?? outcome.tokensBefore,
+          toName,
+        });
+      }
+    } else if (e.aborted) {
+      setCompactionState(key, null);
+    }
+  }
+}
+
 export interface ExtensionWidgetState {
   lines: string[];
   placement: "aboveEditor" | "belowEditor";
@@ -164,6 +259,8 @@ export interface SessionStoreState {
   reloadStates: Record<string, ReloadState>;
   /** Bumped after every successful reload; views that cache registry-derived data re-fetch on change. */
   reloadEpoch: number;
+  /** Per live-session-key compaction state (compacting, done, error). */
+  compactionStates: Record<string, CompactionState>;
   isInitializing: boolean;
   error: string | null;
 
@@ -173,6 +270,13 @@ export interface SessionStoreState {
   reloadPi: () => Promise<void>;
   /** Hide a finished (success/failed) reload strip for session `key`. */
   dismissReload: (key: string) => void;
+  /** Manually compact session context, managing the shared compaction bar state. */
+  compactSession: (
+    key: string,
+    options?: { fallbackTokensAfter?: number; saved?: number; toName?: string },
+  ) => Promise<CompactionOutcome | null>;
+  /** Hide a finished (done/error) compaction strip for session `key`. */
+  dismissCompaction: (key: string) => void;
   loadModelsCatalog: () => Promise<void>;
   saveEnabledModels: (keys: string[]) => Promise<void>;
   ensureActiveSession: (targetTabId?: string) => Promise<string | null>;
@@ -733,9 +837,41 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   isLoadingModels: false,
   reloadStates: {},
   reloadEpoch: 0,
+  compactionStates: {},
   isInitializing: true,
   error: null,
   clearError: () => set({ error: null }),
+  dismissCompaction: (key) => setCompactionState(key, null),
+
+  compactSession: async (key, options) => {
+    const s = get();
+    if (!key || s.compactionStates[key]?.phase === "compacting" || s.transcript.running) return null;
+    const model = s.tabs.find((t) => t.activeKey === key)?.model ?? s.selectedModel;
+    const toName = options?.toName ?? (model?.name || model?.id || "the model");
+    setCompactionState(key, { phase: "compacting", saved: options?.saved, toName });
+    try {
+      const res = await window.studio.rpc(key, { type: "compact" });
+      if (!res.ok) {
+        throw new Error(res.error || "Compaction failed");
+      }
+      const outcome = await applyCompactionResult(key, res.data, options?.fallbackTokensAfter);
+      const stats = get().stats;
+      const contextTokens = stats?.contextUsage?.tokens ?? get().transcript.lastUsage?.totalTokens ?? 0;
+      const before = outcome?.tokensBefore ?? contextTokens;
+      const tokens = outcome?.tokensAfter ?? options?.fallbackTokensAfter ?? before;
+      setCompactionState(key, {
+        phase: "done",
+        before,
+        tokens,
+        toName,
+      });
+      return outcome;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setCompactionState(key, { phase: "error", message });
+      throw err;
+    }
+  },
 
   reloadPi: async () => {
     const { activeKey, transcript } = get();
@@ -781,10 +917,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       window.studio.onSessionEvents((batch) => {
         trackActivity(batch.key, batch.events);
         for (const ev of batch.events) {
-          const done = ev as { type: string; aborted?: boolean; errorMessage?: string; result?: unknown };
-          if (done.type === "compaction_end" && !done.aborted && !done.errorMessage && done.result) {
-            void applyCompactionResult(batch.key, done.result);
-          }
+          void handleCompactionEvent(batch.key, ev);
         }
         emitSessionEvents(batch.key, batch.key === get().activeKey, batch.events as Array<{ type: string }>);
         const bgTabId = tabIdForKey(batch.key);
@@ -1265,7 +1398,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   openModuleTab: (spec: OpenTabSpec) => {
-    const { tabs, activeProject } = get();
+    const { tabs, activeProject, projects } = get();
     const asModuleTab = (t: TabItem) => ({
       id: t.id,
       kind: t.kind,
@@ -1289,11 +1422,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       return existing.id;
     }
 
+    // Open next to the session that triggered the tab (e.g. a CLI run by the agent), not wherever the user is looking.
+    const originTab = findOriginTab(tabs, spec.origin);
+    const originProjectId = originTab?.projectId ?? findOriginProject(projects, spec.origin)?.id;
     const tabId = spec.id ?? `${spec.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const newTab: TabItem = {
       id: tabId,
       kind: spec.kind,
-      projectId: spec.projectId ?? activeProject?.id ?? "",
+      projectId: spec.projectId ?? originProjectId ?? activeProject?.id ?? "",
       title: spec.title,
       filePath: spec.filePath,
       url: spec.url,
@@ -1302,8 +1438,21 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       data: spec.data,
       pinned: false,
     };
-    const owner = spec.projectId ? get().projects.find((p) => p.id === spec.projectId) : undefined;
-    set({ tabs: [...tabs, newTab], activeTabId: tabId, ...(owner ? { activeProject: owner } : {}) });
+    const originIdx = originTab ? tabs.findIndex((t) => t.id === originTab.id) : -1;
+    const nextTabs = originIdx >= 0 ? [...tabs.slice(0, originIdx + 1), newTab, ...tabs.slice(originIdx + 1)] : [...tabs, newTab];
+    const ownerId = spec.projectId ?? originProjectId;
+    const owner = ownerId ? get().projects.find((p) => p.id === ownerId) : undefined;
+    set({ tabs: nextTabs, activeTabId: tabId, ...(owner ? { activeProject: owner } : {}) });
+    if (originTab) {
+      // Put it in the originating session's pane, right after that session's tab (default sync would use the focused pane).
+      const panes = usePaneLayoutStore.getState();
+      const leaf = findLeafForTab(panes.root, originTab.id);
+      if (leaf) {
+        panes.syncWithTabs(nextTabs.map((t) => t.id), tabId);
+        const idx = (findLeafForTab(usePaneLayoutStore.getState().root, originTab.id)?.tabIds ?? leaf.tabIds).indexOf(originTab.id);
+        usePaneLayoutStore.getState().moveTab(tabId, leaf.id, idx + 1);
+      }
+    }
     return tabId;
   },
 

@@ -2,39 +2,26 @@ import React, { useEffect, useState } from "react";
 import {
   Bot,
   Brain,
-  ChevronDown,
-  ChevronRight,
   Clock,
   Coins,
   Cpu,
-  ExternalLink,
   Loader2,
   Maximize2,
   Square,
   Terminal,
   Wrench,
 } from "lucide-react";
-import type { Timeline } from "@hive/pi-adapter";
 import type { SubagentView } from "../../lib/ai/subagents.ts";
 import { formatCost, formatDuration } from "../../lib/format.ts";
-import { useSubagentOutput } from "../../hooks/useSubagentOutput.ts";
-import { Markdown } from "../code/Markdown.tsx";
 import { useSessionStore } from "../../store/session-store.ts";
 
 export interface SubagentCardProps {
   view: SubagentView;
-  renderNested?: (timeline: Timeline) => React.ReactNode;
+  /** @deprecated unused; subagent details open in a popup. */
+  renderNested?: unknown;
 }
 
-export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }) => {
-  const [expanded, setExpanded] = useState(false);
-  const [showPrompt, setShowPrompt] = useState(false);
-
-  const { timeline, prompt: outputPrompt, loading, error: transcriptError } = useSubagentOutput(
-    view,
-    expanded,
-  );
-
+export const SubagentCard: React.FC<SubagentCardProps> = ({ view }) => {
   const isRunning =
     view.status === "running" || view.status === "queued" || view.status === "background";
 
@@ -57,21 +44,9 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
     ? formatDuration(view.durationMs)
     : undefined;
 
-  const promptText = view.prompt || outputPrompt;
-
-  const openSubagentTab = useSessionStore((s) => s.openSubagentTab);
   const openSubagentModal = useSessionStore((s) => s.openSubagentModal);
   const activeTab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const activeKey = useSessionStore((s) => s.activeKey);
-
-  const handleOpenTab = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    openSubagentTab(view, {
-      parentSessionPath: activeTab?.sessionPath,
-      parentActiveKey: activeTab?.activeKey ?? activeKey ?? undefined,
-      projectId: activeTab?.projectId,
-    });
-  };
 
   const handleOpenModal = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -102,12 +77,12 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
       {/* Top Header */}
       <div
         className="msg-agent-card__header"
-        onClick={() => setExpanded((prev) => !prev)}
+        onClick={handleOpenModal}
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            setExpanded((prev) => !prev);
+            handleOpenModal(e as unknown as React.MouseEvent);
           }
         }}
       >
@@ -147,7 +122,7 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
             <div
               className="msg-agent-card__activity"
               onClick={handleOpenModal}
-              title="Click to inspect live activity in popup modal"
+              title="Open in popup"
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
@@ -161,13 +136,13 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
               <span className="msg-agent-card__activity-text">
                 {view.activity || (view.status === "queued" ? "Queued in runner..." : "Working...")}
               </span>
-              <span className="msg-agent-card__activity-action">Inspect</span>
+              <span className="msg-agent-card__activity-action">Open</span>
             </div>
           ) : view.resultText ? (
             <div
               className="msg-agent-card__activity msg-agent-card__activity--done"
               onClick={handleOpenModal}
-              title="Click to inspect execution transcript & result in popup"
+              title="Open in popup"
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
@@ -177,8 +152,8 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
                 }
               }}
             >
-              <span className="msg-agent-card__activity-text">Execution complete &bull; Inspect transcript & result</span>
-              <span className="msg-agent-card__activity-action">View</span>
+              <span className="msg-agent-card__activity-text">Execution complete</span>
+              <span className="msg-agent-card__activity-action">Open</span>
             </div>
           ) : null}
         </div>
@@ -214,27 +189,12 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
           <button
             type="button"
             className="ui-btn ui-btn--ghost ui-btn--icon"
-            title="Inspect in popup modal"
-            aria-label={`Inspect subagent ${view.description} in popup modal`}
+            title="Open in popup"
+            aria-label={`Open subagent ${view.description} in popup`}
             onClick={handleOpenModal}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <Maximize2 size={13} />
-          </button>
-          <button
-            type="button"
-            className="ui-btn ui-btn--ghost ui-btn--icon"
-            title="Open in dedicated tab"
-            aria-label={`Open subagent ${view.description} in dedicated tab`}
-            onClick={handleOpenTab}
-          >
-            <ExternalLink size={13} />
-          </button>
-          <button
-            type="button"
-            className="ui-btn ui-btn--ghost ui-btn--icon"
-            title={expanded ? "Collapse subagent details" : "Expand subagent details"}
-          >
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
         </div>
       </div>
@@ -273,60 +233,6 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view, renderNested }
           </span>
         )}
       </div>
-
-      {/* Expanded Content Area */}
-      {expanded && (
-        <div className="msg-agent-card__body">
-          {/* Subagent Prompt */}
-          {promptText && (
-            <div className="msg-agent-card__prompt-section">
-              <button
-                type="button"
-                className="msg-agent-card__section-toggle"
-                onClick={() => setShowPrompt((p) => !p)}
-              >
-                {showPrompt ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                <span>Prompt instructions</span>
-              </button>
-              {showPrompt && (
-                <div className="msg-agent-card__prompt-text ui-scroll">
-                  <Markdown text={promptText} />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Subagent's Own Transcript */}
-          <div className="msg-agent-card__transcript-section">
-            <div className="msg-agent-card__section-title">Subagent Execution Transcript</div>
-            {timeline.items.length > 0 && renderNested ? (
-              <div className="msg-agent-card__nested-timeline">
-                {renderNested(timeline)}
-              </div>
-            ) : loading ? (
-              <div className="msg-agent-card__empty-hint">
-                <Loader2 size={14} className="spin" /> Reading subagent transcript...
-              </div>
-            ) : transcriptError ? (
-              <div className="msg-agent-card__empty-hint">{transcriptError}</div>
-            ) : (
-              <div className="msg-agent-card__empty-hint">
-                {isRunning ? "Waiting for subagent turns..." : "No transcript recorded"}
-              </div>
-            )}
-          </div>
-
-          {/* Final Result Output */}
-          {view.resultText && (
-            <div className="msg-agent-card__result-section">
-              <div className="msg-agent-card__section-title">Result</div>
-              <div className="msg-agent-card__result-text">
-                <Markdown text={view.resultText} />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };

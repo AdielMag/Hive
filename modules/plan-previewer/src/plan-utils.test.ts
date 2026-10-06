@@ -322,5 +322,9 @@ describe("resolvePlanPath", () => {
   it("compares paths loosely", () => {
     expect(samePlanPath("C:\\A\\plan.md", "c:/a/plan.md")).toBe(true);
     expect(samePlanPath("a", null)).toBe(false);
+    expect(samePlanPath("C:/Users/me/Hive/plan.md", "plan.md")).toBe(true);
+    expect(samePlanPath("plan.md", "C:\\Users\\me\\Hive\\plan.md")).toBe(true);
+    expect(samePlanPath("C:/Users/me/Hive/plan.md", "./plan.md")).toBe(true);
+    expect(samePlanPath("C:/Users/me/Hive/other.md", "plan.md")).toBe(false);
   });
 });

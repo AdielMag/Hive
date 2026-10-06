@@ -22,6 +22,10 @@ export interface FileOpenArgs {
 export interface FileTabData {
   content?: string;
   language?: string;
+  dataUrl?: string;
+  mimeType?: string;
+  size?: number;
+  isBinary?: boolean;
 }
 
 /** `tab.data` of a `diff` tab. */
