@@ -2,6 +2,17 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.20.0 — 2026-10-06 · [diff](https://github.com/AdielMag/Hive/compare/v0.19.1...v0.20.0)
+
+### ✨ Features
+
+- **desktop:** add Reload Pi action to status bar and command palette ([`2423a4e`](https://github.com/AdielMag/Hive/commit/2423a4e02d6a0f96f65cbb5028ec912d73035d80))
+- **desktop:** redesign model-switch cache bar with token delta meter ([`b592f66`](https://github.com/AdielMag/Hive/commit/b592f66a68a7feaea3239c336fb7d938e0749500))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`eafd541`](https://github.com/AdielMag/Hive/commit/eafd5415d73c628de7ebe4d63d044913a461c88d))
+
 ## v0.19.1 — 2026-10-05 · [diff](https://github.com/AdielMag/Hive/compare/v0.19.0...v0.19.1)
 
 ### 🧹 Other changes
