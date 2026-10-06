@@ -66,7 +66,14 @@ function fetchContextFiles(cwd: string | undefined, cacheKey: string): Promise<C
   return p;
 }
 
-function useContextFiles(cwd: string | undefined, refreshToken: unknown): ContextFileInfo[] {
+/** Last reload epoch the cache was valid for; a Pi reload may have changed AGENTS.md, SYSTEM.md, etc. */
+let contextFilesEpoch = 0;
+
+function useContextFiles(cwd: string | undefined, refreshToken: unknown, reloadEpoch: number): ContextFileInfo[] {
+  if (reloadEpoch !== contextFilesEpoch) {
+    contextFilesEpoch = reloadEpoch;
+    contextFilesCache.clear();
+  }
   const cacheKey = cwd ?? "";
   const [files, setFiles] = useState<ContextFileInfo[]>(
     () => contextFilesCache.get(cacheKey)?.files ?? NO_CONTEXT_FILES,
@@ -87,22 +94,23 @@ function useContextFiles(cwd: string | undefined, refreshToken: unknown): Contex
     return () => {
       cancelled = true;
     };
-  }, [cacheKey, cwd, refreshToken]);
+  }, [cacheKey, cwd, refreshToken, reloadEpoch]);
   return files;
 }
 
 /** Shared data source so the composer ring and the side panel agree on the same numbers. */
 export function useContextBreakdown(): ContextBreakdownData {
-  const { transcript, stats, selectedModel } = useSessionStore(
+  const { transcript, stats, selectedModel, reloadEpoch } = useSessionStore(
     useShallow((s) => ({
       transcript: s.transcript,
       stats: s.stats,
       selectedModel: s.selectedModel,
+      reloadEpoch: s.reloadEpoch,
     })),
   );
   const registry = useActiveRegistry();
   // Re-check the file sizes (TTL-gated) whenever the conversation grows, so AGENTS.md edits show up.
-  const contextFiles = useContextFiles(registry?.cwd, transcript.lastUsage);
+  const contextFiles = useContextFiles(registry?.cwd, transcript.lastUsage, reloadEpoch);
   const systemParts = useMemo<ContextSystemParts | null>(() => {
     if (!registry && contextFiles.length === 0) return null;
     return {

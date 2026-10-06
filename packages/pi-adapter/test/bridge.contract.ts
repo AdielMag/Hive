@@ -91,7 +91,20 @@ describe("Studio Bridge contract (Pi <-> Bridge socket)", () => {
     expect(pingResult.pong).toBe(true);
     expect(pingResult.idle).toBe(true);
 
-    // 7. Clean shutdown
+    // 7. Reload tears down the old runtime (and its socket); the action must still complete once the
+    // new runtime reconnects and re-sends its registry.
+    let helloCount = 0;
+    let registryAfterReload = 0;
+    bridge.onMessage((msg) => {
+      if (msg.type === "hello") helloCount++;
+      if (msg.type === "registry" && helloCount > 0) registryAfterReload++;
+    });
+    await bridge.executeAction("reload", {}, rpc, 30_000);
+    expect(registryAfterReload).toBeGreaterThan(0);
+    const afterReload = await bridge.executeAction<{ pong: boolean }>("ping", {}, rpc);
+    expect(afterReload.pong).toBe(true);
+
+    // 8. Clean shutdown
     await rpc.stop();
     await bridge.close();
   }, 45_000);

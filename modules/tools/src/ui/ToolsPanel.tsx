@@ -56,7 +56,7 @@ const scrollToToolCall = (id: string) => {
 
 export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   currentHost = host;
-  const { project: activeProject, transcript, registry } = host.hooks.useActiveSession();
+  const { project: activeProject, transcript, registry, reloadEpoch } = host.hooks.useActiveSession();
 
   const [mcp, setMcp] = useState<McpServerInfo[] | null>(null);
   const [loadingMcp, setLoadingMcp] = useState(false);
@@ -74,9 +74,10 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     }
   };
 
+  // Load on mount and again after a Pi reload (MCP config / extensions may have changed).
   useEffect(() => {
     void refreshMcp();
-  }, []);
+  }, [reloadEpoch]);
 
   const [filter, setFilter] = useState("");
   const [collapsed, setCollapsed] = useState(() => loadCollapsed(host));

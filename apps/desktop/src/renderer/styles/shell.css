@@ -624,9 +624,13 @@
   color: inherit;
   cursor: pointer;
 }
-.statusbar__btn:hover {
+.statusbar__btn:hover:not(:disabled) {
   background: var(--frame-hover);
   color: var(--frame-text);
+}
+.statusbar__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .pulse-dot {
   width: 7px;

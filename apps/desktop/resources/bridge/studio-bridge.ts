@@ -460,7 +460,16 @@ export default function studioBridge(pi: ExtensionAPI): void {
             break;
           }
           case "reload": {
+            // Normally Pi replaces this runtime during reload (session_shutdown closes the socket), so the
+            // result below is a no-op and Studio completes the action when the NEW runtime reconnects.
+            // If the runtime survives, resend the registry so tools/skills still refresh.
             await ctx.reload();
+            try {
+              lastRegistryHash = "";
+              buildAndSendRegistry();
+            } catch {
+              // stale pre-reload runtime; the new one reports its own registry
+            }
             send({
               v: BRIDGE_PROTOCOL_VERSION,
               type: "command_result",

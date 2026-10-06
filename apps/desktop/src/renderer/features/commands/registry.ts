@@ -69,6 +69,18 @@ const CORE_COMMANDS: readonly Command[] = [
   { id: "tab.next", title: "Next Tab", category: "Tabs", defaultKeys: ["Mod+Tab"], allowInTerminal: true, when: () => useSessionStore.getState().tabs.length > 1, run: () => cycleTab(1) },
   { id: "tab.prev", title: "Previous Tab", category: "Tabs", defaultKeys: ["Mod+Shift+Tab"], allowInTerminal: true, when: () => useSessionStore.getState().tabs.length > 1, run: () => cycleTab(-1) },
 
+  {
+    id: "pi.reload",
+    title: "Reload Pi (extensions, skills, prompts)",
+    category: "Agent",
+    keywords: "reload refresh extensions skills prompts mcp",
+    when: () => {
+      const s = useSessionStore.getState();
+      return !!s.activeKey && !s.isReloading && !s.transcript.running;
+    },
+    run: () => useSessionStore.getState().reloadPi(),
+  },
+
   // Agent Modes
   {
     id: "mode.auto-edit",

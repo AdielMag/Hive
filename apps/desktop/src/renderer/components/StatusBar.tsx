@@ -1,7 +1,7 @@
 /** Bottom status bar on the window frame: Pi version, run state, extension statuses, live quota meters. */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Coins, ExternalLink, X } from "lucide-react";
+import { Coins, ExternalLink, RefreshCw, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { parseAnsi } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
@@ -68,15 +68,18 @@ export const StatusBar: React.FC = () => {
   // Modules that render their own version of an extension's status (e.g. limits meters) hide the duplicate.
   const barItems = useContributions("statusBar");
   const hiddenStatuses = useMemo(() => new Set(barItems.flatMap((i) => i.hideExtensionStatuses ?? [])), [barItems]);
-  const { bootstrap, extensionStatus, running, stats, isSessionActive } = useSessionStore(
+  const { bootstrap, extensionStatus, running, stats, isSessionActive, hasSession, isReloading } = useSessionStore(
     useShallow((s) => ({
       bootstrap: s.bootstrap,
       extensionStatus: s.extensionStatus,
       running: s.transcript.running,
       stats: s.stats,
       isSessionActive: !!s.activeTabId && s.sessionActivity[s.activeTabId] === "running",
+      hasSession: !!s.activeKey,
+      isReloading: s.isReloading,
     })),
   );
+  const reloadPi = useSessionStore((s) => s.reloadPi);
   const isRunning = running || isSessionActive;
   const cost = stats?.cost ?? 0;
   const activeSessionPath = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId)?.sessionPath);
@@ -108,6 +111,24 @@ export const StatusBar: React.FC = () => {
       </div>
 
       <ModuleStatusItems />
+
+      <button
+        className="statusbar__btn"
+        onClick={() => void reloadPi()}
+        disabled={!hasSession || isRunning || isReloading}
+        title={
+          !hasSession
+            ? "Reload Pi (open a session first)"
+            : isRunning
+              ? "Reload Pi is unavailable while the agent is running"
+              : isReloading
+                ? "Reloading…"
+                : "Reload Pi: extensions, skills, prompts, MCP"
+        }
+        aria-label="Reload Pi"
+      >
+        <RefreshCw size={12} className={isReloading ? "spin" : undefined} />
+      </button>
 
       {cost > 0 && (
         <button

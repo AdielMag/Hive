@@ -502,3 +502,62 @@ describe("compaction result", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("reloadPi", () => {
+  const setup = (bridgeAction: ReturnType<typeof vi.fn>) => {
+    const rpc = vi.fn(async (_key: string, cmd: { type: string }) =>
+      cmd.type === "get_available_models"
+        ? { ok: true, data: { models: [{ provider: "p", id: "m" }] } }
+        : { ok: true, data: { contextUsage: null } },
+    );
+    vi.stubGlobal("window", { studio: { rpc, bridgeAction } });
+    useSessionStore.setState({
+      activeKey: "k1",
+      tabs: [{ id: "t1", activeKey: "k1" }],
+      transcript: { running: false },
+      // Not the displayed tab in tests, so its UI is parked in tabUi.
+      tabUi: { t1: { extensionStatus: { mcp: "old" }, extensionWidgets: { w: {} } } },
+      isReloading: false,
+      reloadEpoch: 0,
+      error: null,
+    } as never);
+    return rpc;
+  };
+
+  it("clears extension UI, reloads, refreshes models and bumps the epoch", async () => {
+    const bridgeAction = vi.fn(async () => ({ ok: true }));
+    const rpc = setup(bridgeAction);
+
+    await useSessionStore.getState().reloadPi();
+
+    expect(bridgeAction).toHaveBeenCalledWith("k1", { action: "reload" });
+    expect(rpc).toHaveBeenCalledWith("k1", { type: "get_session_stats" });
+    expect(rpc).toHaveBeenCalledWith("k1", { type: "get_available_models" });
+    const s = useSessionStore.getState();
+    expect(s.tabUi.t1?.extensionStatus).toEqual({});
+    expect(s.tabUi.t1?.extensionWidgets).toEqual({});
+    expect(s.models).toEqual([{ provider: "p", id: "m" }]);
+    expect(s.reloadEpoch).toBe(1);
+    expect(s.isReloading).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("surfaces a failure without bumping the epoch", async () => {
+    setup(vi.fn(async () => ({ ok: false, error: "boom" })));
+    await useSessionStore.getState().reloadPi();
+    const s = useSessionStore.getState();
+    expect(s.error).toBe("boom");
+    expect(s.reloadEpoch).toBe(0);
+    expect(s.isReloading).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("refuses while the agent is running", async () => {
+    const bridgeAction = vi.fn(async () => ({ ok: true }));
+    setup(bridgeAction);
+    useSessionStore.setState({ transcript: { running: true } } as never);
+    await useSessionStore.getState().reloadPi();
+    expect(bridgeAction).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});

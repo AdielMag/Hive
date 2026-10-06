@@ -71,11 +71,12 @@ function useActiveSession(): ActiveSessionContext {
   const transcript = useSessionStore((s) => s.transcript);
   const registry = useActiveRegistry();
   const selected = useSessionStore((s) => s.selectedModel);
+  const reloadEpoch = useSessionStore((s) => s.reloadEpoch);
   const provider = selected?.provider;
   const id = selected?.id;
   const name = selected?.name;
   const model = useMemo(() => (provider && id ? { provider, id, name } : null), [provider, id, name]);
-  return { project: activeProject, transcript, registry, model };
+  return { project: activeProject, transcript, registry, model, reloadEpoch };
 }
 const HostCodeBlock: ModuleHost["ui"]["CodeBlock"] = (props) => <CodeBlock {...props} />;
 const HostHighlightedSource: ModuleHost["ui"]["HighlightedSource"] = (props) => <HighlightedSource {...props} />;

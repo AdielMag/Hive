@@ -123,11 +123,17 @@ export interface SessionStoreState {
   promptText: string;
   attachments: AttachedItem[];
   isLoadingModels: boolean;
+  /** True while the active session is reloading Pi resources (extensions, skills, prompts). */
+  isReloading: boolean;
+  /** Bumped after every successful reload; views that cache registry-derived data re-fetch on change. */
+  reloadEpoch: number;
   isInitializing: boolean;
   error: string | null;
 
   // Actions
   init: () => Promise<void>;
+  /** Reload Pi's extensions, skills and prompts for the active session (the CLI's `/reload`) and refresh dependent views. */
+  reloadPi: () => Promise<void>;
   loadModelsCatalog: () => Promise<void>;
   saveEnabledModels: (keys: string[]) => Promise<void>;
   ensureActiveSession: (targetTabId?: string) => Promise<string | null>;
@@ -549,6 +555,18 @@ export async function applyCompactionResult(
   return { tokensBefore: outcome.tokensBefore, tokensAfter };
 }
 
+/** Re-read the models Pi can use (extensions may add or remove providers) and merge them into the store. */
+async function refreshModels(key: string): Promise<void> {
+  const res = await window.studio.rpc(key, { type: "get_available_models" });
+  if (!res.ok || useSessionStore.getState().activeKey !== key) return;
+  const models = (res.data as { models: Array<Model<any>> }).models;
+  useSessionStore.setState((s) => {
+    const existing = new Set(s.allCatalogModels.map((m) => `${m.provider}/${m.id}`));
+    const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
+    return { models, ...(additions.length ? { allCatalogModels: [...s.allCatalogModels, ...additions] } : {}) };
+  });
+}
+
 /**
  * Reconcile a live session with its tab. The tab owns its model / thinking level (chosen by the user,
  * possibly before Pi started); if it has none yet, it adopts whatever the session file restored. Only
@@ -672,9 +690,36 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   promptText: "",
   attachments: [],
   isLoadingModels: false,
+  isReloading: false,
+  reloadEpoch: 0,
   isInitializing: true,
   error: null,
   clearError: () => set({ error: null }),
+
+  reloadPi: async () => {
+    const { activeKey, isReloading, transcript } = get();
+    const tabId = activeKey ? tabIdForKey(activeKey) : undefined;
+    if (!activeKey || !tabId || isReloading) return;
+    if (transcript.running || hasRunningWork(tabId)) {
+      set({ error: "Wait for the current run to finish before reloading." });
+      return;
+    }
+    set({ isReloading: true, error: null });
+    // Extensions that were removed never clear their own status/widgets; the new runtime re-sets what it still has.
+    updateTabUi(tabId, () => ({ extensionStatus: {}, extensionWidgets: {} }));
+    try {
+      const res = await window.studio.bridgeAction(activeKey, { action: "reload" });
+      if (!res.ok) {
+        set({ error: res.error || "Could not reload Pi." });
+        return;
+      }
+      // The new registry (tools, skills) has already arrived. Refresh everything else derived from it.
+      await Promise.allSettled([refreshStats(activeKey), refreshModels(activeKey)]);
+      set((s) => ({ reloadEpoch: s.reloadEpoch + 1 }));
+    } finally {
+      set({ isReloading: false });
+    }
+  },
 
   init: async () => {
     // React StrictMode mounts effects twice in dev; registering IPC listeners twice would apply every

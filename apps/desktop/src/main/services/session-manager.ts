@@ -197,7 +197,9 @@ export class MainSessionManager {
     }
     try {
       const { action: actionName, ...params } = action;
-      const data = await session.bridge.executeAction(actionName, params, session.rpc);
+      // Reload re-imports every extension, which can take a while (MCP servers, big skill sets).
+      const timeoutMs = actionName === "reload" ? 30_000 : undefined;
+      const data = await session.bridge.executeAction(actionName, params, session.rpc, timeoutMs);
       return { ok: true, data };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };

@@ -81,6 +81,8 @@ export interface ActiveSessionContext {
   registry: SessionRegistry | null;
   /** Model selected in the active session tab (provider is Pi's provider id, e.g. "antigravity"). */
   model: { provider: string; id: string; name?: string } | null;
+  /** Increments after each Pi reload (extensions, skills, prompts); re-fetch anything cached from them when it changes. */
+  reloadEpoch: number;
 }
 
 export interface ResolvedFeatureModelLite {

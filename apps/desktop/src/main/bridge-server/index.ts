@@ -57,6 +57,23 @@ export async function createBridgeServer(
     { resolve: (val: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }
   >();
 
+  /**
+   * `reload` actions in flight. Pi tears down the old extension runtime (and this socket) while reloading, so
+   * the old runtime can never answer; the reload is done once the new runtime says hello and sends its registry.
+   */
+  const reloadsAwaitingHello = new Set<string>();
+  const reloadsAwaitingRegistry = new Set<string>();
+  const settleAction = (id: string, ok: boolean, value: unknown) => {
+    reloadsAwaitingHello.delete(id);
+    reloadsAwaitingRegistry.delete(id);
+    const pending = pendingActions.get(id);
+    if (!pending) return;
+    pendingActions.delete(id);
+    clearTimeout(pending.timer);
+    if (ok) pending.resolve(value);
+    else pending.reject(value as Error);
+  };
+
   let activeSocket: Socket | null = null;
   let server: Server | null = null;
   let actionCounter = 0;
@@ -85,13 +102,15 @@ export async function createBridgeServer(
           if (!isAuthed) continue;
 
           if (raw.type === "command_result") {
-            const pending = pendingActions.get(raw.id);
-            if (pending) {
-              pendingActions.delete(raw.id);
-              clearTimeout(pending.timer);
-              if (raw.ok) pending.resolve(raw.data);
-              else pending.reject(new Error(raw.error ?? "Action failed"));
-            }
+            if (raw.ok) settleAction(raw.id, true, raw.data);
+            else settleAction(raw.id, false, new Error(raw.error ?? "Action failed"));
+          }
+
+          if (raw.type === "hello") {
+            for (const id of reloadsAwaitingHello) reloadsAwaitingRegistry.add(id);
+            reloadsAwaitingHello.clear();
+          } else if (raw.type === "registry") {
+            for (const id of [...reloadsAwaitingRegistry]) settleAction(id, true, undefined);
           }
 
           for (const listener of [...listeners]) {
@@ -146,8 +165,11 @@ export async function createBridgeServer(
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         pendingActions.delete(id);
+        reloadsAwaitingHello.delete(id);
+        reloadsAwaitingRegistry.delete(id);
         reject(new Error(`Bridge action "${action}" timed out after ${timeoutMs}ms`));
       }, timeoutMs);
+      if (action === "reload") reloadsAwaitingHello.add(id);
 
       pendingActions.set(id, {
         resolve: (val) => resolve(val as T),
@@ -161,6 +183,8 @@ export async function createBridgeServer(
         message: `/${BRIDGE_COMMAND} ${JSON.stringify(payload)}`,
       }).catch((err: unknown) => {
         pendingActions.delete(id);
+        reloadsAwaitingHello.delete(id);
+        reloadsAwaitingRegistry.delete(id);
         clearTimeout(timer);
         reject(err instanceof Error ? err : new Error(String(err)));
       });
@@ -173,6 +197,8 @@ export async function createBridgeServer(
       p.reject(new Error("Bridge server closed"));
     }
     pendingActions.clear();
+    reloadsAwaitingHello.clear();
+    reloadsAwaitingRegistry.clear();
 
     if (activeSocket) {
       activeSocket.destroy();
