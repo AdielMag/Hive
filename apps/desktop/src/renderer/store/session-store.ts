@@ -1,3 +1,4 @@
+import { summarizeReload } from "../lib/reload-summary.ts";
 import { create } from "zustand";
 import {
   BRIDGE_TOPICS,
@@ -79,6 +80,42 @@ export function hasDraft(ui: TabUiState | undefined): boolean {
   return !!ui && (ui.promptText.trim().length > 0 || ui.attachments.length > 0);
 }
 
+/** Progress of a Pi reload for one session. "reloading" locks the composer; the others are a result strip. */
+export interface ReloadState {
+  phase: "reloading" | "success" | "error";
+  /** Headline: what is happening or what changed ("+1 skill", an error message...). */
+  message: string;
+  /** Extra lines for a tooltip (names of added/removed tools and skills). */
+  detail?: string;
+}
+
+/** How long a success strip stays before disappearing on its own. */
+const RELOAD_SUCCESS_MS = 6000;
+const reloadClearTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function setReloadState(key: string, state: ReloadState | null): void {
+  const timer = reloadClearTimers.get(key);
+  if (timer) {
+    clearTimeout(timer);
+    reloadClearTimers.delete(key);
+  }
+  useSessionStore.setState((s) => {
+    const next = { ...s.reloadStates };
+    if (state) next[key] = state;
+    else delete next[key];
+    return { reloadStates: next };
+  });
+  if (state?.phase === "success") {
+    reloadClearTimers.set(
+      key,
+      setTimeout(() => {
+        reloadClearTimers.delete(key);
+        if (useSessionStore.getState().reloadStates[key]?.phase === "success") setReloadState(key, null);
+      }, RELOAD_SUCCESS_MS),
+    );
+  }
+}
+
 export interface ExtensionWidgetState {
   lines: string[];
   placement: "aboveEditor" | "belowEditor";
@@ -123,8 +160,8 @@ export interface SessionStoreState {
   promptText: string;
   attachments: AttachedItem[];
   isLoadingModels: boolean;
-  /** True while the active session is reloading Pi resources (extensions, skills, prompts). */
-  isReloading: boolean;
+  /** Per live-session-key reload progress/result, so each session shows (and is locked by) its own reload. */
+  reloadStates: Record<string, ReloadState>;
   /** Bumped after every successful reload; views that cache registry-derived data re-fetch on change. */
   reloadEpoch: number;
   isInitializing: boolean;
@@ -134,6 +171,8 @@ export interface SessionStoreState {
   init: () => Promise<void>;
   /** Reload Pi's extensions, skills and prompts for the active session (the CLI's `/reload`) and refresh dependent views. */
   reloadPi: () => Promise<void>;
+  /** Hide a finished (success/failed) reload strip for session `key`. */
+  dismissReload: (key: string) => void;
   loadModelsCatalog: () => Promise<void>;
   saveEnabledModels: (keys: string[]) => Promise<void>;
   ensureActiveSession: (targetTabId?: string) => Promise<string | null>;
@@ -435,6 +474,8 @@ if (typeof window !== "undefined") {
  * A crash in the middle of a run the user isn't watching is surfaced as an "error" badge.
  */
 function dropSessionKey(key: string, crashed = false): void {
+  // A session that died mid-reload must not stay locked behind a spinner.
+  if (useSessionStore.getState().reloadStates[key]) setReloadState(key, null);
   const tabId = tabIdForKey(key);
   if (tabId) {
     const wasRunning = useSessionStore.getState().sessionActivity[tabId] === "running" || hasRunningWork(tabId);
@@ -690,35 +731,40 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   promptText: "",
   attachments: [],
   isLoadingModels: false,
-  isReloading: false,
+  reloadStates: {},
   reloadEpoch: 0,
   isInitializing: true,
   error: null,
   clearError: () => set({ error: null }),
 
   reloadPi: async () => {
-    const { activeKey, isReloading, transcript } = get();
+    const { activeKey, transcript } = get();
     const tabId = activeKey ? tabIdForKey(activeKey) : undefined;
-    if (!activeKey || !tabId || isReloading) return;
-    if (transcript.running || hasRunningWork(tabId)) {
-      set({ error: "Wait for the current run to finish before reloading." });
-      return;
-    }
-    set({ isReloading: true, error: null });
+    if (!activeKey || !tabId || get().reloadStates[activeKey]?.phase === "reloading") return;
+    if (transcript.running || hasRunningWork(tabId)) return;
+    const key = activeKey;
+    setReloadState(key, { phase: "reloading", message: "Reloading extensions, skills and prompts…" });
     // Extensions that were removed never clear their own status/widgets; the new runtime re-sets what it still has.
     updateTabUi(tabId, () => ({ extensionStatus: {}, extensionWidgets: {} }));
     try {
-      const res = await window.studio.bridgeAction(activeKey, { action: "reload" });
+      const before = await window.studio.getSessionRegistry(key).catch(() => null);
+      const res = await window.studio.bridgeAction(key, { action: "reload" });
       if (!res.ok) {
-        set({ error: res.error || "Could not reload Pi." });
+        setReloadState(key, { phase: "error", message: res.error || "Could not reload Pi." });
         return;
       }
       // The new registry (tools, skills) has already arrived. Refresh everything else derived from it.
-      await Promise.allSettled([refreshStats(activeKey), refreshModels(activeKey)]);
+      await Promise.allSettled([refreshStats(key), refreshModels(key)]);
+      const after = await window.studio.getSessionRegistry(key).catch(() => null);
+      const summary = summarizeReload(before, after);
       set((s) => ({ reloadEpoch: s.reloadEpoch + 1 }));
-    } finally {
-      set({ isReloading: false });
+      setReloadState(key, { phase: "success", message: summary.text, detail: summary.detail || undefined });
+    } catch (err) {
+      setReloadState(key, { phase: "error", message: err instanceof Error ? err.message : String(err) });
     }
+  },
+  dismissReload: (key) => {
+    if (get().reloadStates[key]?.phase !== "reloading") setReloadState(key, null);
   },
 
   init: async () => {
@@ -1382,6 +1428,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   sendPrompt: async (streamingBehavior) => {
     let { activeKey, promptText, transcript, attachments } = get();
     if (!promptText.trim() && attachments.length === 0) return;
+    // Pi is swapping its extension runtime; a prompt now would hit a half-loaded session.
+    if (activeKey && get().reloadStates[activeKey]?.phase === "reloading") return;
 
     // Promote cold tab to live process if needed
     if (!activeKey) {

@@ -1,0 +1,130 @@
+/* Per-session Pi reload: toolbar button + progress/result strip above the editor. */
+.reload-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.reload-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-prominent);
+}
+.reload-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.reload-btn.is-reloading {
+  opacity: 1;
+  color: var(--accent-base);
+  border-color: var(--accent-base);
+}
+.reload-btn.is-error {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.reload-bar {
+  --rb: var(--accent-base);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 8px 7px 12px;
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--rb) 13%, transparent), color-mix(in srgb, var(--rb) 3%, transparent) 75%),
+    var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--rb) 30%, transparent);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  animation: fade-up 0.18s ease;
+}
+.reload-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--rb);
+  opacity: 0.85;
+}
+.reload-bar.is-success {
+  --rb: var(--success);
+}
+.reload-bar.is-error {
+  --rb: var(--danger);
+}
+.reload-bar.is-reloading::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--rb), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: reload-sweep 1.2s ease-in-out infinite;
+}
+@keyframes reload-sweep {
+  from {
+    background-position: -50% 0;
+  }
+  to {
+    background-position: 150% 0;
+  }
+}
+.reload-bar__icon {
+  display: inline-flex;
+  color: var(--rb);
+  flex-shrink: 0;
+}
+.reload-bar__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reload-bar__msg {
+  margin-left: 5px;
+  color: var(--text-secondary);
+}
+.reload-bar__action,
+.reload-bar__close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+.reload-bar__action {
+  color: var(--rb);
+  font-weight: 600;
+}
+.reload-bar__action:hover,
+.reload-bar__close:hover {
+  background: rgba(var(--fg-rgb), 0.08);
+  color: var(--text-primary);
+}
+
+/* Composer locked while its session reloads. */
+.composer-editor.is-reloading {
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+}

@@ -76,7 +76,7 @@ const CORE_COMMANDS: readonly Command[] = [
     keywords: "reload refresh extensions skills prompts mcp",
     when: () => {
       const s = useSessionStore.getState();
-      return !!s.activeKey && !s.isReloading && !s.transcript.running;
+      return !!s.activeKey && s.reloadStates[s.activeKey]?.phase !== "reloading" && !s.transcript.running;
     },
     run: () => useSessionStore.getState().reloadPi(),
   },

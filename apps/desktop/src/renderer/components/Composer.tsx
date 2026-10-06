@@ -23,6 +23,7 @@ import { ModePicker } from "./ModePicker.tsx";
 import { QueuedMessagesBar } from "./transcript/QueuedMessages.tsx";
 import { ModelSwitchCacheBar } from "./ModelSwitchCacheBar.tsx";
 import { AttachmentTray } from "./AttachmentTray.tsx";
+import { ReloadButton, ReloadStatusBar } from "./ReloadControls.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { Slot } from "../modules/ModuleViews.tsx";
 import type { AttachedItem } from "@hive/protocol";
@@ -34,6 +35,9 @@ interface ComposerProps {
 export const Composer: React.FC<ComposerProps> = ({ height }) => {
   const activeKey = useSessionStore((s) => s.activeKey);
   const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets, pendingUiDialog, respondDialog } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets, pendingUiDialog: s.pendingUiDialog, respondDialog: s.respondDialog })));
+
+  // While this session reloads Pi's extensions the editor is locked (the runtime is being replaced).
+  const isReloading = useSessionStore((s) => (s.activeKey ? s.reloadStates[s.activeKey]?.phase === "reloading" : false));
 
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [modelFilter, setModelFilter] = useState("");
@@ -337,11 +341,16 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       {/* Queued messages banner if any */}
       <QueuedMessagesBar />
 
+      {/* Pi reload progress / result for this session */}
+      <ReloadStatusBar />
+
       {/* Module slots above composer (e.g. bash-guard approval card) */}
       <Slot name="composer.above" props={{ pendingUiDialog, respondDialog, activeKey }} />
 
       {/* Editor Box (Droppable area) */}
       <div
+        className={`composer-editor${isReloading ? " is-reloading" : ""}`}
+        aria-busy={isReloading}
         onDragOver={(e) => {
           e.preventDefault();
           setIsDraggingOver(true);
@@ -373,8 +382,11 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
           onChange={(e) => setPromptText(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
+          readOnly={isReloading}
           placeholder={
-            isDraggingOver
+            isReloading
+              ? "Reloading Pi…"
+              : isDraggingOver
               ? "Drop files or images to attach..."
               : isRunning
               ? "Type to steer (Ctrl+Enter) or queue (Enter)..."
@@ -688,6 +700,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               onClick={() => useUi.getState().toggleRight("context")}
             />
             </span>
+
+            {/* Reload Pi (extensions, skills, prompts) for this session */}
+            <ReloadButton />
           </div>
 
           {/* Right: Send or Abort button */}

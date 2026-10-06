@@ -504,32 +504,42 @@ describe("compaction result", () => {
 });
 
 describe("reloadPi", () => {
-  const setup = (bridgeAction: ReturnType<typeof vi.fn>) => {
+  const registry = (tools: string[]) => ({
+    tools: tools.map((name) => ({ name, description: "", active: true, source: "extension", sourcePath: "" })),
+    skills: [],
+  });
+
+  const setup = (bridgeAction: ReturnType<typeof vi.fn>, registries: unknown[] = [null, null]) => {
     const rpc = vi.fn(async (_key: string, cmd: { type: string }) =>
       cmd.type === "get_available_models"
         ? { ok: true, data: { models: [{ provider: "p", id: "m" }] } }
         : { ok: true, data: { contextUsage: null } },
     );
-    vi.stubGlobal("window", { studio: { rpc, bridgeAction } });
+    const getSessionRegistry = vi.fn(async () => registries.shift() ?? null);
+    vi.stubGlobal("window", { studio: { rpc, bridgeAction, getSessionRegistry } });
     useSessionStore.setState({
       activeKey: "k1",
       tabs: [{ id: "t1", activeKey: "k1" }],
       transcript: { running: false },
       // Not the displayed tab in tests, so its UI is parked in tabUi.
       tabUi: { t1: { extensionStatus: { mcp: "old" }, extensionWidgets: { w: {} } } },
-      isReloading: false,
+      reloadStates: {},
       reloadEpoch: 0,
-      error: null,
     } as never);
     return rpc;
   };
 
-  it("clears extension UI, reloads, refreshes models and bumps the epoch", async () => {
-    const bridgeAction = vi.fn(async () => ({ ok: true }));
-    const rpc = setup(bridgeAction);
+  it("shows reloading, then success with what changed, and refreshes dependent state", async () => {
+    let seenPhase: string | undefined;
+    const bridgeAction = vi.fn(async () => {
+      seenPhase = useSessionStore.getState().reloadStates.k1?.phase;
+      return { ok: true };
+    });
+    const rpc = setup(bridgeAction, [registry(["a"]), registry(["a", "b"])]);
 
     await useSessionStore.getState().reloadPi();
 
+    expect(seenPhase).toBe("reloading");
     expect(bridgeAction).toHaveBeenCalledWith("k1", { action: "reload" });
     expect(rpc).toHaveBeenCalledWith("k1", { type: "get_session_stats" });
     expect(rpc).toHaveBeenCalledWith("k1", { type: "get_available_models" });
@@ -538,17 +548,18 @@ describe("reloadPi", () => {
     expect(s.tabUi.t1?.extensionWidgets).toEqual({});
     expect(s.models).toEqual([{ provider: "p", id: "m" }]);
     expect(s.reloadEpoch).toBe(1);
-    expect(s.isReloading).toBe(false);
+    expect(s.reloadStates.k1).toMatchObject({ phase: "success", message: "+1 tool" });
+    s.dismissReload("k1");
+    expect(useSessionStore.getState().reloadStates.k1).toBeUndefined();
     vi.unstubAllGlobals();
   });
 
-  it("surfaces a failure without bumping the epoch", async () => {
+  it("reports a failure on the session without bumping the epoch", async () => {
     setup(vi.fn(async () => ({ ok: false, error: "boom" })));
     await useSessionStore.getState().reloadPi();
     const s = useSessionStore.getState();
-    expect(s.error).toBe("boom");
+    expect(s.reloadStates.k1).toEqual({ phase: "error", message: "boom" });
     expect(s.reloadEpoch).toBe(0);
-    expect(s.isReloading).toBe(false);
     vi.unstubAllGlobals();
   });
 
@@ -558,6 +569,18 @@ describe("reloadPi", () => {
     useSessionStore.setState({ transcript: { running: true } } as never);
     await useSessionStore.getState().reloadPi();
     expect(bridgeAction).not.toHaveBeenCalled();
+    expect(useSessionStore.getState().reloadStates.k1).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
+  it("blocks sending prompts while that session reloads", async () => {
+    const rpc = setup(vi.fn(async () => ({ ok: true })));
+    useSessionStore.setState({
+      promptText: "hi",
+      reloadStates: { k1: { phase: "reloading", message: "" } },
+    } as never);
+    await useSessionStore.getState().sendPrompt();
+    expect(rpc).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 });
