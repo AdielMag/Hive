@@ -3,7 +3,7 @@
  * there is no layout shift when highlighting completes. Long files render in chunks with
  * `content-visibility: auto`, letting the browser skip layout/paint for off-screen chunks.
  */
-import React, { memo } from "react";
+import React, { memo, useEffect, useRef } from "react";
 import type { HlLine } from "../../lib/highlight/highlighter.ts";
 
 const CHUNK = 200;
@@ -16,17 +16,30 @@ interface Props {
   wrap?: boolean;
   /** Optional per-line class (diff add/remove, highlight). */
   lineClass?: (index: number) => string | undefined;
+  targetLine?: number;
 }
 
-export const HighlightedLines: React.FC<Props> = memo(({ code, tokens, lineNumbers, startLine = 1, wrap, lineClass }) => {
+export const HighlightedLines: React.FC<Props> = memo(({ code, tokens, lineNumbers, startLine = 1, wrap, lineClass, targetLine }) => {
+  const preRef = useRef<HTMLPreElement | null>(null);
   const plain = tokens ? null : code.split("\n");
   const count = tokens ? tokens.length : plain!.length;
   const gutterCh = String(startLine + count - 1).length;
 
+  useEffect(() => {
+    if (targetLine === undefined || !preRef.current) return;
+    const el = preRef.current.querySelector<HTMLElement>(`[data-line="${targetLine}"]`);
+    if (el) {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [targetLine, tokens]);
+
   const renderLine = (i: number) => {
-    const extra = lineClass?.(i);
+    const lineNum = startLine + i;
+    const isTarget = targetLine !== undefined && lineNum === targetLine;
+    const extraParts = [lineClass?.(i), isTarget ? "is-target" : undefined].filter(Boolean);
+    const extra = extraParts.length > 0 ? ` ${extraParts.join(" ")}` : "";
     return (
-      <div key={i} className={extra ? `hl-line ${extra}` : "hl-line"}>
+      <div key={i} data-line={lineNum} className={`hl-line${extra}`}>
         {lineNumbers && (
           <span className="hl-ln" aria-hidden="true">
             {startLine + i}
@@ -68,6 +81,7 @@ export const HighlightedLines: React.FC<Props> = memo(({ code, tokens, lineNumbe
 
   return (
     <pre
+      ref={preRef}
       className={`hl${wrap ? " hl--wrap" : ""}${lineNumbers ? " hl--numbered" : ""}`}
       style={{ ["--gutter-ch" as string]: gutterCh }}
     >

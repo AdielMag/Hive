@@ -29,6 +29,7 @@ import { setModuleHostFactory } from "./registry.ts";
 import { toast } from "./toast-store.ts";
 import { playUiSound } from "../store/sound-store.ts";
 import type { SoundId } from "../audio/sound-types.ts";
+import { getFileManagerLabel } from "../lib/platform.ts";
 
 const toModuleTab = (t: TabItem): ModuleTab => ({
   id: t.id,
@@ -156,6 +157,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
       read: (filePath) => window.studio.readFile(filePath),
       readMedia: (filePath) => window.studio.readMediaFile(filePath),
       showInFolder: (filePath) => window.studio.showItemInFolder(filePath),
+      fileManagerLabel: () => getFileManagerLabel(),
       list: (dirPath) => window.studio.listFiles(dirPath),
     },
     models: {

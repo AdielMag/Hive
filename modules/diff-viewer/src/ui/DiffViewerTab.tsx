@@ -35,7 +35,7 @@ export const DiffViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
   };
 
   const empty = !content.trim() || content === "No differences detected.";
-  const fileManagerLabel = useMemo(() => getFileManagerLabel(), []);
+  const fileManagerLabel = useMemo(() => host.files.fileManagerLabel?.() ?? getFileManagerLabel(), [host]);
 
   return (
     <div

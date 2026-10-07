@@ -176,7 +176,7 @@ export interface ModuleHost {
      * Syntax-highlighted source with line numbers (no frame). `language` is a language id (see `host.languages`);
      * `wrap` defaults to the user's "wrap code" editor preference.
      */
-    HighlightedSource: ComponentType<{ code: string; language?: string | null; wrap?: boolean; lineNumbers?: boolean }>;
+    HighlightedSource: ComponentType<{ code: string; language?: string | null; wrap?: boolean; lineNumbers?: boolean; targetLine?: number }>;
     /** Unified-diff renderer (the same one used for inline transcript diffs). */
     DiffView: ComponentType<{ diff: string; language?: string | null }>;
     ProviderIcon: ComponentType<{ provider: string; size?: number; className?: string; style?: React.CSSProperties }>;
@@ -198,6 +198,7 @@ export interface ModuleHost {
     read(filePath: string): Promise<{ content: string; language: string; mimeType?: string; isBinary?: boolean; dataUrl?: string; [key: string]: unknown }>;
     readMedia?(filePath: string): Promise<{ data: string; mimeType: string; size: number; name: string }>;
     showInFolder?(filePath: string): Promise<void>;
+    fileManagerLabel?(): string;
     /** Directory tree of `dirPath` (nodes: `{ name, path, relativePath?, isDirectory, children? }`). */
     list(dirPath: string): Promise<FileTreeNode[]>;
   };

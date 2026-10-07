@@ -4,13 +4,20 @@ import { HighlightedLines } from "./HighlightedLines.tsx";
 import { useHighlight } from "./useHighlight.ts";
 import { useAppearance } from "../../features/appearance/appearance-store.ts";
 
-export const HighlightedSource: React.FC<{ code: string; language?: string | null; wrap?: boolean; lineNumbers?: boolean }> = ({
+export const HighlightedSource: React.FC<{
+  code: string;
+  language?: string | null;
+  wrap?: boolean;
+  lineNumbers?: boolean;
+  targetLine?: number;
+}> = ({
   code,
   language = null,
   wrap,
   lineNumbers = true,
+  targetLine,
 }) => {
   const tokens = useHighlight(code, language);
   const prefWrap = useAppearance((s) => s.editor.wrapCode);
-  return <HighlightedLines code={code} tokens={tokens} lineNumbers={lineNumbers} wrap={wrap ?? prefWrap} />;
+  return <HighlightedLines code={code} tokens={tokens} lineNumbers={lineNumbers} wrap={wrap ?? prefWrap} targetLine={targetLine} />;
 };

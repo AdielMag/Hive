@@ -93,8 +93,10 @@ export const FileViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
   const isHtml = !isImage && lang === "html";
   const isJson = !isImage && (lang === "json" || lang === "jsonc");
   const canRender = isMarkdown || isHtml || isSvg || isJson;
-  const [mode, setMode] = useState<"rendered" | "source">(isMarkdown || isSvg ? "rendered" : "source");
-  const fileManagerLabel = useMemo(() => getFileManagerLabel(), []);
+  const [mode, setMode] = useState<"rendered" | "source">(
+    data.line ? "source" : isMarkdown || isSvg ? "rendered" : "source",
+  );
+  const fileManagerLabel = useMemo(() => host.files.fileManagerLabel?.() ?? getFileManagerLabel(), [host]);
 
   const lineCount = useMemo(() => content.split("\n").length, [content]);
   const sizeKb = useMemo(() => {
@@ -154,7 +156,7 @@ export const FileViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
 
   const source = (code: string, language: string | null) => (
     <div className="viewer__source selectable">
-      <HighlightedSource code={code} language={language} />
+      <HighlightedSource code={code} language={language} targetLine={data.line} />
     </div>
   );
 
