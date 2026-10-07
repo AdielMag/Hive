@@ -2,6 +2,14 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.22.0 — 2026-10-07 · [diff](https://github.com/AdielMag/Hive/compare/v0.21.0...v0.22.0)
+
+### ✨ Features
+
+- **desktop:** add target line highlighting and fileManagerLabel ([`78af55f`](https://github.com/AdielMag/Hive/commit/78af55f7b82bc9b5e5cd3f40843ed3431e5c15a8))
+- **desktop:** add procedural sound engine, file links, and run timer ([`94fadc1`](https://github.com/AdielMag/Hive/commit/94fadc11bfc306fbeb1ed393ea7326cc2923f0b7))
+- **desktop:** add image viewer, file reveal, and tab origin routing ([`bf2ce01`](https://github.com/AdielMag/Hive/commit/bf2ce012a349e305148c4c5e1e291046205e213d))
+
 ## v0.21.0 — 2026-10-06 · [diff](https://github.com/AdielMag/Hive/compare/v0.20.0...v0.21.0)
 
 ### ✨ Features
