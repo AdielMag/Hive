@@ -41,15 +41,18 @@ export interface JevSettings {
   askJev: { enabled: boolean };
   /** Hard cap on Jev calls per local day, across all sessions. 0 = unlimited. */
   maxCallsPerDay: number;
-  /** User-entered price per 1M input tokens in USD (the API exposes no pricing or balance). */
+  /** Price per 1M input tokens in USD. Null = use the published list price (JEV_PRICE_PER_MTOK_USD). */
   pricePerMTokUsd: number | null;
-  /** User-entered credit they have loaded, in USD; remaining is estimated from usage since `creditSince`. */
+  /** USD the user deposited; remaining is estimated from usage since `creditSince` (the API exposes no balance). */
   creditUsd: number | null;
   /** Epoch ms the user accepted the privacy notice (conversation text goes to api.typesafe.ai). Null keeps Jev inert. */
   consentAt: number | null;
   /** Epoch ms the credit figure was entered (spend before it is ignored). */
   creditSince: number | null;
 }
+
+/** List price of jev-1.13.0 (docs.typesafe.ai/models): $0.042 per 1M input tokens ($42 per 1B); output is free. */
+export const JEV_PRICE_PER_MTOK_USD = 0.042;
 
 export const DEFAULT_SETTINGS: JevSettings = {
   apiKey: "",
@@ -145,8 +148,8 @@ export interface UsageBucket {
   failed: number;
   inputTokens: number;
   outputTokens: number;
-  /** Estimated USD, or null when no price is configured. */
-  costUsd: number | null;
+  /** Estimated USD (input tokens x price). */
+  costUsd: number;
 }
 
 export interface UsageSummary {
@@ -154,12 +157,22 @@ export interface UsageSummary {
   last7d: UsageBucket;
   total: UsageBucket;
   byFeature: Record<string, UsageBucket>;
-  /** Estimated credit left (creditUsd − spend since creditSince), or null without both inputs. */
+  /** Price per 1M input tokens actually used for the estimates. */
+  pricePerMTokUsd: number;
+  /** Estimated credit left (creditUsd − spend since creditSince), or null without a deposit. */
   remainingUsd: number | null;
+  /** Estimated spend since the deposit was entered, or null without a deposit. */
+  spentSinceCreditUsd: number | null;
+  /** Input tokens the remaining credit still buys, or null without a deposit. */
+  remainingTokens: number | null;
+  /** Average local-day spend over the last 7 days (days with no calls count), or null if none. */
+  avgDailyUsd: number | null;
+  /** remainingUsd / avgDailyUsd, or null when either is missing/zero. */
+  daysLeft: number | null;
   lastError: { ts: number; message: string } | null;
 }
 
-const emptyBucket = (): UsageBucket => ({ calls: 0, failed: 0, inputTokens: 0, outputTokens: 0, costUsd: null });
+const emptyBucket = (): UsageBucket => ({ calls: 0, failed: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
 function add(b: UsageBucket, r: UsageRecord): void {
   b.calls += 1;
@@ -168,8 +181,7 @@ function add(b: UsageBucket, r: UsageRecord): void {
   b.outputTokens += r.outputTokens;
 }
 
-const costOf = (inputTokens: number, price: number | null): number | null =>
-  price === null ? null : (inputTokens / 1_000_000) * price;
+const costOf = (inputTokens: number, price: number): number => (inputTokens / 1_000_000) * price;
 
 export function startOfLocalDay(now: number): number {
   const d = new Date(now);
@@ -185,12 +197,18 @@ export function summarizeUsage(
 ): UsageSummary {
   const dayStart = startOfLocalDay(now);
   const weekStart = now - 7 * 24 * 3600_000;
+  const price = settings.pricePerMTokUsd ?? JEV_PRICE_PER_MTOK_USD;
   const out: UsageSummary = {
     today: emptyBucket(),
     last7d: emptyBucket(),
     total: emptyBucket(),
     byFeature: {},
+    pricePerMTokUsd: price,
     remainingUsd: null,
+    spentSinceCreditUsd: null,
+    remainingTokens: null,
+    avgDailyUsd: null,
+    daysLeft: null,
     lastError: null,
   };
   let sinceCredit = 0;
@@ -203,11 +221,15 @@ export function summarizeUsage(
     if (!r.ok && r.error && (!out.lastError || r.ts >= out.lastError.ts)) out.lastError = { ts: r.ts, message: r.error };
   }
   for (const b of [out.today, out.last7d, out.total, ...Object.values(out.byFeature)]) {
-    b.costUsd = costOf(b.inputTokens, settings.pricePerMTokUsd);
+    b.costUsd = costOf(b.inputTokens, price);
   }
-  if (settings.creditUsd !== null && settings.pricePerMTokUsd !== null) {
-    const spent = costOf(sinceCredit, settings.pricePerMTokUsd) ?? 0;
+  if (out.last7d.calls > 0) out.avgDailyUsd = out.last7d.costUsd / 7;
+  if (settings.creditUsd !== null) {
+    const spent = costOf(sinceCredit, price);
+    out.spentSinceCreditUsd = spent;
     out.remainingUsd = Math.max(0, settings.creditUsd - spent);
+    out.remainingTokens = price > 0 ? Math.floor((out.remainingUsd / price) * 1_000_000) : null;
+    if (out.avgDailyUsd && out.avgDailyUsd > 0) out.daysLeft = out.remainingUsd / out.avgDailyUsd;
   }
   return out;
 }

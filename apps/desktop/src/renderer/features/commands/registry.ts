@@ -3,9 +3,12 @@
  * module has no React coupling. Default chords here reproduce the previous hard-coded shortcuts exactly.
  */
 import { create } from "zustand";
+import type { AgentMode } from "@hive/protocol";
 import { useSessionStore } from "../../store/session-store.ts";
 import { useUi, type LeftPanel } from "../../store/ui-store.ts";
 import { useUpdates } from "../../store/update-store.ts";
+import { getSupportedThinkingLevels, clampThinkingLevel } from "../../lib/models/thinking.ts";
+import { toast } from "../../modules/toast-store.ts";
 import { usePalette } from "./palette-store.ts";
 import type { Command } from "./types.ts";
 
@@ -22,6 +25,50 @@ function cycleTab(dir: 1 | -1): void {
   if (tabs.length < 2) return;
   const i = tabs.findIndex((t) => t.id === activeTabId);
   void switchTab(tabs[(i + dir + tabs.length) % tabs.length]!.id);
+}
+
+const ORDERED_MODES: readonly AgentMode[] = ["auto-edit", "ask", "plan", "manual", "debug"];
+
+const MODE_LABELS: Record<AgentMode, string> = {
+  "auto-edit": "Auto Edit",
+  ask: "Ask",
+  plan: "Plan",
+  manual: "Manual",
+  debug: "Debug",
+};
+
+function cycleMode(): void {
+  const { selectedMode, setMode } = useSessionStore.getState();
+  const currentIndex = ORDERED_MODES.indexOf(selectedMode);
+  const nextMode = ORDERED_MODES[(currentIndex + 1) % ORDERED_MODES.length]!;
+  setMode(nextMode);
+  toast({ message: `Mode: ${MODE_LABELS[nextMode] || nextMode}`, kind: "info", duration: 1500 });
+}
+
+function cycleThinkingLevel(): void {
+  const { thinkingLevels, selectedThinkingLevel, setThinkingLevel, selectedModel } = useSessionStore.getState();
+  const available = thinkingLevels && thinkingLevels.length > 0 ? thinkingLevels : getSupportedThinkingLevels(selectedModel);
+
+  if (available.length <= 1) {
+    toast({
+      message: selectedModel?.reasoning
+        ? "Only one thinking level supported for this model"
+        : "Thinking mode not supported by current model",
+      kind: "info",
+      duration: 1500,
+    });
+    return;
+  }
+
+  const current = available.includes(selectedThinkingLevel)
+    ? selectedThinkingLevel
+    : clampThinkingLevel(selectedModel, selectedThinkingLevel);
+
+  const idx = available.indexOf(current);
+  const next = available[(idx + 1) % available.length]!;
+  void setThinkingLevel(next);
+  const label = next.charAt(0).toUpperCase() + next.slice(1);
+  toast({ message: `Thinking: ${label}`, kind: "info", duration: 1500 });
 }
 
 const left = (id: string, title: string, panel: LeftPanel, defaultKeys?: string[]): Command => ({
@@ -67,7 +114,7 @@ const CORE_COMMANDS: readonly Command[] = [
     },
   },
   { id: "tab.next", title: "Next Tab", category: "Tabs", defaultKeys: ["Mod+Tab"], allowInTerminal: true, when: () => useSessionStore.getState().tabs.length > 1, run: () => cycleTab(1) },
-  { id: "tab.prev", title: "Previous Tab", category: "Tabs", defaultKeys: ["Mod+Shift+Tab"], allowInTerminal: true, when: () => useSessionStore.getState().tabs.length > 1, run: () => cycleTab(-1) },
+  { id: "tab.prev", title: "Previous Tab", category: "Tabs", defaultKeys: ["Mod+Alt+Tab"], allowInTerminal: true, when: () => useSessionStore.getState().tabs.length > 1, run: () => cycleTab(-1) },
 
   {
     id: "pi.reload",
@@ -81,7 +128,27 @@ const CORE_COMMANDS: readonly Command[] = [
     run: () => useSessionStore.getState().reloadPi(),
   },
 
-  // Agent Modes
+  // Agent Modes & Settings
+  {
+    id: "mode.cycle",
+    title: "Cycle Agent Mode",
+    category: "Agent",
+    keywords: "mode cycle switch next auto edit ask plan manual debug",
+    defaultKeys: ["Shift+Tab"],
+    allowInTerminal: false,
+    when: () => !!useSessionStore.getState().activeTabId,
+    run: () => cycleMode(),
+  },
+  {
+    id: "thinking.cycle",
+    title: "Cycle Thinking Level",
+    category: "Agent",
+    keywords: "thinking cycle switch next reasoning effort level",
+    defaultKeys: ["Mod+Shift+Tab"],
+    allowInTerminal: false,
+    when: () => !!useSessionStore.getState().activeTabId,
+    run: () => cycleThinkingLevel(),
+  },
   {
     id: "mode.auto-edit",
     title: "Mode: Auto Edit",

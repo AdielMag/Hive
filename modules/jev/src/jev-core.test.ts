@@ -75,14 +75,20 @@ describe("usage", () => {
     expect(s.remainingUsd).toBeNull();
   });
 
-  it("has no cost without a price and estimates remaining credit from the anchor", () => {
-    expect(summarizeUsage([rec({})], { pricePerMTokUsd: null, creditUsd: 10, creditSince: null }, now).total.costUsd).toBeNull();
+  it("falls back to the list price and estimates remaining credit from the anchor", () => {
+    const d = summarizeUsage([rec({})], { pricePerMTokUsd: null, creditUsd: 10, creditSince: null }, now);
+    expect(d.pricePerMTokUsd).toBe(0.042);
+    expect(d.total.costUsd).toBeCloseTo(0.042);
     const s = summarizeUsage(
       [rec({ ts: now - 1000 }), rec({ ts: now - 10 * 24 * 3600_000, inputTokens: 9_000_000 })],
       { pricePerMTokUsd: 1, creditUsd: 10, creditSince: now - 3600_000 },
       now,
     );
     expect(s.remainingUsd).toBe(9);
+    expect(s.spentSinceCreditUsd).toBe(1);
+    expect(s.remainingTokens).toBe(9_000_000);
+    expect(s.avgDailyUsd).toBeCloseTo(1 / 7);
+    expect(s.daysLeft).toBeCloseTo(63);
     expect(summarizeUsage([rec({ inputTokens: 99_000_000 })], { pricePerMTokUsd: 1, creditUsd: 5, creditSince: 0 }, now).remainingUsd).toBe(0);
   });
 

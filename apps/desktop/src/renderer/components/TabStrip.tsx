@@ -15,6 +15,8 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import type { TabItem } from "@hive/protocol";
 import { hasDraft, useSessionStore } from "../store/session-store.ts";
+import { getFileManagerLabel } from "../lib/platform.ts";
+import { playUiSound } from "../store/sound-store.ts";
 import { isCoreTabKind } from "@hive/protocol";
 import { ModuleTabIcon, Slot, useModuleTabTitle } from "../modules/ModuleViews.tsx";
 import { useShortcut } from "../features/commands/useShortcut.ts";
@@ -90,6 +92,9 @@ export const TabStrip: React.FC<TabStripProps> = ({
   const activeTabId = propActiveTabId !== undefined ? propActiveTabId : storeActiveTabId;
 
   const handleSelect = (tabId: string) => {
+    if (tabId !== activeTabId) {
+      playUiSound("tab_switch");
+    }
     if (onSelectTab) {
       onSelectTab(tabId);
     } else {
@@ -270,7 +275,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
     if (tab.filePath) {
       items.push({ kind: "separator" });
       items.push({
-        label: "Show in Folder",
+        label: getFileManagerLabel(),
         icon: <FolderOpen size={14} />,
         onSelect: () => {
           if (tab.filePath) void window.studio.showItemInFolder(tab.filePath);

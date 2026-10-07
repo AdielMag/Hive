@@ -27,6 +27,8 @@ import { useUi, type SettingsTabId } from "../store/ui-store.ts";
 import { subscribeSessionEvents } from "./session-bus.ts";
 import { setModuleHostFactory } from "./registry.ts";
 import { toast } from "./toast-store.ts";
+import { playUiSound } from "../store/sound-store.ts";
+import type { SoundId } from "../audio/sound-types.ts";
 
 const toModuleTab = (t: TabItem): ModuleTab => ({
   id: t.id,
@@ -122,6 +124,9 @@ export function createModuleHost(moduleId: string): ModuleHost {
       close: (side) => (side === "left" ? useUi.getState().showLeft(null) : useUi.getState().showRight(null)),
     },
     toast: (options) => void toast(options),
+    sound: {
+      play: (soundId: string) => playUiSound(soundId as SoundId),
+    },
     commands: {
       run: async (commandId, args) => {
         await COMMANDS_BY_ID.get(commandId)?.run(args);
@@ -134,7 +139,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
           useUi.getState().openSettings(undefined, focus);
           return;
         }
-        const coreTabs = ["appearance", "models", "compaction", "accounts", "keyboard", "modules", "updates", "about"];
+        const coreTabs = ["appearance", "sound", "models", "compaction", "accounts", "keyboard", "modules", "updates", "about"];
         const resolvedTab = coreTabs.includes(tabId) || tabId.includes(":") ? (tabId as SettingsTabId) : `${moduleId}:${tabId}`;
         useUi.getState().openSettings(resolvedTab, focus);
       },

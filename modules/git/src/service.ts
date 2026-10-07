@@ -25,14 +25,17 @@ export async function runGit(
 /** Network operations must never block on an interactive credential prompt. */
 const NETWORK_OPTIONS = {
   env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-  timeout: 120_000,
+  timeout: 300_000,
 };
 
 async function runGitNetwork(args: string[], cwd: string): Promise<string> {
   try {
-    return await runGit(args, cwd, NETWORK_OPTIONS);
+    return await runGit(["-c", "http.postBuffer=524288000", ...args], cwd, NETWORK_OPTIONS);
   } catch (err: any) {
-    const detail = String(err?.stderr || "").trim();
+    if (err?.killed || err?.signal === "SIGTERM") {
+      throw new Error(`Git network operation timed out after ${NETWORK_OPTIONS.timeout / 1000}s`);
+    }
+    const detail = String(err?.stderr || err?.stdout || "").trim();
     throw new Error(detail || err?.message || String(err));
   }
 }

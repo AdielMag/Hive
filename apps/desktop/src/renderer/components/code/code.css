@@ -296,6 +296,30 @@
   border: 1px solid var(--border-subtle);
   color: var(--accent-hover);
 }
+.md :not(pre) > code.md-code-file,
+.md-code-file {
+  cursor: pointer;
+  color: var(--accent-base);
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.08);
+  transition: all 0.15s ease;
+}
+.md :not(pre) > code.md-code-file:hover,
+.md-code-file:hover {
+  background: rgba(var(--accent-rgb), 0.16);
+  border-color: var(--accent-base);
+  text-decoration: underline;
+}
+.md a.md-file-link {
+  color: var(--accent-base);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(var(--accent-rgb), 0.4);
+  transition: all 0.15s ease;
+}
+.md a.md-file-link:hover {
+  border-bottom-style: solid;
+  border-bottom-color: var(--accent-base);
+}
 .md .codeblock {
   margin: 4px 0 12px;
 }

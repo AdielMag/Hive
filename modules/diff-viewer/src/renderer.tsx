@@ -9,10 +9,10 @@ const DiffViewerTab = lazy(() => import("./ui/DiffViewerTab.tsx").then((m) => ({
 
 /** Opens `args.path` in a file tab (re-reads the file, so reopening refreshes stale content). */
 async function openFile(host: ModuleHost, args: unknown): Promise<void> {
-  const { path, projectId, name } = (args ?? {}) as Partial<FileOpenArgs>;
+  const { path, projectId, name, line, column } = (args ?? {}) as Partial<FileOpenArgs>;
   if (!path) return;
   const isRasterImg = /\.(png|jpe?g|webp|gif|bmp|ico|avif)$/i.test(path);
-  const data: FileTabData = { content: "", language: isRasterImg ? "image" : "text" };
+  const data: FileTabData = { content: "", language: isRasterImg ? "image" : "text", line, column };
   try {
     const res = await host.files.read(path);
     data.content = res.content;

@@ -16,6 +16,8 @@ export interface FileOpenArgs {
   projectId?: string;
   /** Tab title; defaults to the file name. */
   name?: string;
+  line?: number;
+  column?: number;
 }
 
 /** `tab.data` of a `file` tab. */
@@ -26,6 +28,8 @@ export interface FileTabData {
   mimeType?: string;
   size?: number;
   isBinary?: boolean;
+  line?: number;
+  column?: number;
 }
 
 /** `tab.data` of a `diff` tab. */
@@ -41,3 +45,14 @@ export const fileTabId = (filePath: string): string => `file:${filePath}`;
 export const fileBaseName = (filePath: string): string => filePath.split(/[/\\]/).pop() || filePath;
 
 export const diffTabTitle = (staged: boolean, filePath: string): string => `${staged ? "[Staged] " : ""}${fileBaseName(filePath)}`;
+
+/** Returns the OS-appropriate label for opening the file manager. */
+export function getFileManagerLabel(): string {
+  const p = typeof document !== "undefined" ? document.documentElement.dataset.platform : "";
+  const isMac = p === "darwin" || (typeof navigator !== "undefined" && (/Mac|iPhone|iPod|iPad/i.test(navigator.platform) || /Macintosh/i.test(navigator.userAgent)));
+  const isWin = p === "win32" || (typeof navigator !== "undefined" && (/Win/i.test(navigator.platform) || /Windows/i.test(navigator.userAgent)));
+  if (isMac) return "Open in Finder";
+  if (isWin) return "Open in File Explorer";
+  return "Open in File Manager";
+}
+

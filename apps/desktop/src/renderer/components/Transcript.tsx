@@ -24,6 +24,7 @@ import {
   Search,
   Sparkles,
   Terminal,
+  Timer,
   Wrench,
 } from "lucide-react";
 import { createTranscript } from "@hive/pi-adapter";
@@ -39,12 +40,13 @@ import { CodeBlock } from "./code/CodeBlock.tsx";
 import { ImageThumbnail } from "./ImageThumbnail.tsx";
 import { languageFromPath } from "../lib/highlight/languages.ts";
 import { copyText } from "../lib/clipboard.ts";
-import { formatCost, formatTokens } from "../lib/format.ts";
+import { formatCost, formatElapsed, formatTokens } from "../lib/format.ts";
 import { QueuedMessagesList } from "./transcript/QueuedMessages.tsx";
 import { AuthErrorActions } from "./AuthErrorActions.tsx";
 import { detectAuthError } from "../lib/auth-errors.ts";
 import { useContributions } from "../modules/registry.ts";
 import { ModuleToolCard } from "../modules/ModuleViews.tsx";
+import { isFilePath, openFileInTab, renderTextWithFileLinks } from "../lib/file-links.tsx";
 
 export function scrollToToolCall(id: string): void {
   const sel = CSS.escape(id);
@@ -259,6 +261,15 @@ const TimelineRow = memo(
             {item.output && <CodeBlock code={item.output} language="text" bare lineNumbers={false} />}
           </div>
         );
+      case "turn":
+        return (
+          <div className="msg-turn" data-item-key={item.key} title="Time from your message until the agent answered, asked or finished">
+            <span className="msg-turn__label">
+              <Timer size={11} />
+              Worked for {formatElapsed(item.ms)}
+            </span>
+          </div>
+        );
       case "marker":
         return <div className="msg-marker" data-item-key={item.key}>{item.text}</div>;
       case "summary":
@@ -313,6 +324,7 @@ const TimelineRow = memo(
     if (a.item.kind === "assistant" && a.tools !== b.tools) {
       return !a.item.blocks.some((bl) => bl.type === "toolCall" && !a.results?.some((r) => r.toolCallId === bl.id));
     }
+    if (a.item.kind === "turn" && b.item.kind === "turn") return a.item.ms === b.item.ms;
     return a.item.kind === b.item.kind;
   },
 );
@@ -356,7 +368,7 @@ const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; da
                 ))}
               </div>
             )}
-            {(parsedSkill?.rest || text) && <div className="msg-user__text">{parsedSkill?.rest || text}</div>}
+            {(parsedSkill?.rest || text) && <div className="msg-user__text">{renderTextWithFileLinks(parsedSkill?.rest || text)}</div>}
           </div>
           {(parsedSkill?.rest || text) && (
             <div className="msg-actions">
@@ -637,6 +649,7 @@ const ToolCall: React.FC<{
   const meta = TOOL_META[block.name] ?? { icon: <Wrench size={13} />, label: block.name };
   const summary = toolSummary(block.name, block.arguments ?? {});
   const path = str(block.arguments?.path ?? block.arguments?.file_path);
+  const targetFilePath = path || (isFilePath(summary) ? summary : undefined);
   const status = result ? (result.isError ? "error" : "done") : running || !block.complete ? "running" : "pending";
   const usedSkill = ctx?.annotations.skills.usedBy.get(block.id);
 
@@ -695,7 +708,18 @@ const ToolCall: React.FC<{
             <Sparkles size={10} /> skill: {usedSkill}
           </span>
         )}
-        <span className="msg-tool__arg mono" title={summary}>
+        <span
+          className={`msg-tool__arg mono${targetFilePath ? " is-clickable" : ""}`}
+          title={targetFilePath ? `Open ${targetFilePath} in tab · ${summary}` : summary}
+          onClick={
+            targetFilePath
+              ? (e) => {
+                  e.stopPropagation();
+                  void openFileInTab(targetFilePath);
+                }
+              : undefined
+          }
+        >
           {summary}
         </span>
         {status === "running" || status === "pending" ? (

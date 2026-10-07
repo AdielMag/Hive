@@ -21,7 +21,7 @@ Jev is a typed decision model, not a chat model. A request carries a `state` and
 | `choice` | One of 2-255 caller-defined options, with confidence and probabilities. |
 | `score` | A position on 2-10 described levels, plus confidence. |
 
-API: `POST https://api.typesafe.ai/v1/systemone` with `Authorization: Bearer <key>`, model `jev-latest`. `GET /v1/models` validates a key. The API exposes no balance or pricing, so Hive estimates spend from the input tokens each call reports and a price the user enters. Spec: `https://api.typesafe.ai/openapi.json`.
+API: `POST https://api.typesafe.ai/v1/systemone` with `Authorization: Bearer <key>`, model `jev-latest`. `GET /v1/models` validates a key. The API exposes no balance or pricing, so Hive estimates spend from the input tokens each call reports at the published list price ($0.042 per 1M input tokens for jev-1.13.0, output free; docs.typesafe.ai/models, overridable) and shows tokens left from the deposit the user enters. Spec: `https://api.typesafe.ai/openapi.json`.
 
 ## Architecture
 

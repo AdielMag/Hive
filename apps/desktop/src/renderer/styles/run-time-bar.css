@@ -1,0 +1,30 @@
+/* Agent time strip above the editor: session total + current / last turn. */
+.run-time-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.run-time-bar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.run-time-bar__item strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.run-time-bar__sep {
+  opacity: 0.5;
+}
+.run-time-bar.is-running .run-time-bar__item--live {
+  color: var(--accent-base);
+}
+.run-time-bar.is-running .run-time-bar__item--live strong {
+  color: var(--accent-base);
+}

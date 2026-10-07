@@ -53,6 +53,8 @@ export interface ToastOptions {
   action?: { label: string; run: () => void | Promise<void> };
   /** ms; 0 keeps it until dismissed. Default 5000. */
   duration?: number;
+  /** Suppress notification sound */
+  silent?: boolean;
 }
 
 /** A Pi session stream event, as forwarded by core. */
@@ -126,6 +128,9 @@ export interface ModuleHost {
     close(side: PanelSide): void;
   };
   toast(options: string | ToastOptions): void;
+  sound?: {
+    play(soundId: string): void;
+  };
   commands: {
     /** Run any registered command (core or another module's) by id. No-op when it is not registered. */
     run(commandId: string, args?: unknown): Promise<void>;

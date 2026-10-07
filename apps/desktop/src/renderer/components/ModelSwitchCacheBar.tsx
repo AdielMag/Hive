@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, Loader2, Minimize2, Snowflake, TriangleAlert, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { Model } from "@hive/protocol";
-import { applyCompactionResult, useSessionStore } from "../store/session-store.ts";
+import { useSessionStore } from "../store/session-store.ts";
 import {
   CACHE_TTL_MS,
   DEFAULT_KEEP_RECENT_MAX_TOKENS,

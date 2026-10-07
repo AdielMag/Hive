@@ -1,7 +1,9 @@
 /** Settings dialog: Appearance, Models, AI providers, Updates, About. */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, Volume2, X } from "lucide-react";
 import { AppearanceSettingsContent } from "./AppearanceSettingsContent.tsx";
+import { SoundSettingsContent } from "./SoundSettingsContent.tsx";
+import { playUiSound } from "../store/sound-store.ts";
 import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
 import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
 import { KeyboardSettings } from "../features/commands/KeyboardSettings.tsx";
@@ -35,6 +37,7 @@ interface Account {
 
 const TABS: Array<{ id: CoreSettingsTabId; label: string; icon: React.ReactNode; title: string }> = [
   { id: "appearance", label: "Appearance", icon: <Palette size={15} />, title: "Appearance" },
+  { id: "sound", label: "Sound", icon: <Volume2 size={15} />, title: "Sound & Audio Effects" },
   { id: "models", label: "Models", icon: <Cpu size={15} />, title: "Models" },
   { id: "compaction", label: "Compaction", icon: <Minimize2 size={15} />, title: "Auto-Compaction & Context" },
   { id: "accounts", label: "AI Providers", icon: <Key size={15} />, title: "AI providers & accounts" },
@@ -54,27 +57,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   const checkPi = useUpdates((s) => s.checkPi);
   const piHasUpdate = useUpdates((s) => s.piInfo?.hasUpdate);
 
+  const handleClose = useCallback(() => {
+    playUiSound("modal_close");
+    onClose();
+  }, [onClose]);
+
   useEffect(() => {
     if (!isOpen) return;
+    playUiSound("modal_open");
     setTab(initialTab);
     void checkUpdate();
     void checkPi();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && handleClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, initialTab, checkUpdate, checkPi, onClose]);
+  }, [isOpen, initialTab, checkUpdate, checkPi, handleClose]);
 
   if (!isOpen) return null;
   const moduleTab = moduleSettings.find((t) => `${t.moduleId}:${t.id}` === tab);
   const current = TABS.find((t) => t.id === tab) ?? (moduleTab ? { title: moduleTab.title ?? moduleTab.label } : TABS[0]!);
 
   return (
-    <div className="modal-scrim" onMouseDown={onClose}>
+    <div className="modal-scrim" onMouseDown={handleClose}>
       <div className="settings" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()}>
         <nav className="settings__nav">
           <div className="settings__brand">Settings</div>
           {TABS.map((t) => (
-            <button key={t.id} className={`settings__nav-btn${tab === t.id ? " is-active" : ""}`} onClick={() => setTab(t.id)}>
+            <button
+              key={t.id}
+              className={`settings__nav-btn${tab === t.id ? " is-active" : ""}`}
+              onClick={() => {
+                if (tab !== t.id) playUiSound("tab_switch");
+                setTab(t.id);
+              }}
+            >
               {t.icon}
               <span>{t.label}</span>
               {t.id === "updates" && (update?.hasUpdate || piHasUpdate) && <span className="ui-chip ui-chip--accent">New</span>}
@@ -84,7 +100,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             const key = `${t.moduleId}:${t.id}`;
             const Icon = t.icon;
             return (
-              <button key={key} className={`settings__nav-btn${tab === key ? " is-active" : ""}`} onClick={() => setTab(key)}>
+              <button
+                key={key}
+                className={`settings__nav-btn${tab === key ? " is-active" : ""}`}
+                onClick={() => {
+                  if (tab !== key) playUiSound("tab_switch");
+                  setTab(key);
+                }}
+              >
                 {Icon ? <Icon size={15} /> : <Puzzle size={15} />}
                 <span>{t.label}</span>
               </button>
@@ -94,12 +117,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         <section className="settings__main">
           <header className="settings__header">
             <h2>{current.title}</h2>
-            <button className="ui-btn ui-btn--ghost ui-btn--icon" onClick={onClose} aria-label="Close settings">
+            <button className="ui-btn ui-btn--ghost ui-btn--icon" onClick={handleClose} aria-label="Close settings">
               <X size={16} />
             </button>
           </header>
           <div className="settings__body">
             {tab === "appearance" && <AppearanceSettingsContent />}
+            {tab === "sound" && <SoundSettingsContent />}
             {tab === "models" && <ModelsSettingsContent />}
             {tab === "compaction" && <CompactionSettingsContent />}
             {tab === "accounts" && <AccountsTab />}

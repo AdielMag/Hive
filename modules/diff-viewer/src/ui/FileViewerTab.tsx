@@ -17,7 +17,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import type { ModuleHost, ModuleTab } from "@hive/module-sdk/renderer";
-import { fileBaseName, type FileTabData } from "../shared.ts";
+import { fileBaseName, getFileManagerLabel, type FileTabData } from "../shared.ts";
 
 const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -94,6 +94,7 @@ export const FileViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
   const isJson = !isImage && (lang === "json" || lang === "jsonc");
   const canRender = isMarkdown || isHtml || isSvg || isJson;
   const [mode, setMode] = useState<"rendered" | "source">(isMarkdown || isSvg ? "rendered" : "source");
+  const fileManagerLabel = useMemo(() => getFileManagerLabel(), []);
 
   const lineCount = useMemo(() => content.split("\n").length, [content]);
   const sizeKb = useMemo(() => {
@@ -220,8 +221,8 @@ export const FileViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
           </div>
         )}
         {tab.filePath && (
-          <button className="ui-btn ui-btn--sm" onClick={showInFolder} title="Show in folder">
-            <FolderOpen size={12} /> Show in Folder
+          <button className="ui-btn ui-btn--sm" onClick={showInFolder} title={fileManagerLabel}>
+            <FolderOpen size={12} /> {fileManagerLabel}
           </button>
         )}
         <button

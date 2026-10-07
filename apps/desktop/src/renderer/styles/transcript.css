@@ -254,6 +254,14 @@ div.msg-tool__head {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.msg-tool__arg.is-clickable {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.msg-tool__arg.is-clickable:hover {
+  color: var(--accent-base);
+  text-decoration: underline;
+}
 .msg-tool__status {
   flex-shrink: 0;
   color: var(--accent-base);
@@ -702,4 +710,26 @@ div.msg-tool__head {
 }
 .auth-error-action--banner {
   margin-left: 0;
+}
+
+/* End-of-turn divider: how long the agent worked on the turn above. */
+.msg-turn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.msg-turn::before,
+.msg-turn::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+.msg-turn__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }

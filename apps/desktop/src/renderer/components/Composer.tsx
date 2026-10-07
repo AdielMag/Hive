@@ -24,6 +24,7 @@ import { QueuedMessagesBar } from "./transcript/QueuedMessages.tsx";
 import { ModelSwitchCacheBar } from "./ModelSwitchCacheBar.tsx";
 import { AttachmentTray } from "./AttachmentTray.tsx";
 import { ReloadButton, ReloadStatusBar } from "./ReloadControls.tsx";
+import { RunTimeBar } from "./RunTimeBar.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { Slot } from "../modules/ModuleViews.tsx";
 import type { AttachedItem } from "@hive/protocol";
@@ -343,6 +344,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
 
       {/* Pi reload progress / result for this session */}
       <ReloadStatusBar />
+
+      {/* How long the agent has worked in this session */}
+      <RunTimeBar />
 
       {/* Module slots above composer (e.g. bash-guard approval card) */}
       <Slot name="composer.above" props={{ pendingUiDialog, respondDialog, activeKey }} />

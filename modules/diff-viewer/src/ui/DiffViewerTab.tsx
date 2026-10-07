@@ -1,8 +1,8 @@
 /** Diff viewer tab. Repo-specific actions (e.g. Stage / Unstage) are contributed by other modules via the `diff.actions` slot. */
 import React, { useMemo } from "react";
-import { Sparkles, X, GitCompare } from "lucide-react";
+import { Sparkles, X, GitCompare, FolderOpen } from "lucide-react";
 import type { ModuleHost, ModuleTab } from "@hive/module-sdk/renderer";
-import { DIFF_ACTIONS_SLOT, fileBaseName, type DiffTabData } from "../shared.ts";
+import { DIFF_ACTIONS_SLOT, fileBaseName, getFileManagerLabel, type DiffTabData } from "../shared.ts";
 
 export const DiffViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ tab, host }) => {
   const { project: activeProject } = host.hooks.useActiveSession();
@@ -35,6 +35,7 @@ export const DiffViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
   };
 
   const empty = !content.trim() || content === "No differences detected.";
+  const fileManagerLabel = useMemo(() => getFileManagerLabel(), []);
 
   return (
     <div
@@ -119,6 +120,22 @@ export const DiffViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           {/* Contributed by other modules (git: Stage / Unstage) */}
           <Slot name={DIFF_ACTIONS_SLOT} props={{ tab }} />
+
+          {tab.filePath && host.files.showInFolder && (
+            <button
+              onClick={() => {
+                if (tab.filePath && host.files.showInFolder) {
+                  void host.files.showInFolder(tab.filePath);
+                }
+              }}
+              title={fileManagerLabel}
+              className="ui-btn ui-btn--sm"
+              style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+            >
+              <FolderOpen size={12} />
+              <span>{fileManagerLabel}</span>
+            </button>
+          )}
 
           {/* Ask Pi about diff */}
           <button

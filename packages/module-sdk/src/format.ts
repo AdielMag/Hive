@@ -36,6 +36,18 @@ export function formatDuration(ms: number): string {
   return `${s}s`;
 }
 
+/** Stopwatch style: "42s", "3m 05s", "1h 02m". Used for how long the agent worked. */
+export function formatElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (h > 0) return `${h}h ${pad(m)}m`;
+  if (m > 0) return `${m}m ${pad(sec)}s`;
+  return `${sec}s`;
+}
+
 /** "Today 14:30", "Tomorrow 09:00", "Sat 07:59" */
 export function formatResetAt(ts: number, now = Date.now()): string {
   const d = new Date(ts);

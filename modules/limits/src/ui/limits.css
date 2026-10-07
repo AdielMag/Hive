@@ -197,9 +197,6 @@
 .sb-quota__item + .sb-quota__item {
   border-left: 1px solid rgba(var(--fg-rgb), 0.14);
 }
-.sb-quota__item.is-idle-pool {
-  opacity: 0.5;
-}
 .sb-quota__pool {
   font-size: 10px;
   letter-spacing: 0.02em;

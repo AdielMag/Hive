@@ -21,7 +21,7 @@ import {
 } from "../shared.ts";
 import "./jev.css";
 
-const usd = (n: number | null, digits = 4): string => (n === null ? "n/a" : `$${n.toFixed(n >= 1 ? 2 : digits)}`);
+const usd = (n: number | null, digits = 4): string => (n === null ? "n/a" : `$${n.toFixed(n >= 1 ? 2 : n > 0 && n < 0.0001 ? 6 : digits)}`);
 const tok = (n: number): string => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 const Switch: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label: string }> = ({ checked, onChange, label }) => (
@@ -79,9 +79,9 @@ const NumberField: React.FC<{
 const Stat: React.FC<{ label: string; bucket: UsageBucket }> = ({ label, bucket }) => (
   <div className="jev-stat">
     <div className="jev-stat__label">{label}</div>
-    <div className="jev-stat__value">{bucket.costUsd === null ? `${bucket.calls} calls` : usd(bucket.costUsd)}</div>
+    <div className="jev-stat__value">{tok(bucket.inputTokens)} tokens</div>
     <div className="jev-stat__sub">
-      {bucket.costUsd === null ? `${tok(bucket.inputTokens)} in` : `${bucket.calls} calls · ${tok(bucket.inputTokens)} in`}
+      {`${usd(bucket.costUsd)} · ${bucket.calls} calls`}
       {bucket.failed > 0 && <span className="jev-stat__fail"> · {bucket.failed} failed</span>}
     </div>
   </div>
@@ -369,8 +369,8 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
           <section className="jev-card">
             <h4 className="jev-card__sub">Spend</h4>
             <p className="jev-card__desc">
-              TypeSafe's API doesn't expose your balance or pricing, so Hive counts the input tokens each call reports (output tokens are free) and prices them with the rate you enter.
-              Enter your loaded credit to see an estimate of what's left.
+              TypeSafe's API doesn't report your balance, so Hive counts the input tokens each call reports (output tokens are free) and prices them at the list rate (jev-1.13.0: $0.042 per 1M input tokens).
+              Enter what you deposited and Hive estimates what's left. Only calls made through Hive are counted.
             </p>
             {usage && (
               <div className="jev-stats">
@@ -378,18 +378,22 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
                 <Stat label="Last 7 days" bucket={usage.last7d} />
                 <Stat label="All time" bucket={usage.total} />
                 <div className="jev-stat jev-stat--remaining">
-                  <div className="jev-stat__label">Credit left (est.)</div>
-                  <div className="jev-stat__value">{usd(usage.remainingUsd, 2)}</div>
-                  <div className="jev-stat__sub">{usage.remainingUsd === null ? "set price and credit below" : "from the credit you entered"}</div>
+                  <div className="jev-stat__label">Tokens left (est.)</div>
+                  <div className="jev-stat__value">{usage.remainingTokens === null ? "n/a" : tok(usage.remainingTokens)}</div>
+                  <div className="jev-stat__sub">
+                    {usage.remainingUsd === null
+                      ? "enter your deposit below"
+                      : `${usd(usage.remainingUsd, 2)} left of ${usd(settings.creditUsd, 2)}${usage.daysLeft !== null ? ` · ~${usage.daysLeft >= 365 ? "1y+" : `${Math.round(usage.daysLeft)}d`} at current pace` : ""}`}
+                  </div>
                 </div>
               </div>
             )}
             {usage?.lastError && <div className="jev-bad jev-lasterr">Last error: {usage.lastError.message}</div>}
-            <Row title="Price per 1M input tokens" hint="From your TypeSafe plan. Used only for the estimates above.">
-              <NumberField label="Price per million input tokens" prefix="$" placeholder="e.g. 0.10" step={0.01} value={settings.pricePerMTokUsd} onCommit={(v) => void save({ pricePerMTokUsd: v })} />
+            <Row title="Amount deposited" hint="Total USD you've added to your TypeSafe account. Spend is counted from the moment you change this figure, so update it after each top-up with your current balance.">
+              <NumberField label="Amount deposited in USD" prefix="$" placeholder="e.g. 5" step={1} value={settings.creditUsd} onCommit={(v) => void save({ creditUsd: v })} />
             </Row>
-            <Row title="Credit you loaded" hint="Spend is counted from the moment you change this figure.">
-              <NumberField label="Credit in USD" prefix="$" placeholder="e.g. 5" step={1} value={settings.creditUsd} onCommit={(v) => void save({ creditUsd: v })} />
+            <Row title="Price per 1M input tokens" hint="Defaults to the published rate of $0.042. Override only if your plan differs.">
+              <NumberField label="Price per million input tokens" prefix="$" placeholder="0.042" step={0.001} value={settings.pricePerMTokUsd} onCommit={(v) => void save({ pricePerMTokUsd: v })} />
             </Row>
             <Row title="Daily call limit" hint="Stops Jev calls for the rest of the day once reached (all sessions). 0 means unlimited.">
               <NumberField label="Calls per day" value={settings.maxCallsPerDay} onCommit={(v) => void save({ maxCallsPerDay: v ?? 0 })} />

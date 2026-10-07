@@ -254,7 +254,19 @@ function addEntry(info: TerminalSessionInfo, replay?: { scrollback: string; seq:
   };
   entries.set(info.id, entry);
 
-  if (replay?.scrollback) term.write(replay.scrollback);
+  let isReplaying = Boolean(replay?.scrollback);
+  term.onBell(() => {
+    if (!isReplaying && state.activeId === entry.id) {
+      if (host?.sound) host.sound.play("terminal_bell");
+      else window.dispatchEvent(new CustomEvent("hive-sound:play", { detail: { sound: "terminal_bell" } }));
+    }
+  });
+
+  if (replay?.scrollback) {
+    term.write(replay.scrollback, () => {
+      isReplaying = false;
+    });
+  }
 
   term.onData((data) => {
     const e = entry;
@@ -564,6 +576,8 @@ export async function runCommand(h: ModuleHost, command: string, cwd?: string): 
   id ??= await newTerminal({ cwd });
   if (!id) return;
   setState({ activeId: id });
+  if (h?.sound) h.sound.play("terminal_command");
+  else window.dispatchEvent(new CustomEvent("hive-sound:play", { detail: { sound: "terminal_command" } }));
   await invoke(TerminalMethods.write, { id, data: command + "\r" });
 }
 

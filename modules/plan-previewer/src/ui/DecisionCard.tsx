@@ -4,6 +4,7 @@ import type { DecisionItem } from "../plan-utils.ts";
 import { resolveChoice } from "../plan-review.ts";
 import { usePlanStore } from "./plan-store.ts";
 import { InlineText } from "./InlineText.tsx";
+import { planHost } from "./plan-host.ts";
 
 interface Props {
   item: DecisionItem;
@@ -149,12 +150,18 @@ export const DecisionCard: React.FC<Props> = ({ item, readOnly, scope = "" }) =>
                 tabIndex={tabbable ? 0 : -1}
                 className="plan-option"
                 onClick={() => {
+                  const host = planHost();
+                  if (host.sound) host.sound.play("plan_choice");
+                  else window.dispatchEvent(new CustomEvent("hive-sound:play", { detail: { sound: "plan_choice" } }));
                   selectChoice(item, opt.label);
                   fold();
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
+                    const host = planHost();
+                    if (host.sound) host.sound.play("plan_choice");
+                    else window.dispatchEvent(new CustomEvent("hive-sound:play", { detail: { sound: "plan_choice" } }));
                     selectChoice(item, opt.label);
                     fold();
                   } else onRadioKeyDown(e, i);

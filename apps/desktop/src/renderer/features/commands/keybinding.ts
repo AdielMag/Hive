@@ -138,7 +138,7 @@ export function validateGlobalChord(chord: string): string | null {
   if (!c) return "Not a valid key combination";
   const canon = stringifyChord(c);
   if (RESERVED.has(canon)) return `${formatChord(canon, null)} is reserved for editing`;
-  if (!c.mod && !c.alt && !isFunctionKey(c.key)) return "Include Ctrl/Cmd or Alt (or use an F-key)";
+  if (!c.mod && !c.alt && !c.shift && !isFunctionKey(c.key)) return "Include Ctrl/Cmd, Alt, or Shift (or use an F-key)";
   return null;
 }
 

@@ -8,8 +8,9 @@ import remarkGfm from "remark-gfm";
 import { CodeBlock } from "./CodeBlock.tsx";
 import { ImageThumbnail } from "../ImageThumbnail.tsx";
 import { openLink } from "../../modules/link-bus.ts";
+import { isFilePath, openFileInTab, remarkFileLinks } from "../../lib/file-links.tsx";
 
-const REMARK_PLUGINS = [remarkGfm];
+const REMARK_PLUGINS = [remarkGfm, remarkFileLinks];
 
 function makeComponents(streaming: boolean): Components {
   return {
@@ -19,23 +20,63 @@ function makeComponents(streaming: boolean): Components {
       const text = String(children ?? "");
       const match = /language-([\w#+.-]+)/.exec(className ?? "");
       const isBlock = Boolean(match) || text.includes("\n") || node?.position?.start.line !== node?.position?.end.line;
-      if (!isBlock) return <code>{children}</code>;
+      if (!isBlock) {
+        if (isFilePath(text)) {
+          return (
+            <code
+              className="md-code-file"
+              role="button"
+              tabIndex={0}
+              title={`Open ${text} in new tab`}
+              onClick={(e) => {
+                e.stopPropagation();
+                void openFileInTab(text);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  void openFileInTab(text);
+                }
+              }}
+            >
+              {children}
+            </code>
+          );
+        }
+        return <code>{children}</code>;
+      }
       return <CodeBlock code={text} language={match?.[1] ?? null} streaming={streaming} />;
     },
-    a: ({ href, children }) => (
-      <a
-        href={href}
-        onClick={(e) => {
-          e.preventDefault();
-          if (href) {
-            openLink(href);
-          }
-        }}
-        title={href}
-      >
-        {children}
-      </a>
-    ),
+    a: ({ href, children, className }) => {
+      const isExternal = href ? /^(https?:\/\/|mailto:)/i.test(href) : false;
+      const isFile = href
+        ? !isExternal &&
+          (isFilePath(href) ||
+            href.startsWith("/") ||
+            href.startsWith("./") ||
+            href.startsWith("../") ||
+            /^[a-zA-Z]:[/\\]/.test(href) ||
+            href.startsWith("file://"))
+        : false;
+      return (
+        <a
+          href={href}
+          className={className || (isFile ? "md-file-link" : undefined)}
+          onClick={(e) => {
+            e.preventDefault();
+            if (!href) return;
+            if (isFile) {
+              void openFileInTab(href);
+            } else {
+              openLink(href);
+            }
+          }}
+          title={isFile ? `Open ${href} in new tab` : href}
+        >
+          {children}
+        </a>
+      );
+    },
     input: ({ checked, type }) => (type === "checkbox" ? <input type="checkbox" checked={!!checked} readOnly /> : null),
     img: ({ src, alt, title }) => {
       if (!src) return null;

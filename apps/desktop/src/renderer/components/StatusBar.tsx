@@ -1,13 +1,14 @@
 /** Bottom status bar on the window frame: Pi version, run state, extension statuses, live quota meters. */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Coins, ExternalLink, X } from "lucide-react";
+import { Coins, ExternalLink, Volume2, VolumeX, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { parseAnsi } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useContributions, useModules } from "../modules/registry.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
+import { useSoundStore } from "../store/sound-store.ts";
 
 /** Hover-to-peek / click-to-pin popover anchored above a status bar button. */
 function useHoverPopover() {
@@ -83,6 +84,9 @@ export const StatusBar: React.FC = () => {
   const piVersion = bootstrap?.pi.ok ? bootstrap.pi.info.version : "not found";
 
   const costPop = useHoverPopover();
+  const soundEnabled = useSoundStore((s) => s.enabled);
+  const soundVolume = useSoundStore((s) => s.volume);
+  const toggleMute = useSoundStore((s) => s.toggleMute);
 
   return (
     <footer className="statusbar">
@@ -108,6 +112,15 @@ export const StatusBar: React.FC = () => {
       </div>
 
       <ModuleStatusItems />
+
+      <button
+        className="statusbar__btn"
+        onClick={toggleMute}
+        title={soundEnabled ? `Sound effects: On (${Math.round(soundVolume * 100)}%) — Click to mute` : "Sound effects: Muted — Click to unmute"}
+        aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
+      >
+        {soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} style={{ opacity: 0.6 }} />}
+      </button>
 
       {cost > 0 && (
         <button

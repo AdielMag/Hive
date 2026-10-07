@@ -14,7 +14,7 @@ import {
   type PersistedLayout as Persisted,
 } from "./layout-persist.ts";
 
-export type CoreSettingsTabId = "appearance" | "models" | "compaction" | "accounts" | "keyboard" | "modules" | "updates" | "about";
+export type CoreSettingsTabId = "appearance" | "sound" | "models" | "compaction" | "accounts" | "keyboard" | "modules" | "updates" | "about";
 /** Core tab, or `<moduleId>:<tabId>` for a settings page contributed by a module. */
 export type SettingsTabId = CoreSettingsTabId | (string & {});
 

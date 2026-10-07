@@ -29,6 +29,8 @@ interface Props {
   call: ToolCardCall;
 }
 
+const announcedPlans = new Set<string>();
+
 /** Transcript card for a `plan-previewer` bash call: live review while it blocks, a compact record once settled. */
 export const PlanToolCard: React.FC<Props> = ({ host, call }) => {
   const command = typeof call.arguments.command === "string" ? call.arguments.command : "";
@@ -73,6 +75,14 @@ const LivePlanCard: React.FC<{ host: ModuleHost; filePath: string }> = ({ host, 
   useLayoutEffect(() => {
     if (bodyRef.current) applyBadges(bodyRef.current);
   }, [segments]);
+
+  useEffect(() => {
+    if (ready && filePath && !announcedPlans.has(filePath)) {
+      announcedPlans.add(filePath);
+      if (host.sound) host.sound.play("plan_request");
+      else window.dispatchEvent(new CustomEvent("hive-sound:play", { detail: { sound: "plan_request" } }));
+    }
+  }, [ready, filePath, host]);
 
   const jumpToDecision = useCallback(
     (key: string) => {

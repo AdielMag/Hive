@@ -33,6 +33,7 @@ import { usePaneLayoutStore, findLeafForTab } from "./pane-layout-store.ts";
 import { findOriginProject, findOriginTab } from "../lib/tab-origin.ts";
 import { openLink } from "../modules/link-bus.ts";
 import type { OpenTabSpec } from "@hive/module-sdk/renderer";
+import { playUiSound } from "./sound-store.ts";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { parseAgentResultText, type SubagentView } from "../lib/ai/subagents.ts";
@@ -469,8 +470,10 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
     const assistantStart = ev.type === "message_start" && (ev.message as { role?: string } | undefined)?.role === "assistant";
     if (ev.type === "agent_start" || assistantStart) {
       if (ev.type === "agent_start") runErrored.delete(tabId);
+      const wasRunning = mainThreadRunning.get(tabId) ?? false;
       mainThreadRunning.set(tabId, true);
       setActivity(tabId, "running");
+      if (!wasRunning && isTabInView(tabId)) playUiSound("agent_start");
     } else if (ev.type === "message_end") {
       const msg = ev.message as {
         role?: string;
@@ -517,6 +520,9 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
           if (Array.isArray(d.others)) {
             for (const o of d.others) removeSub(o.id, o.status, o.error);
           }
+          if (isTabInView(tabId)) {
+            playUiSound(d.status === "error" || d.error ? "agent_error" : "subagent_done");
+          }
         }
         if (!hasRunningWork(tabId)) {
           const errored = runErrored.has(tabId);
@@ -524,7 +530,11 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
           setActivity(tabId, isTabInView(tabId) ? null : errored ? "error" : "done");
         }
       }
+    } else if (ev.type === "tool_execution_start") {
+      if (isTabInView(tabId)) playUiSound("tool_start");
     } else if (ev.type === "tool_execution_end") {
+      const isToolErr = Boolean((ev as { isError?: boolean }).isError);
+      if (isTabInView(tabId)) playUiSound(isToolErr ? "tool_error" : "tool_end");
       const toolName = String(ev.toolName ?? "");
       if (toolName === "Agent" || toolName === "SubagentWorkflow") {
         const res = ev.result as {
@@ -549,6 +559,7 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
           }
           set.add(agentId);
           setActivity(tabId, "running");
+          playUiSound("subagent_spawn");
         }
       }
     } else if (ev.type === "agent_settled") {
@@ -560,6 +571,7 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
         const errored = runErrored.has(tabId);
         runErrored.delete(tabId);
         setActivity(tabId, isTabInView(tabId) ? null : errored ? "error" : "done");
+        playUiSound(errored ? "agent_error" : "agent_settled");
       }
     }
   }
@@ -1579,6 +1591,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (!promptText.trim() && attachments.length === 0) return;
     // Pi is swapping its extension runtime; a prompt now would hit a half-loaded session.
     if (activeKey && get().reloadStates[activeKey]?.phase === "reloading") return;
+
+    playUiSound("prompt_send");
 
     // Promote cold tab to live process if needed
     if (!activeKey) {

@@ -76,6 +76,8 @@ export interface TranscriptState {
   streaming: { message: AnyMessage & { content: AssistantBlock[] } } | null;
   tools: Readonly<Record<string, ToolRun>>;
   running: boolean;
+  /** Wall-clock ms when the current agent run started (`agent_start`); null when idle or unknown. */
+  runStartedAt: number | null;
   queue: { steering: readonly string[]; followUp: readonly string[] };
   retry: RetryState | null;
   compaction: { reason: string } | null;
@@ -96,6 +98,7 @@ export function createTranscript(): TranscriptState {
     streaming: null,
     tools: {},
     running: false,
+    runStartedAt: null,
     queue: { steering: [], followUp: [] },
     retry: null,
     compaction: null,
@@ -201,9 +204,9 @@ export function applyEvent(state: TranscriptState, event: PiStreamEvent): Transc
   const e = event as { type: string; [k: string]: unknown };
   switch (e.type) {
     case "agent_start":
-      return { ...state, running: true };
+      return { ...state, running: true, runStartedAt: state.running && state.runStartedAt ? state.runStartedAt : Date.now() };
     case "agent_settled":
-      return { ...state, running: false, retry: null, streaming: null };
+      return { ...state, running: false, runStartedAt: null, retry: null, streaming: null };
     case "message_start": {
       const message = e.message as AnyMessage;
       if (message?.role !== "assistant") return state;
@@ -222,7 +225,9 @@ export function applyEvent(state: TranscriptState, event: PiStreamEvent): Transc
     case "message_end": {
       const message = e.message as AnyMessage;
       if (!message) return state;
-      const next: TranscriptState = { ...state, live: appendLive(state.live, message), revision: state.revision + 1 };
+      // Stamp the finish time so turn durations are exact before the entry is synced from disk.
+      const stamped: AnyMessage = { ...message, endedAt: Date.now() };
+      const next: TranscriptState = { ...state, live: appendLive(state.live, stamped), revision: state.revision + 1 };
       if (message.role === "assistant") {
         next.streaming = null;
         const usage = message.usage as UsageLike | undefined;
@@ -437,6 +442,8 @@ export type TimelineItem =
   | { kind: "custom"; key: string; customType: string; text: string; images: ImageRef[]; details?: unknown }
   | { kind: "summary"; key: string; variant: "compaction" | "branch"; summary: string; tokensBefore?: number }
   | { kind: "marker"; key: string; text: string }
+  /** End-of-turn divider: how long the agent worked from the user message until it answered/asked/finished. */
+  | { kind: "turn"; key: string; ms: number }
   | { kind: "unknown"; key: string; label: string; raw: unknown };
 
 export interface Timeline {
@@ -523,6 +530,134 @@ function toolResultView(message: AnyMessage): ToolResultView {
   };
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// Turn timing. A turn runs from a user message to the last assistant / tool result / subagent notification
+// before the next user message. Times come from entry timestamps (ISO, set when appended) and live
+// messages (`endedAt`, else their creation `timestamp`), so reopened sessions need no extra storage.
+// ---------------------------------------------------------------------------------------------------------
+
+const isoMs = (iso: unknown): number | undefined => {
+  if (typeof iso !== "string" || !iso) return undefined;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : undefined;
+};
+
+const finiteNum = (n: unknown): number | undefined => (typeof n === "number" && Number.isFinite(n) ? n : undefined);
+
+function createTurnTracker() {
+  let start: number | null = null;
+  let end: number | null = null;
+  /** Time spent waiting for the user (question tools) inside this turn; not agent work. */
+  let waited = 0;
+  const close = (): number | null => {
+    const ms = start !== null && end !== null ? Math.max(0, end - start - waited) : null;
+    start = null;
+    end = null;
+    waited = 0;
+    return ms;
+  };
+  return {
+    /** A user message begins a new turn; returns the previous turn's duration (null when it had no timed work). */
+    user(ts: number | undefined): number | null {
+      const ms = close();
+      start = ts ?? null;
+      return ms;
+    },
+    /** Agent work ended at `ts`. With `waitsForUser`, the gap since the previous work is the user answering, not agent time. */
+    work(ts: number | undefined, waitsForUser = false): void {
+      if (start === null || ts === undefined) return;
+      if (waitsForUser) waited += Math.max(0, ts - (end ?? start));
+      if (end === null || ts > end) end = ts;
+    },
+    close,
+    get start(): number | null {
+      return start;
+    },
+    get waited(): number {
+      return waited;
+    },
+  };
+}
+
+/** Timestamp at which `message` stopped doing agent work, or undefined when it is not agent work. */
+function messageWorkEnd(message: AnyMessage, entryIso?: string): number | undefined {
+  const isWork =
+    message.role === "assistant" ||
+    message.role === "toolResult" ||
+    (message.role === "custom" && message.customType === "subagent-notification");
+  if (!isWork) return undefined;
+  return isoMs(entryIso) ?? finiteNum(message.endedAt) ?? finiteNum(message.timestamp);
+}
+
+/** Tools that block on the user answering (their runtime is waiting, not agent work). */
+const USER_WAIT_TOOLS = new Set(["questionnaire", "askuserquestion", "askuser"]);
+const isUserWaitTool = (toolName: unknown): boolean =>
+  typeof toolName === "string" && USER_WAIT_TOOLS.has(toolName.toLowerCase().replace(/[^a-z]/g, ""));
+
+/** Feed a non-user message into the tracker as agent work (a question-tool result excludes the user's thinking time). */
+function trackWork(tracker: ReturnType<typeof createTurnTracker>, message: AnyMessage, entryIso?: string): void {
+  tracker.work(messageWorkEnd(message, entryIso), message.role === "toolResult" && isUserWaitTool(message.toolName));
+}
+
+const messageStart = (message: AnyMessage, entryIso?: string): number | undefined =>
+  finiteNum(message.timestamp) ?? isoMs(entryIso);
+
+const isSubagentNotification = (entry: SessionEntry) =>
+  entry.type === "custom_message" && entry.customType === "subagent-notification";
+
+export interface TurnStats {
+  /** Finished turns, excluding the one in progress. */
+  turns: number;
+  /** Summed duration of finished turns. */
+  completedMs: number;
+  /** Duration of the most recent finished turn (0 when none). */
+  lastMs: number;
+  /** Start of the turn in progress, or null when idle (or the start is unknown). */
+  activeStart: number | null;
+  /** When the agent run in progress started (`agent_start`), if seen. */
+  runStartedAt: number | null;
+  /** User-wait time already inside the turn in progress (to subtract from live timers). */
+  activeWaitedMs: number;
+  /** When the run began waiting on a question to the user (still unanswered), else null. */
+  waitingSince: number | null;
+}
+
+/** Time the agent worked in this session, derived from the active branch plus live messages. */
+export function computeTurnStats(state: TranscriptState): TurnStats {
+  const tracker = createTurnTracker();
+  const stats: TurnStats = { turns: 0, completedMs: 0, lastMs: 0, activeStart: null, runStartedAt: state.runStartedAt, activeWaitedMs: 0, waitingSince: null };
+  const finish = (ms: number | null) => {
+    if (ms === null) return;
+    stats.turns += 1;
+    stats.completedMs += ms;
+    stats.lastMs = ms;
+  };
+  for (const entry of activePath(state)) {
+    if (entry.type === "message") {
+      const message = entry.message as unknown as AnyMessage;
+      if (message.role === "user") finish(tracker.user(messageStart(message, entry.timestamp)));
+      else trackWork(tracker, message, entry.timestamp);
+    } else if (isSubagentNotification(entry)) {
+      tracker.work(isoMs(entry.timestamp));
+    }
+  }
+  for (const message of state.live) {
+    if (message.role === "user") finish(tracker.user(messageStart(message)));
+    else trackWork(tracker, message);
+  }
+  if (state.running) {
+    stats.activeStart = tracker.start;
+    stats.activeWaitedMs = tracker.waited;
+    for (const run of Object.values(state.tools)) {
+      if (run.status === "running" && isUserWaitTool(run.toolName)) {
+        stats.waitingSince = Math.min(stats.waitingSince ?? Infinity, run.startedAt);
+      }
+    }
+  }
+  else finish(tracker.close());
+  return stats;
+}
+
 /** Build the display timeline: active branch + live overlay + streaming message. */
 export function buildTimeline(state: TranscriptState): Timeline {
   const items: TimelineItem[] = [];
@@ -539,6 +674,11 @@ export function buildTimeline(state: TranscriptState): Timeline {
     pendingChanges.delete(kind); // re-insert so ordering follows the latest change
     pendingChanges.set(kind, item);
   };
+  const tracker = createTurnTracker();
+  let turnKey = "";
+  const pushTurn = (ms: number | null) => {
+    if (ms !== null) items.push({ kind: "turn", key: `turn:${turnKey}`, ms });
+  };
 
   for (const entry of activePath(state)) {
     const key = entry.id;
@@ -549,6 +689,12 @@ export function buildTimeline(state: TranscriptState): Timeline {
         const isFirstSystem = message.role === "system" && !sawSystem;
         if (message.role === "system") sawSystem = true;
         const item = messageItem(message, key, isFirstSystem);
+        if (message.role === "user") {
+          pushTurn(tracker.user(messageStart(message, entry.timestamp)));
+          turnKey = key;
+        } else {
+          trackWork(tracker, message, entry.timestamp);
+        }
         if (item) {
           flushPendingChanges();
           items.push(item);
@@ -574,6 +720,7 @@ export function buildTimeline(state: TranscriptState): Timeline {
         items.push({ kind: "summary", key, variant: "branch", summary: entry.summary });
         break;
       case "custom_message": {
+        if (isSubagentNotification(entry)) tracker.work(isoMs(entry.timestamp));
         if (!entry.display) break;
         const { text, images } = contentText(entry.content);
         items.push({ kind: "custom", key, customType: entry.customType, text, images, details: (entry as { details?: unknown }).details });
@@ -588,11 +735,20 @@ export function buildTimeline(state: TranscriptState): Timeline {
   for (const message of state.live) {
     if (message.role === "toolResult") toolResults[String(message.toolCallId)] = toolResultView(message);
     const item = messageItem(message, `live:${messageKey(message)}`, false);
+    if (message.role === "user") {
+      pushTurn(tracker.user(messageStart(message)));
+      turnKey = `live:${messageKey(message)}`;
+    } else {
+      trackWork(tracker, message);
+    }
     if (item) {
       flushPendingChanges();
       items.push(item);
     }
   }
+
+  // The turn in progress gets no divider (the composer strip shows it live).
+  if (!state.running && !state.streaming) pushTurn(tracker.close());
 
   if (state.streaming) {
     flushPendingChanges();

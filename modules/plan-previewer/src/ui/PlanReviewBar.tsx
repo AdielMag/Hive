@@ -37,9 +37,20 @@ export const PlanReviewBar: React.FC<Props> = ({ onJumpToDecision, onJumpToNote,
   }, [footerComment, phase]);
 
   const submit = async (status: FeedbackStatus) => {
-    if (status === "approved") planHost().sessions.setMode(selectedExecutionMode);
+    const host = planHost();
+    if (status === "approved") host.sessions.setMode(selectedExecutionMode);
     const res = await s.submitFeedback(status);
-    if (!res.success) planHost().toast({ message: res.error || "Could not send feedback", kind: "error" });
+    if (res.success) {
+      if (status === "approved") {
+        if (host.sound) host.sound.play("plan_approve");
+        else window.dispatchEvent(new CustomEvent("hive-sound:play", { detail: { sound: "plan_approve" } }));
+      } else if (status === "changes_requested") {
+        if (host.sound) host.sound.play("plan_reject");
+        else window.dispatchEvent(new CustomEvent("hive-sound:play", { detail: { sound: "plan_reject" } }));
+      }
+    } else {
+      host.toast({ message: res.error || "Could not send feedback", kind: "error" });
+    }
   };
 
   if (phase === "sent") {

@@ -56,8 +56,8 @@ describe("keybinding", () => {
     expect(validateGlobalChord("Alt+1")).toBeNull();
 
     // Plain keys are rejected
-    expect(validateGlobalChord("A")).toContain("Include Ctrl/Cmd or Alt");
-    expect(validateGlobalChord("Shift+A")).toContain("Include Ctrl/Cmd or Alt");
+    expect(validateGlobalChord("A")).toContain("Include Ctrl/Cmd, Alt, or Shift");
+    expect(validateGlobalChord("Shift+A")).toBeNull();
 
     // Reserved editing keys are rejected
     expect(validateGlobalChord("Mod+C")).toContain("reserved");
@@ -167,5 +167,15 @@ describe("command registry", () => {
       const cmd = COMMANDS_BY_ID.get(id)!;
       expect(cmd.defaultKeys && cmd.defaultKeys.length > 0).toBe(true);
     }
+  });
+
+  it("registers cycling commands for agent mode and thinking level", () => {
+    const cycleMode = COMMANDS_BY_ID.get("mode.cycle");
+    expect(cycleMode).toBeDefined();
+    expect(cycleMode?.defaultKeys).toEqual(["Shift+Tab"]);
+
+    const cycleThinking = COMMANDS_BY_ID.get("thinking.cycle");
+    expect(cycleThinking).toBeDefined();
+    expect(cycleThinking?.defaultKeys).toEqual(["Mod+Shift+Tab"]);
   });
 });
