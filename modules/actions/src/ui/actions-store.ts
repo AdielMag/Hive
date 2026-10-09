@@ -210,7 +210,8 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
   },
 
   setFilters: (patch) => {
-    set({ filters: { ...get().filters, ...patch }, page: 1, runs: [], totalCount: 0, loading: true });
+    // Keep the current rows visible (dimmed by the panel) until the filtered page arrives.
+    set({ filters: { ...get().filters, ...patch }, page: 1, loading: true });
     void get().refresh();
   },
 

@@ -3,7 +3,8 @@ import { Ban, Check, CircleDashed, Clock, Loader2, MinusCircle, X } from "lucide
 import type { ActionsState } from "../shared.ts";
 import { STATE_LABEL } from "./timing.ts";
 
-export const StatusIcon: React.FC<{ state: ActionsState; size?: number }> = ({ state, size = 14 }) => {
+/** State glyph. `disc` wraps it in a tinted circle (used on run cards and job nodes). */
+export const StatusIcon: React.FC<{ state: ActionsState; size?: number; disc?: boolean }> = ({ state, size = 14, disc = false }) => {
   const common = { size, "aria-label": STATE_LABEL[state] } as const;
   let icon: React.ReactNode;
   switch (state) {
@@ -28,8 +29,9 @@ export const StatusIcon: React.FC<{ state: ActionsState; size?: number }> = ({ s
     default:
       icon = <CircleDashed {...common} />;
   }
+  const box = disc ? { width: size + 12, height: size + 12 } : undefined;
   return (
-    <span className={`ga-status ga-status--${state}`} title={STATE_LABEL[state]}>
+    <span className={`ga-status ga-status--${state}${disc ? " ga-disc" : ""}`} style={box} title={STATE_LABEL[state]}>
       {icon}
     </span>
   );
