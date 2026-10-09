@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.23.0 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.22.0...v0.23.0)
+
+### ✨ Features
+
+- **desktop:** Add video attachments and question-asked sound effect ([`3b3d0e0`](https://github.com/AdielMag/Hive/commit/3b3d0e0fc8c8b1090e5b3f14651a9999da5b8507))
+
 ## v0.22.0 — 2026-10-07 · [diff](https://github.com/AdielMag/Hive/compare/v0.21.0...v0.22.0)
 
 ### ✨ Features
