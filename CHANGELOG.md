@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.25.2 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.25.1...v0.25.2)
+
+### 📝 Documentation
+
+- **actions:** add GitHub Actions panel UI redesign plan ([`7edeff8`](https://github.com/AdielMag/Hive/commit/7edeff81cd723f54f928165affa3986a134c014a))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`9015115`](https://github.com/AdielMag/Hive/commit/9015115713edee15a64ef07f4902f73f7fac144e))
+
 ## v0.25.1 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.25.0...v0.25.1)
 
 ### 🧹 Other changes
