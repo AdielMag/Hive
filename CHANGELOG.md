@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.24.0 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.23.0...v0.24.0)
+
+### ✨ Features
+
+- **desktop:** add GitHub Actions module ([`1c9e643`](https://github.com/AdielMag/Hive/commit/1c9e6433c873c5c0b5d556a0c38b37b37ad3c66f))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`e880f0a`](https://github.com/AdielMag/Hive/commit/e880f0a82e955e10786d8f4a5c64ad036d22736f))
+
 ## v0.23.0 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.22.0...v0.23.0)
 
 ### ✨ Features
