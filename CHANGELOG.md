@@ -2,6 +2,13 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.25.1 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.25.0...v0.25.1)
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`8bf6e95`](https://github.com/AdielMag/Hive/commit/8bf6e959e6218012f37e101314037ba06aabd9ea))
+- **desktop:** update TypeScript build cache ([`d84022a`](https://github.com/AdielMag/Hive/commit/d84022ad46f0a8cf3b4194b54ed585fdbb49a030))
+
 ## v0.25.0 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.24.0...v0.25.0)
 
 ### ✨ Features
