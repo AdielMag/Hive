@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.25.0 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.24.0...v0.25.0)
+
+### ✨ Features
+
+- **git:** add fetch button and refactor sync operations ([`2e6b8c2`](https://github.com/AdielMag/Hive/commit/2e6b8c28a09fb9cb70e3b4681e5c70508222f403))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`3c74a39`](https://github.com/AdielMag/Hive/commit/3c74a398f5e895baeb4c090bf46aac6f2fae0364))
+
 ## v0.24.0 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.23.0...v0.24.0)
 
 ### ✨ Features
