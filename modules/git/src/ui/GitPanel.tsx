@@ -436,14 +436,12 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const detached = status?.branch === "detached HEAD";
   const ahead = status?.ahead ?? 0;
   const behind = status?.behind ?? 0;
-  const primarySync: { op: "push" | "pull"; label: string; count: number; icon: React.ReactNode } | null =
-    ahead > 0
-      ? { op: "push", label: "Push", count: ahead, icon: <ArrowUp size={12} /> }
-      : behind > 0
-        ? { op: "pull", label: "Pull", count: behind, icon: <ArrowDown size={12} /> }
-        : status && !status.upstream && !detached && status.branch
-          ? { op: "push", label: "Publish", count: 0, icon: <CloudUpload size={12} /> }
-          : null;
+  type SyncBtn = { op: "push" | "pull"; label: string; count: number; icon: React.ReactNode };
+  const syncButtons: SyncBtn[] = [];
+  if (behind > 0) syncButtons.push({ op: "pull", label: "Pull", count: behind, icon: <ArrowDown size={12} /> });
+  if (ahead > 0) syncButtons.push({ op: "push", label: "Push", count: ahead, icon: <ArrowUp size={12} /> });
+  if (syncButtons.length === 0 && status && !status.upstream && !detached && status.branch)
+    syncButtons.push({ op: "push", label: "Publish", count: 0, icon: <CloudUpload size={12} /> });
 
   const subjectLen = commitMsg.split("\n")[0]?.length ?? 0;
   const commitTitle =
@@ -476,24 +474,36 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           <ChevronDown size={13} className="gp-branch__chev" />
         </button>
 
-        {primarySync && (
+        {syncButtons.map((btn) => (
           <button
+            key={btn.op}
             type="button"
-            className={`gp-sync${primarySync.op === "pull" ? " gp-sync--behind" : ""}`}
+            className={`gp-sync${btn.op === "pull" ? " gp-sync--behind" : ""}`}
             disabled={!!syncOp || loading}
-            onClick={() => void handleSync(primarySync.op)}
+            onClick={() => void handleSync(btn.op)}
             title={
-              primarySync.label === "Publish"
+              btn.label === "Publish"
                 ? "Publish branch to origin"
-                : `${primarySync.label} ${primarySync.count} commit${primarySync.count === 1 ? "" : "s"}${status?.upstream ? ` (${status.upstream})` : ""}`
+                : `${btn.label} ${btn.count} commit${btn.count === 1 ? "" : "s"}${status?.upstream ? ` (${status.upstream})` : ""}`
             }
           >
-            {syncOp === "push" || syncOp === "pull" ? <RefreshCw size={12} className="spin" /> : primarySync.icon}
-            <span>{primarySync.count || primarySync.label}</span>
+            {syncOp === btn.op ? <RefreshCw size={12} className="spin" /> : btn.icon}
+            <span>{btn.count || btn.label}</span>
           </button>
-        )}
+        ))}
 
         <div className="gp-head__tools" ref={moreRef}>
+          <button
+            type="button"
+            className="gp-ib"
+            style={{ height: 28, minWidth: 28 }}
+            onClick={() => void handleSync("fetch")}
+            disabled={!!syncOp || loading}
+            title="Fetch"
+            aria-label="Fetch"
+          >
+            <CloudDownload size={13} className={syncOp === "fetch" ? "spin" : undefined} />
+          </button>
           <button
             type="button"
             className="gp-ib"
@@ -628,7 +638,7 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
             <CircleCheck size={26} />
             <span className="gp-clean__title">Working tree clean</span>
             <span className="gp-clean__sub">
-              {behind > 0 ? `${behind} commit${behind === 1 ? "" : "s"} to pull` : ahead > 0 ? `${ahead} commit${ahead === 1 ? "" : "s"} to push` : "Nothing to commit"}
+              {[behind > 0 && `${behind} commit${behind === 1 ? "" : "s"} to pull`, ahead > 0 && `${ahead} commit${ahead === 1 ? "" : "s"} to push`].filter(Boolean).join(" · ") || "Nothing to commit"}
             </span>
           </div>
         ) : (
