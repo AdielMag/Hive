@@ -1,0 +1,334 @@
+/* ───────────────────────── GitHub Actions panel ───────────────────────── */
+.ga {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  font-size: 12px;
+  background: var(--bg-app);
+}
+.ga-msg {
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+.ga-muted,
+.ga-dim {
+  color: var(--text-muted);
+}
+.ga-pad {
+  padding: 6px 10px;
+}
+.ga-spin {
+  animation: ga-spin 1s linear infinite;
+}
+@keyframes ga-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ga-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+.ga-head__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  min-width: 0;
+}
+.ga-head__tools {
+  display: flex;
+  gap: 2px;
+}
+.ga-repo {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ga-repo:hover {
+  color: var(--accent-base);
+  text-decoration: underline;
+}
+
+.ga-ib {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.ga-ib:hover:not(:disabled) {
+  background: rgba(var(--fg-rgb), 0.08);
+  color: var(--text-primary);
+}
+.ga-ib:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ga-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.ga-select,
+.ga-input {
+  height: 24px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 0 6px;
+  min-width: 0;
+}
+.ga-select {
+  flex: 1 1 90px;
+  max-width: 100%;
+}
+.ga-input {
+  flex: 1;
+}
+.ga-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.ga-btn:hover:not(:disabled) {
+  border-color: var(--accent-base);
+  color: var(--accent-base);
+}
+.ga-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ga-btn--link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--accent-base);
+}
+
+.ga-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  color: var(--danger);
+  font-size: 11px;
+  word-break: break-word;
+}
+.ga-banner svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ga-token {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ga-token__hint {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.ga-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.ga-more {
+  display: block;
+  margin: 10px auto;
+}
+.ga-foot {
+  padding: 4px 12px;
+  font-size: 10.5px;
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.ga-run {
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ga-run__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.ga-run__head:hover {
+  background: rgba(var(--fg-rgb), 0.04);
+}
+.ga-run__main {
+  flex: 1;
+  min-width: 0;
+}
+.ga-run__title {
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ga-run__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.ga-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 140px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: rgba(var(--fg-rgb), 0.08);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ga-run__body {
+  padding: 4px 12px 10px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ga-status {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ga-status--success {
+  color: var(--success);
+}
+.ga-status--failure {
+  color: var(--danger);
+}
+.ga-status--running {
+  color: var(--warning);
+}
+.ga-status--queued,
+.ga-status--cancelled,
+.ga-status--skipped,
+.ga-status--neutral {
+  color: var(--text-muted);
+}
+
+.ga-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ga-job summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.ga-job summary::-webkit-details-marker {
+  display: none;
+}
+.ga-job__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ga-steps {
+  list-style: none;
+  margin: 0 0 4px 8px;
+  padding: 0 0 0 10px;
+  border-left: 1px solid var(--border-subtle);
+}
+.ga-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+.ga-step__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Rail badge, positioned inside core's .rail__icon-wrap. */
+.ga-badge {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px var(--bg-app, #13100d);
+  pointer-events: none;
+}
+.ga-badge--running {
+  background: var(--warning);
+  color: #000;
+}
+.ga-badge--failed {
+  width: 8px;
+  min-width: 8px;
+  height: 8px;
+  padding: 0;
+  background: var(--danger);
+}

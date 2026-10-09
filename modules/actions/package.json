@@ -1,0 +1,42 @@
+{
+  "name": "@hive-module/actions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hive module: GitHub Actions runs, history and jobs for the active repo",
+  "exports": {
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.tsx",
+    "./shared": "./src/shared.ts"
+  },
+  "hive": {
+    "id": "actions",
+    "title": "GitHub Actions",
+    "description": "See queued, running and past GitHub Actions runs for the active project's repo, with jobs and steps, like the Actions tab on github.com.",
+    "tier": "bonus",
+    "icon": "play-circle",
+    "category": "Workbench",
+    "requires": [
+      "git"
+    ],
+    "contributes": {
+      "leftPanels": [
+        "actions"
+      ],
+      "commands": [
+        {
+          "id": "view.actions",
+          "title": "Toggle GitHub Actions Panel",
+          "category": "View"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@hive-module/git": "0.1.0",
+    "@hive/module-sdk": "0.1.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.0.0",
+    "zustand": "^5.0.0"
+  }
+}

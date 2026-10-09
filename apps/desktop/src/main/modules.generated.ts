@@ -5,6 +5,31 @@ import type { MainModule } from "@hive/module-sdk/main";
 /** Metadata of every module in the repo (enabled or not). */
 export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
   {
+    "id": "actions",
+    "title": "GitHub Actions",
+    "description": "See queued, running and past GitHub Actions runs for the active project's repo, with jobs and steps, like the Actions tab on github.com.",
+    "tier": "bonus",
+    "icon": "play-circle",
+    "category": "Workbench",
+    "requires": [
+      "git"
+    ],
+    "contributes": {
+      "leftPanels": [
+        "actions"
+      ],
+      "commands": [
+        {
+          "id": "view.actions",
+          "title": "Toggle GitHub Actions Panel",
+          "category": "View"
+        }
+      ]
+    },
+    "hasMain": true,
+    "hasRenderer": true
+  },
+  {
     "id": "analytics",
     "title": "Usage & Cost Analytics",
     "description": "Comprehensive spend velocity, token telemetry, cost breakdown by model/project/day, and AI-driven efficiency analysis.",
@@ -368,6 +393,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
 
 /** Lazy entry points; only called for enabled modules. */
 export const MAIN_MODULE_LOADERS: Readonly<Record<string, () => Promise<{ default: MainModule }>>> = {
+  "actions": () => import("@hive-module/actions/main"),
   "analytics": () => import("@hive-module/analytics/main"),
   "bash-guard": () => import("@hive-module/bash-guard/main"),
   "browser": () => import("@hive-module/browser/main"),
