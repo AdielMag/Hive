@@ -159,6 +159,9 @@ export const SOUND_RENDERERS: Record<SoundTheme, Record<SoundId, (ctx: AudioCont
     plan_request: (ctx, dest) => {
       playChord(ctx, dest, [880.0, 1318.51], { duration: 0.28, stagger: 0.04, gain: 0.2 });
     },
+    question_asked: (ctx, dest) => {
+      playChord(ctx, dest, [783.99, 1174.66], { duration: 0.22, stagger: 0.09, gain: 0.2 });
+    },
     plan_choice: (ctx, dest) => {
       playTone(ctx, dest, { freq: 580, freqEnd: 220, duration: 0.04, gain: 0.16, type: "sine" });
     },
@@ -238,6 +241,10 @@ export const SOUND_RENDERERS: Record<SoundTheme, Record<SoundId, (ctx: AudioCont
     },
     plan_request: (ctx, dest) => {
       playTone(ctx, dest, { freq: 750, duration: 0.2, gain: 0.22, type: "sine" });
+    },
+    question_asked: (ctx, dest) => {
+      playTone(ctx, dest, { freq: 620, duration: 0.1, gain: 0.2, type: "sine" });
+      playTone(ctx, dest, { freq: 830, duration: 0.16, gain: 0.2, delay: 0.1, type: "sine" });
     },
     plan_choice: (ctx, dest) => {
       playNoise(ctx, dest, { duration: 0.022, filterFreq: 4000, gain: 0.22 });
@@ -320,6 +327,10 @@ export const SOUND_RENDERERS: Record<SoundTheme, Record<SoundId, (ctx: AudioCont
       playTone(ctx, dest, { freq: 950, duration: 0.15, gain: 0.2, type: "sine" });
       playTone(ctx, dest, { freq: 1425, duration: 0.22, gain: 0.2, delay: 0.05, type: "sine" });
     },
+    question_asked: (ctx, dest) => {
+      playTone(ctx, dest, { freq: 760, duration: 0.1, gain: 0.2, type: "sine" });
+      playTone(ctx, dest, { freq: 1140, duration: 0.18, gain: 0.2, delay: 0.1, type: "sine" });
+    },
     plan_choice: (ctx, dest) => {
       playTone(ctx, dest, { freq: 1100, freqEnd: 600, duration: 0.04, gain: 0.18, type: "triangle" });
     },
@@ -400,6 +411,10 @@ export const SOUND_RENDERERS: Record<SoundTheme, Record<SoundId, (ctx: AudioCont
     plan_request: (ctx, dest) => {
       playTone(ctx, dest, { freq: 987, duration: 0.08, gain: 0.2, type: "square" });
       playTone(ctx, dest, { freq: 1318, duration: 0.15, gain: 0.2, delay: 0.07, type: "square" });
+    },
+    question_asked: (ctx, dest) => {
+      playTone(ctx, dest, { freq: 784, duration: 0.08, gain: 0.2, type: "square" });
+      playTone(ctx, dest, { freq: 1046, duration: 0.14, gain: 0.2, delay: 0.09, type: "square" });
     },
     plan_choice: (ctx, dest) => {
       playTone(ctx, dest, { freq: 660, duration: 0.025, gain: 0.16, type: "square" });

@@ -181,14 +181,16 @@ export function useModuleTabTitle(tab: TabItem): string {
 export const ModuleToolCard: React.FC<{
   card: ToolCardContribution & { moduleId: string };
   call: ToolCardCall;
-}> = ({ card, call }) => {
+  /** Stock raw body for this call (see ToolCardProps.RawBody). */
+  RawBody: React.ComponentType;
+}> = ({ card, call, RawBody }) => {
   const host = useModuleHost(card.moduleId);
   if (!host) return null;
   const View = card.component;
   return (
     <ErrorBoundary label="Tool card" resetKey={call.id}>
       <div data-tool-call-id={call.id}>
-        <View host={host} call={call} />
+        <View host={host} call={call} RawBody={RawBody} />
       </div>
     </ErrorBoundary>
   );

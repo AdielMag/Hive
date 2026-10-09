@@ -178,7 +178,7 @@
 .sb-session__busy {
   color: var(--prj-color, var(--accent-base));
 }
-.sb-session.is-running /* Project row: one or more of its sessions is waiting on you (always visible, even when collapsed). */
+/* Project row: one or more of its sessions is waiting on you (always visible, even when collapsed). */
 .sb-project__input {
   display: inline-flex;
   align-items: center;

@@ -1,7 +1,7 @@
 import { shell } from "electron";
 import { IPC } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
-import { listDirectory, readFileContent, readMediaFile } from "../services/files.ts";
+import { listDirectory, readFileContent, readMediaFile, saveAttachmentFile } from "../services/files.ts";
 import { handle } from "./util.ts";
 
 /**
@@ -12,6 +12,9 @@ export function registerWorkspaceIpc(_ctx: AppContext): void {
   handle(IPC.filesList, ({ dirPath }: { dirPath: string }) => listDirectory(dirPath));
   handle(IPC.filesRead, ({ filePath }: { filePath: string }) => readFileContent(filePath));
   handle(IPC.filesReadMedia, ({ filePath }: { filePath: string }) => readMediaFile(filePath));
+  handle(IPC.filesSaveAttachment, ({ name, data }: { name: string; data: ArrayBuffer }) =>
+    saveAttachmentFile(name, data),
+  );
   handle(IPC.filesShowInFolder, ({ filePath }: { filePath: string }) => {
     shell.showItemInFolder(filePath);
   });

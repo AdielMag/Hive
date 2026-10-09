@@ -6,6 +6,7 @@ import "./styles/theme.css";
 import "./styles/ui.css";
 import "./styles/shell.css";
 import "./styles/settings.css";
+import "./styles/sound-settings.css";
 import "./styles/sidebar.css";
 import "./styles/question-form.css";
 import "./styles/transcript.css";

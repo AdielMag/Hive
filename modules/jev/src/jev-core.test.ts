@@ -5,6 +5,8 @@ import {
   DEFAULT_SETTINGS,
   isJevAdvice,
   normalizeSettings,
+  parseUsageRecord,
+  reachedApi,
   summarizeUsage,
   toView,
   type JevAdvice,
@@ -97,6 +99,56 @@ describe("usage", () => {
     const out = parseUsageLog(text);
     expect(out).toHaveLength(2);
     expect(out[1]).toMatchObject({ ok: false, error: "x" });
+  });
+
+  it("parses old records unchanged and new records with their optional fields", () => {
+    const old = { ts: 1, feature: "ask_jev", model: "m", inputTokens: 10, outputTokens: 1, ms: 5, ok: true };
+    expect(parseUsageRecord(old)).toEqual({ ...old, error: undefined });
+    expect(Object.keys(parseUsageRecord(old)!)).not.toContain("sessionId");
+    const rich = {
+      ...old,
+      ok: false,
+      error: "HTTP 500",
+      errorKind: "api",
+      sessionId: "s",
+      toolCallId: "t",
+      cwd: "/w",
+      questions: { noul: 2, choice: 1 },
+      sources: { stateChars: 3, files: [{ path: "a", bytes: 40 }, { bogus: 1 }], commandBytes: 8 },
+      savedTokensEst: 12,
+      confidence: [0.9, "x", 0.6],
+    };
+    expect(parseUsageRecord(rich)).toEqual({
+      ...old,
+      ok: false,
+      error: "HTTP 500",
+      errorKind: "api",
+      sessionId: "s",
+      toolCallId: "t",
+      cwd: "/w",
+      questions: { noul: 2, choice: 1, score: 0 },
+      sources: { stateChars: 3, files: [{ path: "a", bytes: 40 }], commandBytes: 8 },
+      savedTokensEst: 12,
+      confidence: [0.9, 0.6],
+    });
+    expect(parseUsageRecord({ ...old, errorKind: "weird" })!.errorKind).toBeUndefined();
+    expect(parseUsageRecord({ ...old, ok: false, errorKind: "aborted" })!.errorKind).toBe("aborted");
+    expect(reachedApi({ errorKind: "aborted" })).toBe(false);
+    expect(parseUsageRecord({ feature: "x" })).toBeNull();
+    expect(parseUsageLog(`${JSON.stringify(rich)}\n`)[0]!.sessionId).toBe("s");
+  });
+
+  it("leaves local refusals out of the call and cost buckets", () => {
+    expect(reachedApi({})).toBe(true);
+    expect(reachedApi({ errorKind: "timeout" })).toBe(true);
+    expect(reachedApi({ errorKind: "gather" })).toBe(false);
+    const s = summarizeUsage(
+      [rec({}), rec({ ok: false, inputTokens: 0, error: "Could not gather", errorKind: "gather" }), rec({ ok: false, inputTokens: 0, error: "cap", errorKind: "cap" })],
+      { pricePerMTokUsd: 1, creditUsd: null, creditSince: null },
+      now,
+    );
+    expect(s.total).toMatchObject({ calls: 1, failed: 0 });
+    expect(s.lastError).toBeNull();
   });
 });
 

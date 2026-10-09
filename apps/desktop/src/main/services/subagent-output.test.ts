@@ -88,4 +88,22 @@ describe("subagent-output service", () => {
     );
     expect(excluded).toBeNull();
   });
+
+  it("locates by prompt when the first line is larger than 2 KB", async () => {
+    const longPrompt = "Long task prompt. ".repeat(500);
+    const agentFile = join(tasksDir, "agent_long.output");
+    const firstLine = JSON.stringify({
+      isSidechain: true,
+      agentId: "agent_long",
+      type: "user",
+      message: { role: "user", content: longPrompt },
+    });
+    expect(firstLine.length).toBeGreaterThan(2048);
+    writeFileSync(agentFile, `${firstLine}
+{"type":"assistant"}
+`);
+
+    const located = await locateSubagentOutput({ prompt: longPrompt }, testSessionId);
+    expect(located?.path).toBe(agentFile);
+  });
 });

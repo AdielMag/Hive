@@ -25,6 +25,7 @@ export default defineRendererModule({
         id: "plan-review",
         match: ({ name, arguments: args }) =>
           name === "bash" && typeof args.command === "string" && parsePlanCommandPath(args.command) !== null,
+        awaitsUser: true,
         component: PlanToolCard,
       },
     ],

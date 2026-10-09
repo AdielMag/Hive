@@ -17,7 +17,7 @@ import { RENDERER_MODULE_LOADERS } from "../modules.generated.ts";
 import { registerCommands } from "../features/commands/registry.ts";
 import type { Command } from "../features/commands/types.ts";
 import { MODULE_MANIFESTS, manifestById } from "./manifests.ts";
-import { subscribeSessionEvents } from "./session-bus.ts";
+import { setUserWaitResolver, subscribeSessionEvents } from "./session-bus.ts";
 import { toast } from "./toast-store.ts";
 
 export interface LoadedModule {
@@ -201,6 +201,10 @@ export function collectContributions<P extends ContributionPoint>(
     .sort((a, b) => (a.item.order ?? 100) - (b.item.order ?? 100) || a.i - b.i)
     .map((x) => x.item);
 }
+
+setUserWaitResolver((call) =>
+  collectContributions(useModules.getState().loaded, "toolCards").some((c) => c.awaitsUser && c.match(call)),
+);
 
 /** Subscribes a component to a contribution point (re-renders when modules load/unload). */
 export function useContributions<P extends ContributionPoint>(point: P): Contributed<P>[] {

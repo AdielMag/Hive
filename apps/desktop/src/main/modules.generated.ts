@@ -213,6 +213,11 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     "recommended": false,
     "icon": "gauge",
     "category": "AI",
+    "contributes": {
+      "tabKinds": [
+        "jev-insights"
+      ]
+    },
     "agent": {
       "extensions": [
         "agent/extensions/jev.ts"

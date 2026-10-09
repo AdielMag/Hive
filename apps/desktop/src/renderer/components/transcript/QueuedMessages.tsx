@@ -16,17 +16,22 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../../store/session-store.ts";
 
+const EMPTY_HELD: never[] = [];
+
 export const QueuedMessagesList: React.FC = () => {
-  const { queue, clearAllQueued } = useSessionStore(
+  const { queue, clearAllQueued, held, removeHeldMessage, popHeldToEditor } = useSessionStore(
     useShallow((s) => ({
       queue: s.transcript.queue,
       clearAllQueued: s.clearAllQueued,
+      held: (s.activeKey ? s.compactionHeld[s.activeKey] : undefined) ?? EMPTY_HELD,
+      removeHeldMessage: s.removeHeldMessage,
+      popHeldToEditor: s.popHeldToEditor,
     })),
   );
 
   const steering = queue.steering ?? [];
   const followUp = queue.followUp ?? [];
-  const total = steering.length + followUp.length;
+  const total = steering.length + followUp.length + held.length;
 
   if (total === 0) return null;
 
@@ -66,6 +71,30 @@ export const QueuedMessagesList: React.FC = () => {
             type="followUp"
             index={idx}
           />
+        ))}
+        {held.map((h, idx) => (
+          <div key={`held-${idx}`} className="msg-queued msg-queued--followUp" data-testid="queued-held-message">
+            <div className="msg-queued__bubble">
+              <div className="msg-queued__header">
+                <span className="msg-queued__badge">
+                  <Clock size={10} /> Sends after compaction
+                </span>
+                <div className="msg-queued__actions">
+                  <button
+                    className="msg-queued__btn"
+                    onClick={() => popHeldToEditor(idx)}
+                    title="Move back to the composer"
+                  >
+                    <CornerDownLeft size={11} />
+                  </button>
+                  <button className="msg-queued__btn" onClick={() => removeHeldMessage(idx)} title="Remove from queue">
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </div>
+              <div className="msg-queued__text">{h.text}</div>
+            </div>
+          </div>
         ))}
       </div>
     </div>
@@ -242,15 +271,16 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
 
 /** Compact banner rendered above composer textarea when messages are queued. */
 export const QueuedMessagesBar: React.FC = () => {
-  const { queue, clearAllQueued } = useSessionStore(
+  const { queue, clearAllQueued, heldCount } = useSessionStore(
     useShallow((s) => ({
       queue: s.transcript.queue,
       clearAllQueued: s.clearAllQueued,
+      heldCount: (s.activeKey ? s.compactionHeld[s.activeKey]?.length : 0) ?? 0,
     })),
   );
 
   const steeringCount = queue.steering?.length ?? 0;
-  const followUpCount = queue.followUp?.length ?? 0;
+  const followUpCount = (queue.followUp?.length ?? 0) + heldCount;
   const total = steeringCount + followUpCount;
 
   if (total === 0) return null;

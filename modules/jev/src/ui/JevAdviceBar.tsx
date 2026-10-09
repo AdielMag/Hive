@@ -44,6 +44,16 @@ export const JevAdviceBar: React.FC<JevAdviceBarProps> = ({ host, activeKey }) =
     return () => clearTimeout(t);
   }, [activeKey, startedAt]);
 
+  // Funnel: the hint counts as shown once the bar is visible with a non-silent tier (logged once per advice entry).
+  const current = activeKey ? advice[activeKey] : undefined;
+  const visibleTier: CompactTier =
+    activeKey && current && startedAt === undefined && dismissed[activeKey] !== current.entryId
+      ? decideTier({ advice: current, idleMs: now - current.at, floorPct: 0 }).tier
+      : "silent";
+  useEffect(() => {
+    if (activeKey && visibleTier !== "silent") jevStore.markShown(activeKey, visibleTier);
+  }, [activeKey, current?.entryId, visibleTier]);
+
   if (!activeKey) return null;
 
   if (startedAt !== undefined) {
@@ -63,7 +73,7 @@ export const JevAdviceBar: React.FC<JevAdviceBarProps> = ({ host, activeKey }) =
 
   const compact = () => {
     setError(null);
-    jevStore.startCompacting(activeKey);
+    jevStore.requestCompact(activeKey);
     host.sessions.emitToBridge(activeKey, { kind: JEV_COMPACT_KIND }).catch((err: unknown) => {
       jevStore.stopCompacting(activeKey);
       setError(err instanceof Error ? err.message : String(err));

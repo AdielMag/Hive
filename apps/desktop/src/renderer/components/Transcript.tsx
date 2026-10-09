@@ -578,6 +578,51 @@ function editAsDiff(args: Record<string, unknown>): string | null {
     .join("\n@@\n");
 }
 
+/** Stock expanded body of a tool row (arguments + result). Also handed to module tool cards as `RawBody`. */
+const ToolRawBody: React.FC<{ block: ToolCallBlockT; result?: ToolResultView }> = ({ block, result }) => {
+  const args = block.arguments ?? {};
+  const path = str(args.path ?? args.file_path);
+  const pieces: React.ReactNode[] = [];
+  if (block.name === "edit") {
+    const diff = editAsDiff(args);
+    if (diff) pieces.push(<CodeBlock key="diff" code={diff} language="diff" bare lineNumbers={false} />);
+  } else if (block.name === "write" && typeof args.content === "string") {
+    pieces.push(<CodeBlock key="content" code={args.content} language={languageFromPath(path)} bare />);
+  } else if (block.name === "bash") {
+    pieces.push(<CodeBlock key="cmd" code={str(args.command)} language="shellscript" bare lineNumbers={false} />);
+  } else if (block.name !== "read") {
+    pieces.push(<CodeBlock key="args" code={JSON.stringify(args, null, 2)} language="json" bare lineNumbers={false} />);
+  }
+  if (result) {
+    if (result.text) {
+      const lang = result.isError ? null : block.name === "read" ? languageFromPath(path) : null;
+      const startLine = block.name === "read" && Number(args.offset) > 0 ? Number(args.offset) : 1;
+      pieces.push(
+        <div key="result" className={`msg-tool__result${result.isError ? " is-error" : ""}`}>
+          <CodeBlock code={result.text} language={lang} bare lineNumbers={block.name === "read"} startLine={startLine} />
+        </div>,
+      );
+    }
+    if (result.images.length > 0) {
+      pieces.push(
+        <div key="tool-images" className="msg-tool__image-wrap">
+          {result.images.map((img, i) => (
+            <ImageThumbnail
+              key={`img${i}`}
+              className="msg-tool__image-thumb"
+              src={`data:${img.mimeType};base64,${img.data}`}
+              alt={`Tool output ${i + 1}`}
+            />
+          ))}
+        </div>,
+      );
+    }
+  } else if (!block.complete && block.argsText) {
+    pieces.push(<CodeBlock key="partial" code={block.argsText} language="json" streaming bare lineNumbers={false} />);
+  }
+  return <div className="msg-tool__body">{pieces}</div>;
+};
+
 const ToolCall: React.FC<{
   block: ToolCallBlockT;
   result?: ToolResultView;
@@ -587,6 +632,8 @@ const ToolCall: React.FC<{
   const ctx = useContext(TranscriptContext);
   const [open, setOpen] = useState(false);
   const toolCards = useContributions("toolCards");
+  // Stable per block/result so a module card's raw view doesn't remount on unrelated renders.
+  const RawBody = useCallback(() => <ToolRawBody block={block} result={result} />, [block, result]);
 
   // 1. Skill load card
   if (ctx?.annotations.skills.loads.has(block.id)) {
@@ -639,8 +686,10 @@ const ToolCall: React.FC<{
           arguments: block.arguments ?? {},
           complete: block.complete,
           running,
-          result: result ? { text: result.text, isError: result.isError } : undefined,
+          result: result ? { text: result.text, isError: result.isError, details: result.details } : undefined,
+          run: run ? { startedAt: run.startedAt, endedAt: run.endedAt, status: run.status } : undefined,
         }}
+        RawBody={RawBody}
       />
     );
   }
@@ -653,49 +702,7 @@ const ToolCall: React.FC<{
   const status = result ? (result.isError ? "error" : "done") : running || !block.complete ? "running" : "pending";
   const usedSkill = ctx?.annotations.skills.usedBy.get(block.id);
 
-  let body: React.ReactNode = null;
-  if (open) {
-    const args = block.arguments ?? {};
-    const pieces: React.ReactNode[] = [];
-    if (block.name === "edit") {
-      const diff = editAsDiff(args);
-      if (diff) pieces.push(<CodeBlock key="diff" code={diff} language="diff" bare lineNumbers={false} />);
-    } else if (block.name === "write" && typeof args.content === "string") {
-      pieces.push(<CodeBlock key="content" code={args.content} language={languageFromPath(path)} bare />);
-    } else if (block.name === "bash") {
-      pieces.push(<CodeBlock key="cmd" code={str(args.command)} language="shellscript" bare lineNumbers={false} />);
-    } else if (block.name !== "read") {
-      pieces.push(<CodeBlock key="args" code={JSON.stringify(args, null, 2)} language="json" bare lineNumbers={false} />);
-    }
-    if (result) {
-      if (result.text) {
-        const lang = result.isError ? null : block.name === "read" ? languageFromPath(path) : null;
-        const startLine = block.name === "read" && Number(args.offset) > 0 ? Number(args.offset) : 1;
-        pieces.push(
-          <div key="result" className={`msg-tool__result${result.isError ? " is-error" : ""}`}>
-            <CodeBlock code={result.text} language={lang} bare lineNumbers={block.name === "read"} startLine={startLine} />
-          </div>,
-        );
-      }
-      if (result.images.length > 0) {
-        pieces.push(
-          <div key="tool-images" className="msg-tool__image-wrap">
-            {result.images.map((img, i) => (
-              <ImageThumbnail
-                key={`img${i}`}
-                className="msg-tool__image-thumb"
-                src={`data:${img.mimeType};base64,${img.data}`}
-                alt={`Tool output ${i + 1}`}
-              />
-            ))}
-          </div>,
-        );
-      }
-    } else if (!block.complete && block.argsText) {
-      pieces.push(<CodeBlock key="partial" code={block.argsText} language="json" streaming bare lineNumbers={false} />);
-    }
-    body = <div className="msg-tool__body">{pieces}</div>;
-  }
+  const body: React.ReactNode = open ? <ToolRawBody block={block} result={result} /> : null;
 
   return (
     <div className={`msg-tool${open ? " is-open" : ""}`} data-tool-call-id={block.id}>

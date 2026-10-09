@@ -1,4 +1,5 @@
-import { readdirSync, statSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, extname, relative } from "node:path";
 
 export interface FileNode {
@@ -140,6 +141,17 @@ export function detectMimeType(filePath: string): string {
       return "image/x-icon";
     case ".avif":
       return "image/avif";
+    case ".mp4":
+    case ".m4v":
+      return "video/mp4";
+    case ".mov":
+      return "video/quicktime";
+    case ".webm":
+      return "video/webm";
+    case ".mkv":
+      return "video/x-matroska";
+    case ".avi":
+      return "video/x-msvideo";
     case ".pdf":
       return "application/pdf";
     case ".json":
@@ -212,4 +224,20 @@ export function readFileContent(filePath: string): FileContentResult {
     mimeType,
     ...(isSvg ? { dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(content)}` } : {}),
   };
+}
+
+const MAX_ATTACHMENT_BYTES = 500 * 1024 * 1024;
+
+/** Write clipboard/drag bytes (videos have no path) to a temp file and return it, so the prompt can reference it. */
+export function saveAttachmentFile(name: string, data: ArrayBuffer): { path: string; size: number } {
+  const buf = Buffer.from(data);
+  if (buf.length > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`File too large (${(buf.length / 1024 / 1024).toFixed(0)}MB) to attach`);
+  }
+  const dir = join(tmpdir(), "hive-attachments");
+  mkdirSync(dir, { recursive: true });
+  const safe = (name.split(/[/\\]/).pop() || "attachment").replace(/[^\w.\- ]+/g, "_").slice(-120);
+  const filePath = join(dir, `${Date.now().toString(36)}-${safe}`);
+  writeFileSync(filePath, buf);
+  return { path: filePath, size: buf.length };
 }

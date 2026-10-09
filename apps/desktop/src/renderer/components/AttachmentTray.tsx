@@ -57,15 +57,23 @@ export const AttachmentTray: React.FC<AttachmentTrayProps> = ({ attachments, onR
     <div className="attach-tray">
       {attachments.map((att) => {
         const isImage = att.kind === "image" && !!att.previewUrl;
+        const isVideoPreview = att.kind === "video" && !!att.previewUrl;
         const ext = extOf(att.name);
-        const Icon = iconFor(ext);
+        const Icon = att.kind === "video" ? FileVideoCamera : iconFor(ext);
         return (
           <div
             key={att.id}
-            className={`attach-tile ${isImage ? "attach-tile--image" : "attach-tile--file"}`}
+            className={`attach-tile ${isImage || isVideoPreview ? "attach-tile--image" : "attach-tile--file"}`}
             title={att.name}
           >
-            {isImage ? (
+            {isVideoPreview ? (
+              <>
+                <video src={att.previewUrl} preload="metadata" muted playsInline draggable={false} />
+                <span className="attach-tile__badge" aria-hidden="true">
+                  <FileVideoCamera size={10} strokeWidth={2} />
+                </span>
+              </>
+            ) : isImage ? (
               <img
                 src={att.previewUrl}
                 alt={att.name}

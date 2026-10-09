@@ -146,6 +146,9 @@ const api: StudioApi = {
   readMediaFile(filePath: string) {
     return ipcRenderer.invoke(IPC.filesReadMedia, { filePath });
   },
+  saveAttachment(name: string, data: ArrayBuffer) {
+    return ipcRenderer.invoke(IPC.filesSaveAttachment, { name, data });
+  },
   showItemInFolder(filePath: string) {
     return ipcRenderer.invoke(IPC.filesShowInFolder, { filePath });
   },

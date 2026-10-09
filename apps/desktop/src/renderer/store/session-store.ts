@@ -28,7 +28,7 @@ import {
   createTranscript,
   type TranscriptState,
 } from "@hive/pi-adapter";
-import { emitSessionEvents } from "../modules/session-bus.ts";
+import { emitSessionEvents, toolAwaitsUser } from "../modules/session-bus.ts";
 import { usePaneLayoutStore, findLeafForTab } from "./pane-layout-store.ts";
 import { findOriginProject, findOriginTab } from "../lib/tab-origin.ts";
 import { openLink } from "../modules/link-bus.ts";
@@ -174,6 +174,29 @@ export const __resetCompactionStates = () => {
   useSessionStore.setState({ compactionStates: {} });
 };
 
+/** A prompt sent while compaction runs. Held client-side (shown as queued) and sent once compaction ends. */
+export interface HeldMessage {
+  /** Text shown in the queue list. */
+  text: string;
+  /** Full prompt text (attachments + mode prefix applied). */
+  message: string;
+  images: Array<{ type: "image"; data: string; mimeType: string }>;
+}
+
+/** Send everything held for `key` as one prompt now that compaction is over. */
+export async function flushHeldMessages(key: string): Promise<void> {
+  const held = useSessionStore.getState().compactionHeld[key];
+  if (!held || held.length === 0) return;
+  useSessionStore.setState((s) => {
+    const next = { ...s.compactionHeld };
+    delete next[key];
+    return { compactionHeld: next };
+  });
+  const message = held.map((h) => h.message).join("\n\n");
+  const images = held.flatMap((h) => h.images);
+  await window.studio.rpc(key, { type: "prompt", message, ...(images.length > 0 ? { images } : {}) });
+}
+
 export async function handleCompactionEvent(key: string, ev: unknown): Promise<void> {
   const e = ev as {
     type: string;
@@ -209,6 +232,7 @@ export async function handleCompactionEvent(key: string, ev: unknown): Promise<v
     } else if (e.aborted) {
       setCompactionState(key, null);
     }
+    await flushHeldMessages(key);
   }
 }
 
@@ -247,6 +271,8 @@ export interface SessionStoreState {
    * not just the active one. "done"/"error" mean the run finished while the user wasn't looking at it.
    */
   sessionActivity: Record<string, SessionActivity>;
+  /** Tab ids with a running tool call that blocks on the user (e.g. a plan review). */
+  sessionAwaitingUser: Record<string, true>;
   /** Parked per-tab UI state for every session tab except the displayed one (keyed by tab id). */
   tabUi: Record<string, TabUiState>;
   extensionWidgets: Record<string, ExtensionWidgetState>;
@@ -262,6 +288,12 @@ export interface SessionStoreState {
   reloadEpoch: number;
   /** Per live-session-key compaction state (compacting, done, error). */
   compactionStates: Record<string, CompactionState>;
+  /** Messages sent while a session compacts, per live-session-key; shown as queued, sent when compaction ends. */
+  compactionHeld: Record<string, HeldMessage[]>;
+  /** Drop one held (compaction-queued) message of the active session. */
+  removeHeldMessage: (index: number) => void;
+  /** Move a held message back into the composer. */
+  popHeldToEditor: (index: number) => void;
   isInitializing: boolean;
   error: string | null;
 
@@ -447,7 +479,42 @@ function setActivity(tabId: string, activity: SessionActivity | null): void {
   });
 }
 
+/** Running tool calls per tab that wait on the user (module cards with `awaitsUser`). */
+const awaitingUserCalls = new Map<string, Set<string>>();
+
+function syncAwaitingUser(tabId: string): void {
+  const waiting = (awaitingUserCalls.get(tabId)?.size ?? 0) > 0;
+  useSessionStore.setState((s) => {
+    if (!!s.sessionAwaitingUser[tabId] === waiting) return {};
+    const next = { ...s.sessionAwaitingUser };
+    if (waiting) next[tabId] = true;
+    else delete next[tabId];
+    return { sessionAwaitingUser: next };
+  });
+}
+
+function setAwaitingUserCall(tabId: string, callId: string, waiting: boolean): void {
+  let set = awaitingUserCalls.get(tabId);
+  if (waiting) {
+    if (!set) awaitingUserCalls.set(tabId, (set = new Set()));
+    if (set.has(callId)) return;
+    set.add(callId);
+  } else if (!set?.delete(callId)) return;
+  syncAwaitingUser(tabId);
+}
+
+function clearAwaitingUser(tabId: string): void {
+  if (awaitingUserCalls.delete(tabId)) syncAwaitingUser(tabId);
+}
+
+/** True when the transcript has a running tool call that blocks on the user (covers tabs reopened mid-wait). */
+export function transcriptAwaitsUser(t: TranscriptState): boolean {
+  if (!t.running) return false;
+  return Object.values(t.tools).some((r) => r.status === "running" && toolAwaitsUser(r.toolName, r.args));
+}
+
 function clearActivity(tabId: string): void {
+  clearAwaitingUser(tabId);
   runErrored.delete(tabId);
   mainThreadRunning.delete(tabId);
   runningSubagents.delete(tabId);
@@ -531,8 +598,14 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
         }
       }
     } else if (ev.type === "tool_execution_start") {
+      if (toolAwaitsUser(String(ev.toolName ?? ""), ev.args)) {
+        setAwaitingUserCall(tabId, String(ev.toolCallId), true);
+        // The visible plan card announces itself; ping only when the question lands in a background tab.
+        if (useSessionStore.getState().activeTabId !== tabId) playUiSound("question_asked");
+      }
       if (isTabInView(tabId)) playUiSound("tool_start");
     } else if (ev.type === "tool_execution_end") {
+      setAwaitingUserCall(tabId, String(ev.toolCallId), false);
       const isToolErr = Boolean((ev as { isError?: boolean }).isError);
       if (isTabInView(tabId)) playUiSound(isToolErr ? "tool_error" : "tool_end");
       const toolName = String(ev.toolName ?? "");
@@ -563,6 +636,7 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
         }
       }
     } else if (ev.type === "agent_settled") {
+      clearAwaitingUser(tabId);
       mainThreadRunning.set(tabId, false);
       if (hasRunningWork(tabId)) {
         // Subagent(s) are still actively executing in background; maintain running state!
@@ -594,6 +668,7 @@ function dropSessionKey(key: string, crashed = false): void {
   if (useSessionStore.getState().reloadStates[key]) setReloadState(key, null);
   const tabId = tabIdForKey(key);
   if (tabId) {
+    clearAwaitingUser(tabId);
     const wasRunning = useSessionStore.getState().sessionActivity[tabId] === "running" || hasRunningWork(tabId);
     runErrored.delete(tabId);
     mainThreadRunning.delete(tabId);
@@ -838,6 +913,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   selectedMode: "auto-edit",
   stats: null,
   sessionActivity: {},
+  sessionAwaitingUser: {},
   tabUi: {},
   subagentModal: null,
   extensionWidgets: {},
@@ -850,6 +926,26 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   reloadStates: {},
   reloadEpoch: 0,
   compactionStates: {},
+  compactionHeld: {},
+  removeHeldMessage: (index) => {
+    const { activeKey } = get();
+    if (!activeKey) return;
+    set((s) => {
+      const list = [...(s.compactionHeld[activeKey] ?? [])];
+      list.splice(index, 1);
+      const next = { ...s.compactionHeld };
+      if (list.length) next[activeKey] = list;
+      else delete next[activeKey];
+      return { compactionHeld: next };
+    });
+  },
+  popHeldToEditor: (index) => {
+    const { activeKey, compactionHeld, promptText } = get();
+    const item = activeKey ? compactionHeld[activeKey]?.[index] : undefined;
+    if (!item) return;
+    get().removeHeldMessage(index);
+    set({ promptText: promptText ? `${promptText}\n${item.text}` : item.text });
+  },
   isInitializing: true,
   error: null,
   clearError: () => set({ error: null }),
@@ -882,6 +978,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       const message = err instanceof Error ? err.message : String(err);
       setCompactionState(key, { phase: "error", message });
       throw err;
+    } finally {
+      await flushHeldMessages(key);
     }
   },
 
@@ -1028,6 +1126,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         }
 
         if (["select", "confirm", "input", "editor"].includes(request.method)) {
+          playUiSound("question_asked");
           updateTabUi(tabId, () => ({ pendingUiDialog: request }));
         }
       });
@@ -1049,6 +1148,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
               .bridgeEmit(key, BRIDGE_TOPICS.fromGui, { kind: "form_result", id: previous.id, cancelled: true, answers: [] })
               .catch(() => {});
           }
+          if (!previous || previous.id !== form.id) playUiSound("question_asked");
           updateTabUi(tabId, () => ({ pendingForm: form }));
         } else if (isStudioFormCancel(message.data)) {
           const { id } = message.data;
@@ -1602,6 +1702,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     const images: Array<{ type: "image"; data: string; mimeType: string }> = [];
     const fileBlocks: string[] = [];
+    const videoBlocks: string[] = [];
 
     for (const item of attachments) {
       if (item.kind === "image" && item.dataBase64) {
@@ -1610,6 +1711,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           data: item.dataBase64,
           mimeType: item.mimeType,
         });
+      } else if (item.kind === "video" && item.path) {
+        // Pi's prompt API only takes images, so a video goes in as a file reference the agent can open with its tools.
+        videoBlocks.push(`--- Attached Video: ${item.name} (${item.path}${item.mimeType ? `, ${item.mimeType}` : ""}) ---`);
       } else if (item.textContent) {
         fileBlocks.push(
           `--- Attached File: ${item.name}${item.path ? ` (${item.path})` : ""} ---\n${item.textContent}\n--- End of File ---`
@@ -1618,6 +1722,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
 
     let message = promptText;
+    if (videoBlocks.length > 0) {
+      message =
+        (message ? message + "\n\n" : "") +
+        "The user attached video file(s) on disk. You cannot view video directly; inspect them with your tools (e.g. ffprobe/ffmpeg to read metadata or extract frames) as needed.\n" +
+        videoBlocks.join("\n");
+    }
     if (fileBlocks.length > 0) {
       message = (message ? message + "\n\n" : "") + fileBlocks.join("\n\n");
     }
@@ -1669,6 +1779,19 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           ...s.allSessions,
         ],
       }));
+    }
+
+    // Compaction in progress: hold the message, show it as queued, send it when compaction ends.
+    if (get().compactionStates[activeKey]?.phase === "compacting") {
+      const key = activeKey;
+      const text = promptText.trim() || attachments[0]?.name || "";
+      set((s) => ({
+        compactionHeld: {
+          ...s.compactionHeld,
+          [key]: [...(s.compactionHeld[key] ?? []), { text, message, images }],
+        },
+      }));
+      return;
     }
 
     if (transcript.running && streamingBehavior === "steer") {
@@ -2108,12 +2231,17 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     const { activeKey } = get();
     if (!activeKey) return;
     await window.studio.rpc(activeKey, { type: "clear_queue" });
-    set((s) => ({
-      transcript: {
-        ...s.transcript,
-        queue: { steering: [], followUp: [] },
-      },
-    }));
+    set((s) => {
+      const compactionHeld = { ...s.compactionHeld };
+      delete compactionHeld[activeKey];
+      return {
+        compactionHeld,
+        transcript: {
+          ...s.transcript,
+          queue: { steering: [], followUp: [] },
+        },
+      };
+    });
   },
 
   popQueuedToEditor: async (type: "steering" | "followUp", index: number) => {

@@ -29,6 +29,26 @@ import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/t
 import { Slot } from "../modules/ModuleViews.tsx";
 import type { AttachedItem } from "@hive/protocol";
 
+const VIDEO_RE = /\.(mp4|m4v|mov|webm|mkv|avi)$/i;
+
+function isVideoFile(file: File): boolean {
+  return file.type.startsWith("video/") || VIDEO_RE.test(file.name);
+}
+
+function videoMimeFromName(name: string): string {
+  const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+  const map: Record<string, string> = { mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", mkv: "video/x-matroska", avi: "video/x-msvideo" };
+  return map[ext] ?? "video/mp4";
+}
+
+function videoExtFromMime(mime: string): string {
+  if (mime === "video/quicktime") return ".mov";
+  if (mime === "video/webm") return ".webm";
+  if (mime === "video/x-matroska") return ".mkv";
+  if (mime === "video/x-msvideo") return ".avi";
+  return ".mp4";
+}
+
 interface ComposerProps {
   height?: number;
 }
@@ -133,6 +153,12 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
 
       const newItems: AttachedItem[] = [];
       for (const p of paths) {
+        if (VIDEO_RE.test(p)) {
+          // Videos stay on disk; the prompt references the path (too big to inline).
+          const name = p.split(/[/\\]/).pop() || "video";
+          newItems.push(videoItem({ name, path: p, mimeType: videoMimeFromName(name) }));
+          continue;
+        }
         const isImg = /\.(png|jpe?g|webp|gif|svg|bmp)$/i.test(p);
         if (isImg) {
           try {
@@ -187,7 +213,10 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       const realPath = window.studio.getPathForFile?.(file);
       const isImg = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|svg|bmp)$/i.test(file.name);
 
-      if (isImg) {
+      if (isVideoFile(file)) {
+        const item = await videoItemFromFile(file, realPath);
+        if (item) newItems.push(item);
+      } else if (isImg) {
         if (realPath) {
           try {
             const media = await window.studio.readMediaFile(realPath);
@@ -261,7 +290,11 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
         const file = item.getAsFile();
         if (!file) continue;
 
-        if (file.type.startsWith("image/")) {
+        if (isVideoFile(file)) {
+          e.preventDefault();
+          const item = await videoItemFromFile(file, window.studio.getPathForFile?.(file) || undefined);
+          if (item) newItems.push(item);
+        } else if (file.type.startsWith("image/")) {
           e.preventDefault();
           const dataUrl = await readFileAsDataUrl(file);
           const base64 = dataUrl.split(",")[1] ?? "";
@@ -282,6 +315,42 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       addAttachments(newItems);
     }
   };
+
+  function videoItem(v: { name: string; path: string; mimeType: string; size?: number; previewUrl?: string }): AttachedItem {
+    return {
+      id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: v.name,
+      path: v.path,
+      kind: "video",
+      mimeType: v.mimeType,
+      size: v.size,
+      previewUrl: v.previewUrl,
+    };
+  }
+
+  /** Video from a drop/paste: use its real path if it has one, otherwise save the bytes to a temp file. */
+  async function videoItemFromFile(file: File, realPath?: string): Promise<AttachedItem | null> {
+    const name = file.name || `pasted-video-${Date.now()}${videoExtFromMime(file.type)}`;
+    try {
+      let path = realPath;
+      let size = file.size;
+      if (!path) {
+        const saved = await window.studio.saveAttachment(name, await file.arrayBuffer());
+        path = saved.path;
+        size = saved.size;
+      }
+      return videoItem({
+        name,
+        path,
+        size,
+        mimeType: file.type || videoMimeFromName(name),
+        previewUrl: URL.createObjectURL(file),
+      });
+    } catch (err) {
+      console.error("Failed to attach video", name, err);
+      return null;
+    }
+  }
 
   function readFileAsDataUrl(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -391,10 +460,10 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             isReloading
               ? "Reloading Pi…"
               : isDraggingOver
-              ? "Drop files or images to attach..."
+              ? "Drop files, images or videos to attach..."
               : isRunning
               ? "Type to steer (Ctrl+Enter) or queue (Enter)..."
-              : "Ask Pi or issue a task... (Drag & drop or paste files/images)"
+              : "Ask Pi or issue a task... (Drag & drop or paste files/images/videos)"
           }
           style={{
             flex: 1,
@@ -425,7 +494,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             {/* Attach button */}
             <button
               onClick={handlePickFiles}
-              title="Attach files or images"
+              title="Attach files, images or videos"
               style={{
                 flexShrink: 0,
                 display: "flex",

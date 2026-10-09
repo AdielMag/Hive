@@ -5,6 +5,7 @@ import { isSafeExternalUrl } from "../window.ts";
 import { handle } from "./util.ts";
 
 const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"];
+const VIDEO_EXT = ["mp4", "m4v", "mov", "webm", "mkv", "avi"];
 const TEXT_EXT = ["ts", "tsx", "js", "jsx", "json", "md", "txt", "css", "html", "py", "rs", "go", "sh", "yaml", "yml", "cs", "java", "kt", "c", "cpp", "h"];
 
 export function registerAppIpc(ctx: AppContext): void {
@@ -57,13 +58,14 @@ export function registerAppIpc(ctx: AppContext): void {
     const filters = options?.allowImagesOnly
       ? [{ name: "Images", extensions: IMAGE_EXT }]
       : [
-          { name: "All Supported", extensions: [...IMAGE_EXT, ...TEXT_EXT] },
+          { name: "All Supported", extensions: [...IMAGE_EXT, ...VIDEO_EXT, ...TEXT_EXT] },
           { name: "Images", extensions: IMAGE_EXT },
+          { name: "Videos", extensions: VIDEO_EXT },
           { name: "All Files", extensions: ["*"] },
         ];
     const r = await dialog.showOpenDialog(win, {
       properties: ["openFile", "multiSelections"],
-      title: "Select files or images to attach",
+      title: "Select files, images or videos to attach",
       filters,
     });
     return r.canceled ? [] : r.filePaths;

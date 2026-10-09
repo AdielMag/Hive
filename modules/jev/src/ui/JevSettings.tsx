@@ -9,10 +9,14 @@ import {
   Gauge,
   Loader2,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import {
+  INSIGHTS_TAB_ID,
+  INSIGHTS_TAB_KIND,
   JevMethods,
+  MAIN_MODEL_PRICE_PER_MTOK_USD,
   type JevSettingsPatch,
   type JevSettingsView,
   type TestKeyResult,
@@ -87,6 +91,28 @@ const Stat: React.FC<{ label: string; bucket: UsageBucket }> = ({ label, bucket 
   </div>
 );
 
+const FEATURE_LABEL: Record<string, string> = { compact: "Compaction hints", ask_jev: "ask_jev tool" };
+
+/** Per-feature split of the usage log (compaction hints vs ask_jev). */
+export const FeatureSplit: React.FC<{ byFeature: Record<string, UsageBucket> }> = ({ byFeature }) => {
+  const rows = Object.entries(byFeature).sort((a, b) => b[1].calls - a[1].calls);
+  if (rows.length === 0) return null;
+  return (
+    <div className="jev-stats jev-stats--features" aria-label="Usage by feature">
+      {rows.map(([name, b]) => (
+        <div className="jev-stat" key={name}>
+          <div className="jev-stat__label">{FEATURE_LABEL[name] ?? name}</div>
+          <div className="jev-stat__value">{tok(b.inputTokens)} tokens</div>
+          <div className="jev-stat__sub">
+            {`${usd(b.costUsd)} · ${b.calls} calls`}
+            {b.failed > 0 && <span className="jev-stat__fail"> · {b.failed} failed</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export interface JevSettingsProps {
   host: ModuleHost;
   focus?: { providerId: string; reason?: string } | null;
@@ -140,6 +166,12 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
     },
     [host, refreshUsage],
   );
+
+  const openInsights = () => {
+    host.tabs.open({ id: INSIGHTS_TAB_ID, kind: INSIGHTS_TAB_KIND, title: "Jev insights", reuse: (t) => t.kind === INSIGHTS_TAB_KIND });
+    // Settings is a modal over the workbench; it closes on Escape, so the new tab isn't hidden behind it.
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  };
 
   const saveKey = async () => {
     const key = keyDraft.trim();
@@ -388,6 +420,7 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
                 </div>
               </div>
             )}
+            {usage && <FeatureSplit byFeature={usage.byFeature} />}
             {usage?.lastError && <div className="jev-bad jev-lasterr">Last error: {usage.lastError.message}</div>}
             <Row title="Amount deposited" hint="Total USD you've added to your TypeSafe account. Spend is counted from the moment you change this figure, so update it after each top-up with your current balance.">
               <NumberField label="Amount deposited in USD" prefix="$" placeholder="e.g. 5" step={1} value={settings.creditUsd} onCommit={(v) => void save({ creditUsd: v })} />
@@ -395,16 +428,32 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
             <Row title="Price per 1M input tokens" hint="Defaults to the published rate of $0.042. Override only if your plan differs.">
               <NumberField label="Price per million input tokens" prefix="$" placeholder="0.042" step={0.001} value={settings.pricePerMTokUsd} onCommit={(v) => void save({ pricePerMTokUsd: v })} />
             </Row>
+            <Row
+              title="Main model price per 1M input tokens"
+              hint={`Used to value the context ask_jev keeps out of the agent's window in Insights. Leave empty for the default ($${MAIN_MODEL_PRICE_PER_MTOK_USD}, a typical Sonnet-class price).`}
+            >
+              <NumberField
+                label="Main model price per million input tokens"
+                prefix="$"
+                placeholder={String(MAIN_MODEL_PRICE_PER_MTOK_USD)}
+                step={0.1}
+                value={settings.mainModelPricePerMTokUsd}
+                onCommit={(v) => void save({ mainModelPricePerMTokUsd: v })}
+              />
+            </Row>
             <Row title="Daily call limit" hint="Stops Jev calls for the rest of the day once reached (all sessions). 0 means unlimited.">
               <NumberField label="Calls per day" value={settings.maxCallsPerDay} onCommit={(v) => void save({ maxCallsPerDay: v ?? 0 })} />
             </Row>
-            {usage && usage.total.calls > 0 && (
-              <div className="jev-actions">
+            <div className="jev-actions jev-actions--split">
+              <button className="jev-btn" type="button" onClick={openInsights} title="Open the Jev insights tab: savings, hint funnel, latency, session scan">
+                <TrendingUp size={13} /> Open insights
+              </button>
+              {usage && usage.total.calls > 0 && (
                 <button className="jev-btn jev-btn--ghost" type="button" onClick={() => void host.ipc.invoke<UsageSummary>(JevMethods.clearUsage).then(setUsage)}>
                   Reset usage log
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </section>
 
           <section className="jev-card">

@@ -122,10 +122,12 @@ export const StatusBar: React.FC = () => {
         {soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} style={{ opacity: 0.6 }} />}
       </button>
 
-      {cost > 0 && (
+      {(
         <button
           ref={costPop.btnRef}
-          className={`statusbar__btn mono${costPop.open ? " is-active" : ""}`}
+          style={cost > 0 ? undefined : { visibility: "hidden" }}
+          tabIndex={cost > 0 ? undefined : -1}
+          className={`statusbar__btn statusbar__cost mono${costPop.open ? " is-active" : ""}`}
           onClick={costPop.onClick}
           onMouseEnter={costPop.onEnter}
           onMouseLeave={costPop.onLeave}

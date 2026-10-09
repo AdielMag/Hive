@@ -271,8 +271,18 @@ export interface ToolCardCall {
   complete: boolean;
   /** True while the tool is executing (no result yet). */
   running: boolean;
-  /** Final tool output; undefined until the call settles. */
-  result?: { text: string; isError: boolean };
+  /** Final tool output; undefined until the call settles. `details` is the tool's structured result, if any. */
+  result?: { text: string; isError: boolean; details?: unknown };
+  /** Live execution timing (only while/after the call runs in this window; absent for reopened sessions). */
+  run?: { startedAt?: number; endedAt?: number; status?: string };
+}
+
+/** Props of a tool card component. */
+export interface ToolCardProps {
+  host: ModuleHost;
+  call: ToolCardCall;
+  /** Renders Hive's stock expanded body for this call (arguments JSON + result text), e.g. for a "Raw" tab. */
+  RawBody: ComponentType;
 }
 
 /**
@@ -282,7 +292,12 @@ export interface ToolCardCall {
 export interface ToolCardContribution extends ContributionBase {
   id: string;
   match(call: Pick<ToolCardCall, "name" | "arguments">): boolean;
-  component: ComponentType<{ host: ModuleHost; call: ToolCardCall }>;
+  /**
+   * True when a running call of this card blocks on the user (e.g. a plan review). Core then shows the
+   * session as "waiting for your input" in the tab strip and sidebar until the call ends.
+   */
+  awaitsUser?: boolean;
+  component: ComponentType<ToolCardProps>;
 }
 
 export interface SettingsContribution extends ContributionBase {

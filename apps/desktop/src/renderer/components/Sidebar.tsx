@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { ProjectEntry, SessionCatalogItem } from "@hive/protocol";
-import { useSessionStore } from "../store/session-store.ts";
+import { transcriptAwaitsUser, useSessionStore } from "../store/session-store.ts";
 import { sessionDisplayTitle } from "../lib/session-title.ts";
 import { formatAgo } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
@@ -54,6 +54,7 @@ export const Sidebar: React.FC = () => {
     activeRunning,
     displayedTabId,
     displayedNeedsInput,
+    sessionAwaitingUser,
   } = useSessionStore(
     useShallow((s) => ({
       projects: s.projects,
@@ -71,7 +72,8 @@ export const Sidebar: React.FC = () => {
       tabUi: s.tabUi,
       activeRunning: s.transcript.running,
       displayedTabId: s.displayedTabId,
-      displayedNeedsInput: !!s.pendingUiDialog || !!s.pendingForm,
+      displayedNeedsInput: !!s.pendingUiDialog || !!s.pendingForm || transcriptAwaitsUser(s.transcript),
+      sessionAwaitingUser: s.sessionAwaitingUser,
     })),
   );
 
@@ -86,9 +88,10 @@ export const Sidebar: React.FC = () => {
       const active = t.id === activeTabId;
       const activity = sessionActivity[t.id];
       const needsInput =
-        t.id === displayedTabId
+        !!sessionAwaitingUser[t.id] ||
+        (t.id === displayedTabId
           ? displayedNeedsInput
-          : !!tabUi[t.id]?.pendingUiDialog || !!tabUi[t.id]?.pendingForm;
+          : !!tabUi[t.id]?.pendingUiDialog || !!tabUi[t.id]?.pendingForm);
       if (needsInput) {
         out[t.sessionPath] = "input";
         if (t.projectId) byProject[t.projectId] = (byProject[t.projectId] ?? 0) + 1;
@@ -96,7 +99,7 @@ export const Sidebar: React.FC = () => {
       else if (activity === "done" || activity === "error") out[t.sessionPath] = activity;
     }
     return { sessionState: out, inputByProject: byProject };
-  }, [tabs, activeTabId, sessionActivity, tabUi, activeRunning, displayedTabId, displayedNeedsInput]);
+  }, [tabs, activeTabId, sessionActivity, tabUi, activeRunning, displayedTabId, displayedNeedsInput, sessionAwaitingUser]);
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [showAllSessions, setShowAllSessions] = useState<Record<string, boolean>>({});

@@ -3,19 +3,27 @@
  * the file paths to Pi sessions through this process's environment, and reads the usage log the Pi extension
  * appends to. The Jev API itself is called from the Pi extension; main only calls it to test a key.
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { defineMainModule } from "@hive/module-sdk/main";
+import { SessionScanService } from "./session-scan-io.ts";
 import {
   applyPatch,
   DEFAULT_SETTINGS,
+  dedupeEvents,
+  eventDedupeKey,
   JEV_API_URL,
   JEV_ENV,
   JevMethods,
   MODULE_ID,
   normalizeSettings,
+  parseJevEvent,
+  parseUsageRecord,
+  summarizeImpact,
   summarizeUsage,
   toView,
+  type JevEvent,
+  type JevInsights,
   type JevSettings,
   type JevSettingsPatch,
   type JevSettingsView,
@@ -25,31 +33,77 @@ import {
 } from "./shared.ts";
 
 const MAX_LOG_BYTES = 2 * 1024 * 1024;
+const SCAN_WAIT_MS = 2_500;
 const BALANCE_HEADER = /balance|credit|quota|remaining|limit|usage|spend|billing/i;
 
-export function parseUsageLog(text: string): UsageRecord[] {
-  const out: UsageRecord[] = [];
+function parseJsonl<T>(text: string, parse: (raw: unknown) => T | null): T[] {
+  const out: T[] = [];
   for (const line of text.split("\n")) {
     if (!line) continue;
     try {
-      const r = JSON.parse(line) as UsageRecord;
-      if (typeof r.ts === "number" && typeof r.feature === "string") {
-        out.push({
-          ts: r.ts,
-          feature: r.feature,
-          model: String(r.model ?? ""),
-          inputTokens: Number(r.inputTokens) || 0,
-          outputTokens: Number(r.outputTokens) || 0,
-          ms: Number(r.ms) || 0,
-          ok: r.ok !== false,
-          error: typeof r.error === "string" ? r.error : undefined,
-        });
-      }
+      const r = parse(JSON.parse(line));
+      if (r) out.push(r);
     } catch {
       // Torn line from a concurrent append: skip it.
     }
   }
   return out;
+}
+
+export const parseUsageLog = (text: string): UsageRecord[] => parseJsonl(text, parseUsageRecord);
+export const parseEventLog = (text: string): JevEvent[] => parseJsonl(text, parseJevEvent);
+
+/** Keeps a jsonl log bounded: drops the oldest half when it grows past `maxBytes`. */
+export function trimLog(path: string, maxBytes = MAX_LOG_BYTES): void {
+  try {
+    if (existsSync(path) && statSync(path).size > maxBytes) {
+      const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
+      writeFileSync(path, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`, "utf8");
+    }
+  } catch {}
+}
+
+/** events.jsonl: the compaction-hint funnel. Main is the only writer; repeats of key + entryId + kind are dropped. */
+export function createEventLog(path: string, maxBytes = MAX_LOG_BYTES) {
+  trimLog(path, maxBytes);
+  const read = (): JevEvent[] => {
+    trimLog(path, maxBytes);
+    try {
+      return existsSync(path) ? dedupeEvents(parseEventLog(readFileSync(path, "utf8"))) : [];
+    } catch {
+      return [];
+    }
+  };
+  const seen = new Set<string>();
+  for (const e of read()) {
+    const k = eventDedupeKey(e);
+    if (k) seen.add(k);
+  }
+  return {
+    read,
+    /** Appends a validated event; returns false for malformed input or a duplicate. */
+    append(raw: unknown): boolean {
+      const e = parseJevEvent(raw);
+      if (!e) return false;
+      const k = eventDedupeKey(e);
+      if (k && seen.has(k)) return false;
+      try {
+        mkdirSync(dirname(path), { recursive: true });
+        appendFileSync(path, `${JSON.stringify(e)}\n`, "utf8");
+      } catch {
+        return false;
+      }
+      if (k) seen.add(k);
+      trimLog(path, maxBytes);
+      return true;
+    },
+    clear(): void {
+      seen.clear();
+      try {
+        writeFileSync(path, "", "utf8");
+      } catch {}
+    },
+  };
 }
 
 /** Calls GET /v1/models, which validates the key and lists models. Also surfaces any balance-like headers. */
@@ -90,6 +144,8 @@ export default defineMainModule({
     const dir = ctx.paths.moduleData();
     const configPath = join(dir, "config.json");
     const usagePath = join(dir, "usage.jsonl");
+    const events = createEventLog(join(dir, "events.jsonl"));
+    const scan = new SessionScanService(join(dir, "scan-cache.json"), join(ctx.paths.piAgentDir, "sessions"));
 
     const read = (): JevSettings => {
       try {
@@ -109,6 +165,8 @@ export default defineMainModule({
       }
     };
     const readUsage = (): UsageRecord[] => {
+      // Pi sessions append to this file all day; trimLog is a cheap size check unless the file is over the limit.
+      trimLog(usagePath);
       try {
         return existsSync(usagePath) ? parseUsageLog(readFileSync(usagePath, "utf8")) : [];
       } catch {
@@ -117,12 +175,7 @@ export default defineMainModule({
     };
 
     // Keep the log bounded: drop the oldest half when it grows past 2 MB.
-    try {
-      if (existsSync(usagePath) && statSync(usagePath).size > MAX_LOG_BYTES) {
-        const lines = readFileSync(usagePath, "utf8").split("\n").filter(Boolean);
-        writeFileSync(usagePath, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`, "utf8");
-      }
-    } catch {}
+    trimLog(usagePath);
 
     // Pi sessions inherit this process's environment when they are spawned.
     process.env[JEV_ENV.config] = configPath;
@@ -140,8 +193,21 @@ export default defineMainModule({
     });
     ctx.ipc.handle(JevMethods.testKey, (): Promise<TestKeyResult> => testKey(read().apiKey));
     ctx.ipc.handle(JevMethods.getUsage, (): UsageSummary => summarizeUsage(readUsage(), read()));
+    ctx.ipc.handle(JevMethods.logEvent, (event: unknown): void => {
+      events.append(event);
+    });
+    ctx.ipc.handle(JevMethods.getInsights, async (opts?: { force?: boolean }): Promise<JevInsights> => {
+      const impact = summarizeImpact(readUsage(), events.read(), read());
+      // A cold scan can take a while: wait briefly, then hand back what we have (the scan keeps running and is cached).
+      const pending = scan.get(opts?.force === true).catch(() => null);
+      const timeout = new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), SCAN_WAIT_MS).unref?.();
+      });
+      return { impact, scan: (await Promise.race([pending, timeout])) ?? scan.peek() };
+    });
     ctx.ipc.handle(JevMethods.clearUsage, (): UsageSummary => {
       writeFileSync(usagePath, "", "utf8");
+      events.clear();
       return summarizeUsage([], read());
     });
   },

@@ -619,6 +619,27 @@ div.msg-tool__head {
   box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.45), 0 4px 12px rgba(0, 0, 0, 0.22);
 }
 
+.attach-tile video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.attach-tile__badge {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  display: flex;
+  padding: 2px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  pointer-events: none;
+}
+
 .attach-tile img {
   display: block;
   width: 100%;

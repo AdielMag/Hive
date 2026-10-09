@@ -158,6 +158,49 @@ export function findTaskDirs(root: string, sessionId: string): string[] {
 }
 
 /**
+ * Reads the first line of a file in full. Task prompts are often several KB, so a fixed small
+ * window would truncate the JSON and make prompt-based lookup silently fail.
+ */
+function readFirstLine(filePath: string, maxBytes = 8_000_000): string | null {
+  const fd = openSync(filePath, "r");
+  try {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let pos = 0;
+    const size = fstatSync(fd).size;
+    while (pos < size && total < maxBytes) {
+      const buf = Buffer.alloc(Math.min(65_536, size - pos));
+      const n = readSync(fd, buf, 0, buf.length, pos);
+      if (n <= 0) break;
+      const nl = buf.subarray(0, n).indexOf(0x0a);
+      if (nl >= 0) {
+        chunks.push(buf.subarray(0, nl));
+        return Buffer.concat(chunks).toString("utf8").trim() || null;
+      }
+      chunks.push(buf.subarray(0, n));
+      total += n;
+      pos += n;
+    }
+    // No newline yet: the line is incomplete (still being written) unless we hit EOF.
+    return pos >= size ? Buffer.concat(chunks).toString("utf8").trim() || null : null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Message content may be a plain string or an array of text blocks; compare ignoring edge whitespace. */
+function normalizePrompt(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((b) => (b && typeof b === "object" && typeof (b as { text?: unknown }).text === "string" ? (b as { text: string }).text : ""))
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
+/**
  * Locates a subagent transcript output file by outputFile, agentId, or prompt match.
  */
 export async function locateSubagentOutput(
@@ -195,6 +238,7 @@ export async function locateSubagentOutput(
   if (req.prompt) {
     let newestMatch: { agentId: string; path: string; mtime: number } | null = null;
     const excludes = new Set(req.excludeAgentIds ?? []);
+    const wanted = normalizePrompt(req.prompt);
 
     for (const dir of taskDirs) {
       let files: string[] = [];
@@ -214,17 +258,11 @@ export async function locateSubagentOutput(
 
         try {
           const st = statSync(fullPath);
-          // Read first line to check prompt
-          const fd = openSync(fullPath, "r");
-          const buf = Buffer.alloc(2048);
-          const bytesRead = readSync(fd, buf, 0, 2048, 0);
-          closeSync(fd);
-
-          const firstLine = buf.toString("utf8", 0, bytesRead).split("\n")[0]?.trim();
+          const firstLine = readFirstLine(fullPath);
           if (!firstLine) continue;
 
           const parsed = JSON.parse(firstLine) as { message?: { content?: unknown } };
-          if (parsed.message?.content === req.prompt) {
+          if (normalizePrompt(parsed.message?.content) === wanted) {
             if (!newestMatch || st.mtimeMs > newestMatch.mtime) {
               newestMatch = { agentId, path: fullPath, mtime: st.mtimeMs };
             }

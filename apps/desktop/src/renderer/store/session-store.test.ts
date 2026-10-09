@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
+import { setUserWaitResolver } from "../modules/session-bus.ts";
 import {
   applyCompactionResult,
   handleCompactionEvent,
@@ -733,5 +734,66 @@ describe("compactionStates and compactSession", () => {
     });
 
     vi.unstubAllGlobals();
+  });
+
+  it("sends messages held during compaction as one prompt once compaction ends", async () => {
+    const rpc = vi.fn(async () => ({ ok: true, data: {} }));
+    vi.stubGlobal("window", { studio: { rpc } });
+    useSessionStore.setState({
+      activeKey: "k1",
+      compactionStates: { k1: { phase: "compacting", toName: "m" } },
+      compactionHeld: {
+        k1: [
+          { text: "a", message: "a", images: [] },
+          { text: "b", message: "b", images: [] },
+        ],
+      },
+    } as never);
+
+    await handleCompactionEvent("k1", { type: "compaction_end", aborted: true });
+
+    expect(rpc).toHaveBeenCalledWith("k1", { type: "prompt", message: "a\n\nb" });
+    expect(useSessionStore.getState().compactionHeld.k1).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("tool calls that wait on the user", () => {
+  const tabId = "tab_await_test";
+  const sessionKey = "key_await_test";
+
+  beforeEach(() => {
+    setUserWaitResolver((c) => c.name === "bash" && String(c.arguments.command).includes("plan-previewer"));
+    useSessionStore.setState({
+      activeTabId: "other_tab",
+      tabs: [{ id: tabId, title: "S", kind: "session", activeKey: sessionKey, projectId: "p1" } as any],
+      sessionActivity: {},
+      sessionAwaitingUser: {},
+    });
+  });
+
+  it("flags the tab while a blocking call runs and clears it when the call ends", () => {
+    __test.trackActivity(sessionKey, [
+      { type: "agent_start" },
+      { type: "tool_execution_start", toolCallId: "c1", toolName: "bash", args: { command: "plan-previewer plan.md" } },
+    ]);
+    expect(useSessionStore.getState().sessionAwaitingUser[tabId]).toBe(true);
+    __test.trackActivity(sessionKey, [{ type: "tool_execution_end", toolCallId: "c1", toolName: "bash" }]);
+    expect(useSessionStore.getState().sessionAwaitingUser[tabId]).toBeUndefined();
+  });
+
+  it("ignores ordinary tool calls", () => {
+    __test.trackActivity(sessionKey, [
+      { type: "tool_execution_start", toolCallId: "c2", toolName: "bash", args: { command: "ls" } },
+    ]);
+    expect(useSessionStore.getState().sessionAwaitingUser[tabId]).toBeUndefined();
+  });
+
+  it("clears when the run settles", () => {
+    __test.trackActivity(sessionKey, [
+      { type: "tool_execution_start", toolCallId: "c3", toolName: "bash", args: { command: "plan-previewer x.md" } },
+      { type: "agent_settled" },
+    ]);
+    expect(useSessionStore.getState().sessionAwaitingUser[tabId]).toBeUndefined();
   });
 });

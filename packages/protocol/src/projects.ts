@@ -30,13 +30,13 @@ export interface ProjectsFile {
 export interface AttachedItem {
   id: string;
   name: string;
-  path?: string;
-  kind: "image" | "file";
+  path?: string; // on-disk path; always set for videos (the agent reads them from here)
+  kind: "image" | "video" | "file";
   mimeType: string;
   size?: number;
   dataBase64?: string; // base64 string for images (without data:... prefix)
   textContent?: string; // string content for text/code files
-  previewUrl?: string; // data URL or thumbnail for rendering in UI
+  previewUrl?: string; // data URL (images) or blob URL (videos) for rendering in UI
 }
 
 export interface SessionCatalogItem {

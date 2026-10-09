@@ -15,6 +15,7 @@ export type SoundId =
   | "subagent_done"
   // Plan Previewer & Approvals
   | "plan_request"
+  | "question_asked"
   | "plan_choice"
   | "plan_approve"
   | "plan_reject"
@@ -98,6 +99,12 @@ export const SOUND_DEFINITIONS: Record<SoundId, SoundMeta> = {
     id: "plan_request",
     label: "Plan Review Ready",
     description: "Attention ping when a plan review card arrives",
+    category: "plan",
+  },
+  question_asked: {
+    id: "question_asked",
+    label: "Question Asked",
+    description: "Attention ping when the AI asks you a question or needs an approval",
     category: "plan",
   },
   plan_choice: {

@@ -1,10 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  answerConfidence,
   buildRecentMessages,
   callJev,
+  estimateSavedTokens,
+  usageSources,
   checkCommandPaths,
   COMPACTION_QUESTIONS,
   confine,
@@ -126,6 +129,69 @@ describe("callJev", () => {
     const r = await callJev({ settings: { ...settings, maxCallsPerDay: 2 }, feature: "t", state: "x", questions: {}, env, fetchImpl: fetchImpl as any });
     expect(r).toMatchObject({ ok: false, error: "Daily Jev call limit reached (2)" });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("callJev analytics fields", () => {
+  it("classifies failures with errorKind", async () => {
+    const { env } = tmpEnv();
+    const base = { settings, feature: "t", state: "x", questions: {}, env };
+    expect(await callJev({ ...base, fetchImpl: (async () => jsonRes(500, {})) as any })).toMatchObject({ errorKind: "api", logged: true });
+    resetBreaker();
+    expect(await callJev({ ...base, fetchImpl: (async () => jsonRes(402, {})) as any })).toMatchObject({ errorKind: "auth" });
+    resetBreaker();
+    const hang = (async (_u: string, init: RequestInit) =>
+      new Promise((_, reject) => init.signal!.addEventListener("abort", () => reject(new Error("aborted"))))) as any;
+    expect(await callJev({ ...base, timeoutMs: 10, fetchImpl: hang })).toMatchObject({ errorKind: "timeout", error: "Jev request timed out" });
+    resetBreaker();
+    resetCallCounter();
+    const capped = await callJev({ ...base, settings: { ...settings, maxCallsPerDay: 1 }, fetchImpl: (async () => jsonRes(200, okBody({}))) as any });
+    expect(capped).toMatchObject({ ok: false, errorKind: "cap", logged: false });
+  });
+
+  it("treats an aborted signal as a non-failure: not logged, not counted, breaker untouched", async () => {
+    const { env, usage } = tmpEnv();
+    const limited = { ...settings, maxCallsPerDay: 2 };
+    const base = { settings: limited, feature: "t", state: "x", questions: {}, env };
+    const fetchImpl = vi.fn(async () => jsonRes(200, okBody({})));
+    // Already aborted: no fetch, no log, no count.
+    const pre = new AbortController();
+    pre.abort();
+    expect(await callJev({ ...base, signal: pre.signal, fetchImpl: fetchImpl as any })).toMatchObject({ ok: false, errorKind: "aborted", logged: false });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    // Aborted mid-flight: fetch rejects, still no log / count / breaker failure.
+    const hang = (async (_u: string, init: RequestInit) =>
+      new Promise((_, reject) => init.signal!.addEventListener("abort", () => reject(new Error("The operation was aborted"))))) as any;
+    for (let i = 0; i < 5; i++) {
+      const ac = new AbortController();
+      const p = callJev({ ...base, signal: ac.signal, fetchImpl: hang });
+      ac.abort();
+      expect(await p).toMatchObject({ ok: false, errorKind: "aborted", logged: false });
+    }
+    expect(existsSync(usage)).toBe(false);
+    // Breaker not tripped (5 > 3 failures) and cap (2) untouched: two real calls still go through.
+    expect(await callJev({ ...base, fetchImpl: fetchImpl as any })).toMatchObject({ ok: true });
+    expect(await callJev({ ...base, fetchImpl: fetchImpl as any })).toMatchObject({ ok: true });
+    expect(await callJev({ ...base, fetchImpl: fetchImpl as any })).toMatchObject({ errorKind: "cap" });
+  });
+
+  it("writes meta and per-answer confidence into the usage record", async () => {
+    const { env, usage } = tmpEnv();
+    const answers = { a: { type: "noul", noul: 0.1 }, b: { type: "choice", choice: "x", confidence: 0.55, probabilities: {} } };
+    await callJev({
+      settings, feature: "ask_jev", state: "x", questions: {}, env,
+      meta: { sessionId: "s1", toolCallId: "t1", savedTokensEst: 9 },
+      fetchImpl: (async () => jsonRes(200, okBody(answers))) as any,
+    });
+    expect(JSON.parse(readFileSync(usage, "utf8").trim())).toMatchObject({ sessionId: "s1", toolCallId: "t1", savedTokensEst: 9, confidence: [0.9, 0.55] });
+  });
+
+  it("computes confidence, saved tokens and size-only sources", () => {
+    expect(answerConfidence({ type: "noul", noul: 0.3 })).toBeCloseTo(0.7);
+    expect(answerConfidence({ type: "score", score: 1, confidence: 0.4, legend: {}, probabilities: {} })).toBe(0.4);
+    const sources = { stateChars: 100, files: [{ path: "a", bytes: 401, preview: "p", truncated: false }], command: { command: "ls", bytes: 399, preview: "q", truncated: false } };
+    expect(estimateSavedTokens(sources)).toBe(200);
+    expect(usageSources(sources)).toEqual({ stateChars: 100, files: [{ path: "a", bytes: 401 }], commandBytes: 399 });
   });
 });
 

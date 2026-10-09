@@ -171,6 +171,7 @@ export const IPC = {
   filesReadMedia: "files:read-media",
   filesShowInFolder: "files:show-in-folder",
   pickFiles: "studio:pick-files",
+  filesSaveAttachment: "files:save-attachment",
   // Window controls
   windowMinimize: "window:minimize",
   windowMaximize: "window:maximize",
@@ -395,6 +396,8 @@ export interface StudioApi {
   listFiles(dirPath: string): Promise<any[]>;
   readFile(filePath: string): Promise<any>;
   readMediaFile(filePath: string): Promise<{ data: string; mimeType: string; size: number; name: string }>;
+  /** Persist pasted/dropped bytes (e.g. a video) to a temp file so the agent can read it by path. */
+  saveAttachment(name: string, data: ArrayBuffer): Promise<{ path: string; size: number }>;
   showItemInFolder(filePath: string): Promise<void>;
   pickFiles(options?: { allowImagesOnly?: boolean }): Promise<string[]>;
   // Marketplace operations

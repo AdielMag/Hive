@@ -42,6 +42,19 @@ export function useSubagentOutput(
   const isRunning =
     view.status === "running" || view.status === "queued" || view.status === "background";
 
+  // The viewer component can be reused for a different subagent: never carry over its file/messages.
+  const ownerRef = useRef<string>(view.toolCallId);
+  if (ownerRef.current !== view.toolCallId) {
+    ownerRef.current = view.toolCallId;
+    filePathRef.current = view.outputFile ?? null;
+    offsetRef.current = 0;
+    messagesRef.current = [];
+  } else if (view.outputFile && filePathRef.current !== view.outputFile && messagesRef.current.length === 0) {
+    // The authoritative output path arrived after (or instead of) a guessed one.
+    filePathRef.current = view.outputFile;
+    offsetRef.current = 0;
+  }
+
   useEffect(() => {
     if (!expanded) return;
 
@@ -113,6 +126,11 @@ export function useSubagentOutput(
       }
     };
 
+    if (messagesRef.current.length === 0) {
+      setTimeline(EMPTY_TIMELINE);
+      setPrompt(undefined);
+      setError(null);
+    }
     setLoading(messagesRef.current.length === 0);
     void locateAndRead();
 

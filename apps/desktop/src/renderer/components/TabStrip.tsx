@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { TabItem } from "@hive/protocol";
-import { hasDraft, useSessionStore } from "../store/session-store.ts";
+import { hasDraft, transcriptAwaitsUser, useSessionStore } from "../store/session-store.ts";
 import { getFileManagerLabel } from "../lib/platform.ts";
 import { playUiSound } from "../store/sound-store.ts";
 import { isCoreTabKind } from "@hive/protocol";
@@ -54,6 +54,8 @@ export const TabStrip: React.FC<TabStripProps> = ({
     displayedTabId,
     displayedPendingDialog,
     displayedPendingForm,
+    sessionAwaitingUser,
+    displayedAwaitingTool,
   } = useSessionStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -69,6 +71,8 @@ export const TabStrip: React.FC<TabStripProps> = ({
       displayedTabId: s.displayedTabId,
       displayedPendingDialog: !!s.pendingUiDialog,
       displayedPendingForm: !!s.pendingForm,
+      sessionAwaitingUser: s.sessionAwaitingUser,
+      displayedAwaitingTool: transcriptAwaitsUser(s.transcript),
     })),
   );
 
@@ -335,9 +339,10 @@ export const TabStrip: React.FC<TabStripProps> = ({
           // "running" while it waits, so this must win over the spinner or the wait is invisible.
           const needsInput =
             isSession &&
-            (tab.id === displayedTabId
-              ? displayedPendingDialog || displayedPendingForm
-              : !!parked?.pendingUiDialog || !!parked?.pendingForm);
+            (!!sessionAwaitingUser[tab.id] ||
+              (tab.id === displayedTabId
+                ? displayedPendingDialog || displayedPendingForm || displayedAwaitingTool
+                : !!parked?.pendingUiDialog || !!parked?.pendingForm));
           const busy = isRunning && !needsInput;
           const unseen = !busy && !needsInput && (activity === "done" || activity === "error" ? activity : subagentUnseen);
           const dotKind = needsInput ? "input" : unseen;
@@ -387,7 +392,11 @@ export const TabStrip: React.FC<TabStripProps> = ({
                 </span>
               )}
               <span className="tab__end">
-                {busy && <Loader2 size={12} className="spin tab__busy" aria-hidden />}
+                {busy && (
+                  <span className="tab__busy" aria-hidden>
+                    <Loader2 size={12} className="spin" />
+                  </span>
+                )}
                 {!busy && dotKind && <span className={`tab__dot tab__dot--${dotKind}`} aria-hidden />}
                 <button
                   className="tab__close"
