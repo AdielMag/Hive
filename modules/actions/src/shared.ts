@@ -60,6 +60,21 @@ export interface ActionsWorkflow {
   active: boolean;
 }
 
+export interface WorkflowInput {
+  name: string;
+  description?: string;
+  required: boolean;
+  type: "string" | "boolean" | "choice" | "number" | "environment";
+  default?: string;
+  options?: string[];
+}
+
+/** Whether a workflow has a `workflow_dispatch` trigger, and the inputs it asks for. */
+export interface WorkflowInputs {
+  dispatchable: boolean;
+  inputs: WorkflowInput[];
+}
+
 export type RunStatusFilter = "all" | "queued" | "in_progress" | "success" | "failure" | "cancelled";
 
 export interface RunsQuery {
@@ -84,6 +99,10 @@ export const ActionsMethods = {
   runs: "runs",
   jobs: "jobs",
   workflows: "workflows",
+  workflowInputs: "workflowInputs",
+  dispatch: "dispatch",
+  rerun: "rerun",
+  cancel: "cancel",
   setToken: "setToken",
   clearToken: "clearToken",
 } as const;
@@ -95,6 +114,10 @@ export interface ActionsApi {
   runs(repo: RepoRef, query: RunsQuery): Promise<ActionsResult<RunsPage>>;
   jobs(repo: RepoRef, runId: number): Promise<ActionsResult<ActionsJob[]>>;
   workflows(repo: RepoRef): Promise<ActionsResult<ActionsWorkflow[]>>;
+  workflowInputs(repo: RepoRef, path: string, ref: string): Promise<ActionsResult<WorkflowInputs>>;
+  dispatch(repo: RepoRef, workflowId: number, ref: string, inputs: Record<string, string>): Promise<ActionsResult<null>>;
+  rerun(repo: RepoRef, runId: number, failedOnly: boolean): Promise<ActionsResult<null>>;
+  cancel(repo: RepoRef, runId: number): Promise<ActionsResult<null>>;
   setToken(token: string): Promise<void>;
   clearToken(): Promise<void>;
 }
@@ -109,6 +132,10 @@ export function createActionsApi(invoke: Invoke): ActionsApi {
     runs: (repo, query) => invoke(M.runs, repo, query),
     jobs: (repo, runId) => invoke(M.jobs, repo, runId),
     workflows: (repo) => invoke(M.workflows, repo),
+    workflowInputs: (repo, path, ref) => invoke(M.workflowInputs, repo, path, ref),
+    dispatch: (repo, workflowId, ref, inputs) => invoke(M.dispatch, repo, workflowId, ref, inputs),
+    rerun: (repo, runId, failedOnly) => invoke(M.rerun, repo, runId, failedOnly),
+    cancel: (repo, runId) => invoke(M.cancel, repo, runId),
     setToken: (token) => invoke(M.setToken, token),
     clearToken: () => invoke(M.clearToken),
   };

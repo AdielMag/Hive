@@ -25,6 +25,12 @@ export default defineMainModule({
     h(M.runs, (repo: RepoRef, query: RunsQuery) => github.runs(repo, query ?? {}));
     h(M.jobs, (repo: RepoRef, runId: number) => github.jobs(repo, runId));
     h(M.workflows, (repo: RepoRef) => github.workflows(repo));
+    h(M.workflowInputs, (repo: RepoRef, path: string, ref: string) => github.workflowInputs(repo, path, ref));
+    h(M.dispatch, (repo: RepoRef, workflowId: number, ref: string, inputs: Record<string, string>) =>
+      github.dispatch(repo, workflowId, ref, inputs ?? {}),
+    );
+    h(M.rerun, (repo: RepoRef, runId: number, failedOnly: boolean) => github.rerun(repo, runId, !!failedOnly));
+    h(M.cancel, (repo: RepoRef, runId: number) => github.cancel(repo, runId));
     h(M.setToken, (token: string) => {
       if (typeof token !== "string" || !token.trim()) throw new Error("Token is empty");
       tokens.save(token);

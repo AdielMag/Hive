@@ -332,3 +332,54 @@
   padding: 0;
   background: var(--danger);
 }
+
+/* write actions: dispatch form, run buttons, ok banner */
+.ga-dispatch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  flex-shrink: 0;
+  max-height: 50%;
+  overflow-y: auto;
+}
+.ga-dispatch__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ga-dispatch__err {
+  color: var(--danger);
+  font-size: 11px;
+  word-break: break-word;
+}
+.ga-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.ga-field input[type="checkbox"] {
+  align-self: flex-start;
+}
+.ga-run__actions {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+.ga-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ga-banner--ok {
+  background: color-mix(in srgb, var(--accent-base) 12%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--accent-base) 25%, transparent);
+  color: var(--accent-base);
+}
+.ga-banner__x {
+  margin-left: auto;
+}

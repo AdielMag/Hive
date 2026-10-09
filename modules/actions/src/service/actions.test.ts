@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { createGithubClient, normalizeRun, toState } from "./github.ts";
+import { createGithubClient, normalizeRun, parseWorkflowInputs, toState } from "./github.ts";
 import { parseGithubRemote } from "./remote.ts";
 import { createTokenProvider } from "./token.ts";
 
@@ -127,5 +127,58 @@ describe("token provider", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("parseWorkflowInputs", () => {
+  it("reads inputs from workflow_dispatch", () => {
+    const r = parseWorkflowInputs(
+      "on:\n  workflow_dispatch:\n    inputs:\n      env:\n        type: choice\n        options: [dev, prod]\n        required: true\n      dry:\n        type: boolean\n        default: true\n",
+    );
+    expect(r.dispatchable).toBe(true);
+    expect(r.inputs).toEqual([
+      { name: "env", description: undefined, required: true, type: "choice", default: undefined, options: ["dev", "prod"] },
+      { name: "dry", description: undefined, required: false, type: "boolean", default: "true", options: undefined },
+    ]);
+  });
+  it("handles bare and list triggers", () => {
+    expect(parseWorkflowInputs("on: workflow_dispatch\n")).toEqual({ dispatchable: true, inputs: [] });
+    expect(parseWorkflowInputs("on: [push, workflow_dispatch]\n").dispatchable).toBe(true);
+    expect(parseWorkflowInputs("on:\n  workflow_dispatch:\n").dispatchable).toBe(true);
+  });
+  it("reports non-dispatchable workflows", () => {
+    expect(parseWorkflowInputs("on: push\n").dispatchable).toBe(false);
+    expect(parseWorkflowInputs("on:\n  push:\n").dispatchable).toBe(false);
+    expect(parseWorkflowInputs(": : bad").dispatchable).toBe(false);
+  });
+});
+
+describe("write actions", () => {
+  it("POSTs a dispatch with ref and inputs", async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
+    const client = createGithubClient({ getToken: async () => "tok", fetchImpl: fetchImpl as any });
+    const res = await client.dispatch({ owner: "o", repo: "r" }, 7, "main", { a: "1" });
+    expect(res.ok).toBe(true);
+    const [url, init] = fetchImpl.mock.calls[0] as any;
+    expect(url).toBe("https://api.github.com/repos/o/r/actions/workflows/7/dispatches");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ ref: "main", inputs: { a: "1" } });
+  });
+  it("maps 403 on write to a permission message and surfaces 422 detail", async () => {
+    const forbidden = createGithubClient({ getToken: async () => "tok", fetchImpl: (async () => new Response("{}", { status: 403 })) as any });
+    const r1 = await forbidden.cancel({ owner: "o", repo: "r" }, 1);
+    expect(r1).toMatchObject({ ok: false, code: "unauthorized" });
+    const bad = createGithubClient({
+      getToken: async () => "tok",
+      fetchImpl: (async () => new Response(JSON.stringify({ message: "Workflow does not have 'workflow_dispatch' trigger" }), { status: 422 })) as any,
+    });
+    const r2 = await bad.dispatch({ owner: "o", repo: "r" }, 1, "main", {});
+    expect(r2).toMatchObject({ ok: false, message: "Workflow does not have 'workflow_dispatch' trigger" });
+  });
+  it("uses the rerun-failed-jobs endpoint", async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 201 }));
+    const client = createGithubClient({ getToken: async () => "tok", fetchImpl: fetchImpl as any });
+    await client.rerun({ owner: "o", repo: "r" }, 9, true);
+    expect((fetchImpl.mock.calls[0] as any)[0]).toContain("/runs/9/rerun-failed-jobs");
   });
 });

@@ -10,7 +10,10 @@ import type {
   RepoRef,
   RunsPage,
   RunsQuery,
+  WorkflowInput,
+  WorkflowInputs,
 } from "../shared.ts";
+import { parse as parseYaml } from "yaml";
 
 const API = "https://api.github.com";
 
@@ -79,6 +82,38 @@ export function normalizeJob(j: any): ActionsJob {
   };
 }
 
+/** Extracts `on.workflow_dispatch` (and its inputs) from a workflow file's YAML. */
+export function parseWorkflowInputs(yamlText: string): WorkflowInputs {
+  let doc: any;
+  try {
+    doc = parseYaml(yamlText);
+  } catch {
+    return { dispatchable: false, inputs: [] };
+  }
+  const on = doc?.on ?? doc?.["true"]; // some parsers read the bare key `on` as boolean true
+  let wd: any;
+  if (typeof on === "string") wd = on === "workflow_dispatch" ? {} : undefined;
+  else if (Array.isArray(on)) wd = on.includes("workflow_dispatch") ? {} : undefined;
+  else if (on && typeof on === "object" && "workflow_dispatch" in on) wd = on.workflow_dispatch ?? {};
+  if (wd === undefined) return { dispatchable: false, inputs: [] };
+  const raw = typeof wd === "object" ? wd.inputs : undefined;
+  const inputs: WorkflowInput[] = [];
+  if (raw && typeof raw === "object") {
+    for (const [name, def] of Object.entries<any>(raw)) {
+      const type = ["boolean", "choice", "number", "environment"].includes(def?.type) ? def.type : "string";
+      inputs.push({
+        name,
+        description: typeof def?.description === "string" ? def.description : undefined,
+        required: def?.required === true,
+        type,
+        default: def?.default === undefined || def?.default === null ? undefined : String(def.default),
+        options: Array.isArray(def?.options) ? def.options.map(String) : undefined,
+      });
+    }
+  }
+  return { dispatchable: true, inputs };
+}
+
 class ApiError extends Error {
   constructor(
     readonly code: ActionsErrorCode,
@@ -96,7 +131,13 @@ export interface GithubClientOptions {
 export function createGithubClient({ getToken, fetchImpl = fetch }: GithubClientOptions) {
   const etags = new Map<string, { etag: string; body: unknown; token: string | null }>();
 
-  async function get(path: string, params: Record<string, string | number | undefined> = {}): Promise<any> {
+  async function request(
+    method: "GET" | "POST",
+    path: string,
+    params: Record<string, string | number | undefined> = {},
+    body?: unknown,
+  ): Promise<any> {
+    const write = method !== "GET";
     const url = new URL(API + path);
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
     const key = url.toString();
@@ -107,21 +148,28 @@ export function createGithubClient({ getToken, fetchImpl = fetch }: GithubClient
       "User-Agent": "Hive-Desktop",
     };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const cached = etags.get(key);
+    const cached = write ? undefined : etags.get(key);
     if (cached && cached.token === token) headers["If-None-Match"] = cached.etag;
+    if (write) headers["Content-Type"] = "application/json";
 
     let res: Response;
     try {
-      res = await fetchImpl(key, { headers, signal: AbortSignal.timeout(15_000) });
+      res = await fetchImpl(key, {
+        method,
+        headers,
+        body: write && body !== undefined ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(15_000),
+      });
     } catch (err: any) {
       throw new ApiError("network", `Could not reach GitHub: ${err?.message ?? err}`);
     }
     if (res.status === 304 && cached) return cached.body;
     if (res.ok) {
-      const body = await res.json();
+      if (write) return res.status === 204 ? null : await res.json().catch(() => null);
+      const json = await res.json();
       const etag = res.headers.get("etag");
-      if (etag) etags.set(key, { etag, body, token });
-      return body;
+      if (etag) etags.set(key, { etag, body: json, token });
+      return json;
     }
     const remaining = res.headers.get("x-ratelimit-remaining");
     const reset = Number(res.headers.get("x-ratelimit-reset"));
@@ -129,6 +177,13 @@ export function createGithubClient({ getToken, fetchImpl = fetch }: GithubClient
     if ((res.status === 403 || res.status === 429) && remaining === "0") {
       const when = reset ? ` Resets at ${new Date(reset * 1000).toLocaleTimeString()}.` : "";
       throw new ApiError("rate_limited", `GitHub API rate limit reached.${when}${token ? "" : " Add a token for a higher limit."}`);
+    }
+    if (write && (res.status === 403 || res.status === 404)) {
+      throw new ApiError("unauthorized", "GitHub refused the action. The token needs write access to Actions (repo scope / actions:write).");
+    }
+    if (res.status === 422 || res.status === 409) {
+      const detail = await res.json().then((j: any) => j?.message as string | undefined).catch(() => undefined);
+      throw new ApiError("unknown", detail || `GitHub returned ${res.status} ${res.statusText}`);
     }
     if (res.status === 404) {
       throw new ApiError(
@@ -139,6 +194,8 @@ export function createGithubClient({ getToken, fetchImpl = fetch }: GithubClient
     if (res.status === 403) throw new ApiError("unauthorized", "Access denied. The token needs permission to read Actions (repo / actions:read).");
     throw new ApiError("unknown", `GitHub returned ${res.status} ${res.statusText}`);
   }
+
+  const get = (path: string, params: Record<string, string | number | undefined> = {}) => request("GET", path, params);
 
   async function wrap<T>(fn: () => Promise<T>): Promise<ActionsResult<T>> {
     try {
@@ -172,6 +229,29 @@ export function createGithubClient({ getToken, fetchImpl = fetch }: GithubClient
       wrap(async () => {
         const body = await get(`${base(repo)}/workflows`, { per_page: 100 });
         return (body.workflows ?? []).map((w: any) => ({ id: w.id, name: w.name, path: w.path, active: w.state === "active" }));
+      }),
+    /** Reads the workflow file at `ref` and reports whether it can be dispatched, with its inputs. */
+    workflowInputs: (repo: RepoRef, path: string, ref: string): Promise<ActionsResult<WorkflowInputs>> =>
+      wrap(async () => {
+        const filePath = path.split("/").map(encodeURIComponent).join("/");
+        const body = await get(`/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.repo)}/contents/${filePath}`, { ref });
+        if (typeof body?.content !== "string") throw new ApiError("unknown", "Could not read the workflow file.");
+        return parseWorkflowInputs(Buffer.from(body.content, "base64").toString("utf8"));
+      }),
+    dispatch: (repo: RepoRef, workflowId: number, ref: string, inputs: Record<string, string>): Promise<ActionsResult<null>> =>
+      wrap(async () => {
+        await request("POST", `${base(repo)}/workflows/${workflowId}/dispatches`, {}, { ref, inputs });
+        return null;
+      }),
+    rerun: (repo: RepoRef, runId: number, failedOnly: boolean): Promise<ActionsResult<null>> =>
+      wrap(async () => {
+        await request("POST", `${base(repo)}/runs/${runId}/${failedOnly ? "rerun-failed-jobs" : "rerun"}`);
+        return null;
+      }),
+    cancel: (repo: RepoRef, runId: number): Promise<ActionsResult<null>> =>
+      wrap(async () => {
+        await request("POST", `${base(repo)}/runs/${runId}/cancel`);
+        return null;
       }),
   };
 }

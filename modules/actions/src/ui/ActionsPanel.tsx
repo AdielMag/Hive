@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { AlertCircle, ChevronDown, ChevronRight, ExternalLink, GitBranch, KeyRound, Play, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronRight, CheckCircle2, ExternalLink, GitBranch, KeyRound, Play, RefreshCw, RotateCcw, Square, X } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
-import type { ActionsJob, ActionsRun, RunStatusFilter } from "../shared.ts";
+import type { ActionsJob, ActionsRun, RunStatusFilter, WorkflowInput } from "../shared.ts";
+import { actionsApi } from "./actions-host.ts";
 import { isActiveState, setPanelMounted, useActionsStore } from "./actions-store.ts";
 import { StatusIcon } from "./StatusIcon.tsx";
 import { durationLabel, runAgo, runDuration } from "./timing.ts";
@@ -47,7 +48,7 @@ const TokenForm: React.FC<{ hint?: string }> = ({ hint }) => {
       <input
         type="password"
         className="ga-input"
-        placeholder="GitHub token (repo / actions:read)"
+        placeholder="GitHub token (repo / actions:write to run workflows)"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         autoComplete="off"
@@ -55,6 +56,118 @@ const TokenForm: React.FC<{ hint?: string }> = ({ hint }) => {
       />
       <button type="submit" className="ga-btn" disabled={busy || !value.trim()}>
         Save token
+      </button>
+    </form>
+  );
+};
+
+/** Form to trigger a `workflow_dispatch` run: pick workflow, ref, and fill its declared inputs. */
+const DispatchForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const repo = useActionsStore((s) => s.repo);
+  const workflows = useActionsStore((s) => s.workflows);
+  const dispatchWorkflow = useActionsStore((s) => s.dispatchWorkflow);
+  const active = workflows.filter((w) => w.active);
+  const [workflowId, setWorkflowId] = useState<number | null>(active[0]?.id ?? null);
+  const [ref, setRef] = useState(repo?.branch ?? "main");
+  const [meta, setMeta] = useState<{ dispatchable: boolean; inputs: WorkflowInput[] } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const workflow = active.find((w) => w.id === workflowId);
+
+  useEffect(() => {
+    setMeta(null);
+    setLoadError(null);
+    if (!repo || !workflow || !ref.trim()) return;
+    let cancelled = false;
+    // Debounce so typing a ref does not fire a request per keystroke.
+    const t = setTimeout(() => {
+      void actionsApi()
+        .workflowInputs(repo, workflow.path, ref.trim())
+        .then((res) => {
+          if (cancelled) return;
+          if (!res.ok) return setLoadError(res.message);
+          setMeta(res.data);
+          setValues(Object.fromEntries(res.data.inputs.map((i) => [i.name, i.default ?? (i.type === "choice" ? (i.options?.[0] ?? "") : "")])));
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [repo, workflow, ref]);
+
+  const missing = meta?.inputs.some((i) => i.required && !values[i.name]?.trim()) ?? false;
+  const canRun = !!workflow && !!ref.trim() && meta?.dispatchable === true && !missing && !busy;
+
+  return (
+    <form
+      className="ga-dispatch"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!workflow || !canRun) return;
+        setBusy(true);
+        const inputs = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== ""));
+        void dispatchWorkflow(workflow, ref.trim(), inputs).then((ok) => {
+          setBusy(false);
+          if (ok) onClose();
+        });
+      }}
+    >
+      <div className="ga-dispatch__row">
+        <select className="ga-select" value={workflowId ?? ""} onChange={(e) => setWorkflowId(Number(e.target.value))}>
+          {active.length === 0 && <option value="">No workflows</option>}
+          {active.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="ga-ib" title="Close" onClick={onClose}>
+          <X size={13} />
+        </button>
+      </div>
+      <label className="ga-field">
+        <span>Branch / tag</span>
+        <input className="ga-input" value={ref} onChange={(e) => setRef(e.target.value)} spellCheck={false} />
+      </label>
+      {loadError && <div className="ga-dispatch__err">{loadError}</div>}
+      {meta && !meta.dispatchable && <div className="ga-dispatch__err">This workflow has no workflow_dispatch trigger on {ref}.</div>}
+      {meta?.dispatchable &&
+        meta.inputs.map((i) => (
+          <label key={i.name} className="ga-field" title={i.description}>
+            <span>
+              {i.name}
+              {i.required ? " *" : ""}
+              {i.description && <span className="ga-dim"> — {i.description}</span>}
+            </span>
+            {i.type === "boolean" ? (
+              <input
+                type="checkbox"
+                checked={values[i.name] === "true"}
+                onChange={(e) => setValues({ ...values, [i.name]: e.target.checked ? "true" : "false" })}
+              />
+            ) : i.type === "choice" ? (
+              <select className="ga-select" value={values[i.name] ?? ""} onChange={(e) => setValues({ ...values, [i.name]: e.target.value })}>
+                {(i.options ?? []).map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="ga-input"
+                type={i.type === "number" ? "number" : "text"}
+                value={values[i.name] ?? ""}
+                onChange={(e) => setValues({ ...values, [i.name]: e.target.value })}
+                spellCheck={false}
+              />
+            )}
+          </label>
+        ))}
+      <button type="submit" className="ga-btn" disabled={!canRun}>
+        {busy ? "Triggering..." : "Run workflow"}
       </button>
     </form>
   );
@@ -102,6 +215,13 @@ const RunRow: React.FC<{ run: ActionsRun; host: ModuleHost; now: number }> = ({ 
   const expanded = useActionsStore((s) => s.expandedRunId === run.id);
   const jobs = useActionsStore((s) => s.jobs[run.id]);
   const toggleRun = useActionsStore((s) => s.toggleRun);
+  const rerunRun = useActionsStore((s) => s.rerunRun);
+  const cancelRun = useActionsStore((s) => s.cancelRun);
+  const [busy, setBusy] = useState(false);
+  const act = (fn: () => Promise<boolean>) => {
+    setBusy(true);
+    void fn().finally(() => setBusy(false));
+  };
   const duration = runDuration(run, now);
   return (
     <div className={`ga-run${expanded ? " ga-run--open" : ""}`}>
@@ -135,6 +255,24 @@ const RunRow: React.FC<{ run: ActionsRun; host: ModuleHost; now: number }> = ({ 
           <button type="button" className="ga-btn ga-btn--link" onClick={() => void host.openExternal(run.url)}>
             <ExternalLink size={11} /> Open run on GitHub
           </button>
+          <div className="ga-run__actions">
+            {isActiveState(run.state) ? (
+              <button type="button" className="ga-btn ga-btn--icon" disabled={busy} onClick={() => act(() => cancelRun(run))}>
+                <Square size={10} /> Cancel
+              </button>
+            ) : (
+              <>
+                <button type="button" className="ga-btn ga-btn--icon" disabled={busy} onClick={() => act(() => rerunRun(run, false))}>
+                  <RotateCcw size={10} /> Re-run all
+                </button>
+                {run.state === "failure" && (
+                  <button type="button" className="ga-btn ga-btn--icon" disabled={busy} onClick={() => act(() => rerunRun(run, true))}>
+                    <RotateCcw size={10} /> Re-run failed
+                  </button>
+                )}
+              </>
+            )}
+          </div>
           <JobList jobs={jobs} host={host} now={now} />
         </div>
       )}
@@ -147,6 +285,7 @@ export const ActionsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const hasActive = s.runs.some((r) => isActiveState(r.state));
   const now = useNow(s.runs.some((r) => r.state === "running") || s.jobs[s.expandedRunId ?? -1]?.some((j) => j.state === "running") === true);
   const project = host.sessions.activeProject();
+  const [showDispatch, setShowDispatch] = useState(false);
 
   useEffect(() => {
     setPanelMounted(1);
@@ -173,6 +312,11 @@ export const ActionsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           )}
         </div>
         <div className="ga-head__tools">
+          {s.repo && (
+            <button type="button" className="ga-ib" title="Run workflow" onClick={() => setShowDispatch((v) => !v)}>
+              <Play size={13} />
+            </button>
+          )}
           {s.repo?.tokenSource === "saved" && (
             <button type="button" className="ga-ib" title="Remove saved GitHub token" onClick={() => void s.clearToken()}>
               <KeyRound size={13} />
@@ -214,6 +358,16 @@ export const ActionsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         </div>
       )}
 
+      {showDispatch && s.repo && <DispatchForm onClose={() => setShowDispatch(false)} />}
+      {s.notice && (
+        <div className={`ga-banner${s.notice.kind === "ok" ? " ga-banner--ok" : ""}`}>
+          {s.notice.kind === "ok" ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+          <span>{s.notice.message}</span>
+          <button type="button" className="ga-ib ga-banner__x" title="Dismiss" onClick={s.dismissNotice}>
+            <X size={11} />
+          </button>
+        </div>
+      )}
       {err && (
         <div className="ga-banner">
           <AlertCircle size={13} />

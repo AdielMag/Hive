@@ -8,6 +8,7 @@ import type {
   ActionsErrorCode,
   ActionsJob,
   ActionsRepo,
+  ActionsResult,
   ActionsRun,
   ActionsWorkflow,
   RunStatusFilter,
@@ -54,6 +55,13 @@ export interface ActionsState {
   toggleRun: (runId: number) => void;
   saveToken: (token: string) => Promise<void>;
   clearToken: () => Promise<void>;
+  /** Result of the last write action (dispatch / re-run / cancel), shown as a banner. */
+  notice: { kind: "ok" | "error"; message: string } | null;
+  dismissNotice: () => void;
+  /** Triggers a `workflow_dispatch`; resolves true on success. */
+  dispatchWorkflow: (workflow: ActionsWorkflow, ref: string, inputs: Record<string, string>) => Promise<boolean>;
+  rerunRun: (run: ActionsRun, failedOnly: boolean) => Promise<boolean>;
+  cancelRun: (run: ActionsRun) => Promise<boolean>;
 }
 
 const initialFilters: ActionsFilters = { status: "all", branch: "all", workflowId: null };
@@ -83,6 +91,17 @@ function queryFor(s: Pick<ActionsState, "filters" | "repo">, page: number) {
   };
 }
 
+/** Records a write result as a notice and schedules refreshes (GitHub applies writes asynchronously). */
+function finishWrite(res: ActionsResult<unknown>, okMessage: string): boolean {
+  if (!res.ok) {
+    useActionsStore.setState({ notice: { kind: "error", message: res.message } });
+    return false;
+  }
+  useActionsStore.setState({ notice: { kind: "ok", message: okMessage } });
+  for (const delay of [1500, 5000]) setTimeout(() => void useActionsStore.getState().refresh({ silent: true }), delay);
+  return true;
+}
+
 export const useActionsStore = create<ActionsState>((set, get) => ({
   projectPath: null,
   repo: null,
@@ -98,6 +117,30 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
   expandedRunId: null,
   jobs: {},
   panelMounts: 0,
+  notice: null,
+
+  dismissNotice: () => set({ notice: null }),
+
+  dispatchWorkflow: async (workflow, ref, inputs) => {
+    const { repo } = get();
+    if (!repo) return false;
+    const res = await actionsApi().dispatch(repo, workflow.id, ref, inputs);
+    return finishWrite(res, `Triggered "${workflow.name}" on ${ref}.`);
+  },
+
+  rerunRun: async (run, failedOnly) => {
+    const { repo } = get();
+    if (!repo) return false;
+    const res = await actionsApi().rerun(repo, run.id, failedOnly);
+    return finishWrite(res, failedOnly ? "Re-running failed jobs." : "Re-running all jobs.");
+  },
+
+  cancelRun: async (run) => {
+    const { repo } = get();
+    if (!repo) return false;
+    const res = await actionsApi().cancel(repo, run.id);
+    return finishWrite(res, "Cancel requested.");
+  },
 
   refresh: async (opts) => {
     const project = hostRef?.sessions.activeProject();
