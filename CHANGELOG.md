@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.26.0 — 2026-10-10 · [diff](https://github.com/AdielMag/Hive/compare/v0.25.2...v0.26.0)
+
+### ✨ Features
+
+- **actions:** redesign run workflow as full-height sheet ([`e992b2f`](https://github.com/AdielMag/Hive/commit/e992b2f99ce44aa60270133de1194dfda95ee419))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`cdd9094`](https://github.com/AdielMag/Hive/commit/cdd909438dd339b27dd5e70db4910738c6084132))
+
 ## v0.25.2 — 2026-10-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.25.1...v0.25.2)
 
 ### 📝 Documentation
