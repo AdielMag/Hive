@@ -24,7 +24,7 @@ export function openBrowserUrl(host: ModuleHost, settings: BrowserSettings, rawU
 /** Handler for clicked links: in-app browser, or the system browser when the user opted out. */
 export function handleLink(host: ModuleHost, settings: BrowserSettings, url: string, title?: string): void {
   if (settings.openExternalInHive) openBrowserUrl(host, settings, url, title);
-  else void host.openExternal(url);
+  else void host.openSystemBrowser(url);
 }
 
 /** Apply the RAM-saver policy: wake the active tab, hibernate stale / excess background tabs. */

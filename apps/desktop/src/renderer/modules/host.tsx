@@ -16,7 +16,7 @@ import { scrollToToolCall } from "../components/Transcript.tsx";
 import { useActiveRegistry } from "../store/ai-registry-store.ts";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import { useFeatureModelStore, resolveFeatureModel, type FeatureModelsConfig } from "../store/feature-models-store.ts";
-import { setLinkHandler } from "./link-bus.ts";
+import { openLink, setLinkHandler } from "./link-bus.ts";
 import { Slot } from "./ModuleViews.tsx";
 import { AiModelChip } from "../components/AiModelChip.tsx";
 import { ContextBreakdownPanel } from "../components/ContextBreakdownPanel.tsx";
@@ -145,7 +145,8 @@ export function createModuleHost(moduleId: string): ModuleHost {
         useUi.getState().openSettings(resolvedTab, focus);
       },
     },
-    openExternal: (url: string) => window.studio.openSystemBrowser(url),
+    openExternal: async (url: string) => openLink(url),
+    openSystemBrowser: (url: string) => window.studio.openSystemBrowser(url),
     links: { setHandler: (handler) => setLinkHandler(moduleId, handler) },
     ui: { Markdown: HostMarkdown, AiModelChip: HostAiModelChip, CodeBlock: HostCodeBlock, HighlightedSource: HostHighlightedSource, DiffView: HostDiffView, ProviderIcon: HostProviderIcon, ContextBreakdownPanel: HostContextBreakdown, Slot },
     languages: {

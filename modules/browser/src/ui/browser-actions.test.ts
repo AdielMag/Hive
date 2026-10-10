@@ -23,6 +23,7 @@ function fakeHost(initial: ModuleTab[] = [], activeId: string | null = null) {
       list: () => state.tabs,
     },
     openExternal: vi.fn(async () => {}),
+    openSystemBrowser: vi.fn(async () => {}),
   } as unknown as ModuleHost;
   return { host, state };
 }
@@ -54,7 +55,7 @@ describe("handleLink", () => {
     expect(state.tabs).toHaveLength(1);
     handleLink(host, { ...DEFAULT_BROWSER_SETTINGS, openExternalInHive: false }, "https://other.dev");
     expect(state.tabs).toHaveLength(1);
-    expect(host.openExternal).toHaveBeenCalledWith("https://other.dev");
+    expect(host.openSystemBrowser).toHaveBeenCalledWith("https://other.dev");
   });
 });
 

@@ -186,7 +186,7 @@ export const BrowserTab: React.FC<{ tab: ModuleTab }> = ({ tab }) => {
   };
 
   const handleOpenSystemBrowser = () => {
-    void host.openExternal(currentUrl);
+    void host.openSystemBrowser(currentUrl);
   };
 
   const isHttps = /^https:\/\//i.test(currentUrl);

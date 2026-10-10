@@ -140,7 +140,10 @@ export interface ModuleHost {
   settings: {
     open(tabId?: string, focus?: { providerId: string; reason?: string }): void;
   };
+  /** Open a link the way a click would: in the Hive browser when its module is enabled, else the system browser. */
   openExternal(url: string): Promise<void>;
+  /** Always open in the OS default browser (bypasses the Hive browser). */
+  openSystemBrowser(url: string): Promise<void>;
   /** Persistent key/value storage (localStorage with Hive's legacy-key migration). Keys are used verbatim. */
   storage: {
     get(key: string): string | null;
