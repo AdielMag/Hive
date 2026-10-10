@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.27.1 — 2026-10-10 · [diff](https://github.com/AdielMag/Hive/compare/v0.27.0...v0.27.1)
+
+### ♻️ Refactoring
+
+- **host:** add openSystemBrowser, refactor openExternal ([`371f6ad`](https://github.com/AdielMag/Hive/commit/371f6ad2849cca20f03c5372a6348d0fce2b6151))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`685223a`](https://github.com/AdielMag/Hive/commit/685223a02ba191aeabd843dd59f87c8ab30ff548))
+
 ## v0.27.0 — 2026-10-10 · [diff](https://github.com/AdielMag/Hive/compare/v0.26.0...v0.27.0)
 
 ### ✨ Features
