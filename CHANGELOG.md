@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.27.0 — 2026-10-10 · [diff](https://github.com/AdielMag/Hive/compare/v0.26.0...v0.27.0)
+
+### ✨ Features
+
+- **git:** add background fetch with throttling and backoff ([`2e8aa95`](https://github.com/AdielMag/Hive/commit/2e8aa95731114b3d6814a3a001f65de854df3228))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`e30d11d`](https://github.com/AdielMag/Hive/commit/e30d11d3c7c429588095b997a4453ccc5bf3c015))
+
 ## v0.26.0 — 2026-10-10 · [diff](https://github.com/AdielMag/Hive/compare/v0.25.2...v0.26.0)
 
 ### ✨ Features
