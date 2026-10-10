@@ -34,6 +34,7 @@ import { findOriginProject, findOriginTab } from "../lib/tab-origin.ts";
 import { openLink } from "../modules/link-bus.ts";
 import type { OpenTabSpec } from "@hive/module-sdk/renderer";
 import { playUiSound } from "./sound-store.ts";
+import { toast } from "../modules/toast-store.ts";
 import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { parseAgentResultText, type SubagentView } from "../lib/ai/subagents.ts";
@@ -1816,13 +1817,56 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
   },
 
-  rewindToUserMessage: async (entryId, mode) => {
-    const { activeKey, transcript } = get();
-    if (!activeKey) return;
-    const entry = transcript.byId[entryId];
-    if (!entry || entry.type !== "message") return;
-    const msg = entry.message as unknown as { role?: string; content?: unknown };
-    if (msg.role !== "user") return;
+  rewindToUserMessage: async (requestedId, mode) => {
+    const fail = (message: string) => {
+      console.error("[rewind]", message);
+      toast({ message, kind: "error" });
+    };
+
+    let activeKey = get().activeKey;
+    if (!activeKey) {
+      // Cold tab (session opened from history, no Pi process yet): start it so the rewind can run.
+      activeKey = await get().ensureActiveSession();
+      if (!activeKey) return fail("Couldn't start the session to rewind it.");
+    }
+    if (get().reloadStates[activeKey]?.phase === "reloading") {
+      return fail("Pi is reloading. Try again in a moment.");
+    }
+
+    // The row key can be `live:user:<ts>` for a message not synced from the session file yet; map it to the real entry.
+    const findEntry = () => {
+      const { byId } = get().transcript;
+      const direct = byId[requestedId];
+      if (direct) return direct;
+      const m = /^live:user:(.+)$/.exec(requestedId);
+      if (!m) return undefined;
+      return Object.values(byId).find((e) => {
+        if (e.type !== "message") return false;
+        const em = e.message as unknown as { role?: string; timestamp?: unknown };
+        return em.role === "user" && String(em.timestamp ?? "?") === m[1];
+      });
+    };
+    let entry = findEntry();
+    if (!entry) {
+      // Not synced yet: reload from the session file once and look again.
+      const sessionPath = get().tabs.find((t) => t.activeKey === activeKey)?.sessionPath;
+      if (sessionPath) {
+        try {
+          const { entries, leafId } = await window.studio.readSessionFile(sessionPath);
+          set((s) => (s.activeKey === activeKey ? { transcript: applyEntries(s.transcript, entries, leafId, "append") } : {}));
+        } catch (err) {
+          console.error("[rewind] session file reload failed", err);
+        }
+        entry = findEntry();
+      }
+    }
+    if (!entry || entry.type !== "message") {
+      return fail("This message isn't saved to the session yet, so it can't be rewound. Try again in a moment.");
+    }
+    const target = entry;
+    const entryId = target.id;
+    const msg = target.message as unknown as { role?: string; content?: unknown; timestamp?: unknown };
+    if (msg.role !== "user") return fail("Only your own messages can be retried or edited.");
 
     const parts =
       typeof msg.content === "string"
@@ -1850,20 +1894,45 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         };
       });
 
-    if (transcript.running) await get().abort();
+    if (get().transcript.running) {
+      await get().abort();
+      // Pi refuses to navigate while it is still streaming; wait for the run to actually settle.
+      const settleDeadline = Date.now() + 8_000;
+      while (get().transcript.running && Date.now() < settleDeadline) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
 
-    const res = await window.studio.bridgeAction(activeKey, { action: "navigate_tree", entryId });
+    // Retry while Pi is still winding down (abort is asynchronous).
+    let res = await window.studio.bridgeAction(activeKey, { action: "navigate_tree", entryId });
+    for (let attempt = 0; !res.ok && /Wait for the current/i.test(res.error ?? "") && attempt < 20; attempt++) {
+      await new Promise((r) => setTimeout(r, 250));
+      res = await window.studio.bridgeAction(activeKey, { action: "navigate_tree", entryId });
+    }
     if (!res.ok) {
-      set({ error: res.error || "Could not rewind the conversation." });
-      return;
+      return fail(`Couldn't rewind the conversation: ${res.error || "Pi didn't accept the rewind."}`);
     }
     // Pi moved its leaf to the parent of this message; mirror that so the view (and appends) follow.
-    set((s) => ({
-      transcript: applyEntries(s.transcript, [], entry.parentId ?? null, "append"),
-      promptText: text,
-      attachments: images,
-    }));
-    if (mode === "resend") await get().sendPrompt();
+    // Messages from the abandoned branch may still sit in `live`; keep only ones sent before this message.
+    const cutoff = typeof msg.timestamp === "number" ? msg.timestamp : null;
+    set((s) => {
+      const next = applyEntries(s.transcript, [], target.parentId ?? null, "append");
+      return {
+        transcript:
+          cutoff === null
+            ? next
+            : { ...next, live: next.live.filter((m) => typeof m.timestamp === "number" && m.timestamp < cutoff) },
+        promptText: text,
+        attachments: images,
+      };
+    });
+    if (mode === "resend") {
+      try {
+        await get().sendPrompt();
+      } catch (err) {
+        fail(`Couldn't resend the message: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   },
 
   abort: async () => {

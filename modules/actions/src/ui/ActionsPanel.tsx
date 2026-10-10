@@ -141,8 +141,6 @@ export const ActionsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
 
       {repo && <FilterBar repo={repo} workflows={workflows} filters={filters} onChange={setFilters} />}
 
-      {showDispatch && repo && <DispatchForm onClose={() => setShowDispatch(false)} />}
-
       {notice && (
         <div className={`ga-banner ga-banner--${notice.kind}`} role="status">
           {notice.kind === "ok" ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
@@ -197,6 +195,8 @@ export const ActionsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           <span>{hasActive ? "Live, updating every few seconds" : lastFetchedAt ? `Updated ${formatAgo(lastFetchedAt, now)}` : "Waiting for first update"}</span>
         </footer>
       )}
+
+      {showDispatch && repo && <DispatchForm onClose={() => setShowDispatch(false)} />}
     </div>
   );
 };

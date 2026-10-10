@@ -47,3 +47,10 @@ export function hueOf(s: string): number {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
   return h;
 }
+
+/** Newest run per workflow id (runs are newest-first), for "last run" hints in the workflow picker. */
+export function lastRunByWorkflow(runs: ActionsRun[]): Map<number, ActionsRun> {
+  const map = new Map<number, ActionsRun>();
+  for (const run of runs) if (!map.has(run.workflowId)) map.set(run.workflowId, run);
+  return map;
+}

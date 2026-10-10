@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ActionsRun } from "../shared.ts";
-import { countStates, dayLabel, groupRuns, hueOf } from "./group-runs.ts";
+import { countStates, dayLabel, groupRuns, hueOf, lastRunByWorkflow } from "./group-runs.ts";
 
 const NOW = new Date(2025, 5, 15, 12, 0, 0).getTime();
 
@@ -36,5 +36,17 @@ describe("groupRuns", () => {
     expect(c.running).toBe(1);
     expect(hueOf("octo")).toBe(hueOf("octo"));
     expect(hueOf("octo")).toBeLessThan(360);
+  });
+});
+
+describe("lastRunByWorkflow", () => {
+  it("keeps the newest run per workflow", () => {
+    const a = { ...run(5, NOW), workflowId: 1 };
+    const b = { ...run(4, NOW), workflowId: 2 };
+    const c = { ...run(3, NOW), workflowId: 1 };
+    const map = lastRunByWorkflow([a, b, c]);
+    expect(map.get(1)?.id).toBe(5);
+    expect(map.get(2)?.id).toBe(4);
+    expect(map.size).toBe(2);
   });
 });

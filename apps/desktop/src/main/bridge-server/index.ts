@@ -159,6 +159,16 @@ export async function createBridgeServer(
     rpc: PiRpcConnection,
     timeoutMs = 15_000,
   ): Promise<T> => {
+    // Actions travel as a hidden slash command; if the extension hasn't connected yet Pi would treat it as a
+    // plain prompt (and the action would just time out). Give a freshly started session a moment to connect.
+    const readyDeadline = Date.now() + 5_000;
+    while (!(isAuthed && activeSocket !== null && !activeSocket.destroyed)) {
+      if (Date.now() > readyDeadline) {
+        throw new Error("Hive's Pi bridge isn't connected yet. Wait a moment and try again.");
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
     const id = `act_${++actionCounter}`;
     const payload: BridgeAction = { id, action, ...params } as BridgeAction;
 

@@ -123,6 +123,12 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isRunning = running;
 
+  // Auto-focus the prompt input when a session tab opens/activates so the user can type immediately.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => textareaRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [activeKey]);
+
   // Extension widgets placed above/below the editor
   const aboveWidgets = Object.entries(extensionWidgets).filter(([, w]) => w.placement === "aboveEditor");
   const belowWidgets = Object.entries(extensionWidgets).filter(([, w]) => w.placement === "belowEditor");
