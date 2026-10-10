@@ -60,6 +60,39 @@ export const useGitStore = create<GitState>((set, get) => ({
 
 let watcherStarted = false;
 let checkTimer: ReturnType<typeof setInterval> | undefined;
+let fetchTimer: ReturnType<typeof setInterval> | undefined;
+
+/** Background remote fetch tuning: infrequent, throttled, backs off on failure. */
+const FETCH_INTERVAL_MS = 5 * 60_000;
+const FETCH_MIN_GAP_MS = 2 * 60_000;
+const FETCH_MAX_BACKOFF_MS = 30 * 60_000;
+const lastFetchAt = new Map<string, number>();
+const failCount = new Map<string, number>();
+let fetching = false;
+
+/**
+ * `git fetch` the active project (silent), then refresh status so ahead/behind updates.
+ * Throttled per project; exponential backoff after failures (offline, auth, no remote).
+ */
+async function backgroundFetch(host: ModuleHost, force = false): Promise<void> {
+  const path = host.sessions.activeProject()?.path;
+  const status = useGitStore.getState().status;
+  if (!path || fetching || (status && !status.upstream)) return;
+  const fails = failCount.get(path) ?? 0;
+  const gap = Math.min(FETCH_MIN_GAP_MS * 2 ** fails, FETCH_MAX_BACKOFF_MS);
+  if (!force && Date.now() - (lastFetchAt.get(path) ?? 0) < gap) return;
+  fetching = true;
+  lastFetchAt.set(path, Date.now());
+  try {
+    await gitApi().gitFetch(path);
+    failCount.delete(path);
+    await useGitStore.getState().refreshGit();
+  } catch {
+    failCount.set(path, fails + 1);
+  } finally {
+    fetching = false;
+  }
+}
 
 /**
  * Start background Git status tracking.
@@ -69,16 +102,20 @@ export function startGitStatusWatcher(host: ModuleHost): () => void {
   if (watcherStarted || typeof window === "undefined") return () => {};
   watcherStarted = true;
 
-  void useGitStore.getState().refreshGit();
+  void useGitStore.getState().refreshGit().then(() => backgroundFetch(host));
 
   let lastPath = host.sessions.activeProject()?.path;
   const offTabs = host.tabs.onChange(() => {
     const path = host.sessions.activeProject()?.path;
     if (path !== lastPath) {
       lastPath = path;
-      void useGitStore.getState().refreshGit();
+      void useGitStore.getState().refreshGit().then(() => backgroundFetch(host));
     }
   });
+
+  fetchTimer = setInterval(() => {
+    if (document.visibilityState === "visible") void backgroundFetch(host);
+  }, FETCH_INTERVAL_MS);
 
   checkTimer = setInterval(() => {
     void useGitStore.getState().refreshGit();
@@ -88,6 +125,7 @@ export function startGitStatusWatcher(host: ModuleHost): () => void {
     if (Date.now() - useGitStore.getState().lastCheckedAt >= 3_000) {
       void useGitStore.getState().refreshGit();
     }
+    void backgroundFetch(host); // throttled by FETCH_MIN_GAP_MS
   };
   window.addEventListener("focus", onFocus);
 
@@ -96,6 +134,8 @@ export function startGitStatusWatcher(host: ModuleHost): () => void {
     offTabs();
     if (checkTimer) clearInterval(checkTimer);
     checkTimer = undefined;
+    if (fetchTimer) clearInterval(fetchTimer);
+    fetchTimer = undefined;
     window.removeEventListener("focus", onFocus);
     useGitStore.setState({ status: null, loading: false });
   };
