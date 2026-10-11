@@ -154,6 +154,26 @@ export class AuthService {
         prompt: async (prompt: any) => {
           if (prompt.type === "auth_url" && prompt.url) {
             shell.openExternal(prompt.url);
+            return "";
+          }
+          if (prompt.type === "manual_code") {
+            if (prompt.signal?.aborted) return "";
+            // Keep the prompt pending while the loopback callback server waits for the browser redirect.
+            // When the callback succeeds or fails, Pi aborts prompt.signal.
+            return new Promise<string>((resolve, reject) => {
+              const timer = setTimeout(() => {
+                reject(new Error("Sign-in timed out waiting for browser callback"));
+              }, 5 * 60 * 1000);
+
+              prompt.signal?.addEventListener(
+                "abort",
+                () => {
+                  clearTimeout(timer);
+                  resolve("");
+                },
+                { once: true },
+              );
+            });
           }
           return "";
         },

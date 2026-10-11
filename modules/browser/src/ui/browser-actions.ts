@@ -27,11 +27,21 @@ export function handleLink(host: ModuleHost, settings: BrowserSettings, url: str
   else void host.openSystemBrowser(url);
 }
 
-/** Apply the RAM-saver policy: wake the active tab, hibernate stale / excess background tabs. */
-export function runMemoryCheck(host: ModuleHost, settings: BrowserSettings, now = Date.now()): void {
+/**
+ * Apply the RAM-saver policy: wake the active tab, hibernate stale / excess background tabs.
+ * `wakeActive: false` skips auto-wake — used when the active tab didn't change, so a tab the
+ * user just put to sleep manually isn't immediately woken back up.
+ */
+export function runMemoryCheck(
+  host: ModuleHost,
+  settings: BrowserSettings,
+  now = Date.now(),
+  opts: { wakeActive?: boolean } = {},
+): void {
   const active = host.tabs.active();
   const { tabsToSleep, tabsToWake } = evaluateTabsForMemory(host.tabs.list(), active?.id ?? null, settings, now);
   for (const id of tabsToSleep) host.tabs.update(id, { isSleeping: true });
+  if (opts.wakeActive === false) return;
   for (const id of tabsToWake) host.tabs.update(id, { isSleeping: false, lastActiveAt: now });
 }
 

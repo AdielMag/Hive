@@ -71,6 +71,12 @@ describe("runMemoryCheck / hibernateBackground", () => {
     expect(state.tabs.find((t) => t.id === "b")!.isSleeping).toBe(true);
   });
 
+  it("does not wake the active tab when wakeActive is false (manual sleep)", () => {
+    const { host, state } = fakeHost([tab("a", { isSleeping: true, lastActiveAt: 0 })], "a");
+    runMemoryCheck(host, DEFAULT_BROWSER_SETTINGS, 1000, { wakeActive: false });
+    expect(state.tabs.find((t) => t.id === "a")!.isSleeping).toBe(true);
+  });
+
   it("hibernateBackground leaves the active and non-browser tabs alone", () => {
     const { host, state } = fakeHost(
       [tab("a"), tab("b"), { id: "p", kind: "plan", title: "p", projectId: "" }],

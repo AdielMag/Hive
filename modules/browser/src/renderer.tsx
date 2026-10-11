@@ -89,7 +89,14 @@ export default defineRendererModule({
     const offLinks = host.links.setHandler((url, title) => handleLink(host, useBrowserStore.getState().settings, url, title));
 
     // RAM Saver: wake/sleep on every tab change (instant) and on a slow timer (inactivity timeout).
-    const check = () => runMemoryCheck(host, useBrowserStore.getState().settings);
+    // Auto-wake only when the active tab actually changes (selection), so a manual "sleep" sticks.
+    let lastActiveId: string | undefined | null = null;
+    const check = () => {
+      const activeId = host.tabs.active()?.id;
+      const wakeActive = activeId !== lastActiveId;
+      lastActiveId = activeId;
+      runMemoryCheck(host, useBrowserStore.getState().settings, Date.now(), { wakeActive });
+    };
     const offTabs = host.tabs.onChange(check);
     const interval = setInterval(check, 15000);
     check();
