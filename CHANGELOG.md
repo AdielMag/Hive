@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.28.0 — 2026-10-11 · [diff](https://github.com/AdielMag/Hive/compare/v0.27.1...v0.28.0)
+
+### ✨ Features
+
+- **browser,auth:** respect manual sleep and add auth code timeout ([`2fa0061`](https://github.com/AdielMag/Hive/commit/2fa006181e105f214c03f1922e00238213545ba2))
+
 ## v0.27.1 — 2026-10-10 · [diff](https://github.com/AdielMag/Hive/compare/v0.27.0...v0.27.1)
 
 ### ♻️ Refactoring
