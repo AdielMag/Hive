@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.29.1 — 2026-10-15 · [diff](https://github.com/AdielMag/Hive/compare/v0.29.0...v0.29.1)
+
+### 🐛 Fixes
+
+- **renderer:** prevent infinite render loop in ProjectPicker and UsagePanel ([`e97e5d0`](https://github.com/AdielMag/Hive/commit/e97e5d07594b77fd191bc07c4dea1d46f51d54a3))
+
 ## v0.29.0 — 2026-10-15 · [diff](https://github.com/AdielMag/Hive/compare/v0.28.0...v0.29.0)
 
 ### ✨ Features
