@@ -503,7 +503,7 @@ export interface StudioApi {
   applyUpdate(downloadUrl?: string): Promise<{ success: boolean; message: string }>;
   onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void;
   checkPiUpdate(): Promise<PiUpdateInfo>;
-  applyPiUpdate(): Promise<{ success: boolean; message: string }>;
+  applyPiUpdate(target?: string): Promise<{ success: boolean; message: string }>;
 
 
   // Models

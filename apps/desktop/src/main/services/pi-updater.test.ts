@@ -147,6 +147,18 @@ describe("PiUpdaterService", () => {
     const installRes = await service.install();
     expect(installRes.success).toBe(true);
     expect(installRes.message).toBe("Everything is already up to date.");
+
+    const cliRes = await service.install("cli");
+    expect(cliRes.success).toBe(true);
+    expect(cliRes.message).toBe("Pi CLI is already up to date.");
+
+    const extRes = await service.install("extensions");
+    expect(extRes.success).toBe(true);
+    expect(extRes.message).toBe("Extensions are already up to date.");
+
+    const singleRes = await service.install("pi-antigravity");
+    expect(singleRes.success).toBe(true);
+    expect(singleRes.message).toBe("pi-antigravity is already up to date.");
   });
 
   it("handles network errors during check and does not falsely claim up-to-date in install()", async () => {

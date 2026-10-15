@@ -230,8 +230,8 @@ const api: StudioApi = {
   checkPiUpdate() {
     return ipcRenderer.invoke(IPC.piUpdateCheck);
   },
-  applyPiUpdate() {
-    return ipcRenderer.invoke(IPC.piUpdateApply);
+  applyPiUpdate(target?: string) {
+    return ipcRenderer.invoke(IPC.piUpdateApply, { target });
   },
   applyUpdate(downloadUrl?: string) {
     return ipcRenderer.invoke(IPC.updaterApply, { downloadUrl });

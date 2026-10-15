@@ -37,10 +37,13 @@ interface UpdateState {
   piInfo: PiUpdateInfo | null;
   piChecking: boolean;
   piInstalling: boolean;
+  installingTarget: string | null;
   /** Result of the last Pi install attempt. */
   piResult: { success: boolean; message: string } | null;
+  piCliResult: { success: boolean; message: string } | null;
+  piExtResult: { target?: string; success: boolean; message: string } | null;
   checkPi(): Promise<void>;
-  applyPiUpdate(): Promise<void>;
+  applyPiUpdate(target?: string): Promise<void>;
   applyUpdate(): Promise<void>;
 }
 
@@ -55,7 +58,10 @@ export const useUpdates = create<UpdateState>((set, get) => ({
   piInfo: null,
   piChecking: false,
   piInstalling: false,
+  installingTarget: null,
   piResult: null,
+  piCliResult: null,
+  piExtResult: null,
   checkPi: async () => {
     if (get().piChecking) return;
     set({ piChecking: true });
@@ -68,17 +74,67 @@ export const useUpdates = create<UpdateState>((set, get) => ({
       set({ piChecking: false });
     }
   },
-  applyPiUpdate: async () => {
+  applyPiUpdate: async (target?: string) => {
     if (get().piInstalling) return;
-    set({ piInstalling: true, piResult: null });
+    set({ piInstalling: true, installingTarget: target ?? "all" });
+    if (target === "cli") {
+      set({ piCliResult: null });
+    } else if (target) {
+      set({ piExtResult: null });
+    } else {
+      set({ piCliResult: null, piExtResult: null, piResult: null });
+    }
     try {
-      const res = await window.studio.applyPiUpdate();
+      const res = await window.studio.applyPiUpdate(target);
+      if (target === "cli") {
+        set({ piCliResult: res });
+      } else if (target) {
+        set({ piExtResult: { ...res, target } });
+      } else {
+        set({ piCliResult: res, piExtResult: res, piResult: res });
+      }
       set({ piResult: res });
-      if (res.success) set((s) => ({ piInfo: s.piInfo ? { ...s.piInfo, hasUpdate: false, cliHasUpdate: false, currentVersion: s.piInfo.latestVersion ?? s.piInfo.currentVersion, extensions: s.piInfo.extensions?.map((e) => ({ ...e, hasUpdate: false, currentVersion: e.latestVersion ?? e.currentVersion })) } : s.piInfo }));
+
+      if (res.success) {
+        set((s) => {
+          if (!s.piInfo) return s;
+          const isCli = !target || target === "all" || target === "cli";
+          const nextCliHasUpdate = isCli ? false : s.piInfo.cliHasUpdate;
+          const nextCurrentVersion = isCli && s.piInfo.latestVersion
+            ? s.piInfo.latestVersion
+            : s.piInfo.currentVersion;
+          const nextExtensions = s.piInfo.extensions?.map((e) => {
+            const matchesExt = !target || target === "all" || target === "extensions" || target === e.name;
+            if (matchesExt) {
+              return { ...e, hasUpdate: false, currentVersion: e.latestVersion ?? e.currentVersion };
+            }
+            return e;
+          });
+          const hasAnyExtUpdate = nextExtensions?.some((e) => e.hasUpdate) ?? false;
+          return {
+            piInfo: {
+              ...s.piInfo,
+              cliHasUpdate: nextCliHasUpdate,
+              currentVersion: nextCurrentVersion,
+              extensions: nextExtensions,
+              hasUpdate: (nextCliHasUpdate ?? false) || hasAnyExtUpdate,
+            },
+          };
+        });
+        void get().checkPi();
+      }
     } catch (err) {
-      set({ piResult: { success: false, message: err instanceof Error ? err.message : String(err) } });
+      const errRes = { success: false, message: err instanceof Error ? err.message : String(err) };
+      if (target === "cli") {
+        set({ piCliResult: errRes });
+      } else if (target) {
+        set({ piExtResult: { ...errRes, target } });
+      } else {
+        set({ piCliResult: errRes, piExtResult: errRes, piResult: errRes });
+      }
+      set({ piResult: errRes });
     } finally {
-      set({ piInstalling: false });
+      set({ piInstalling: false, installingTarget: null });
     }
   },
   applyUpdate: async () => {
