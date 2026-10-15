@@ -4,6 +4,7 @@ import {
   Bot,
   Columns2,
   FolderOpen,
+  GitBranch,
   Loader2,
   MessageSquare,
   Moon,
@@ -56,6 +57,9 @@ export const TabStrip: React.FC<TabStripProps> = ({
     displayedPendingForm,
     sessionAwaitingUser,
     displayedAwaitingTool,
+    newSessionInMainTree,
+    setNewSessionInMainTree,
+    catalog,
   } = useSessionStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -73,6 +77,9 @@ export const TabStrip: React.FC<TabStripProps> = ({
       displayedPendingForm: !!s.pendingForm,
       sessionAwaitingUser: s.sessionAwaitingUser,
       displayedAwaitingTool: transcriptAwaitsUser(s.transcript),
+      newSessionInMainTree: s.newSessionInMainTree,
+      setNewSessionInMainTree: s.setNewSessionInMainTree,
+      catalog: s.allSessions,
     })),
   );
 
@@ -323,6 +330,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
               tab.subagentView?.status === "queued" ||
               tab.subagentView?.status === "background");
           const subagentStatus = tab.subagentView?.status;
+          const tabWorktree = isSession ? (tab.worktree ?? catalog.find((x) => x.path === tab.sessionPath)?.worktree) : undefined;
           const subagentUnseen =
             isSubagent &&
             !subagentRunning &&
@@ -374,7 +382,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
               onAuxClick={(e) => {
                 if (e.button === 1) handleClose(tab.id);
               }}
-              title={(tab.filePath ?? tab.title) + stateLabel}
+              title={(tab.filePath ?? tab.title) + stateLabel + (tabWorktree ? `\nBranch: ${tabWorktree.branch}` : "")}
               aria-label={tab.title + stateLabel}
             >
               <span className="tab__icon">
@@ -414,9 +422,27 @@ export const TabStrip: React.FC<TabStripProps> = ({
         })}
         {activeProject && (
           <button
-            className="tabstrip__new"
+            className={`tabstrip__new${newSessionInMainTree ? " is-main-tree" : ""}`}
             onClick={() => void newSessionTab(activeProject.id)}
-            title={newSessionShortcut ? `New session in ${activeProject.name} (${newSessionShortcut})` : `New session in ${activeProject.name}`}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenu({
+                x: e.clientX,
+                y: e.clientY,
+                items: [
+                  {
+                    label: "Work in main tree",
+                    icon: <GitBranch size={13} />,
+                    hint: newSessionInMainTree ? "on" : "off",
+                    onSelect: () => setNewSessionInMainTree(!newSessionInMainTree),
+                  },
+                ],
+              });
+            }}
+            title={
+              (newSessionShortcut ? `New session in ${activeProject.name} (${newSessionShortcut})` : `New session in ${activeProject.name}`) +
+              (newSessionInMainTree ? "\nRuns in the main tree (no worktree). Right-click to change." : "\nGets its own git worktree. Right-click to work in the main tree.")
+            }
           >
             <Plus size={14} />
           </button>

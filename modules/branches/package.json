@@ -19,13 +19,13 @@
       "git"
     ],
     "contributes": {
-      "leftPanels": [
+      "bottomPanels": [
         "branches"
       ],
       "commands": [
         {
           "id": "view.branches",
-          "title": "Toggle Branches Panel",
+          "title": "Toggle Branches Window",
           "category": "View"
         }
       ]

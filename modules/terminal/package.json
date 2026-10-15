@@ -17,7 +17,7 @@
     "icon": "terminal",
     "category": "Workbench",
     "contributes": {
-      "rightPanels": [
+      "bottomPanels": [
         "terminal"
       ],
       "commands": [

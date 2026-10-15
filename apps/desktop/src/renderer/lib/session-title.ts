@@ -17,10 +17,23 @@ export function titleFromPrompt(text: string | undefined | null, max = 60): stri
   return t;
 }
 
-/** Preferred title for a catalog session: user rename → Pi session name → first prompt. */
+const CHEAP_MODEL = /haiku|flash|mini|nano|lite|small/i;
+
+/** Model id (`provider/id`) for title generation: a cheap sibling from the session's provider, else the session model. */
+export function pickTitleModel(
+  catalog: Array<{ id: string; provider?: string }>,
+  active: { id: string; provider?: string } | null | undefined,
+): string | undefined {
+  const full = (m: { id: string; provider?: string }) => (m.provider && !m.id.includes("/") ? `${m.provider}/${m.id}` : m.id);
+  const cheap = catalog.find((m) => (!active?.provider || m.provider === active.provider) && CHEAP_MODEL.test(m.id));
+  if (cheap) return full(cheap);
+  return active ? full(active) : undefined;
+}
+
+/** Preferred title for a catalog session: user rename → LLM title → Pi session name → first prompt. */
 export function sessionDisplayTitle(
-  s: { title?: string; name?: string; firstMessage?: string },
+  s: { title?: string; aiTitle?: string; name?: string; firstMessage?: string },
   max = 80,
 ): string {
-  return s.title?.trim() || s.name?.trim() || titleFromPrompt(s.firstMessage, max) || "";
+  return s.title?.trim() || s.aiTitle?.trim() || s.name?.trim() || titleFromPrompt(s.firstMessage, max) || "";
 }

@@ -10,14 +10,16 @@ export { MODULE_MANIFESTS };
 export const manifestById = (id: string): ModuleManifest | undefined => MODULE_MANIFESTS.find((m) => m.id === id);
 
 /** Panel ids declared by manifests, so a persisted layout keeps panels of currently disabled modules. */
-export function staticPanelIds(manifests: readonly ModuleManifest[] = MODULE_MANIFESTS): { left: Set<string>; right: Set<string> } {
+export function staticPanelIds(manifests: readonly ModuleManifest[] = MODULE_MANIFESTS): { left: Set<string>; right: Set<string>; bottom: Set<string> } {
   const left = new Set<string>();
   const right = new Set<string>();
+  const bottom = new Set<string>();
   for (const m of manifests) {
     m.contributes?.leftPanels?.forEach((id) => left.add(id));
     m.contributes?.rightPanels?.forEach((id) => right.add(id));
+    m.contributes?.bottomPanels?.forEach((id) => bottom.add(id));
   }
-  return { left, right };
+  return { left, right, bottom };
 }
 
 /** Command ids declared by manifests (so user key overrides survive while the module is disabled). */
@@ -32,6 +34,7 @@ export function ownerOfTabKind(kind: string, manifests: readonly ModuleManifest[
   return manifests.find((m) => m.contributes?.tabKinds?.includes(kind));
 }
 
-export function ownerOfPanel(side: "left" | "right", id: string, manifests: readonly ModuleManifest[] = MODULE_MANIFESTS): ModuleManifest | undefined {
-  return manifests.find((m) => (side === "left" ? m.contributes?.leftPanels : m.contributes?.rightPanels)?.includes(id));
+export function ownerOfPanel(side: "left" | "right" | "bottom", id: string, manifests: readonly ModuleManifest[] = MODULE_MANIFESTS): ModuleManifest | undefined {
+  const key = side === "left" ? "leftPanels" : side === "right" ? "rightPanels" : "bottomPanels";
+  return manifests.find((m) => m.contributes?.[key]?.includes(id));
 }

@@ -34,9 +34,11 @@ interface UiState extends Persisted {
   settingsFocus: SettingsFocus | null;
   toggleLeft(p: LeftPanel): void;
   toggleRight(p: RightPanel): void;
+  toggleBottom(p: string): void;
   showLeft(p: LeftPanel | null): void;
   showRight(p: RightPanel | null): void;
-  setSize(patch: Partial<Pick<Persisted, "leftWidth" | "rightWidth" | "composerHeight">>): void;
+  showBottom(p: string | null): void;
+  setSize(patch: Partial<Pick<Persisted, "leftWidth" | "rightWidth" | "composerHeight" | "bottomHeight">>): void;
   openSettings(tab?: SettingsTabId, focus?: SettingsFocus): void;
   /** Opens Settings → AI Providers on a provider that needs (re)connecting. */
   openAccountSettings(providerId: string, reason?: string): void;
@@ -46,7 +48,7 @@ interface UiState extends Persisted {
 const KEY = "hive.layout.v1";
 
 function load(): Persisted {
-  const fallback: Persisted = { left: "projects", right: null, leftWidth: 268, rightWidth: 360, composerHeight: 150 };
+  const fallback: Persisted = { left: "projects", right: null, bottom: null, leftWidth: 268, rightWidth: 360, composerHeight: 150, bottomHeight: 380 };
   try {
     const raw = JSON.parse(getStoredItem(KEY) ?? "null") as Partial<Persisted> | null;
     return sanitizeLayout(raw, fallback, staticPanelIds());
@@ -59,8 +61,8 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function save(s: Persisted) {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const { left, right, leftWidth, rightWidth, composerHeight } = s;
-    setStoredItem(KEY, JSON.stringify({ left, right, leftWidth, rightWidth, composerHeight }));
+    const { left, right, bottom, leftWidth, rightWidth, composerHeight, bottomHeight } = s;
+    setStoredItem(KEY, JSON.stringify({ left, right, bottom, leftWidth, rightWidth, composerHeight, bottomHeight }));
   }, 200);
 }
 
@@ -72,11 +74,14 @@ export const useUi = create<UiState>((set, get) => ({
   toggleLeft: (p) => set({ left: get().left === p ? null : p }),
   toggleRight: (p) => set({ right: get().right === p ? null : p }),
   showLeft: (p) => set({ left: p }),
+  toggleBottom: (p) => set({ bottom: get().bottom === p ? null : p }),
   showRight: (p) => set({ right: p }),
+  showBottom: (p) => set({ bottom: p }),
   setSize: (patch) =>
     set({
       ...(patch.leftWidth !== undefined ? { leftWidth: clamp(patch.leftWidth, LIMITS.leftWidth) } : {}),
       ...(patch.rightWidth !== undefined ? { rightWidth: clamp(patch.rightWidth, LIMITS.rightWidth) } : {}),
+      ...(patch.bottomHeight !== undefined ? { bottomHeight: clamp(patch.bottomHeight, LIMITS.bottomHeight) } : {}),
       ...(patch.composerHeight !== undefined ? { composerHeight: clamp(patch.composerHeight, LIMITS.composerHeight) } : {}),
     }),
   openSettings: (tab, focus) => set({ settingsOpen: true, settingsFocus: focus ?? null, ...(tab ? { settingsTab: tab } : {}) }),

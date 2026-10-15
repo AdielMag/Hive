@@ -23,6 +23,9 @@ describe("settings", () => {
     expect(s.maxCallsPerDay).toBe(0);
     expect(s.pricePerMTokUsd).toBeNull();
     expect(s.model).toBe("jev-latest");
+    expect(s.maxInputTokens).toBe(28_000);
+    expect(normalizeSettings({ maxInputTokens: 10 }).maxInputTokens).toBe(1_000);
+    expect(normalizeSettings({ maxInputTokens: 40_000 }).maxInputTokens).toBe(40_000);
   });
 
   it("never exposes the key in the view", () => {

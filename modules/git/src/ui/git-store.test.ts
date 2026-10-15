@@ -4,7 +4,7 @@ import { useGitStore, startGitStatusWatcher } from "./git-store.ts";
 import { setGitHost } from "./git-host.ts";
 
 describe("git-store", () => {
-  let listeners: Record<string, Function[]> = {};
+  let listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
   let project: { id: string; name: string; path: string } | null = null;
   let invoke: ReturnType<typeof vi.fn>;
   let tabListener: (() => void) | null = null;
@@ -30,11 +30,11 @@ describe("git-store", () => {
     } as unknown as ModuleHost;
     setGitHost(host);
     (globalThis as any).window = {
-      addEventListener: vi.fn((event: string, fn: Function) => {
+      addEventListener: vi.fn((event: string, fn: (...args: unknown[]) => void) => {
         listeners[event] = listeners[event] || [];
         listeners[event].push(fn);
       }),
-      removeEventListener: vi.fn((event: string, fn: Function) => {
+      removeEventListener: vi.fn((event: string, fn: (...args: unknown[]) => void) => {
         if (listeners[event]) {
           listeners[event] = listeners[event].filter((f) => f !== fn);
         }

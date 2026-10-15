@@ -13,10 +13,10 @@ export default defineRendererModule({
     return () => setBranchesHost(null);
   },
   contributes: {
-    leftPanels: [
+    bottomPanels: [
       {
         id: BRANCHES_PANEL_ID,
-        title: "Branches & History",
+        title: "Git Branches & Log",
         order: 30,
         icon: ({ size }) => <GitBranch size={size} />,
         commandId: "view.branches",
@@ -26,11 +26,11 @@ export default defineRendererModule({
     commands: [
       {
         id: "view.branches",
-        title: "Toggle Branches Panel",
+        title: "Toggle Branches Window",
         category: "View",
         keywords: "git history graph checkout",
         allowInTerminal: true,
-        run: (host) => host.panels.toggle("left", BRANCHES_PANEL_ID),
+        run: (host) => host.panels.toggle("bottom", BRANCHES_PANEL_ID),
       },
     ],
   },

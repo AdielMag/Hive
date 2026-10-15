@@ -109,7 +109,7 @@ describe("static manifest lookups", () => {
   ];
 
   it("collects declared panel and command ids and finds their owners", () => {
-    expect(staticPanelIds(manifests)).toEqual({ left: new Set(["lp"]), right: new Set(["rp"]) });
+    expect(staticPanelIds(manifests)).toEqual({ left: new Set(["lp"]), right: new Set(["rp"]), bottom: new Set() });
     expect(staticCommandIds(manifests)).toEqual(new Set(["x.cmd"]));
     expect(ownerOfTabKind("tk", manifests)?.id).toBe("x");
     expect(ownerOfPanel("left", "lp", manifests)?.id).toBe("x");

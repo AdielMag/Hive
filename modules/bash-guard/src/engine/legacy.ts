@@ -41,7 +41,7 @@ export const LEGACY_RULES: readonly LegacyRule[] = [
     title: "Windows Recursive Deletion",
     severity: "critical",
     reason: "Recursively deletes directory trees on Windows (`del /s` or `rmdir /s`).",
-    pattern: /\b(del|erase)\s+.*(\/s|\-s)|\b(rmdir|rd)\s+.*(\/s|\-s)/i,
+    pattern: /\b(del|erase)\s+.*(\/s|-s)|\b(rmdir|rd)\s+.*(\/s|-s)/i,
   },
   {
     id: "ps-recurse-delete",

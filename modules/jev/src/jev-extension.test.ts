@@ -1,7 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   answerConfidence,
   buildRecentMessages,
@@ -11,7 +12,14 @@ import {
   checkCommandPaths,
   COMPACTION_QUESTIONS,
   confine,
+  estimateInputTokens,
   extractSignals,
+  gitSecretPathspecs,
+  looksBinary,
+  readFiles,
+  runOne,
+  runReadOnly,
+  setGrepResolver,
   formatAnswers,
   isSecretPath,
   loadSettings,
@@ -29,6 +37,7 @@ const settings: Settings = {
   compact: { enabled: true, floorPct: 40 },
   askJev: { enabled: true },
   maxCallsPerDay: 500,
+  maxInputTokens: 28_000,
 };
 
 const okBody = (answers: unknown) => ({ model: "jev-latest", answers, usage: { input_tokens: 120, output_tokens: 12 } });
@@ -73,7 +82,19 @@ describe("loadSettings", () => {
       compact: { enabled: true, floorPct: 55 },
       askJev: { enabled: true },
       maxCallsPerDay: 500,
+      maxInputTokens: 28_000,
     });
+  });
+
+  it("reads and clamps maxInputTokens", () => {
+    const { dir, env } = tmpEnv();
+    const load = (v: unknown) => {
+      writeFileSync(join(dir, "config.json"), JSON.stringify({ apiKey: "k", consentAt: 1, maxInputTokens: v }));
+      return loadSettings(env)!.maxInputTokens;
+    };
+    expect(load(12_000)).toBe(12_000);
+    expect(load(5)).toBe(1_000);
+    expect(load("x")).toBe(28_000);
   });
 });
 
@@ -357,5 +378,152 @@ describe("workspace confinement", () => {
     expect(() => run("head .env")).toThrow(/secret/);
     expect(() => run("git diff --no-index /etc/passwd src/a.ts")).toThrow(/outside/);
     expect(() => run("ls --color=../x")).toThrow(/outside/);
+  });
+});
+
+describe("WP-A: binary detection, token budget, grep, git secrets", () => {
+  const tmpRepo = () => {
+    const cwd = mkdtempSync(join(tmpdir(), "jev-git-"));
+    const git = (...a: string[]) => execFileSync("git", a, { cwd, stdio: "pipe" }).toString();
+    git("init", "-q");
+    git("config", "user.email", "t@t");
+    git("config", "user.name", "t");
+    git("config", "core.autocrlf", "false");
+    return { cwd, git };
+  };
+
+  afterEach(() => {
+    setGrepResolver();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("looksBinary: sparse NULs are text, PNG-like data is binary", async () => {
+    expect(looksBinary(Buffer.from(`${"const x = 1;\n".repeat(100)}join("\0") + a.join("\0")`))).toBe(false);
+    expect(looksBinary(Buffer.alloc(0))).toBe(false);
+    const png = Buffer.from(Array.from({ length: 4000 }, (_, i) => (i % 10 === 0 ? 0 : 0x80 + ((i * 37) % 128))));
+    expect(looksBinary(png)).toBe(true);
+    const noNul = Buffer.from(Array.from({ length: 4000 }, (_, i) => 0x80 + ((i * 37) % 128)));
+    expect(looksBinary(noNul)).toBe(true);
+
+    const cwd = mkdtempSync(join(tmpdir(), "jev-bin-"));
+    writeFileSync(join(cwd, "a.tsx"), `${"const x = 1;\n".repeat(100)}const k = parts.join("\0") + x.join("\0");\n`);
+    writeFileSync(join(cwd, "img.png"), Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), png]));
+    const r = await readFiles(["a.tsx"], cwd);
+    expect(r.contents["a.tsx"]).toContain("\\u0000");
+    expect(r.contents["a.tsx"]).not.toContain("\0");
+    await expect(readFiles(["img.png"], cwd)).rejects.toThrow(/looks binary/);
+  });
+
+  it("estimateInputTokens is ceil(json length / 3)", () => {
+    expect(estimateInputTokens("abc", {})).toBe(Math.ceil(JSON.stringify({ state: "abc", questions: {} }).length / 3));
+  });
+
+  it("refuses over-budget input locally: no fetch, logged as invalid", async () => {
+    const { env, usage } = tmpEnv();
+    vi.stubEnv("HIVE_JEV_USAGE", env.HIVE_JEV_USAGE);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonRes(200, okBody({})));
+    const questions = { q: { type: "noul" as const, instructions: "ok?" } };
+    const r = await runOne({ state: "x".repeat(6_000) }, { settings: { ...settings, maxInputTokens: 1_000 }, questions, cwd: tmpdir(), meta: {} });
+    expect(r).toMatchObject({ ok: false, errorKind: "invalid" });
+    if (!r.ok) expect(r.error).toMatch(/~\d+ tokens > limit 1000; split into items/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const rec = JSON.parse(readFileSync(usage, "utf8").trim());
+    expect(rec).toMatchObject({ ok: false, errorKind: "invalid", inputTokens: 0, savedTokensEst: 0 });
+
+    // Under budget goes through.
+    const ok = await runOne({ state: "x".repeat(60) }, { settings: { ...settings, maxInputTokens: 1_000 }, questions, cwd: tmpdir(), meta: {} });
+    expect(ok.ok).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not count HTTP 400 max_tokens_exceeded toward the circuit breaker", async () => {
+    const { env } = tmpEnv();
+    const big = vi.fn(async () => jsonRes(400, { detail: { code: "max_tokens_exceeded", message: "too long" } }));
+    const base = { settings, feature: "t", state: "x", questions: {}, env, fetchImpl: big as any };
+    for (let i = 0; i < 5; i++) expect(await callJev(base)).toMatchObject({ ok: false, status: 400, error: expect.stringContaining("max_tokens_exceeded") });
+    expect(big).toHaveBeenCalledTimes(5);
+    // Other 400s still count.
+    const other = vi.fn(async () => jsonRes(400, { detail: "bad" }));
+    for (let i = 0; i < 3; i++) await callJev({ ...base, fetchImpl: other as any });
+    expect(await callJev({ ...base, fetchImpl: other as any })).toMatchObject({ error: "Jev paused after repeated failures" });
+  });
+
+  it("rejects when command output overflows the buffer instead of truncating", async () => {
+    const { cwd, git } = tmpRepo();
+    writeFileSync(join(cwd, "big.txt"), "line of text\n".repeat(12_000));
+    git("add", "big.txt");
+    git("commit", "-qm", "big");
+    await expect(runReadOnly("git show HEAD:big.txt", cwd)).rejects.toThrow(/output too large; narrow the command or use items/);
+  });
+
+  it("reports an unavailable grep clearly and caches the resolution", async () => {
+    const resolver = vi.fn(async () => null);
+    setGrepResolver(resolver);
+    const cwd = mkdtempSync(join(tmpdir(), "jev-grep-"));
+    await expect(runReadOnly("grep foo .", cwd)).rejects.toThrow(/grep is unavailable on this machine; use `rg`.*`git grep`/);
+    await expect(runReadOnly("grep foo .", cwd)).rejects.toThrow(/unavailable/);
+    expect(resolver).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses git rev:path args that name secret files", () => {
+    const { cwd } = tmpRepo();
+    const run = (c: string) => checkCommandPaths(parseReadOnlyCommand(c)!, cwd);
+    for (const bad of [
+      "git show HEAD:.env",
+      "git cat-file -p HEAD:.npmrc",
+      "git show HEAD:sub/.env",
+      "git show :0:.env",
+      "git show :.env",
+      "git show HEAD:../outside.txt",
+      "git blame .env",
+      "git diff --no-index .env other.txt",
+      "git log --format=x:.env",
+    ]) {
+      expect(() => run(bad), bad).toThrow();
+    }
+    for (const ok of ["git show HEAD:src/a.ts", "git show HEAD:", "git log --format=%h:%s -n 3", "git diff HEAD -- a.ts", "git show HEAD:.env.example", "git fetch https://x/y.git", "git log --since=2024-01-01T10:00"]) {
+      if (ok.startsWith("git fetch")) continue; // not an allowed command, only here to document URLs are not treated as rev:path
+      expect(() => run(ok), ok).not.toThrow();
+    }
+    expect(parseReadOnlyCommand("git grep -f .env x")).toBeNull();
+  });
+
+  it("gitSecretPathspecs applies only to the pathspec-aware subcommands", () => {
+    expect(gitSecretPathspecs(["diff", "HEAD"])).toContain(":(exclude,glob)**/.env");
+    expect(gitSecretPathspecs(["log", "-p"])).toContain(":(exclude,glob)**/id_rsa*");
+    for (const sub of ["status", "branch", "blame", "rev-parse"]) expect(gitSecretPathspecs([sub])).toEqual([]);
+    expect(gitSecretPathspecs(["diff", "--no-index", "a", "b"])).toEqual([]);
+  });
+
+  it("git diff HEAD excludes a modified tracked .env but keeps a.ts; explicit pathspecs still work", async () => {
+    const { cwd, git } = tmpRepo();
+    mkdirSync(join(cwd, "sub"));
+    writeFileSync(join(cwd, ".env"), "TOKEN=old\n");
+    writeFileSync(join(cwd, "sub", ".env"), "TOKEN=old2\n");
+    writeFileSync(join(cwd, "a.ts"), "export const a = 1;\n");
+    git("add", ".");
+    git("commit", "-qm", "init");
+    writeFileSync(join(cwd, ".env"), "TOKEN=SECRETNEW\n");
+    writeFileSync(join(cwd, "sub", ".env"), "TOKEN=SECRETNEW2\n");
+    writeFileSync(join(cwd, "a.ts"), "export const a = 2;\n");
+
+    const all = await runReadOnly("git diff HEAD", cwd);
+    expect(all).toContain("a.ts");
+    expect(all).not.toMatch(/\.env|SECRETNEW/);
+
+    const one = await runReadOnly("git diff HEAD -- a.ts", cwd);
+    expect(one).toContain("export const a = 2;");
+    const bare = await runReadOnly("git diff HEAD a.ts", cwd);
+    expect(bare).toContain("export const a = 2;");
+    expect(await runReadOnly("git diff HEAD -- .env", cwd).catch(() => "")).not.toContain("SECRETNEW");
+    expect(await runReadOnly("git ls-files", cwd)).toBe("a.ts\n");
+    const status = await runReadOnly("git log -p --stat", cwd);
+    expect(status).not.toMatch(/TOKEN=/);
+
+    await expect(runReadOnly("git show HEAD:.env", cwd)).rejects.toThrow(/secret/);
+    await expect(runReadOnly("git cat-file -p HEAD:.npmrc", cwd)).rejects.toThrow(/secret/);
+    await expect(runReadOnly("git show HEAD:sub/.env", cwd)).rejects.toThrow(/secret/);
+    expect(await runReadOnly("git show HEAD:a.ts", cwd)).toContain("export const a = 1;");
   });
 });

@@ -6,6 +6,7 @@ import { shell } from "electron";
 import type { SessionCatalogItem } from "@hive/protocol";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { GuiStore } from "../store/index.ts";
+import { projectPathFromWorktreeCwd } from "./worktrees.ts";
 
 export interface PiSdkModule {
   getAgentDir?: () => string;
@@ -50,8 +51,10 @@ export class SessionCatalogService {
     const rawSessions = await sdk.SessionManager.listAll();
 
     return rawSessions.map((s) => {
-      const project = this.store.getProjectByPath(s.cwd);
       const meta = this.store.getSessionMeta(s.path);
+      // A worktree session's cwd lives under <project>/.hive-worktrees/<slug>; map it back to the project.
+      const projectPath = meta.worktree?.projectPath ?? projectPathFromWorktreeCwd(s.cwd) ?? s.cwd;
+      const project = this.store.getProjectByPath(projectPath) ?? this.store.getProjectByPath(s.cwd);
       return {
         path: s.path,
         id: s.id,
@@ -64,7 +67,9 @@ export class SessionCatalogService {
         firstMessage: s.firstMessage ?? "",
         projectId: project?.id,
         ...(meta.title ? { title: meta.title } : {}),
+        ...(meta.aiTitle ? { aiTitle: meta.aiTitle } : {}),
         ...(meta.archived ? { archived: true } : {}),
+        ...(meta.worktree ? { worktree: meta.worktree } : {}),
       };
     });
   }

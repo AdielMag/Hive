@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { type BrowserWindow } from "electron";
 import { PiRpcConnection } from "@hive/pi-adapter/node";
 import {
@@ -11,8 +12,10 @@ import {
   type RpcExtensionUIRequest,
   type RpcExtensionUIResponse,
   type RpcResult,
+  type SessionMetaEntry,
   type SessionEventBatch,
   type SessionStatusUpdate,
+  type SessionWorktree,
   type StartSessionRequest,
   type StartSessionResult,
   type StudioRpcCommand,
@@ -20,10 +23,22 @@ import {
 import { bridgeExtensionPath } from "../paths.ts";
 import { createBridgeServer, type BridgeSessionHandle } from "../bridge-server/index.ts";
 import type { SessionRegistry } from "@hive/protocol";
+import type { CheckpointService } from "./checkpoints/service.ts";
+import { createWorktree, removeWorktree } from "./worktrees.ts";
+
+/** The slice of GuiStore the manager needs (session meta persistence for worktrees). */
+export interface SessionMetaStore {
+  getSessionMeta(sessionPath: string): SessionMetaEntry;
+  updateSessionMeta(sessionPath: string, updates: Partial<SessionMetaEntry>): SessionMetaEntry;
+}
 
 interface ActiveSession {
   key: string;
+  /** The project (main tree) the session belongs to. */
   projectPath: string;
+  /** Effective cwd Pi runs in: the worktree when present, else `projectPath`. */
+  cwd: string;
+  worktree?: SessionWorktree;
   sessionPath?: string;
   rpc: PiRpcConnection;
   bridge: BridgeSessionHandle;
@@ -41,13 +56,36 @@ export class MainSessionManager {
     private readonly piInfo: PiInstallInfo,
     private readonly getWindow: () => BrowserWindow | null,
     private readonly testProviderPath?: string,
+    private readonly checkpoints?: CheckpointService,
+    private readonly store?: SessionMetaStore,
   ) {
     this.bridgeExtensionPath = bridgeExtensionPath();
   }
 
   async startSession(request: StartSessionRequest): Promise<StartSessionResult> {
     const key = `sess_${++this.nextSessionId}`;
-    const bridge = await createBridgeServer();
+
+    // Resume: reuse the worktree recorded for the session (if its folder still exists).
+    // New session: create one unless the caller opted out. Failures fall back to the main tree.
+    let worktree: SessionWorktree | undefined;
+    let createdWorktree = false;
+    if (request.sessionPath) {
+      const recorded = this.store?.getSessionMeta(request.sessionPath).worktree;
+      if (recorded && existsSync(recorded.worktreePath)) worktree = recorded;
+    } else if (request.useWorktree !== false) {
+      worktree =
+        (await createWorktree({ projectPath: request.projectPath, title: request.title, baseBranch: request.baseBranch })) ?? undefined;
+      createdWorktree = !!worktree;
+    }
+    const cwd = worktree?.worktreePath ?? request.projectPath;
+
+    let bridge: Awaited<ReturnType<typeof createBridgeServer>>;
+    try {
+      bridge = await createBridgeServer();
+    } catch (err) {
+      if (createdWorktree && worktree) void removeWorktree(worktree, { force: true });
+      throw err;
+    }
 
     const args: string[] = ["-e", this.bridgeExtensionPath];
     if (this.testProviderPath) {
@@ -60,7 +98,7 @@ export class MainSessionManager {
     const rpc = new PiRpcConnection({
       nodePath: this.piInfo.nodePath,
       cliPath: this.piInfo.cliPath,
-      cwd: request.projectPath,
+      cwd,
       args,
       env: {
         ...process.env,
@@ -71,6 +109,8 @@ export class MainSessionManager {
     const session: ActiveSession = {
       key,
       projectPath: request.projectPath,
+      cwd,
+      worktree,
       sessionPath: request.sessionPath,
       rpc,
       bridge,
@@ -103,6 +143,25 @@ export class MainSessionManager {
           skills: msg.skills,
           receivedAt: Date.now(),
         };
+      } else if (msg.type === "checkpoint_request") {
+        if (this.checkpoints) {
+          void this.checkpoints.onPromptSent(session.cwd, msg.sessionId, msg.userTs).then(() => {
+            void bridge.send({ v: BRIDGE_PROTOCOL_VERSION, type: "checkpoint_done", reqId: msg.reqId });
+          }).catch((err) => {
+            console.error("[checkpoints] failed to capture before-snapshot", err);
+            void bridge.send({ v: BRIDGE_PROTOCOL_VERSION, type: "checkpoint_done", reqId: msg.reqId });
+          });
+        } else {
+          void bridge.send({ v: BRIDGE_PROTOCOL_VERSION, type: "checkpoint_done", reqId: msg.reqId });
+        }
+      } else if (msg.type === "checkpoint_bind") {
+        if (this.checkpoints) {
+          void this.checkpoints.bindEntryId(session.cwd, msg.sessionId, msg.userTs, msg.leafEntryId);
+        }
+      } else if (msg.type === "boundary") {
+        if (msg.phase === "agent_settled" && msg.userTs && this.checkpoints) {
+          void this.checkpoints.onTurnSettled(session.cwd, session.key, msg.userTs);
+        }
       }
       this.sendToWindow(IPC.evtBridge, { key, message: msg });
     });
@@ -121,10 +180,12 @@ export class MainSessionManager {
     try {
       await rpc.start();
       this.sendStatus(key, "ready", { pid: rpc.pid });
-      return { key, projectPath: request.projectPath };
+      if (createdWorktree && worktree) void this.persistWorktreeMeta(session, worktree);
+      return { key, projectPath: request.projectPath, ...(worktree ? { worktree } : {}) };
     } catch (err) {
       void bridge.close();
       this.sessions.delete(key);
+      if (createdWorktree && worktree) void removeWorktree(worktree, { force: true });
       const msg = err instanceof Error ? err.message : String(err);
       this.sendStatus(key, "crashed", { error: msg });
       throw err;
@@ -222,6 +283,38 @@ export class MainSessionManager {
   async stopAll(): Promise<void> {
     const keys = [...this.sessions.keys()];
     await Promise.allSettled(keys.map((k) => this.stopSession(k)));
+  }
+
+  getSession(key: string): { key: string; projectPath: string; cwd: string; worktree?: SessionWorktree } | undefined {
+    const s = this.sessions.get(key);
+    return s ? { key: s.key, projectPath: s.projectPath, cwd: s.cwd, worktree: s.worktree } : undefined;
+  }
+
+  getAllSessions(): { key: string; projectPath: string; cwd: string; worktree?: SessionWorktree }[] {
+    return Array.from(this.sessions.values()).map((s) => ({ key: s.key, projectPath: s.projectPath, cwd: s.cwd, worktree: s.worktree }));
+  }
+
+  /** Effective cwd (worktree when present) of a live session. */
+  getCwd(key: string): string | null {
+    return this.sessions.get(key)?.cwd ?? null;
+  }
+
+  /**
+   * Meta is keyed by the session file, which Pi only reports once running: read it from get_state
+   * and record the worktree. Best effort; the renderer can also persist it via updateSessionMeta.
+   */
+  private async persistWorktreeMeta(session: ActiveSession, worktree: SessionWorktree): Promise<void> {
+    if (!this.store) return;
+    try {
+      const res = await session.rpc.send({ type: "get_state" });
+      const data = (res as { data?: Record<string, unknown> }).data;
+      const file = res.success && data && typeof data.sessionFile === "string" ? data.sessionFile : undefined;
+      if (!file) return;
+      session.sessionPath = file;
+      this.store.updateSessionMeta(file, { worktree });
+    } catch (err) {
+      console.warn("[worktrees] could not persist worktree meta", err instanceof Error ? err.message : err);
+    }
   }
 
   private flushEvents(session: ActiveSession): void {

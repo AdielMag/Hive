@@ -6,7 +6,7 @@ export class MarketplaceService {
       return this.searchPiNpm(query);
     }
     if (kind === "claude") {
-      return this.fetchClaudeOfficial();
+      return this.fetchClaudeOfficial(query);
     }
     if (kind === "mcp") {
       return this.fetchMcpRegistry(query);
@@ -62,24 +62,39 @@ export class MarketplaceService {
     }
   }
 
-  private async fetchClaudeOfficial(): Promise<MarketplacePackage[]> {
+  private async fetchClaudeOfficial(query = ""): Promise<MarketplacePackage[]> {
     try {
-      const res = await fetch("https://raw.githubusercontent.com/anthropics/anthropic-tools/main/marketplace.json", {
-        signal: AbortSignal.timeout(8000),
-      });
+      const res = await fetch(
+        "https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/.claude-plugin/marketplace.json",
+        { signal: AbortSignal.timeout(8000) },
+      );
       if (!res.ok) return [];
-      const data = (await res.json()) as any[];
-      return data.map((item) => ({
-        id: item.name || item.id,
-        name: item.name || item.id,
-        description: item.description || "Anthropic tool/skill definition",
-        version: item.version || "1.0.0",
-        sourceKind: "claude",
-        source: item.repo ? `git:${item.repo}` : item.source || item.name,
-        author: item.author || "Anthropic / Community",
-        homepage: item.homepage,
-        capabilities: item.capabilities || ["tool"],
-      }));
+      const data = (await res.json()) as { plugins?: any[] };
+      const q = query.trim().toLowerCase();
+      return (data.plugins ?? [])
+        .filter((p) => p?.name)
+        .filter((p) => !q || `${p.name} ${p.description ?? ""} ${p.category ?? ""}`.toLowerCase().includes(q))
+        .map((p): MarketplacePackage => {
+          const src = p.source;
+          // Relative-path plugins live inside the official repo itself.
+          const url: string | undefined =
+            typeof src === "string" ? "https://github.com/anthropics/claude-plugins-official.git" : src?.url;
+          const caps: MarketplacePackage["capabilities"] = [];
+          if (p.category === "theme") caps.push("theme");
+          if (`${p.name} ${p.description ?? ""}`.toLowerCase().includes("mcp")) caps.push("mcp");
+          if (caps.length === 0) caps.push("tool");
+          return {
+            id: p.name,
+            name: p.name,
+            description: p.description || "Claude plugin",
+            version: p.version || p.category || "plugin",
+            sourceKind: "claude",
+            source: url ? `git:${url}` : p.name,
+            author: p.author?.name ?? "Community",
+            homepage: p.homepage ?? url,
+            capabilities: caps,
+          };
+        });
     } catch {
       return [];
     }
@@ -87,25 +102,33 @@ export class MarketplaceService {
 
   private async fetchMcpRegistry(query: string): Promise<MarketplacePackage[]> {
     try {
-      const q = encodeURIComponent(query);
-      const res = await fetch(`https://registry.modelcontextprotocol.io/v0/servers?query=${q}`, {
+      const params = new URLSearchParams({ limit: "50", version: "latest" });
+      if (query.trim()) params.set("search", query.trim());
+      const res = await fetch(`https://registry.modelcontextprotocol.io/v0/servers?${params}`, {
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return [];
-      const data = (await res.json()) as any;
-      const servers = data.servers || [];
-
-      return servers.map((s: any) => ({
-        id: s.name || s.id,
-        name: s.name || s.id,
-        description: s.description || "MCP Protocol Server",
-        version: s.version || "0.1.0",
-        sourceKind: "mcp",
-        source: s.repository?.url || s.url || s.name,
-        author: s.publisher || s.author,
-        homepage: s.homepage || s.repository?.url,
-        capabilities: ["mcp", "tool"],
-      }));
+      const data = (await res.json()) as { servers?: any[] };
+      const seen = new Set<string>();
+      const out: MarketplacePackage[] = [];
+      for (const entry of data.servers ?? []) {
+        const s = entry?.server ?? entry; // registry wraps each entry as { server, _meta }
+        const name: string | undefined = s?.name ?? s?.id;
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        out.push({
+          id: name,
+          name,
+          description: s.description || "MCP server",
+          version: s.version || "0.1.0",
+          sourceKind: "mcp",
+          source: s.repository?.url || s.remotes?.[0]?.url || name,
+          author: s.publisher || s.author,
+          homepage: s.websiteUrl || s.homepage || s.repository?.url,
+          capabilities: ["mcp", "tool"],
+        });
+      }
+      return out;
     } catch {
       return [];
     }

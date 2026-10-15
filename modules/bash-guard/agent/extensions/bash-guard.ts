@@ -33,7 +33,7 @@ var LEGACY_RULES = [
     title: "Windows Recursive Deletion",
     severity: "critical",
     reason: "Recursively deletes directory trees on Windows (`del /s` or `rmdir /s`).",
-    pattern: /\b(del|erase)\s+.*(\/s|\-s)|\b(rmdir|rd)\s+.*(\/s|\-s)/i
+    pattern: /\b(del|erase)\s+.*(\/s|-s)|\b(rmdir|rd)\s+.*(\/s|-s)/i
   },
   {
     id: "ps-recurse-delete",
@@ -638,7 +638,7 @@ function parseCommand(src) {
         i += 2;
         continue;
       }
-      if (cur === null && /[A-Za-z0-9_.\/-]/.test(nx)) {
+      if (cur === null && /[A-Za-z0-9_./-]/.test(nx)) {
         ensureWord().quoted = true;
         skeleton += "\\";
         i++;

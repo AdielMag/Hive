@@ -74,6 +74,49 @@ async function fromReleasePage(opts: CheckOptions, f: typeof fetch, timeoutMs: n
   return { tag, htmlUrl: `https://github.com/${opts.repo}/releases/tag/${tag}` };
 }
 
+/** Release asset (written by release.yml) listing `sha256sum` hashes of every installer. */
+export const CHECKSUMS_ASSET = "SHA256SUMS.txt";
+
+/** Only binaries attached to this repo's GitHub releases may be downloaded and run. */
+export function isTrustedDownloadUrl(url: string, repo: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && u.host === "github.com" && u.pathname.startsWith(`/${repo}/releases/download/`) && !u.pathname.includes("..");
+  } catch {
+    return false;
+  }
+}
+
+/** A GitHub release page of this repo (safe to open in the browser). */
+export function isReleasePageUrl(url: string, repo: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && u.host === "github.com" && u.pathname.startsWith(`/${repo}/releases`);
+  } catch {
+    return false;
+  }
+}
+
+/** `SHA256SUMS.txt` next to a release asset, plus the asset's file name. */
+export function checksumLocation(downloadUrl: string): { checksumsUrl: string; assetName: string } {
+  const u = new URL(downloadUrl);
+  const slash = u.pathname.lastIndexOf("/");
+  const assetName = decodeURIComponent(u.pathname.slice(slash + 1));
+  u.pathname = `${u.pathname.slice(0, slash + 1)}${CHECKSUMS_ASSET}`;
+  u.search = "";
+  u.hash = "";
+  return { checksumsUrl: u.toString(), assetName };
+}
+
+/** Expected lowercase hex SHA-256 for `assetName` from `sha256sum` output (`<hash>  <name>` or `<hash> *<name>`). */
+export function expectedSha256(checksums: string, assetName: string): string | undefined {
+  for (const line of checksums.split(/\r?\n/)) {
+    const m = /^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$/.exec(line);
+    if (m && m[2] === assetName) return m[1]!.toLowerCase();
+  }
+  return undefined;
+}
+
 /** Pick the platform installer from release assets, or derive it from the known artifact names. */
 export function pickDownloadUrl(release: LatestRelease, repo: string, platform: NodeJS.Platform): string {
   const assets = release.assets;

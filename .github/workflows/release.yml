@@ -20,10 +20,15 @@ env:
 
 jobs:
   verify:
-    name: Verify
+    name: Verify (${{ matrix.os }})
     # The release job's own version-bump commit must not trigger another release.
     if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
-    runs-on: ubuntu-latest
+    # Pushes to main ship straight to users, so gate them like PRs (incl. Windows, the primary platform).
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,6 +37,8 @@ jobs:
           cache: npm
       - run: npm ci --legacy-peer-deps
       - run: npm run typecheck
+      - run: npm run check:modules
+      - run: npm run lint
       - run: npm test
       - run: npm run build
 
@@ -124,6 +131,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Installer checksums
+        # The in-app updater refuses to run an installer whose SHA-256 isn't listed here.
+        run: |
+          cd artifacts
+          find dist-* -maxdepth 1 -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.zip' -o -name '*.AppImage' \) -exec sha256sum {} + \
+            | sed -E 's#  dist-[^/]+/#  #' | sort -k2 > SHA256SUMS.txt
+          test -s SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -138,3 +153,4 @@ jobs:
             artifacts/dist-*/*.dmg
             artifacts/dist-*/*.zip
             artifacts/dist-*/*.AppImage
+            artifacts/SHA256SUMS.txt

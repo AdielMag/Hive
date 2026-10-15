@@ -5,6 +5,7 @@ import { registerAppIpc } from "./app.ts";
 import { registerModulesIpc } from "./modules.ts";
 import { registerSessionIpc } from "./sessions.ts";
 import { registerWorkspaceIpc } from "./workspace.ts";
+import { registerCheckpointIpc } from "./checkpoints.ts";
 
 /** Registers every IPC domain. Each module owns one slice of the `IPC` channel map. */
 export function registerIpc(ctx: AppContext): void {
@@ -14,4 +15,5 @@ export function registerIpc(ctx: AppContext): void {
   registerAccountIpc(ctx);
   registerAiIpc(ctx);
   registerModulesIpc(ctx);
+  registerCheckpointIpc(ctx);
 }

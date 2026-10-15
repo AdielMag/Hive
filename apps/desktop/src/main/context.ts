@@ -15,6 +15,7 @@ import { AppUpdaterService } from "./services/updater.ts";
 import { PiUpdaterService } from "./services/pi-updater.ts";
 import { ModelsService } from "./services/models.ts";
 import { PiInstallService } from "./services/pi-install.ts";
+import { CheckpointService } from "./services/checkpoints/service.ts";
 import { IPC } from "@hive/protocol";
 import { MainModuleHost } from "./modules/host.ts";
 import { MAIN_MODULE_LOADERS, MODULE_MANIFESTS } from "./modules.generated.ts";
@@ -32,6 +33,7 @@ export interface AppContext {
   updater: AppUpdaterService;
   piUpdater: PiUpdaterService;
   models: ModelsService;
+  checkpoints: CheckpointService;
   /** Installable feature modules (enabled set, lifecycle, scoped IPC). Started in index.ts. */
   modules: MainModuleHost;
 }
@@ -48,6 +50,9 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     : undefined;
   const guiStore = new GuiStore(userData);
   const info = pi.ok ? pi.info : null;
+  const checkpoints = new CheckpointService({
+    storageDir: resolve(hiveDataDir, "checkpoints"),
+  });
 
   return {
     pi,
@@ -56,11 +61,12 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
     getWindow,
     guiStore,
     catalog: info ? new SessionCatalogService(info.packageRoot, guiStore) : null,
-    sessions: info ? new MainSessionManager(info, getWindow, testProviderPath) : null,
+    sessions: info ? new MainSessionManager(info, getWindow, testProviderPath, checkpoints, guiStore) : null,
     auth: info ? new AuthService(info.packageRoot) : null,
     updater: new AppUpdaterService(),
     piUpdater: new PiUpdaterService(() => info?.packageRoot),
     models: new ModelsService(undefined, hiveDataDir),
+    checkpoints,
     modules: new MainModuleHost({
       manifests: MODULE_MANIFESTS,
       loaders: MAIN_MODULE_LOADERS,

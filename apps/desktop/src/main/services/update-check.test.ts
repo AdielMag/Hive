@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { checkLatestRelease } from "./update-check.ts";
+import { checkLatestRelease, checksumLocation, expectedSha256, isReleasePageUrl, isTrustedDownloadUrl } from "./update-check.ts";
+import { isSafeExternalUrl } from "../safe-url.ts";
 
 const REPO = "AdielMag/Hive";
 
@@ -69,5 +70,52 @@ describe("checkLatestRelease", () => {
     expect(info.hasUpdate).toBe(false);
     expect(info.latestVersion).toBeUndefined();
     expect(info.error).toMatch(/offline/);
+  });
+});
+
+describe("update download trust", () => {
+  const asset = "https://github.com/AdielMag/Hive/releases/download/v0.28.0/Hive-Setup-0.28.0.exe";
+
+  it("trusts only this repo's https release assets", () => {
+    expect(isTrustedDownloadUrl(asset, REPO)).toBe(true);
+    expect(isTrustedDownloadUrl(asset.replace("https:", "http:"), REPO)).toBe(false);
+    expect(isTrustedDownloadUrl("https://github.com/evil/Hive/releases/download/v1/x.exe", REPO)).toBe(false);
+    expect(isTrustedDownloadUrl("https://github.com.evil.io/AdielMag/Hive/releases/download/v1/x.exe", REPO)).toBe(false);
+    expect(isTrustedDownloadUrl("https://github.com/AdielMag/Hive/releases/tag/v1", REPO)).toBe(false);
+    expect(isTrustedDownloadUrl("file:///C:/x.exe", REPO)).toBe(false);
+    expect(isTrustedDownloadUrl("not a url", REPO)).toBe(false);
+  });
+
+  it("recognizes release pages", () => {
+    expect(isReleasePageUrl("https://github.com/AdielMag/Hive/releases/tag/v0.28.0", REPO)).toBe(true);
+    expect(isReleasePageUrl("https://github.com/AdielMag/Hive/releases/latest", REPO)).toBe(true);
+    expect(isReleasePageUrl("https://example.com/AdielMag/Hive/releases/latest", REPO)).toBe(false);
+  });
+
+  it("locates SHA256SUMS.txt next to the asset", () => {
+    expect(checksumLocation(asset)).toEqual({
+      checksumsUrl: "https://github.com/AdielMag/Hive/releases/download/v0.28.0/SHA256SUMS.txt",
+      assetName: "Hive-Setup-0.28.0.exe",
+    });
+  });
+
+  it("parses sha256sum output (text and binary mode)", () => {
+    const a = "a".repeat(64);
+    const b = "B".repeat(64);
+    const sums = `${a}  Hive-0.28.0.dmg\r\n${b} *Hive-Setup-0.28.0.exe\n`;
+    expect(expectedSha256(sums, "Hive-Setup-0.28.0.exe")).toBe("b".repeat(64));
+    expect(expectedSha256(sums, "Hive-0.28.0.dmg")).toBe(a);
+    expect(expectedSha256(sums, "Hive-Setup-0.27.0.exe")).toBeUndefined();
+    expect(expectedSha256("garbage  Hive-Setup-0.28.0.exe", "Hive-Setup-0.28.0.exe")).toBeUndefined();
+  });
+});
+
+describe("isSafeExternalUrl", () => {
+  it("allows web and mail links only", () => {
+    expect(isSafeExternalUrl("https://pi.dev")).toBe(true);
+    expect(isSafeExternalUrl("mailto:a@b.c")).toBe(true);
+    expect(isSafeExternalUrl("file:///C:/Windows/System32/calc.exe")).toBe(false);
+    expect(isSafeExternalUrl("javascript:alert(1)")).toBe(false);
+    expect(isSafeExternalUrl("ms-msdt:/id")).toBe(false);
   });
 });

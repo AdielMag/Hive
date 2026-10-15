@@ -1,13 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Gauge, Loader2, X } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
-import { JEV_COMPACT_KIND } from "../shared.ts";
 import { decideTier, type CompactTier } from "../tiering.ts";
 import { jevStore, useJev } from "./jev-store.ts";
+import { JEV_COMPACTING_TIMEOUT_MS, requestJevCompact } from "./jev-compact.ts";
 import "./jev.css";
-
-/** If Pi never reports the compaction ending, stop showing the spinner. */
-const COMPACTING_TIMEOUT_MS = 120_000;
 
 const fmtK = (n: number): string => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
 
@@ -40,7 +37,7 @@ export const JevAdviceBar: React.FC<JevAdviceBarProps> = ({ host, activeKey }) =
   const startedAt = activeKey ? compacting[activeKey] : undefined;
   useEffect(() => {
     if (!activeKey || startedAt === undefined) return;
-    const t = setTimeout(() => jevStore.stopCompacting(activeKey), Math.max(0, startedAt + COMPACTING_TIMEOUT_MS - Date.now()));
+    const t = setTimeout(() => jevStore.stopCompacting(activeKey), Math.max(0, startedAt + JEV_COMPACTING_TIMEOUT_MS - Date.now()));
     return () => clearTimeout(t);
   }, [activeKey, startedAt]);
 
@@ -57,11 +54,14 @@ export const JevAdviceBar: React.FC<JevAdviceBarProps> = ({ host, activeKey }) =
   if (!activeKey) return null;
 
   if (startedAt !== undefined) {
+    const from = advice[activeKey];
     return (
       <div className="jev-bar is-busy" role="status">
         <Loader2 size={13} className="jev-bar__icon jev-spin" />
         <span className="jev-bar__label">Compacting…</span>
-        <span className="jev-bar__hint">Summarizing earlier turns</span>
+        <span className="jev-bar__hint">
+          {from ? `Summarizing earlier turns · from ${fmtK(from.tokens)} tokens (${Math.round(from.usagePct)}% of context)` : "Summarizing earlier turns"}
+        </span>
       </div>
     );
   }
@@ -73,11 +73,7 @@ export const JevAdviceBar: React.FC<JevAdviceBarProps> = ({ host, activeKey }) =
 
   const compact = () => {
     setError(null);
-    jevStore.requestCompact(activeKey);
-    host.sessions.emitToBridge(activeKey, { kind: JEV_COMPACT_KIND }).catch((err: unknown) => {
-      jevStore.stopCompacting(activeKey);
-      setError(err instanceof Error ? err.message : String(err));
-    });
+    requestJevCompact(host, activeKey).catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   };
 
   const detail = `${Math.round(a.usagePct)}% of context (${fmtK(a.tokens)} / ${fmtK(a.contextWindow)})`;

@@ -21,7 +21,7 @@ import { Slot } from "./ModuleViews.tsx";
 import { AiModelChip } from "../components/AiModelChip.tsx";
 import { ContextBreakdownPanel } from "../components/ContextBreakdownPanel.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
-import { useSessionStore } from "../store/session-store.ts";
+import { registerPreSendHook, useSessionStore } from "../store/session-store.ts";
 import { useAppearance } from "../features/appearance/appearance-store.ts";
 import { useUi, type SettingsTabId } from "../store/ui-store.ts";
 import { subscribeSessionEvents } from "./session-bus.ts";
@@ -120,9 +120,24 @@ export function createModuleHost(moduleId: string): ModuleHost {
       onChange: (listener) => useSessionStore.subscribe((s, prev) => { if (s.tabs !== prev.tabs || s.activeTabId !== prev.activeTabId) listener(); }),
     },
     panels: {
-      open: (side, panelId) => (side === "left" ? useUi.getState().showLeft(panelId) : useUi.getState().showRight(panelId)),
-      toggle: (side, panelId) => (side === "left" ? useUi.getState().toggleLeft(panelId) : useUi.getState().toggleRight(panelId)),
-      close: (side) => (side === "left" ? useUi.getState().showLeft(null) : useUi.getState().showRight(null)),
+      open: (side, panelId) => {
+        const ui = useUi.getState();
+        if (side === "left") ui.showLeft(panelId);
+        else if (side === "right") ui.showRight(panelId);
+        else ui.showBottom(panelId);
+      },
+      toggle: (side, panelId) => {
+        const ui = useUi.getState();
+        if (side === "left") ui.toggleLeft(panelId);
+        else if (side === "right") ui.toggleRight(panelId);
+        else ui.toggleBottom(panelId);
+      },
+      close: (side) => {
+        const ui = useUi.getState();
+        if (side === "left") ui.showLeft(null);
+        else if (side === "right") ui.showRight(null);
+        else ui.showBottom(null);
+      },
     },
     toast: (options) => void toast(options),
     sound: {
@@ -187,6 +202,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
           if (message.type === "event" && message.topic === BRIDGE_TOPICS.toGui) listener({ key, data: message.data });
         }),
       emitToBridge: (key, data) => window.studio.bridgeEmit(key, BRIDGE_TOPICS.fromGui, data),
+      onBeforeSend: (hook) => registerPreSendHook(hook),
       activeProject: () => {
         const p = useSessionStore.getState().activeProject;
         return p ? { id: p.id, name: p.name, path: p.path } : null;

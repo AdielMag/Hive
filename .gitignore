@@ -20,3 +20,7 @@ apps/desktop/run*.log
 .tmp-*
 
 # Showcase film working files (frames, drafts, fonts, jobs)
+
+# Build caches / stray captures
+*.tsbuildinfo
+/test-capture.png

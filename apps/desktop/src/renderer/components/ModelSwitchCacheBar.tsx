@@ -4,11 +4,11 @@
  * since the conversation was last sent. The whole conversation would be re-sent uncached; compacting
  * first lets the next request start from a summary + recent turns. See lib/models/cache-switch.ts.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, CheckCircle2, Loader2, Minimize2, Snowflake, TriangleAlert, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { Model } from "@hive/protocol";
-import { useSessionStore } from "../store/session-store.ts";
+import { registerPreSendHook, useSessionStore } from "../store/session-store.ts";
 import {
   CACHE_TTL_MS,
   DEFAULT_KEEP_RECENT_MAX_TOKENS,
@@ -173,6 +173,7 @@ export const ModelSwitchCacheBar: React.FC = () => {
     try {
       await compactSession(key, {
         saved: advice.savedTokens,
+        before: advice.contextTokens,
         fallbackTokensAfter: advice.afterCompactTokens,
         toName,
       });
@@ -180,6 +181,24 @@ export const ModelSwitchCacheBar: React.FC = () => {
       // Error handled in store state
     }
   };
+
+  const eligible =
+    !!advice &&
+    !!last &&
+    !!activeKey &&
+    !transcript.running &&
+    !transcript.compaction &&
+    // A switch only counts as "mid-session" when recent; an expired cache is cold however old the session is.
+    (expired || isRecent(last)) &&
+    isWorthCompacting(advice) &&
+    !compactedAfter.has(responseKey) &&
+    !dismissed.has(dismissKey);
+  // Sending a message while this nudge is showing (not dismissed with X) compacts first; the prompt is held until it's done.
+  const autoCompactRef = useRef<(() => Promise<void>) | null>(null);
+  autoCompactRef.current = eligible && !busyElsewhere && !currentCompaction ? compactFirst : null;
+  useEffect(() => {
+    return registerPreSendHook((key) => (useSessionStore.getState().activeKey === key ? autoCompactRef.current?.() : undefined));
+  }, []);
 
   if (currentCompaction?.phase === "compacting") {
     const saved = currentCompaction.saved;
@@ -197,6 +216,9 @@ export const ModelSwitchCacheBar: React.FC = () => {
             Summarizing earlier turns so {modelLabel} doesn't re-read the full history
           </span>
         </span>
+        {currentCompaction.before && currentCompaction.tokens ? (
+          <TokenDelta before={currentCompaction.before} after={currentCompaction.tokens} />
+        ) : null}
       </div>
     );
   }
@@ -243,17 +265,6 @@ export const ModelSwitchCacheBar: React.FC = () => {
     );
   }
 
-  const eligible =
-    !!advice &&
-    !!last &&
-    !!activeKey &&
-    !transcript.running &&
-    !transcript.compaction &&
-    // A switch only counts as "mid-session" when recent; an expired cache is cold however old the session is.
-    (expired || isRecent(last)) &&
-    isWorthCompacting(advice) &&
-    !compactedAfter.has(responseKey) &&
-    !dismissed.has(dismissKey);
   if (!eligible || !advice) return null;
 
   const idleMin = last?.at !== undefined ? Math.max(1, Math.floor((Date.now() - last.at) / 60_000)) : null;

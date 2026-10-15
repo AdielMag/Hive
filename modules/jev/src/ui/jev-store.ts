@@ -100,6 +100,12 @@ export const jevStore = {
     t.shownTier = tier;
     emit({ kind: "shown", key, entryId: a.entryId, tier, usagePct: a.usagePct });
   },
+  /** Tier of the hint currently showing for `key` ("silent" when none: no advice, dismissed with X, or compacting). */
+  visibleTier(key: string, now = Date.now()): CompactTier {
+    const a = state.advice[key];
+    if (!a || key in state.compacting || state.dismissed[key] === a.entryId) return "silent";
+    return decideTier({ advice: a, idleMs: now - a.at, floorPct: 0 }).tier;
+  },
   /** A new turn started or the context was compacted: old advice no longer describes the conversation. */
   clearAdvice(key: string) {
     settleIgnored(key, state.advice[key]);

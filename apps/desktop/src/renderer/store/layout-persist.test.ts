@@ -5,9 +5,11 @@ describe("layout-persist", () => {
   const fallback: PersistedLayout = {
     left: "projects",
     right: null,
+    bottom: null,
     leftWidth: 268,
     rightWidth: 360,
     composerHeight: 150,
+    bottomHeight: 380,
   };
 
   it("returns fallback on null or empty object", () => {
@@ -27,6 +29,18 @@ describe("layout-persist", () => {
     expect(res.left).toBe("files");
     expect(res.leftWidth).toBe(300);
     expect(res.rightWidth).toBe(400);
+  });
+
+  it("keeps a declared bottom panel and drops unknown ones", () => {
+    expect(sanitizeLayout({ bottom: "branches" }, fallback, { bottom: new Set(["branches"]) }).bottom).toBe("branches");
+    expect(sanitizeLayout({ bottom: "ghost" }, fallback, { bottom: new Set(["branches"]) }).bottom).toBeNull();
+    expect(sanitizeLayout({ bottom: "branches" }, fallback).bottom).toBeNull();
+  });
+
+  it("migrates a saved left Branches panel to the bottom dock", () => {
+    const res = sanitizeLayout({ left: "branches" }, fallback, { left: new Set(), bottom: new Set(["branches"]) });
+    expect(res.left).toBe("projects");
+    expect(res.bottom).toBe("branches");
   });
 
   it("accepts valid right panels including 'context'", () => {

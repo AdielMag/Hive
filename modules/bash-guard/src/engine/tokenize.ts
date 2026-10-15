@@ -585,7 +585,7 @@ export function parseCommand(src: string): ParsedCommand {
         i += 2;
         continue;
       }
-      if (cur === null && /[A-Za-z0-9_.\/-]/.test(nx)) {
+      if (cur === null && /[A-Za-z0-9_./-]/.test(nx)) {
         // `\rm`: alias-bypass backslash at word start
         ensureWord().quoted = true;
         skeleton += "\\";

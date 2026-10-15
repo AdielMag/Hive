@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   FolderPlus,
+  GitBranch,
   Link2,
   Loader2,
   MessageSquare,
@@ -24,6 +25,8 @@ import { formatAgo } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
 import { ProjectSettingsModal, type ProjectSettingsSection } from "./ProjectSettingsModal.tsx";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
+import { worktreeChipLabel, worktreeTooltipLines } from "../lib/worktree.ts";
+import { archiveSession } from "../store/worktree-actions.ts";
 
 const VISIBLE_SESSIONS = 5;
 
@@ -55,6 +58,8 @@ export const Sidebar: React.FC = () => {
     displayedTabId,
     displayedNeedsInput,
     sessionAwaitingUser,
+    newSessionInMainTree,
+    setNewSessionInMainTree,
   } = useSessionStore(
     useShallow((s) => ({
       projects: s.projects,
@@ -74,6 +79,8 @@ export const Sidebar: React.FC = () => {
       displayedTabId: s.displayedTabId,
       displayedNeedsInput: !!s.pendingUiDialog || !!s.pendingForm || transcriptAwaitsUser(s.transcript),
       sessionAwaitingUser: s.sessionAwaitingUser,
+      newSessionInMainTree: s.newSessionInMainTree,
+      setNewSessionInMainTree: s.setNewSessionInMainTree,
     })),
   );
 
@@ -153,7 +160,7 @@ export const Sidebar: React.FC = () => {
         { label: "Rename", icon: <Pencil size={13} />, hint: "F2", onSelect: () => setRenaming(sess.path) },
         sess.archived
           ? { label: "Unarchive", icon: <ArchiveRestore size={13} />, onSelect: () => void setSessionArchived(sess.path, false) }
-          : { label: "Archive", icon: <Archive size={13} />, onSelect: () => void setSessionArchived(sess.path, true) },
+          : { label: "Archive", icon: <Archive size={13} />, onSelect: () => void archiveSession(sess) },
         { kind: "separator" },
         { label: "Delete", icon: <Trash2 size={13} />, danger: true, onSelect: () => void confirmDelete(sess) },
       ],
@@ -167,6 +174,12 @@ export const Sidebar: React.FC = () => {
       y: e.clientY,
       items: [
         { label: "New session", icon: <MessageSquarePlus size={13} />, onSelect: () => void newSessionTab(project.id) },
+        {
+          label: "Work in main tree",
+          icon: <GitBranch size={13} />,
+          hint: newSessionInMainTree ? "on" : "off",
+          onSelect: () => setNewSessionInMainTree(!newSessionInMainTree),
+        },
         { kind: "separator" },
         { label: "Project settings…", icon: <Settings2 size={13} />, onSelect: () => setSettingsFor({ id: project.id, section: "general" }) },
         { label: "Linked folders…", icon: <Link2 size={13} />, onSelect: () => setSettingsFor({ id: project.id, section: "links" }) },
@@ -227,7 +240,7 @@ export const Sidebar: React.FC = () => {
         title={
           isRenaming
             ? undefined
-            : `${title}${badge ? ` (${BADGE_LABEL[badge]})` : ""}${Number.isFinite(modified) ? `\n${formatAgo(modified)}` : ""}`
+            : `${title}${badge ? ` (${BADGE_LABEL[badge]})` : ""}${Number.isFinite(modified) ? `\n${formatAgo(modified)}` : ""}${sess.worktree ? `\n${worktreeTooltipLines(sess.worktree).join("\n")}` : ""}`
         }
       >
         {badge === "running" ? (
@@ -248,13 +261,14 @@ export const Sidebar: React.FC = () => {
         )}
         {!isRenaming && (
           <>
+            {sess.worktree && <span className="sb-session__wt">{worktreeChipLabel(sess.worktree)}</span>}
             {badge && badge !== "running" && <span className={`sb-session__dot sb-session__dot--${badge}`} aria-hidden />}
             {sess.messageCount > 0 && <span className="sb-session__count">{sess.messageCount}</span>}
             <button
               className="sb-icon-btn sb-session__action"
               onClick={(e) => {
                 e.stopPropagation();
-                void setSessionArchived(sess.path, !sess.archived);
+                void (sess.archived ? setSessionArchived(sess.path, false) : archiveSession(sess));
               }}
               title={sess.archived ? "Unarchive session" : "Archive session (right-click for more)"}
             >

@@ -79,7 +79,7 @@ export const ModePicker: React.FC = () => {
   };
 
   return (
-    <div ref={containerRef} style={{ position: "relative", minWidth: 0, flexShrink: 2 }}>
+    <div ref={containerRef} className="composer-mode" style={{ position: "relative", minWidth: 0, flexShrink: 2 }}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -100,8 +100,9 @@ export const ModePicker: React.FC = () => {
           transition: "all 0.15s ease",
         }}
       >
-        <span style={{ display: "inline-flex", color: activeMode.color }}>{activeMode.icon}</span>
+        <span style={{ display: "inline-flex", flexShrink: 0, color: activeMode.color }}>{activeMode.icon}</span>
         <span
+          className="composer-hide-md"
           style={{
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -124,6 +125,7 @@ export const ModePicker: React.FC = () => {
 
       {open && (
         <div
+          className="composer-popup"
           style={{
             position: "absolute",
             bottom: "100%",

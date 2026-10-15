@@ -1,10 +1,11 @@
 /** Bottom status bar on the window frame: Pi version, run state, extension statuses, live quota meters. */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Coins, ExternalLink, Volume2, VolumeX, X } from "lucide-react";
+import { Coins, ExternalLink, Terminal, Volume2, VolumeX, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { parseAnsi } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
+import { useUi } from "../store/ui-store.ts";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import { useContributions, useModules } from "../modules/registry.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
@@ -114,6 +115,15 @@ export const StatusBar: React.FC = () => {
       <ModuleStatusItems />
 
       <button
+        className={`statusbar__btn${useUi.getState().bottom === "terminal" ? " is-active" : ""}`}
+        onClick={() => useUi.getState().toggleBottom("terminal")}
+        title="Toggle Bottom Terminal (Ctrl+`)"
+        aria-label="Toggle Bottom Terminal"
+      >
+        <Terminal size={12} />
+      </button>
+
+      <button
         className="statusbar__btn"
         onClick={toggleMute}
         title={soundEnabled ? `Sound effects: On (${Math.round(soundVolume * 100)}%) — Click to mute` : "Sound effects: Muted — Click to unmute"}
@@ -128,12 +138,14 @@ export const StatusBar: React.FC = () => {
           style={cost > 0 ? undefined : { visibility: "hidden" }}
           tabIndex={cost > 0 ? undefined : -1}
           className={`statusbar__btn statusbar__cost mono${costPop.open ? " is-active" : ""}`}
-          onClick={costPop.onClick}
+          onClick={() => {
+            useUi.getState().toggleRight("usage");
+          }}
           onMouseEnter={costPop.onEnter}
           onMouseLeave={costPop.onLeave}
           onFocus={costPop.onEnter}
           onBlur={costPop.onLeave}
-          title="Cost of this session — hover or click for details"
+          title="Session & overall usage breakdown — click to open panel"
           aria-haspopup="dialog"
           aria-expanded={costPop.open}
         >

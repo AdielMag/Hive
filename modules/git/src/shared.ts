@@ -59,6 +59,43 @@ export interface GitGraphCommit {
   message: string;
   /** Decorations, e.g. ["HEAD -> main", "origin/main", "tag: v1"]. */
   refs: string[];
+  /** Author date, ISO 8601. */
+  date?: string;
+  authorEmail?: string;
+}
+
+export interface GitGraphOptions {
+  /** Only commits reachable from this ref (branch, tag or hash). Default: all refs. */
+  ref?: string;
+}
+
+export interface GitCommitFile {
+  path: string;
+  status: "added" | "modified" | "deleted";
+  additions?: number;
+  deletions?: number;
+}
+
+export interface GitCommitDetail {
+  hash: string;
+  shortHash: string;
+  parents: string[];
+  author: string;
+  authorEmail: string;
+  date: string;
+  committer: string;
+  subject: string;
+  body: string;
+  /** Branches that contain this commit (local + remote short names), capped. */
+  containedIn: string[];
+  files: GitCommitFile[];
+}
+
+export interface GitTag {
+  name: string;
+  hash: string;
+  subject: string;
+  relativeDate: string;
 }
 
 export const GitMethods = {
@@ -70,6 +107,11 @@ export const GitMethods = {
   log: "log",
   branchDetails: "branchDetails",
   graph: "graph",
+  commitDetail: "commitDetail",
+  tags: "tags",
+  createBranchFrom: "createBranchFrom",
+  renameBranch: "renameBranch",
+  merge: "merge",
   stage: "stage",
   stageAll: "stageAll",
   unstage: "unstage",
@@ -102,7 +144,12 @@ export interface GitApi {
   gitDeleteBranch(cwd: string, branch: string, force?: boolean): Promise<string>;
   getGitLog(cwd: string, maxCount?: number): Promise<GitCommitLog[]>;
   getGitBranchDetails(cwd: string): Promise<GitBranchDetail[]>;
-  getGitGraph(cwd: string, maxCount?: number): Promise<GitGraphCommit[]>;
+  getGitGraph(cwd: string, maxCount?: number, options?: GitGraphOptions): Promise<GitGraphCommit[]>;
+  getGitCommitDetail(cwd: string, hash: string): Promise<GitCommitDetail | null>;
+  getGitTags(cwd: string): Promise<GitTag[]>;
+  gitCreateBranchFrom(cwd: string, branch: string, startPoint: string, checkout?: boolean): Promise<string>;
+  gitRenameBranch(cwd: string, oldName: string, newName: string): Promise<string>;
+  gitMerge(cwd: string, branch: string): Promise<string>;
   stageFile(cwd: string, filePath: string): Promise<void>;
   stageAll(cwd: string): Promise<void>;
   unstageFile(cwd: string, filePath: string): Promise<void>;
@@ -130,7 +177,12 @@ export function createGitApi(invoke: Invoke): GitApi {
     gitDeleteBranch: (cwd, branch, force) => invoke(M.deleteBranch, cwd, branch, force),
     getGitLog: (cwd, maxCount) => invoke(M.log, cwd, maxCount),
     getGitBranchDetails: (cwd) => invoke(M.branchDetails, cwd),
-    getGitGraph: (cwd, maxCount) => invoke(M.graph, cwd, maxCount),
+    getGitGraph: (cwd, maxCount, options) => invoke(M.graph, cwd, maxCount, options),
+    getGitCommitDetail: (cwd, hash) => invoke(M.commitDetail, cwd, hash),
+    getGitTags: (cwd) => invoke(M.tags, cwd),
+    gitCreateBranchFrom: (cwd, branch, startPoint, checkout) => invoke(M.createBranchFrom, cwd, branch, startPoint, checkout),
+    gitRenameBranch: (cwd, oldName, newName) => invoke(M.renameBranch, cwd, oldName, newName),
+    gitMerge: (cwd, branch) => invoke(M.merge, cwd, branch),
     stageFile: (cwd, filePath) => invoke(M.stage, cwd, filePath),
     stageAll: (cwd) => invoke(M.stageAll, cwd),
     unstageFile: (cwd, filePath) => invoke(M.unstage, cwd, filePath),

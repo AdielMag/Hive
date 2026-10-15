@@ -4,7 +4,7 @@
  */
 import { defineMainModule } from "@hive/module-sdk/main";
 import * as git from "./service.ts";
-import { GitMethods as M, MODULE_ID, type GitDiffOptions } from "./shared.ts";
+import { GitMethods as M, MODULE_ID, type GitDiffOptions, type GitGraphOptions } from "./shared.ts";
 
 export default defineMainModule({
   id: MODULE_ID,
@@ -17,7 +17,12 @@ export default defineMainModule({
     h(M.deleteBranch, (cwd: string, branch: string, force?: boolean) => git.gitDeleteBranch(cwd, branch, force));
     h(M.log, (cwd: string, maxCount?: number) => git.getGitLog(cwd, maxCount));
     h(M.branchDetails, (cwd: string) => git.getGitBranchDetails(cwd));
-    h(M.graph, (cwd: string, maxCount?: number) => git.getGitGraph(cwd, maxCount));
+    h(M.graph, (cwd: string, maxCount?: number, options?: GitGraphOptions) => git.getGitGraph(cwd, maxCount, options));
+    h(M.commitDetail, (cwd: string, hash: string) => git.getGitCommitDetail(cwd, hash));
+    h(M.tags, (cwd: string) => git.getGitTags(cwd));
+    h(M.createBranchFrom, (cwd: string, branch: string, startPoint: string, checkout?: boolean) => git.gitCreateBranchFrom(cwd, branch, startPoint, checkout));
+    h(M.renameBranch, (cwd: string, oldName: string, newName: string) => git.gitRenameBranch(cwd, oldName, newName));
+    h(M.merge, (cwd: string, branch: string) => git.gitMerge(cwd, branch));
     h(M.stage, (cwd: string, filePath: string) => git.stageFile(cwd, filePath));
     h(M.stageAll, (cwd: string) => git.stageAll(cwd));
     h(M.unstage, (cwd: string, filePath: string) => git.unstageFile(cwd, filePath));

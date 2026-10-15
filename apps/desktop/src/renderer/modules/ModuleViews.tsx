@@ -97,8 +97,8 @@ export const ModuleTabView: React.FC<{ tab: TabItem; onClose?: () => void }> = (
 };
 
 /** Content of a module-owned side panel. */
-export const ModulePanelView: React.FC<{ side: "left" | "right"; panelId: string; onClose?: () => void }> = ({ side, panelId, onClose }) => {
-  const panels = useContributions(side === "left" ? "leftPanels" : "rightPanels");
+export const ModulePanelView: React.FC<{ side: "left" | "right" | "bottom"; panelId: string; onClose?: () => void }> = ({ side, panelId, onClose }) => {
+  const panels = useContributions(side === "left" ? "leftPanels" : side === "right" ? "rightPanels" : "bottomPanels");
   const contribution = panels.find((p) => p.id === panelId);
   const host = useModuleHost(contribution?.moduleId ?? "");
   if (!contribution || !host) return <ModulePlaceholder owner={ownerOfPanel(side, panelId)} what="panel" onClose={onClose} />;

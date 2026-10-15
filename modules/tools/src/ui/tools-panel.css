@@ -522,3 +522,13 @@ button.tools-row:hover {
   border-left: none;
   margin-left: 0;
 }
+
+.tools-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tools-panel__actions .ui-btn.is-active {
+  color: var(--accent, var(--text-primary));
+  background: var(--bg-hover, rgba(127, 127, 127, 0.15));
+}

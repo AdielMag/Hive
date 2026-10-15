@@ -81,13 +81,13 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
       "git"
     ],
     "contributes": {
-      "leftPanels": [
+      "bottomPanels": [
         "branches"
       ],
       "commands": [
         {
           "id": "view.branches",
-          "title": "Toggle Branches Panel",
+          "title": "Toggle Branches Window",
           "category": "View"
         }
       ]
@@ -294,14 +294,11 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     "icon": "shopping-bag",
     "category": "Workbench",
     "contributes": {
-      "rightPanels": [
-        "marketplace"
-      ],
       "commands": [
         {
-          "id": "view.marketplace",
-          "title": "Toggle Marketplace Panel",
-          "category": "View"
+          "id": "settings.marketplace",
+          "title": "Settings: Marketplace",
+          "category": "App"
         }
       ]
     },
@@ -340,7 +337,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     "icon": "terminal",
     "category": "Workbench",
     "contributes": {
-      "rightPanels": [
+      "bottomPanels": [
         "terminal"
       ],
       "commands": [

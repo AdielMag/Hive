@@ -61,7 +61,7 @@ export const useUpdates = create<UpdateState>((set, get) => ({
     set({ piChecking: true });
     try {
       const piInfo = await window.studio.checkPiUpdate();
-      if (piInfo && (piInfo.latestVersion || !get().piInfo?.hasUpdate)) set({ piInfo });
+      if (piInfo && (piInfo.latestVersion || piInfo.hasUpdate || !get().piInfo?.hasUpdate)) set({ piInfo });
     } catch {
       // offline: keep previous info
     } finally {
@@ -74,7 +74,7 @@ export const useUpdates = create<UpdateState>((set, get) => ({
     try {
       const res = await window.studio.applyPiUpdate();
       set({ piResult: res });
-      if (res.success) set((s) => ({ piInfo: s.piInfo ? { ...s.piInfo, hasUpdate: false, currentVersion: s.piInfo.latestVersion } : s.piInfo }));
+      if (res.success) set((s) => ({ piInfo: s.piInfo ? { ...s.piInfo, hasUpdate: false, cliHasUpdate: false, currentVersion: s.piInfo.latestVersion ?? s.piInfo.currentVersion, extensions: s.piInfo.extensions?.map((e) => ({ ...e, hasUpdate: false, currentVersion: e.latestVersion ?? e.currentVersion })) } : s.piInfo }));
     } catch (err) {
       set({ piResult: { success: false, message: err instanceof Error ? err.message : String(err) } });
     } finally {

@@ -4,6 +4,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { IPC } from "@hive/protocol";
+import { isSafeExternalUrl } from "./safe-url.ts";
 
 /**
  * Directory of the bundled main script (out/main). Derived explicitly: the main bundle is ESM, where
@@ -12,14 +13,7 @@ import { IPC } from "@hive/protocol";
  */
 const mainDir = dirname(fileURLToPath(import.meta.url));
 
-export function isSafeExternalUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return u.protocol === "https:" || u.protocol === "http:" || u.protocol === "mailto:";
-  } catch {
-    return false;
-  }
-}
+export { isSafeExternalUrl };
 
 export function createMainWindow(): BrowserWindow {
   const preloadCjs = join(mainDir, "../preload/index.cjs");
@@ -41,7 +35,8 @@ export function createMainWindow(): BrowserWindow {
       : { frame: false }),
     webPreferences: {
       preload: preloadPath,
-      sandbox: false,
+      // Preload is a self-contained CJS bundle that only requires `electron`, so it runs under the OS sandbox.
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,

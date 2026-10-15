@@ -4,7 +4,6 @@
  */
 
 export const MODULE_ID = "marketplace";
-export const MARKETPLACE_PANEL_ID = "marketplace";
 
 export const MarketplaceMethods = {
   search: "search",

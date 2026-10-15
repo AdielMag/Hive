@@ -12,6 +12,8 @@ import {
   ChevronRight,
   CircleDashed,
   Clock,
+  Eye,
+  EyeOff,
   Loader2,
   Network,
   RefreshCw,
@@ -33,6 +35,7 @@ import "./tools-panel.css";
 type SectionId = "skills" | "subagents" | "mcp" | "builtin" | "extensions";
 
 const COLLAPSE_KEY = "hive:tools-panel:collapsed";
+const SHOW_AVAILABLE_KEY = "hive:tools-panel:show-available";
 const SUBAGENT_PREVIEW = 6;
 
 let currentHost: ModuleHost | null = null;
@@ -82,6 +85,13 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const [filter, setFilter] = useState("");
   const [collapsed, setCollapsed] = useState(() => loadCollapsed(host));
   const [showAllAgents, setShowAllAgents] = useState(false);
+  // Default view = only what this session used. Unused (available) tools/skills are opt-in.
+  const [showAvailable, setShowAvailable] = useState(() => host.storage.get(SHOW_AVAILABLE_KEY) === "1");
+  const toggleShowAvailable = () =>
+    setShowAvailable((prev) => {
+      host.storage.set(SHOW_AVAILABLE_KEY, prev ? "0" : "1");
+      return !prev;
+    });
 
   const toggleSection = (id: SectionId, wasOpen: boolean) => {
     if (filter.trim()) return;
@@ -108,14 +118,21 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const q = filter.trim().toLowerCase();
   const has = (...values: Array<string | undefined>) => !q || values.some((v) => v?.toLowerCase().includes(q));
 
+  // A filter also searches unused items, so you can still find a tool you haven't called yet.
+  const showAvail = showAvailable || Boolean(q);
+  const availableTotal =
+    available.skills.length +
+    available.mcp.reduce((n, m) => n + m.tools.length, 0) +
+    available.extensions.reduce((n, e) => n + e.tools.length, 0);
+
   const skills = report.skills.filter((s) => has(s.label, String(s.details?.description ?? "")));
-  const availableSkills = available.skills.filter((s) => has(s.name, s.description));
+  const availableSkills = showAvail ? available.skills.filter((s) => has(s.name, s.description)) : [];
   const agents = report.subagents.agents.filter((a) => has(a.type, a.description, a.model));
   const mcpUsed = report.mcp.filter((m) => has(m.server, ...Object.keys(m.tools)));
-  const mcpAvailable = available.mcp.filter((m) => has(m.name, ...m.tools.map((t) => t.name)));
+  const mcpAvailable = showAvail ? available.mcp.filter((m) => has(m.name, ...m.tools.map((t) => t.name))) : [];
   const builtin = report.builtin.filter((b) => has(b.label));
   const extensions = report.extensions.filter((e) => has(e.packageName, ...Object.keys(e.tools)));
-  const extAvailable = available.extensions.filter((e) => has(e.packageName, ...e.tools.map((t) => t.name)));
+  const extAvailable = showAvail ? available.extensions.filter((e) => has(e.packageName, ...e.tools.map((t) => t.name))) : [];
 
   /**
    * Filtering forces sections open so matches are visible. Otherwise the user's last choice wins; sections
@@ -150,6 +167,15 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         <div className="ui-panel-title">
           <Blocks size={14} /> Tools breakdown
         </div>
+        <div className="tools-panel__actions">
+        <button
+          className={`ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon${showAvailable ? " is-active" : ""}`}
+          onClick={toggleShowAvailable}
+          title={showAvailable ? "Hide unused tools & skills" : `Show unused tools & skills (${availableTotal})`}
+          aria-pressed={showAvailable}
+        >
+          {showAvailable ? <Eye size={13} /> : <EyeOff size={13} />}
+        </button>
         <button
           className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
           onClick={() => void refreshMcp()}
@@ -158,6 +184,7 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         >
           <RefreshCw size={13} className={loadingMcp ? "spin" : undefined} />
         </button>
+        </div>
       </div>
 
       <div className="tools-panel__filter">
@@ -199,8 +226,20 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         {nothing && (
           <div className="ui-empty" style={{ margin: "30px auto" }}>
             <Blocks size={24} />
-            <div>{q ? "Nothing matches this filter" : "No tools registered yet"}</div>
-            {!q && <div style={{ fontSize: 11 }}>Tools and skills appear as soon as a Pi session is active.</div>}
+            <div>{q ? "Nothing matches this filter" : "Nothing used in this session yet"}</div>
+            {!q && (
+              <div style={{ fontSize: 11 }}>
+                Tools, skills and subagents show up here as they are used.
+                {availableTotal > 0 && (
+                  <>
+                    {" "}
+                    <button className="tools-more" onClick={toggleShowAvailable}>
+                      Show {availableTotal} unused
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -278,7 +317,7 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
                 ))}
               </div>
             )}
-            <Available label={`Show ${availableSkills.length} available`} show={availableSkills.length > 0} forceOpen={Boolean(q)} inline={skills.length === 0}>
+            <Available label={`Unused (${availableSkills.length})`} show={availableSkills.length > 0} forceOpen={showAvail} inline={skills.length === 0}>
               {availableSkills.map((sk) => (
                 <div key={sk.name} className="tools-row tools-row--available" title={sk.description}>
                   <span className="tools-row__main">
@@ -331,7 +370,7 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
             {mcpUsed.map((m) => (
               <ToolGroup key={m.server} icon={<Network size={12} />} name={m.server} total={m.totalCount} tools={m.tools} />
             ))}
-            <Available label={`Show ${mcpAvailable.reduce((n, x) => n + x.tools.length, 0)} available`} show={mcpAvailable.length > 0} forceOpen={Boolean(q)} inline={mcpUsed.length === 0}>
+            <Available label={`Unused (${mcpAvailable.reduce((n, x) => n + x.tools.length, 0)})`} show={mcpAvailable.length > 0} forceOpen={showAvail} inline={mcpUsed.length === 0}>
               {mcpAvailable.map((srv) => (
                 <AvailableGroup key={srv.name} name={srv.name} tools={srv.tools} />
               ))}
@@ -356,7 +395,7 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
             {extensions.map((pkg) => (
               <ToolGroup key={pkg.packageName} icon={<Box size={12} />} name={pkg.packageName} total={pkg.totalCount} tools={pkg.tools} />
             ))}
-            <Available label={`Show ${extAvailable.reduce((n, x) => n + x.tools.length, 0)} available`} show={extAvailable.length > 0} forceOpen={Boolean(q)} inline={extensions.length === 0}>
+            <Available label={`Unused (${extAvailable.reduce((n, x) => n + x.tools.length, 0)})`} show={extAvailable.length > 0} forceOpen={showAvail} inline={extensions.length === 0}>
               {extAvailable.map((ext) => (
                 <AvailableGroup key={ext.packageName} name={ext.packageName} tools={ext.tools} />
               ))}

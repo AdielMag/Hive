@@ -227,7 +227,7 @@ function loadConfig(): FeatureModelsConfig {
     let gitCommitSource = validCommitSources.includes(parsed?.gitCommit?.source)
       ? parsed.gitCommit.source
       : "session";
-    let gitCommitModelId = typeof parsed?.gitCommit?.modelId === "string" ? parsed.gitCommit.modelId : undefined;
+    const gitCommitModelId = typeof parsed?.gitCommit?.modelId === "string" ? parsed.gitCommit.modelId : undefined;
     if (gitCommitSource === "custom" && !gitCommitModelId) {
       gitCommitSource = "session";
     }
@@ -236,7 +236,7 @@ function loadConfig(): FeatureModelsConfig {
     let usageSource = validUsageSources.includes(parsed?.usageAnalysis?.source)
       ? parsed.usageAnalysis.source
       : "session";
-    let usageModelId = typeof parsed?.usageAnalysis?.modelId === "string" ? parsed.usageAnalysis.modelId : undefined;
+    const usageModelId = typeof parsed?.usageAnalysis?.modelId === "string" ? parsed.usageAnalysis.modelId : undefined;
     if (usageSource === "custom" && !usageModelId) {
       usageSource = "session";
     }

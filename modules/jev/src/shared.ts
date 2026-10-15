@@ -51,6 +51,8 @@ export interface JevSettings {
   askJev: { enabled: boolean };
   /** Hard cap on Jev calls per local day, across all sessions. 0 = unlimited. */
   maxCallsPerDay: number;
+  /** ask_jev refuses locally when the estimated input exceeds this many tokens (the API returns HTTP 400 max_tokens_exceeded above its limit). */
+  maxInputTokens: number;
   /** Price per 1M input tokens in USD. Null = use the published list price (JEV_PRICE_PER_MTOK_USD). */
   pricePerMTokUsd: number | null;
   /** Price per 1M input tokens of the main (agent) model in USD, used to value saved context. Null = MAIN_MODEL_PRICE_PER_MTOK_USD. */
@@ -75,6 +77,7 @@ export const DEFAULT_SETTINGS: JevSettings = {
   compact: { enabled: true, floorPct: 40 },
   askJev: { enabled: true },
   maxCallsPerDay: 500,
+  maxInputTokens: 28_000,
   pricePerMTokUsd: null,
   mainModelPricePerMTokUsd: null,
   creditUsd: null,
@@ -101,6 +104,7 @@ export function normalizeSettings(raw: unknown): JevSettings {
     },
     askJev: { enabled: typeof askJev.enabled === "boolean" ? askJev.enabled : DEFAULT_SETTINGS.askJev.enabled },
     maxCallsPerDay: Math.round(num(r.maxCallsPerDay, DEFAULT_SETTINGS.maxCallsPerDay, 0, 1_000_000)),
+    maxInputTokens: Math.round(num(r.maxInputTokens, DEFAULT_SETTINGS.maxInputTokens, 1_000, 1_000_000)),
     pricePerMTokUsd: optNum(r.pricePerMTokUsd),
     mainModelPricePerMTokUsd: optNum(r.mainModelPricePerMTokUsd),
     creditUsd: optNum(r.creditUsd),

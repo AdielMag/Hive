@@ -370,22 +370,26 @@ const PiUpdateCard: React.FC = () => {
   const checkPi = useUpdates((s) => s.checkPi);
   const applyPi = useUpdates((s) => s.applyPiUpdate);
   const current = info?.currentVersion ?? (pi?.ok ? pi.info.version : undefined);
+  const updates = [
+    ...(info?.cliHasUpdate ? [`Pi ${info.latestVersion}`] : []),
+    ...(info?.extensions ?? []).filter((e) => e.hasUpdate).map((e) => `${e.name} ${e.latestVersion}`),
+  ];
   return (
     <div className="ui-card" style={{ padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div>
-          <div className="ui-row__title">Pi CLI {current ? `v${current}` : ""}</div>
+          <div className="ui-row__title">Pi CLI & Extensions {current ? `(Pi v${current})` : ""}</div>
           <div className="ui-row__hint">
             {installing
               ? "Installing with npm…"
               : info?.hasUpdate
-                ? `Version ${info.latestVersion} is available`
+                ? `Update available: ${updates.join(", ")}`
                 : checking
                   ? "Checking npm…"
                   : info?.error
                     ? `${info.error}. Try again in a moment.`
                     : info
-                      ? "You're on the latest version"
+                      ? "Pi CLI and extensions are up to date"
                       : "Not checked yet"}
           </div>
         </div>
@@ -395,9 +399,9 @@ const PiUpdateCard: React.FC = () => {
       </div>
       {info?.hasUpdate && (
         <div className="settings__update">
-          <div className="ui-row__title">v{info.latestVersion} is ready</div>
+          <div className="ui-row__title">{updates.join(", ")} ready</div>
           <button className="ui-btn ui-btn--primary" onClick={() => void applyPi()} disabled={installing}>
-            {installing ? <RefreshCw size={13} className="spin" /> : <Download size={13} />} {installing ? "Installing…" : "Update Pi"}
+            {installing ? <RefreshCw size={13} className="spin" /> : <Download size={13} />} {installing ? "Installing…" : updates.length > 1 ? "Update all" : "Update"}
           </button>
         </div>
       )}

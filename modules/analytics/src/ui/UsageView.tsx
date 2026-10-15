@@ -177,8 +177,8 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
         const firstPara = llmResult.trim().split("\n\n")[0]?.replace(/^#+\s*/, "");
         const bulletLines = llmResult
           .split("\n")
-          .filter((l) => /^\s*[-*•\d\.]+\s+/.test(l))
-          .map((l) => l.replace(/^\s*[-*•\d\.]+\s+/, "").trim())
+          .filter((l) => /^\s*[-*•\d.]+\s+/.test(l))
+          .map((l) => l.replace(/^\s*[-*•\d.]+\s+/, "").trim())
           .filter(Boolean);
 
         const newRecs = bulletLines.slice(0, 2).map((b, idx) => ({

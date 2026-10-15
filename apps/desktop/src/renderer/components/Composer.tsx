@@ -28,6 +28,7 @@ import { RunTimeBar } from "./RunTimeBar.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { Slot } from "../modules/ModuleViews.tsx";
 import type { AttachedItem } from "@hive/protocol";
+import "../styles/composer.css";
 
 const VIDEO_RE = /\.(mp4|m4v|mov|webm|mkv|avi)$/i;
 
@@ -375,9 +376,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
 
   return (
     <div
+      className="composer"
       style={{
         background: "var(--bg-app)",
-        padding: "6px 18px 14px 18px",
         maxWidth: 920,
         width: "100%",
         margin: "0 auto",
@@ -443,7 +444,6 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
           borderRadius: 14,
           background: isDraggingOver ? "var(--accent-subtle)" : "var(--bg-card)",
           boxShadow: "0 6px 24px rgba(0,0,0,0.18)",
-          padding: "10px 12px 8px",
           display: "flex",
           flexDirection: "column",
           gap: 6,
@@ -487,6 +487,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
 
         {/* Action / Toolbar Row */}
         <div
+          className="composer-toolbar"
           style={{
             display: "flex",
             alignItems: "center",
@@ -496,7 +497,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
           }}
         >
           {/* Left: Mode, Model, Thinking, Attachment Button & Context Ring */}
-          <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, flex: 1 }}>
+          <div className="composer-toolbar__left" style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, flex: 1 }}>
             {/* Attach button */}
             <button
               onClick={handlePickFiles}
@@ -516,14 +517,14 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               }}
             >
               <Paperclip size={12} />
-              <span>Attach</span>
+              <span className="composer-hide-sm">Attach</span>
             </button>
 
             {/* Mode selector */}
             <ModePicker />
 
             {/* Model select with custom dropdown and provider icon */}
-            <div ref={modelPickerRef} style={{ position: "relative", minWidth: 0, flexShrink: 1 }}>
+            <div ref={modelPickerRef} className="composer-model" style={{ position: "relative", minWidth: 0, flexShrink: 1 }}>
               <button
                 type="button"
                 onClick={() => setModelPickerOpen((prev) => !prev)}
@@ -531,7 +532,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                 title={
                   selectedModel
                     ? `${selectedModel.name || selectedModel.id} (${selectedModel.provider}) · Context: ${formatContextWindow(selectedModel.contextWindow) || "unknown"} (${(selectedModel.contextWindow ?? 0).toLocaleString()} tokens) · Thinking: ${
-                        Boolean(selectedModel.reasoning)
+                        selectedModel.reasoning
                           ? getSupportedThinkingLevels(selectedModel).filter((l) => l !== "off").join(", ") || "supported"
                           : "off"
                       }`
@@ -558,6 +559,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                   <Cpu size={13} color="var(--text-muted)" />
                 )}
                 <span
+                  className="composer-hide-lg"
                   style={{
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -580,6 +582,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               {/* Dropdown Menu */}
               {modelPickerOpen && (
                 <div
+                  className="composer-popup"
                   style={{
                     position: "absolute",
                     bottom: "100%",
@@ -805,7 +808,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                     fontSize: 11,
                   }}
                 >
-                  <CornerDownLeft size={12} /> Steer
+                  <CornerDownLeft size={12} /> <span className="composer-hide-sm">Steer</span>
                 </button>
                 <button
                   onClick={() => void abort()}
@@ -824,13 +827,14 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                     fontSize: 11,
                   }}
                 >
-                  <Square size={12} fill="#fff" /> Stop
+                  <Square size={12} fill="#fff" /> <span className="composer-hide-md">Stop</span>
                 </button>
               </>
             ) : (
               <button
                 onClick={() => void sendPrompt()}
                 disabled={!canSend}
+                title="Send"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -845,7 +849,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                   fontSize: 12,
                 }}
               >
-                <Send size={12} /> Send
+                <Send size={12} /> <span className="composer-hide-md">Send</span>
               </button>
             )}
           </div>

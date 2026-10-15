@@ -25,6 +25,7 @@ export interface ProjectEntry {
 export interface ProjectsFile {
   schemaVersion: 1;
   projects: ProjectEntry[];
+  lastOpenedProjectId?: string;
 }
 
 export interface AttachedItem {
@@ -37,6 +38,20 @@ export interface AttachedItem {
   dataBase64?: string; // base64 string for images (without data:... prefix)
   textContent?: string; // string content for text/code files
   previewUrl?: string; // data URL (images) or blob URL (videos) for rendering in UI
+}
+
+/** Git worktree a session runs in (own branch off `baseBranch`), created under `<projectPath>/.hive-worktrees/`. */
+export interface SessionWorktree {
+  /** Absolute path of the worktree; Pi's effective cwd for the session. */
+  worktreePath: string;
+  /** Session branch, `hive/<slug>`. */
+  branch: string;
+  /** Branch the worktree forked from (`HEAD` when the main tree was detached). */
+  baseBranch: string;
+  /** Commit the worktree forked from. */
+  baseCommit: string;
+  /** The original project (main tree) path. */
+  projectPath: string;
 }
 
 export interface SessionCatalogItem {
@@ -52,10 +67,14 @@ export interface SessionCatalogItem {
   projectId?: string;
   /** Studio-side display title set by the user (overrides Pi's name / first message). */
   title?: string;
+  /** LLM-generated title (used when the user hasn't renamed the session). */
+  aiTitle?: string;
   /** Hidden from the session list without deleting the file. */
   archived?: boolean;
   /** Renderer-only: a just-started session whose file Pi hasn't listed yet (optimistic sidebar entry). */
   pending?: boolean;
+  /** Set when the session runs in its own git worktree. */
+  worktree?: SessionWorktree;
 }
 
 export type AgentMode = "plan" | "auto-edit" | "manual" | "debug" | "ask";
@@ -83,6 +102,8 @@ export interface TabItem {
   model?: any; // selected model for this tab
   thinkingLevel?: string;
   mode?: AgentMode;
+  /** Git worktree the session runs in (absent = main tree). */
+  worktree?: SessionWorktree;
 
   /** File the tab shows (module tab kinds such as "file" / "diff"; their payload lives in `data`). */
   filePath?: string;
@@ -114,10 +135,14 @@ export interface UiStateFile {
 export interface SessionMetaEntry {
   /** User-chosen display title (rename). */
   title?: string;
+  /** LLM-generated title (lower priority than the user's `title`). */
+  aiTitle?: string;
   pinned?: boolean;
   archived?: boolean;
   unread?: boolean;
   lastSeenEntryId?: string;
+  /** Git worktree the session runs in (absent = main tree). */
+  worktree?: SessionWorktree;
 }
 
 export interface SessionMetaFile {

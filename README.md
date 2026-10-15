@@ -21,9 +21,23 @@ Multi-session tabs, live subscription limits, local cost analytics, and an adapt
 - **Transcript inspection** — Collapsible thinking, tool cards with diffs, subagent cards with tokens and cost.
 - **Subscription limits** — 5-hour and weekly quotas for Claude, Google Antigravity, and Codex, with reset countdowns.
 - **Usage analytics** — Offline spend, token, and cache dashboards built from your local session files.
-- **Workbench** — Git panel with AI commit messages, context-window meter, terminal, files, MCP marketplace.
+- **Git & GitHub** — Stage, commit, push/pull with AI commit messages; branch graph; GitHub Actions runs and jobs.
+- **Context control** — Context-window meter and per-category token breakdown.
+- **Built-in tools** — Terminal, file tree, file/diff viewer, integrated Chromium browser.
+- **Extensible** — Browse and manage Pi skills, subagents, and MCP servers; review agent plans in a rich tab; guard destructive bash commands.
 - **Themes** — 2D hue/saturation picker, light/dark/auto, WCAG-checked contrast.
 - **Local only** — No telemetry, no cloud relay. Talks to your `pi` CLI over JSON-RPC.
+
+<details>
+<summary>Screenshots</summary>
+
+| | |
+|---|---|
+| ![Git panel](docs/screenshots/git.png) | ![Usage analytics](docs/screenshots/usage.png) |
+| ![Subscription limits](docs/screenshots/limits.png) | ![Context breakdown](docs/screenshots/context.png) |
+| ![Workbench](docs/screenshots/workbench.png) | ![Appearance](docs/screenshots/appearance.png) |
+
+</details>
 
 ## Quickstart
 
@@ -36,6 +50,7 @@ pi
 
 Download Hive from the [latest release](https://github.com/AdielMag/Hive/releases/latest) (Windows `.exe`, macOS `.dmg`, Linux `.AppImage`), then open a project folder.
 
+> [!NOTE]
 > Binaries are unsigned. Windows: *More info → Run anyway*. macOS: right-click → *Open*.
 
 Press <kbd>Ctrl</kbd>+<kbd>,</kbd> for settings (<kbd>Cmd</kbd> on macOS).
@@ -59,14 +74,29 @@ npm ci --legacy-peer-deps
 npm run dev
 ```
 
-Also: `npm run build`, `npm run typecheck`, `npm test`, `npm run dist`.
+| Command | Purpose |
+|---|---|
+| `npm run build` | Production build |
+| `npm run typecheck` | Type-check all packages and modules |
+| `npm run lint` | ESLint |
+| `npm test` | Unit tests (`npm run test:contract` for contract tests) |
+| `npm run check:modules` | Verify generated module registry and boundaries |
+| `npm run dist` | Package installers |
+| `npm run screenshots` | Regenerate `docs/screenshots` |
 
-Layout: `apps/desktop` (Electron app), `packages/*` (protocol, pi-adapter, theme-engine), `modules/*`, `scripts/`.
+### Architecture
+
+| Path | Role |
+|---|---|
+| `apps/desktop` | Electron app (main, preload, renderer) |
+| `modules/*` | Feature modules (git, limits, analytics, terminal, browser, …) loaded through the module SDK |
+| `packages/module-sdk` | Contract between Hive core and modules |
+| `packages/pi-adapter` | The only place Hive couples to Pi: RPC process, framing, transcript reconstruction |
+| `packages/protocol` | Shared Bridge protocol and IPC types |
+| `packages/theme-engine` | Color palette and WCAG contrast solver |
+| `packages/test-provider` | Deterministic offline Pi provider for E2E/contract tests |
+| `scripts/` | Codegen, release, and screenshot tooling |
 
 ## Privacy
 
 Code, prompts, and usage data stay on your machine. Credentials are read from Pi's `~/.pi/agent/auth.json`; Hive never stores its own.
-
-## License
-
-See the repository for license terms. Pi and its tools are © their respective authors.

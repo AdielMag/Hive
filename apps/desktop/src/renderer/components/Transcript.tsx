@@ -35,6 +35,7 @@ import { indexSkills, parseSkillBlock, type SkillIndex } from "../lib/ai/skills.
 import { indexSubagents, parseGetResultText, resolveSubagentView, type NotificationDetails, type SubagentIndex } from "../lib/ai/subagents.ts";
 import { SkillLoadCard } from "./transcript/SkillLoadCard.tsx";
 import { SubagentCard } from "./transcript/SubagentCard.tsx";
+import { SummaryMessage } from "./transcript/SummaryMessage.tsx";
 import { Markdown } from "./code/Markdown.tsx";
 import { CodeBlock } from "./code/CodeBlock.tsx";
 import { ImageThumbnail } from "./ImageThumbnail.tsx";
@@ -274,10 +275,12 @@ const TimelineRow = memo(
         return <div className="msg-marker" data-item-key={item.key}>{item.text}</div>;
       case "summary":
         return (
-          <div className="msg-summary" data-item-key={item.key}>
-            <div className="msg-summary__title">{item.variant === "compaction" ? "Context compacted" : "Branch summary"}</div>
-            <Markdown text={item.summary} />
-          </div>
+          <SummaryMessage
+            itemKey={item.key}
+            variant={item.variant}
+            summary={item.summary}
+            tokensBefore={item.tokensBefore}
+          />
         );
       case "custom": {
         if (item.customType === "subagent-notification") {
@@ -306,10 +309,12 @@ const TimelineRow = memo(
           );
         }
         return item.text ? (
-          <div className="msg-summary" data-item-key={item.key}>
-            <div className="msg-summary__title">{item.customType}</div>
-            <Markdown text={item.text} />
-          </div>
+          <SummaryMessage
+            itemKey={item.key}
+            variant="custom"
+            title={item.customType}
+            summary={item.text}
+          />
         ) : null;
       }
       default:
@@ -407,6 +412,62 @@ const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; da
   );
 };
 
+// Batch consecutive tool calls in an assistant message
+interface ToolBatchGroupProps {
+  blocks: ToolCallBlockT[];
+  results: ToolResultView[];
+  tools: ToolRuns;
+}
+
+const ToolBatchGroup: React.FC<ToolBatchGroupProps> = ({ blocks, results, tools }) => {
+  const [open, setOpen] = useState(false);
+
+  // Summarize tools in batch
+  const counts: Record<string, number> = {};
+  for (const b of blocks) {
+    counts[b.name] = (counts[b.name] ?? 0) + 1;
+  }
+  const summaryStr = Object.entries(counts)
+    .map(([name, count]) => (count > 1 ? `${name} ×${count}` : name))
+    .join(", ");
+
+  const hasRunning = blocks.some((b) => tools[b.id]?.status === "running" || (!b.complete && !results.some((r) => r.toolCallId === b.id)));
+  const hasError = blocks.some((b) => results.some((r) => r.toolCallId === b.id && r.isError));
+
+  return (
+    <div className={`msg-tool-batch${open ? " is-open" : ""}`}>
+      <button className="msg-tool-batch__head" onClick={() => setOpen(!open)}>
+        <ChevronRight size={13} className="msg-chevron" />
+        <Wrench size={13} className="msg-tool-batch__icon" />
+        <span className="msg-tool-batch__title">
+          {blocks.length} tool calls <span className="msg-tool-batch__summary">({summaryStr})</span>
+        </span>
+        {hasRunning ? (
+          <Loader2 size={13} className="spin msg-tool__status" />
+        ) : hasError ? (
+          <AlertCircle size={13} className="msg-tool__status is-error" />
+        ) : (
+          <CheckCircle2 size={13} className="msg-tool__status is-ok" />
+        )}
+      </button>
+
+      {open && (
+        <div className="msg-tool-batch__body">
+          {blocks.map((block, idx) => (
+            <ToolCall
+              key={block.id || idx}
+              block={block}
+              result={results.find((r) => r.toolCallId === block.id)}
+              run={tools[block.id]}
+              running={tools[block.id]?.status === "running"}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AssistantMessage: React.FC<{
   item: Extract<TimelineItem, { kind: "assistant" }>;
   results: ToolResultView[];
@@ -421,9 +482,52 @@ const AssistantMessage: React.FC<{
     .join("\n\n");
   const lastTextIndex = item.blocks.map((b) => b.type).lastIndexOf("text");
 
+  // Group consecutive tool calls together
+  const groupedBlocks: Array<
+    | { kind: "single"; block: AssistantBlock; originalIdx: number }
+    | { kind: "toolBatch"; blocks: ToolCallBlockT[]; originalIdx: number }
+  > = [];
+
+  let currentBatch: ToolCallBlockT[] = [];
+  let batchStartIdx = 0;
+
+  item.blocks.forEach((block, idx) => {
+    if (block.type === "toolCall") {
+      if (currentBatch.length === 0) batchStartIdx = idx;
+      currentBatch.push(block);
+    } else {
+      if (currentBatch.length === 1) {
+        groupedBlocks.push({ kind: "single", block: currentBatch[0]!, originalIdx: batchStartIdx });
+      } else if (currentBatch.length > 1) {
+        groupedBlocks.push({ kind: "toolBatch", blocks: currentBatch, originalIdx: batchStartIdx });
+      }
+      currentBatch = [];
+      groupedBlocks.push({ kind: "single", block, originalIdx: idx });
+    }
+  });
+
+  if (currentBatch.length === 1) {
+    groupedBlocks.push({ kind: "single", block: currentBatch[0]!, originalIdx: batchStartIdx });
+  } else if (currentBatch.length > 1) {
+    groupedBlocks.push({ kind: "toolBatch", blocks: currentBatch, originalIdx: batchStartIdx });
+  }
+
   return (
     <div className="msg-assistant" data-item-key={itemKey}>
-      {item.blocks.map((block, idx) => {
+      {groupedBlocks.map((group) => {
+        if (group.kind === "toolBatch") {
+          return (
+            <ToolBatchGroup
+              key={`batch-${group.originalIdx}`}
+              blocks={group.blocks}
+              results={results}
+              tools={tools}
+            />
+          );
+        }
+
+        const block = group.block;
+        const idx = group.originalIdx;
         if (block.type === "thinking") return <ThinkingBlock key={idx} text={block.thinking} live={item.streaming && idx === item.blocks.length - 1} />;
         if (block.type === "text") return block.text ? <Markdown key={idx} text={block.text} streaming={item.streaming && idx === lastTextIndex} /> : null;
         if (block.type === "toolCall") {
@@ -507,7 +611,17 @@ const AssistantMessage: React.FC<{
 };
 
 const ThinkingBlock: React.FC<{ text: string; live: boolean }> = ({ text, live }) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(live);
+
+  // When live streaming begins or ends, adapt default state:
+  useEffect(() => {
+    if (live) {
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  }, [live]);
+
   if (!text) return null;
   return (
     <div className={`msg-thinking${open ? " is-open" : ""}`}>

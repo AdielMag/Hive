@@ -17,6 +17,7 @@ import {
   type SessionCatalogItem,
   type SessionStats,
   type SessionStatusUpdate,
+  type SessionWorktree,
   type StudioApi,
   type StudioFormRequest,
   type StudioFormResult,
@@ -35,9 +36,10 @@ import { openLink } from "../modules/link-bus.ts";
 import type { OpenTabSpec } from "@hive/module-sdk/renderer";
 import { playUiSound } from "./sound-store.ts";
 import { toast } from "../modules/toast-store.ts";
-import { NEW_SESSION_TITLE, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
+import { NEW_SESSION_TITLE, pickTitleModel, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { parseAgentResultText, type SubagentView } from "../lib/ai/subagents.ts";
+import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 
 export interface SubagentModalTarget {
   view: SubagentView;
@@ -184,6 +186,51 @@ export interface HeldMessage {
   images: Array<{ type: "image"; data: string; mimeType: string }>;
 }
 
+/**
+ * Hook run when the user sends a prompt. Return a promise to start a compaction (or similar) first: the prompt is held
+ * (shown as queued) until it settles. Return nothing to let the prompt through. Only the first hook returning a promise runs
+ * per send, so several "compact first" sources never compact twice.
+ */
+export type PreSendHook = (key: string) => Promise<unknown> | null | undefined | void;
+const preSendHooks = new Set<PreSendHook>();
+
+export function registerPreSendHook(hook: PreSendHook): () => void {
+  preSendHooks.add(hook);
+  return () => preSendHooks.delete(hook);
+}
+
+function runPreSendHooks(key: string): Promise<unknown> | null {
+  for (const hook of [...preSendHooks]) {
+    try {
+      const pending = hook(key);
+      if (pending) return Promise.resolve(pending).catch(() => {});
+    } catch {
+      // A broken hook must never block sending.
+    }
+  }
+  return null;
+}
+
+/**
+ * A hook can report "done" before the session store has applied the compaction result (Pi's compaction_end is handled
+ * async). Wait for the shared compaction phase to leave "compacting" so the held prompt isn't sent into a stale transcript.
+ */
+function whenCompactionApplied(key: string, timeoutMs = 15_000): Promise<void> {
+  const compacting = () => useSessionStore.getState().compactionStates[key]?.phase === "compacting";
+  if (!compacting()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      off();
+      clearTimeout(timer);
+      resolve();
+    };
+    const off = useSessionStore.subscribe(() => {
+      if (!compacting()) done();
+    });
+    const timer = setTimeout(done, timeoutMs);
+  });
+}
+
 /** Send everything held for `key` as one prompt now that compaction is over. */
 export async function flushHeldMessages(key: string): Promise<void> {
   const held = useSessionStore.getState().compactionHeld[key];
@@ -252,6 +299,7 @@ export interface SessionStoreState {
   // Active session details
   activeKey: string | null;
   activeProject: ProjectEntry | null;
+  setActiveProject: (project: ProjectEntry) => Promise<void>;
   status: SessionStatusUpdate | null;
   transcript: TranscriptState;
   transcriptsByTab: Record<string, TranscriptState>;
@@ -266,6 +314,9 @@ export interface SessionStoreState {
   thinkingLevels: string[];
   selectedThinkingLevel: string;
   selectedMode: AgentMode;
+  /** New sessions run in the main tree instead of their own git worktree (opt-out; default off). */
+  newSessionInMainTree: boolean;
+  setNewSessionInMainTree: (value: boolean) => void;
   stats: SessionStats | null;
   /**
    * Per-tab (keyed by tab id) agent activity, tracked for every tab,
@@ -307,7 +358,7 @@ export interface SessionStoreState {
   /** Manually compact session context, managing the shared compaction bar state. */
   compactSession: (
     key: string,
-    options?: { fallbackTokensAfter?: number; saved?: number; toName?: string },
+    options?: { fallbackTokensAfter?: number; saved?: number; toName?: string; before?: number },
   ) => Promise<CompactionOutcome | null>;
   /** Hide a finished (done/error) compaction strip for session `key`. */
   dismissCompaction: (key: string) => void;
@@ -625,7 +676,7 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
         const isBg = toolName === "SubagentWorkflow" ||
           details?.status === "background" ||
           /in background/i.test(text);
-        if (agentId && isBg) {
+        if (agentId && isBg && !/completed|done|failed|finished/i.test(text)) {
           let set = runningSubagents.get(tabId);
           if (!set) {
             set = new Set();
@@ -634,6 +685,8 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
           set.add(agentId);
           setActivity(tabId, "running");
           playUiSound("subagent_spawn");
+        } else if (agentId && (/completed|done|failed|finished/i.test(text) || details?.status === "completed")) {
+          runningSubagents.get(tabId)?.delete(agentId);
         }
       }
     } else if (ev.type === "agent_settled") {
@@ -890,6 +943,17 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
 }
 export const LIBRARY_TAB_ID = "studio:library";
 
+const MAIN_TREE_KEY = "hive.new-session.main-tree";
+
+/** Worktree a session tab runs in: the tab's own (set when it starts), else the catalog's (resumed sessions). */
+export function useSessionWorktree(tabId: string | null | undefined): SessionWorktree | undefined {
+  return useSessionStore((s) => {
+    const tab = tabId ? s.tabs.find((t) => t.id === tabId) : undefined;
+    if (!tab || (tab.kind && tab.kind !== "session")) return undefined;
+    return tab.worktree ?? (tab.sessionPath ? s.allSessions.find((x) => x.path === tab.sessionPath)?.worktree : undefined);
+  });
+}
+
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   bootstrap: null,
   projects: [],
@@ -912,6 +976,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   thinkingLevels: [],
   selectedThinkingLevel: "medium",
   selectedMode: "auto-edit",
+  newSessionInMainTree: getStoredItem(MAIN_TREE_KEY) === "true",
+  setNewSessionInMainTree: (value: boolean) => {
+    setStoredItem(MAIN_TREE_KEY, String(value));
+    set({ newSessionInMainTree: value });
+  },
   stats: null,
   sessionActivity: {},
   sessionAwaitingUser: {},
@@ -957,7 +1026,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (!key || s.compactionStates[key]?.phase === "compacting" || s.transcript.running) return null;
     const model = s.tabs.find((t) => t.activeKey === key)?.model ?? s.selectedModel;
     const toName = options?.toName ?? (model?.name || model?.id || "the model");
-    setCompactionState(key, { phase: "compacting", saved: options?.saved, toName });
+    setCompactionState(key, {
+      phase: "compacting",
+      saved: options?.saved,
+      before: options?.before,
+      tokens: options?.fallbackTokensAfter,
+      toName,
+    });
     try {
       const res = await window.studio.rpc(key, { type: "compact" });
       if (!res.ok) {
@@ -1175,13 +1250,20 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       // Initial projects and catalog load
       await Promise.all([get().refreshCatalog(), get().loadModelsCatalog()]);
 
-      // Only auto-open if an explicit project was passed via env HIVE_PROJECT
-      if (get().projects.length === 0 && bootstrap.initialProjectPath) {
-        const p = await get().addProject(bootstrap.initialProjectPath);
-        await get().newSessionTab(p.id);
-      } else if (get().projects.length > 0 && get().tabs.length === 0) {
-        const firstPrj = get().projects[0]!;
-        await get().newSessionTab(firstPrj.id);
+      // Open last-used project (or first), or env HIVE_PROJECT
+      const projects = get().projects;
+      const lastId = await window.studio.getLastOpenedProjectId();
+      const targetProject =
+        (lastId ? projects.find((p) => p.id === lastId) : null) ??
+        projects[0] ??
+        (bootstrap.initialProjectPath ? await get().addProject(bootstrap.initialProjectPath) : null);
+
+      if (targetProject) {
+        set({ activeProject: targetProject });
+        void window.studio.setLastOpenedProjectId(targetProject.id);
+        if (get().tabs.length === 0) {
+          await get().newSessionTab(targetProject.id);
+        }
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err), isInitializing: false });
@@ -1213,11 +1295,20 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     const startPromise = (async () => {
       set({ isLoadingModels: true });
       try {
-        const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath });
+        // Worktree options only matter for a brand-new session; a resume reuses the recorded worktree.
+        const newSessionOpts = tab.sessionPath
+          ? {}
+          : {
+              useWorktree: !get().newSessionInMainTree,
+              ...(tab.title && tab.title !== NEW_SESSION_TITLE ? { title: tab.title } : {}),
+            };
+        const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath, ...newSessionOpts });
         set((s) => ({
           // Only steal focus if the user is still on this tab.
           ...(isDisplayed(tabId) ? { activeKey: res.key } : {}),
-          tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, activeKey: res.key, isCold: false } : t)),
+          tabs: s.tabs.map((t) =>
+            t.id === tabId ? { ...t, activeKey: res.key, isCold: false, ...(res.worktree ? { worktree: res.worktree } : {}) } : t,
+          ),
         }));
         await hydrateSession(res.key, tabId);
         if (get().activeKey === res.key) void refreshStats(res.key);
@@ -1324,6 +1415,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     } catch (err) {
       console.error("refreshCatalog failed", err);
     }
+  },
+
+  setActiveProject: async (project: ProjectEntry) => {
+    set({ activeProject: project });
+    void window.studio.setLastOpenedProjectId(project.id);
   },
 
   addProject: async (dirPath: string, name?: string, color?: string) => {
@@ -1688,7 +1784,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   setPromptText: (text: string) => set({ promptText: text }),
 
   sendPrompt: async (streamingBehavior) => {
-    let { activeKey, promptText, transcript, attachments } = get();
+    const { promptText, attachments } = get();
+    let { transcript, activeKey } = get();
     if (!promptText.trim() && attachments.length === 0) return;
     // Pi is swapping its extension runtime; a prompt now would hit a half-loaded session.
     if (activeKey && get().reloadStates[activeKey]?.phase === "reloading") return;
@@ -1699,6 +1796,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (!activeKey) {
       activeKey = await get().ensureActiveSession();
       if (!activeKey) return;
+      // The snapshot above predates the session start; don't act on a stale `running`.
+      transcript = get().transcript;
     }
 
     const images: Array<{ type: "image"; data: string; mimeType: string }> = [];
@@ -1749,6 +1848,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     // Name a fresh tab after its first prompt so the header reflects the conversation right away.
     const { activeTabId } = get();
+    const isFirstPrompt = get().tabs.find((t) => t.id === activeTabId)?.title === NEW_SESSION_TITLE;
     const autoTitle = promptText.trim().startsWith("/")
       ? ""
       : titleFromPrompt(promptText, 40) || attachments[0]?.name || "";
@@ -1756,6 +1856,15 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       set((s) => ({
         tabs: s.tabs.map((t) => (t.id === activeTabId && t.title === NEW_SESSION_TITLE ? { ...t, title: autoTitle } : t)),
       }));
+    }
+
+    // Replace the prompt-derived title with a short LLM-generated one (best effort, once per session).
+    if (isFirstPrompt && autoTitle && promptText.trim()) {
+      const t = get().tabs.find((x) => x.id === activeTabId);
+      if (t?.sessionPath) {
+        const project = get().projects.find((pr) => pr.id === t.projectId);
+        void generateAiTitle(t.sessionPath, project?.path ?? "", titleFromPrompt(promptText, 2000), autoTitle, t.model ?? get().selectedModel, get().models);
+      }
     }
 
     // Show a brand-new session under its project immediately (Pi writes/lists the file only after the first reply).
@@ -1769,21 +1878,40 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           {
             path: sentPath,
             id: sentPath,
-            cwd: project?.path ?? "",
+            cwd: sentTab.worktree?.worktreePath ?? project?.path ?? "",
             created: now,
             modified: now,
             messageCount: 0,
             firstMessage: promptText || attachments[0]?.name || "",
             projectId: sentTab.projectId,
             pending: true,
+            ...(sentTab.worktree ? { worktree: sentTab.worktree } : {}),
           },
           ...s.allSessions,
         ],
       }));
     }
 
+    // A stale `running` flag would route this prompt into Pi's steer/follow-up queue on an idle session, where it sits
+    // as "queued". Pi is the source of truth: if it isn't streaming, send a normal prompt.
+    let running = transcript.running;
+    if (running) {
+      const st = await window.studio.rpc(activeKey, { type: "get_state" }).catch(() => null);
+      if (st?.ok && (st.data as { isStreaming?: boolean } | undefined)?.isStreaming === false) {
+        running = false;
+        set((s) => (s.activeKey === activeKey && s.transcript.running ? { transcript: { ...s.transcript, running: false } } : {}));
+      }
+    }
+
+    // "Compact first" sources (cold cache bar, Jev hint) that weren't dismissed compact before this prompt goes out.
+    // Slash commands and mid-turn steering go straight through.
+    const compactFirst =
+      !running && !promptText.trim().startsWith("/") && get().compactionStates[activeKey]?.phase !== "compacting"
+        ? runPreSendHooks(activeKey)
+        : null;
+
     // Compaction in progress: hold the message, show it as queued, send it when compaction ends.
-    if (get().compactionStates[activeKey]?.phase === "compacting") {
+    if (compactFirst || get().compactionStates[activeKey]?.phase === "compacting") {
       const key = activeKey;
       const text = promptText.trim() || attachments[0]?.name || "";
       set((s) => ({
@@ -1792,16 +1920,18 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           [key]: [...(s.compactionHeld[key] ?? []), { text, message, images }],
         },
       }));
+      // Whatever way the compaction ends (done, failed, never started), the prompt goes out.
+      if (compactFirst) void compactFirst.then(() => whenCompactionApplied(key)).finally(() => flushHeldMessages(key));
       return;
     }
 
-    if (transcript.running && streamingBehavior === "steer") {
+    if (running && streamingBehavior === "steer") {
       await window.studio.rpc(activeKey, {
         type: "steer",
         message,
         ...(images.length > 0 ? { images } : {}),
       });
-    } else if (transcript.running && streamingBehavior === "followUp") {
+    } else if (running && streamingBehavior === "followUp") {
       await window.studio.rpc(activeKey, {
         type: "follow_up",
         message,
@@ -1812,7 +1942,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         type: "prompt",
         message,
         ...(images.length > 0 ? { images } : {}),
-        ...(transcript.running ? { streamingBehavior: "steer" } : {}),
+        ...(running ? { streamingBehavior: "steer" } : {}),
       });
     }
   },
@@ -2339,6 +2469,37 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     await get().refreshCatalog();
   },
 }));
+
+const aiTitleInFlight = new Set<string>();
+
+async function generateAiTitle(
+  sessionPath: string,
+  cwd: string,
+  prompt: string,
+  provisional: string,
+  active: Model<any> | null | undefined,
+  catalog: Array<Model<any>>,
+): Promise<void> {
+  if (aiTitleInFlight.has(sessionPath) || !cwd) return;
+  aiTitleInFlight.add(sessionPath);
+  try {
+    const title = await window.studio.generateSessionTitle(cwd, prompt, pickTitleModel(catalog, active));
+    if (!title) return;
+    const { allSessions } = useSessionStore.getState();
+    const existing = allSessions.find((x) => x.path === sessionPath);
+    if (existing?.title?.trim() || existing?.aiTitle?.trim()) return; // user renamed meanwhile
+    await window.studio.updateSessionMeta(sessionPath, { aiTitle: title });
+    useSessionStore.setState((s) => ({
+      allSessions: s.allSessions.map((x) => (x.path === sessionPath ? { ...x, aiTitle: title } : x)),
+      tabs: s.tabs.map((t) => (t.sessionPath === sessionPath && t.title === provisional ? { ...t, title: titleFromPrompt(title, 40) } : t)),
+    }));
+    await useSessionStore.getState().refreshCatalog();
+  } catch (err) {
+    console.error("AI session title failed", err);
+  } finally {
+    aiTitleInFlight.delete(sessionPath);
+  }
+}
 
 if (typeof window !== "undefined") {
   // Exposed for dev tooling / screenshot automation.

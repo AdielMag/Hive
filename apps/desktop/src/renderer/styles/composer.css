@@ -1,0 +1,34 @@
+/* Composer: responsive to the session pane width (container set on .session-view__composer-wrap),
+   so split panes shrink it correctly too, not just the window. Labels collapse to icons as space runs out. */
+.composer {
+  padding: 6px 18px 14px 18px;
+}
+.composer-editor {
+  padding: 10px 12px 8px;
+}
+
+/* Popups (model / mode / thinking) never wider than the pane. */
+.composer-popup {
+  max-width: calc(100cqw - 24px);
+}
+
+@container composer (max-width: 640px) {
+  .composer { padding: 6px 10px 10px 10px; }
+  .composer-hide-sm { display: none; }
+}
+
+@container composer (max-width: 500px) {
+  .composer-hide-md { display: none; }
+  .composer-toolbar { align-items: flex-end; }
+  .composer-toolbar__left { flex-wrap: wrap; row-gap: 6px; }
+  /* Anchor popups to the editor box (left edge) instead of the button, so they can't run off the right side. */
+  .composer-model,
+  .composer-mode,
+  .composer-thinking { position: static !important; }
+}
+
+@container composer (max-width: 380px) {
+  .composer { padding: 4px 6px 8px 6px; }
+  .composer-editor { padding: 8px 8px 6px; }
+  .composer-hide-lg { display: none; }
+}

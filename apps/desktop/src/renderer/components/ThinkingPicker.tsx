@@ -72,7 +72,7 @@ export const ThinkingPicker: React.FC = () => {
   };
 
   return (
-    <div ref={containerRef} style={{ position: "relative", minWidth: 0, flexShrink: 2 }}>
+    <div ref={containerRef} className="composer-thinking" style={{ position: "relative", minWidth: 0, flexShrink: 2 }}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -115,7 +115,8 @@ export const ThinkingPicker: React.FC = () => {
             fontWeight: isReasoningActive ? 600 : 400,
           }}
         >
-          {supportsReasoning ? `Thinking: ${currentMeta.label}` : "Thinking: Off"}
+          <span className="composer-hide-sm">Thinking: </span>
+          {supportsReasoning ? currentMeta.label : "Off"}
         </span>
         <ChevronDown
           size={11}
@@ -130,6 +131,7 @@ export const ThinkingPicker: React.FC = () => {
 
       {open && (
         <div
+          className="composer-popup"
           style={{
             position: "absolute",
             bottom: "100%",

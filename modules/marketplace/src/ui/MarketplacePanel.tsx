@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Check, Download, Search, ShoppingBag } from "lucide-react";
+import { Check, Download, Search } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import { MarketplaceMethods, type MarketplacePackage, type MarketplaceSourceKind } from "../shared.ts";
 
@@ -45,14 +45,6 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         overflowY: "auto",
       }}
     >
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <ShoppingBag size={15} color="var(--accent-base)" />
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Marketplace</span>
-        </div>
-      </div>
-
       {/* Tabs */}
       <div style={{ display: "flex", gap: 6, borderBottom: "1px solid var(--border-subtle)", paddingBottom: 6 }}>
         <button

@@ -1,7 +1,8 @@
 /** Frameless window title bar: app menus, active project, update badge and caption buttons. */
 import React, { useEffect, useRef, useState } from "react";
-import { Copy, Download, FolderKanban, Minus, Search, Square, X } from "lucide-react";
+import { Copy, Download, Minus, Search, Square, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { ProjectPicker } from "./ProjectPicker.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { openProjectFolder } from "../features/commands/registry.ts";
@@ -149,15 +150,7 @@ export const AppTitleBar: React.FC = () => {
       </div>
 
       <div className="titlebar__center">
-        {activeProject ? (
-          <span className="titlebar__project">
-            <span className="titlebar__dot" style={{ background: activeProject.color }} />
-            <FolderKanban size={12} />
-            {activeProject.name}
-          </span>
-        ) : (
-          <span className="titlebar__project is-muted">Hive</span>
-        )}
+        <ProjectPicker />
         <button
           type="button"
           className="titlebar__search-trigger no-drag"

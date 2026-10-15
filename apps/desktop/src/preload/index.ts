@@ -16,10 +16,12 @@ import {
   type StartSessionRequest,
   type StartSessionResult,
   type StudioApi,
+  type SessionWorktree,
   type StudioRpcCommand,
   type SubagentLocateRequest,
   type UiRequestMessage,
   type UpdateProgress,
+  type WorktreeRemoveOptions,
 } from "@hive/protocol";
 
 const api: StudioApi = {
@@ -112,6 +114,14 @@ const api: StudioApi = {
     return ipcRenderer.invoke(IPC.projectsRemove, { id });
   },
 
+  getLastOpenedProjectId(): Promise<string | undefined> {
+    return ipcRenderer.invoke(IPC.projectsGetLastOpened);
+  },
+
+  setLastOpenedProjectId(id?: string): Promise<void> {
+    return ipcRenderer.invoke(IPC.projectsSetLastOpened, { id });
+  },
+
   listAllSessions() {
     return ipcRenderer.invoke(IPC.sessionsListAll);
   },
@@ -126,6 +136,22 @@ const api: StudioApi = {
 
   updateSessionMeta(sessionPath: string, updates: any) {
     return ipcRenderer.invoke(IPC.sessionsUpdateMeta, { path: sessionPath, updates });
+  },
+
+  generateSessionTitle(cwd: string, prompt: string, model?: string, sessionPath?: string) {
+    return ipcRenderer.invoke(IPC.sessionsGenerateTitle, { cwd, prompt, model, sessionPath });
+  },
+
+  worktreeStatus(worktree: SessionWorktree) {
+    return ipcRenderer.invoke(IPC.worktreeStatus, { worktree });
+  },
+
+  worktreeRemove(worktree: SessionWorktree, options?: WorktreeRemoveOptions) {
+    return ipcRenderer.invoke(IPC.worktreeRemove, { worktree, options });
+  },
+
+  worktreeMerge(worktree: SessionWorktree) {
+    return ipcRenderer.invoke(IPC.worktreeMerge, { worktree });
   },
 
   checkTrust(path: string) {
@@ -256,6 +282,20 @@ const api: StudioApi = {
   zoom(direction: "in" | "out" | "reset") {
     const level = direction === "reset" ? 0 : webFrame.getZoomLevel() + (direction === "in" ? 0.5 : -0.5);
     webFrame.setZoomLevel(Math.max(-3, Math.min(4, level)));
+  },
+
+  // Checkpoints
+  listCheckpoints(sessionId: string) {
+    return ipcRenderer.invoke(IPC.checkpointsList, sessionId);
+  },
+  getCheckpointDiffInfo(turnId: string) {
+    return ipcRenderer.invoke(IPC.checkpointsDiffInfo, turnId);
+  },
+  getCheckpointDiffText(turnId: string, filePath?: string) {
+    return ipcRenderer.invoke(IPC.checkpointsDiffText, turnId, filePath);
+  },
+  restoreCheckpoint(turnId: string, mode: "turn" | "rewind") {
+    return ipcRenderer.invoke(IPC.checkpointsRestore, turnId, mode);
   },
 
   modules: {

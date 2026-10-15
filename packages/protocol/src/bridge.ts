@@ -221,6 +221,21 @@ export type BridgeToStudio =
       type: "boundary";
       phase: "agent_start" | "turn_end" | "agent_settled";
       leafEntryId: string | null;
+      userTs?: number;
+    }
+  | {
+      v: 1;
+      type: "checkpoint_request";
+      reqId: string;
+      sessionId: string;
+      userTs: number;
+    }
+  | {
+      v: 1;
+      type: "checkpoint_bind";
+      sessionId: string;
+      userTs: number;
+      leafEntryId: string;
     }
   | { v: 1; type: "event"; topic: string; data: unknown }
   | ({ v: 1; type: "registry" } & Omit<SessionRegistry, "receivedAt">)
@@ -229,7 +244,8 @@ export type BridgeToStudio =
 /** Records sent by Studio to the bridge. */
 export type StudioToBridge =
   | { v: 1; type: "config"; linkedProjects: LinkedProject[] }
-  | { v: 1; type: "emit"; topic: string; data: unknown };
+  | { v: 1; type: "emit"; topic: string; data: unknown }
+  | { v: 1; type: "checkpoint_done"; reqId: string };
 
 /** Command-context actions (payload of `/__studio <json>`). */
 export type BridgeAction =

@@ -10,6 +10,7 @@ import { JevAdviceBar } from "./ui/JevAdviceBar.tsx";
 import { JevSettings } from "./ui/JevSettings.tsx";
 import { JevToolCard } from "./ui/JevToolCard.tsx";
 import { jevStore } from "./ui/jev-store.ts";
+import { requestJevCompact } from "./ui/jev-compact.ts";
 
 export default defineRendererModule({
   id: MODULE_ID,
@@ -53,8 +54,11 @@ export default defineRendererModule({
       // A new run or a finished compaction makes the stored advice describe a conversation that no longer exists.
       if (event.type === "agent_start" || event.type === "compaction_end") jevStore.clearAdvice(key);
     });
+    // Sending a message while the hint is showing (not dismissed with X) compacts first; core holds the prompt until it's done.
+    const offBeforeSend = host.sessions.onBeforeSend((key) => (jevStore.visibleTier(key) === "silent" ? undefined : requestJevCompact(host, key)));
     return () => {
       offBridge();
+      offBeforeSend();
       offEvents();
       jevStore.reset();
       jevStore.setEventSink(null);

@@ -17,14 +17,11 @@
     "icon": "shopping-bag",
     "category": "Workbench",
     "contributes": {
-      "rightPanels": [
-        "marketplace"
-      ],
       "commands": [
         {
-          "id": "view.marketplace",
-          "title": "Toggle Marketplace Panel",
-          "category": "View"
+          "id": "settings.marketplace",
+          "title": "Settings: Marketplace",
+          "category": "App"
         }
       ]
     }

@@ -10,7 +10,7 @@ const TerminalPanel = lazy(() => import("./ui/TerminalPanel.tsx").then((m) => ({
 export default defineRendererModule({
   id: MODULE_ID,
   contributes: {
-    rightPanels: [
+    bottomPanels: [
       {
         id: TERMINAL_PANEL_ID,
         title: "Terminal",
@@ -27,7 +27,7 @@ export default defineRendererModule({
         keywords: "shell console powershell bash",
         defaultKeys: ["Mod+`"],
         allowInTerminal: true,
-        run: (host) => host.panels.toggle("right", TERMINAL_PANEL_ID),
+        run: (host) => host.panels.toggle("bottom", TERMINAL_PANEL_ID),
       },
       {
         // Programmatic entry point (the Files panel's "Run" button calls it by id). `when: false` keeps it out of the palette.

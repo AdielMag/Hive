@@ -62,6 +62,7 @@ export function scanModules(root = ROOT) {
     const claims = [
       ...(c.leftPanels ?? []).map((x) => `panel:${x}`),
       ...(c.rightPanels ?? []).map((x) => `panel:${x}`),
+      ...(c.bottomPanels ?? []).map((x) => `panel:${x}`),
       ...(c.tabKinds ?? []).map((x) => `tab:${x}`),
       ...(c.commands ?? []).map((x) => `command:${x.id}`),
     ];

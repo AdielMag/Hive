@@ -8,6 +8,18 @@ import { registerIpc } from "./ipc/index.ts";
 import { createMainWindow } from "./window.ts";
 import { migrateUserDataDir } from "./migrate-legacy.ts";
 import { appendToProcessPath } from "./paths.ts";
+import { listOrphans } from "./services/worktrees.ts";
+
+/** Best effort, log only: session worktrees git knows about that no session references (e.g. left by a crash). */
+async function logOrphanWorktrees(c: AppContext): Promise<void> {
+  if (!c.catalog) return;
+  const known = (await c.catalog.listAll()).flatMap((s) => (s.worktree ? [s.worktree.worktreePath] : []));
+  for (const project of c.guiStore.getProjects()) {
+    for (const orphan of await listOrphans(project.path, known)) {
+      console.warn(`[worktrees] orphan worktree ${orphan.worktreePath}${orphan.branch ? ` (${orphan.branch})` : ""} in ${project.path}`);
+    }
+  }
+}
 
 // Migrate legacy userData if needed before touching userData or stores.
 migrateUserDataDir(app);
@@ -42,6 +54,7 @@ if (!app.requestSingleInstanceLock()) {
     // enabled modules live in the managed bin dir, appended to PATH so Pi sessions and terminals find them.
     appendToProcessPath(ctx.modules.binDir);
     void ctx.modules.start().catch((err) => console.error("Failed to start modules", err));
+    void logOrphanWorktrees(ctx).catch((err) => console.warn("[worktrees] orphan scan failed", err));
     // Give models added since the last save their percentage-based compaction values.
     try {
       ctx.models.reapplyCompaction();

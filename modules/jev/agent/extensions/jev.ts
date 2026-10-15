@@ -23,7 +23,9 @@ const TO_GUI = "studio:to-gui";
 const FROM_GUI = "studio:from-gui";
 const CALL_TIMEOUT_MS = 6_000;
 const MAX_FILE_BYTES = 200_000;
-const MAX_TOTAL_BYTES = 400_000;
+/** Total gathered bytes per call. ~103 KB (31.8k tokens) was the largest success; ~200 KB hit HTTP 400 max_tokens_exceeded. */
+const MAX_TOTAL_BYTES = 100_000;
+const DEFAULT_MAX_INPUT_TOKENS = 28_000;
 /** Per-source preview kept in the tool result `details` (session JSONL) for the transcript card's In tab. */
 const PREVIEW_CHARS = 4_096;
 
@@ -37,6 +39,8 @@ export interface Settings {
   compact: { enabled: boolean; floorPct: number };
   askJev: { enabled: boolean };
   maxCallsPerDay: number;
+  /** ask_jev refuses locally above this estimated input size (mirrored from JevSettings). */
+  maxInputTokens: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -59,6 +63,10 @@ export function loadSettings(env: Env = process.env): Settings | null {
       },
       askJev: { enabled: raw.askJev?.enabled !== false },
       maxCallsPerDay: typeof raw.maxCallsPerDay === "number" ? raw.maxCallsPerDay : 500,
+      maxInputTokens:
+        typeof raw.maxInputTokens === "number" && Number.isFinite(raw.maxInputTokens)
+          ? Math.round(Math.min(1_000_000, Math.max(1_000, raw.maxInputTokens)))
+          : DEFAULT_MAX_INPUT_TOKENS,
     };
   } catch {
     return null;
@@ -151,6 +159,8 @@ function noteResult(r: CallResult, now: number): void {
     breaker.openUntil = now + 30 * 60_000;
     return;
   }
+  // Our request was too big; the service is healthy, so this must not pause Jev.
+  if (r.status === 400 && /max_tokens_exceeded/.test(r.error)) return;
   breaker.failures += 1;
   if (breaker.failures >= 3) {
     breaker.openUntil = now + 5 * 60_000;
@@ -247,6 +257,8 @@ export async function callJev(opts: CallOptions): Promise<CallResult> {
       try {
         const body = (await res.json()) as any;
         detail = typeof body?.detail === "string" ? body.detail : (body?.detail?.message ?? JSON.stringify(body?.detail ?? body)).slice(0, 200);
+        // The error code may sit beside the message; keep it visible so the breaker can recognise it.
+        if (!detail.includes("max_tokens_exceeded") && JSON.stringify(body ?? "").includes("max_tokens_exceeded")) detail = `max_tokens_exceeded: ${detail}`;
       } catch {}
       const auth = res.status === 401 || res.status === 402 || res.status === 403;
       return fail(`HTTP ${res.status}${detail ? `: ${detail}` : ""}`, auth ? "auth" : "api", res.status);
@@ -411,6 +423,8 @@ export function parseReadOnlyCommand(command: string): { bin: string; args: stri
       const listing = args.some((a) => /^(-l|--list|--contains|--no-contains|--merged|--no-merged|--points-at)(=|$)/.test(a));
       if (!listing && args.some((a) => a !== sub && !a.startsWith("-"))) return null;
     }
+    // `git grep -f <file>` reads patterns from an arbitrary path.
+    if (sub === "grep" && args.some((a) => /^(-f|--file)(=|$)/.test(a))) return null;
     if (sub === "tag" && args.some((a) => !a.startsWith("-") && a !== "tag") ) return null;
     if (sub === "remote" && args.some((a) => /^(add|remove|rm|rename|set-url|prune|update)$/.test(a))) return null;
   }
@@ -462,12 +476,30 @@ export function confine(cwd: string, p: string): string {
 const PATHISH = /[\\/]|^~|^\.\.$|^[a-zA-Z]:/;
 
 /**
+ * For git args of the form `rev:path` (`HEAD:.env`, `:0:.env`, `HEAD:sub/.env`) or pathspec magic (`:(top).env`, `:!x`),
+ * returns the path part (possibly ""), else null (no colon, a URL, or a Windows drive path such as `C:\x`).
+ */
+function gitColonPath(v: string): string | null {
+  if (!v.includes(":") || v.includes("://") || /^[a-zA-Z]:[\\/]/.test(v)) return null;
+  let rest = v.slice(v.indexOf(":") + 1);
+  if (v.startsWith(":")) {
+    rest = rest.replace(/^(\([^)]*\)|[!^/]+)/, "");
+    rest = rest.replace(/^\d:/, ""); // `:0:path` = index stage 0
+  }
+  return rest;
+}
+
+/**
  * Every path argument must stay inside the workspace and not look like a credential. For git, only path-like args
- * (revs such as `HEAD~2` are fine); for everything else every positional arg counts, so a bare `.env` is caught.
- * `--flag=value` values are checked when path-like.
+ * (revs such as `HEAD~2` are fine) plus the path part of `rev:path` args; for everything else every positional arg
+ * counts, so a bare `.env` is caught. `--flag=value` values are checked when path-like.
+ * git pathspecs are not confined here: `gitSecretPathspecs` excludes credential files from them instead. But
+ * `git blame` and `git diff --no-index` take plain file arguments that pathspecs can't filter, so there every positional counts.
  */
 export function checkCommandPaths(parsed: { bin: string; args: string[] }, cwd: string): void {
   const { bin, args } = parsed;
+  const sub = bin === "git" ? args.find((a) => !a.startsWith("-")) : undefined;
+  const confineAll = bin !== "git" || sub === "blame" || args.includes("--no-index");
   // grep/rg: the first positional is the search pattern, not a path (unless given with -e/--regexp).
   let skipPattern = (bin === "grep" || bin === "rg") && !args.some((a) => /^(-e|--regexp)(=|$)/.test(a));
   for (const arg of args) {
@@ -482,12 +514,36 @@ export function checkCommandPaths(parsed: { bin: string; args: string[] }, cwd: 
       skipPattern = false;
       continue;
     }
-    if (v && ((positional && bin !== "git") || PATHISH.test(v))) confine(cwd, v);
+    if (bin === "git") {
+      const cp = gitColonPath(v);
+      if (cp !== null) {
+        if (cp) confine(cwd, cp);
+        continue;
+      }
+    }
+    if (v && ((confineAll && (positional || bin === "git")) || PATHISH.test(v))) confine(cwd, v);
   }
 }
 
+const GIT_SECRET_GLOBS = ["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/.npmrc", "**/.netrc", "**/auth.json", "**/id_rsa*", "**/id_ed25519*", "**/.git-credentials"];
+const GIT_PATHSPEC_SUBS = new Set(["diff", "log", "show", "grep", "ls-files"]);
+
+/**
+ * Exclude pathspecs appended to git diff/log/show/grep/ls-files so credential files never appear in the output,
+ * whatever pathspec (or none) the agent gave. They are appended last with no `--` of our own: git (>= 2.13) treats an
+ * exclude-only pathspec list as "everything but", and inserting `--` would turn an agent's bare `git diff HEAD a.ts`
+ * into a bad-revision error. `blame` takes no pathspec list (its file arguments are confined instead).
+ * Globs over-exclude (`.env.example` too); that is acceptable.
+ */
+export function gitSecretPathspecs(args: string[]): string[] {
+  const sub = args.find((a) => !a.startsWith("-"));
+  if (!sub || !GIT_PATHSPEC_SUBS.has(sub) || args.includes("--no-index")) return [];
+  return GIT_SECRET_GLOBS.map((g) => `:(exclude,glob)${g}`);
+}
+
 /** Appended after the user's args so they win over any `--glob`/`--include` the agent adds. */
-function secretExcludes(bin: string): string[] {
+function secretExcludes(bin: string, args: string[]): string[] {
+  if (bin === "git") return gitSecretPathspecs(args);
   if (bin === "rg") return [".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", ".npmrc", ".netrc", "auth.json", ".ssh", ".aws", ".git-credentials"].flatMap((g) => ["--glob", `!${g}`]);
   if (bin === "grep") {
     return [".env", ".env.*", "*.pem", "*.key", "id_rsa*", "id_ed25519*", ".npmrc", ".netrc", "auth.json", ".git-credentials"]
@@ -497,17 +553,58 @@ function secretExcludes(bin: string): string[] {
   return [];
 }
 
-function runReadOnly(command: string, cwd: string, signal?: AbortSignal): Promise<string> {
-  const parsed = parseReadOnlyCommand(command);
-  if (!parsed) return Promise.reject(new Error("command is not an allowed read-only command (no pipes, redirects or write operations)"));
-  try {
-    checkCommandPaths(parsed, cwd);
-  } catch (err) {
-    return Promise.reject(err);
+// ---- grep on Windows: not on PATH by default; it ships with Git for Windows under usr/bin ----
+
+type GrepResolver = () => Promise<string | null>;
+let grepOverride: GrepResolver | undefined;
+let grepCache: string | null | undefined;
+
+/** Test hook: replace (or with no argument restore) the grep resolver and clear the cache. */
+export function setGrepResolver(fn?: GrepResolver): void {
+  grepOverride = fn;
+  grepCache = undefined;
+}
+
+const capture = (file: string, args: string[]): Promise<string> =>
+  new Promise((resolve) => {
+    try {
+      execFile(file, args, { timeout: 5_000, windowsHide: true }, (err, stdout) => resolve(err ? "" : String(stdout)));
+    } catch {
+      resolve("");
+    }
+  });
+
+async function findWindowsGrep(): Promise<string | null> {
+  const first = (await capture("where", ["grep"])).split(/\r?\n/).map((l) => l.trim()).find((l) => l && fs.existsSync(l));
+  if (first) return first;
+  const execPath = (await capture("git", ["--exec-path"])).trim();
+  if (execPath) {
+    // <git>/mingw64/libexec/git-core -> <git>/usr/bin/grep.exe
+    const candidate = path.resolve(execPath, "..", "..", "..", "usr", "bin", "grep.exe");
+    if (fs.existsSync(candidate)) return candidate;
   }
+  return null;
+}
+
+/** The executable to spawn for `bin`; only grep needs resolving, and only on Windows (or when a resolver is injected). */
+async function resolveExecutable(bin: string): Promise<string> {
+  if (bin !== "grep") return bin;
+  if (!grepOverride && process.platform !== "win32") return bin;
+  if (grepCache === undefined) grepCache = await (grepOverride ?? findWindowsGrep)();
+  if (!grepCache) throw new Error("grep is unavailable on this machine; use `rg` with the same pattern or `git grep`");
+  return grepCache;
+}
+
+export async function runReadOnly(command: string, cwd: string, signal?: AbortSignal): Promise<string> {
+  const parsed = parseReadOnlyCommand(command);
+  if (!parsed) throw new Error("command is not an allowed read-only command (no pipes, redirects or write operations)");
+  checkCommandPaths(parsed, cwd);
+  const exe = await resolveExecutable(parsed.bin);
   return new Promise((resolve, reject) => {
-    execFile(parsed.bin, [...parsed.args, ...secretExcludes(parsed.bin)], { cwd, timeout: 15_000, maxBuffer: MAX_FILE_BYTES, signal, windowsHide: true }, (err, stdout, stderr) => {
-      if (err && !stdout) reject(new Error(String(stderr || err.message).slice(0, 300)));
+    execFile(exe, [...parsed.args, ...secretExcludes(parsed.bin, parsed.args)], { cwd, timeout: 15_000, maxBuffer: MAX_TOTAL_BYTES, signal, windowsHide: true }, (err, stdout, stderr) => {
+      // A truncated listing would silently give Jev a partial picture, so overflow is an error, not a short result.
+      if (err && ((err as { code?: unknown }).code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" || /maxBuffer/i.test(err.message))) reject(new Error("output too large; narrow the command or use items"));
+      else if (err && !stdout) reject(new Error(String(stderr || err.message).slice(0, 300)));
       else resolve(String(stdout));
     });
   });
@@ -612,6 +709,24 @@ export function questionCounts(questions: Record<string, Question>): { noul: num
   return out;
 }
 
+/** Binary heuristic on the first 8 KB: >1% NUL bytes, or >10% U+FFFD after a UTF-8 decode. A stray NUL in source text is fine. */
+export function looksBinary(buf: Uint8Array): boolean {
+  const sample = buf.subarray(0, 8_192);
+  if (sample.length === 0) return false;
+  let nul = 0;
+  for (const b of sample) if (b === 0) nul += 1;
+  if (nul / sample.length > 0.01) return true;
+  const text = Buffer.from(sample).toString("utf8");
+  let bad = 0;
+  for (const ch of text) if (ch === "\uFFFD") bad += 1;
+  return text.length > 0 && bad / text.length > 0.1;
+}
+
+/** Rough input size of a call: the JSON body is ~3 chars per token for code. Over-estimates on purpose. */
+export function estimateInputTokens(state: unknown, questions: unknown): number {
+  return Math.ceil(JSON.stringify({ state, questions }).length / 3);
+}
+
 export async function readFiles(files: string[], cwd: string): Promise<{ contents: Record<string, string>; sources: SourceFile[] }> {
   const contents: Record<string, string> = {};
   const sources: SourceFile[] = [];
@@ -619,10 +734,11 @@ export async function readFiles(files: string[], cwd: string): Promise<{ content
   for (const f of files) {
     const abs = confine(cwd, f);
     const buf = await fs.promises.readFile(abs);
-    if (buf.includes(0)) throw new Error(`${f} looks binary`);
-    const text = buf.subarray(0, MAX_FILE_BYTES).toString("utf8");
+    if (looksBinary(buf)) throw new Error(`${f} looks binary`);
+    // Remaining NULs (e.g. a literal "\0" separator in source) are sent as visible escapes, not raw control bytes.
+    const text = buf.subarray(0, MAX_FILE_BYTES).toString("utf8").replace(/\0/g, "\\u0000");
     total += text.length;
-    if (total > MAX_TOTAL_BYTES) throw new Error("files exceed the 400 KB total limit");
+    if (total > MAX_TOTAL_BYTES) throw new Error("files exceed the 100 KB total limit; send fewer files per item");
     contents[f] = text + (buf.length > MAX_FILE_BYTES ? "\n…[truncated]" : "");
     sources.push({ path: f, bytes: Math.min(buf.length, MAX_FILE_BYTES), ...preview(text) });
   }
@@ -761,6 +877,18 @@ export async function runOne(item: AskItem, rc: RunContext): Promise<OneResult> 
   if (Object.keys(state).length === 0) return refuse("Give at least one of: state, files, command.", "invalid");
   const sources = rc.previewChars ? shrinkSources(gathered, rc.previewChars) : gathered;
 
+  // Over the API's input limit (HTTP 400 max_tokens_exceeded): refuse here, no API call, nothing counted against the cap.
+  const limit = settings.maxInputTokens;
+  if (limit > 0) {
+    const est = estimateInputTokens(state, questions);
+    if (est > limit) {
+      const error = `~${est} tokens > limit ${limit}; split into items (one file/diff per item) or narrow the command`;
+      const ms = Date.now() - started;
+      logUsage({ ts: started, feature: "ask_jev", model: settings.model, inputTokens: 0, outputTokens: 0, ms, ok: false, error, errorKind: "invalid", ...meta, questions: questionCounts(questions), sources: usageSources(sources), savedTokensEst: 0 });
+      return { ok: false, error, errorKind: "invalid", ms, sources, savedTokensEst: 0 };
+    }
+  }
+
   const savedTokensEst = estimateSavedTokens(sources);
   const result = await callJev({
     settings,
@@ -787,6 +915,7 @@ export async function runOne(item: AskItem, rc: RunContext): Promise<OneResult> 
 const ASK_DESCRIPTION =
   "Ask Jev, a fast typed classifier, yes/no, pick-one or rate-on-levels questions about content; it returns probabilities, not prose. " +
   "Pass RAW material: `files` (paths, read for you), `command` (read-only, e.g. `git diff -- src/a.ts`) or `state` text. " +
+  "Input is capped (~28k tokens, ~100 KB): one file or diff per item. On Windows prefer `rg` or `git grep` over `grep`. " +
   "File and command output goes straight to Jev and never enters your context, so never pass your own summary of it. " +
   "Put all your questions in one call. For many files or commands use `items` (max 40, each counts against the daily cap): the same questions run on every item. " +
   "Use it for verdicts over large content: classify, rate risk, \"is this X\", sort many files or diffs into groups. " +

@@ -1,7 +1,7 @@
 import { lazy } from "react";
 import { ShoppingBag } from "lucide-react";
 import { defineRendererModule } from "@hive/module-sdk/renderer";
-import { MARKETPLACE_PANEL_ID, MODULE_ID } from "./shared.ts";
+import { MODULE_ID } from "./shared.ts";
 
 const MarketplacePanel = lazy(() =>
   import("./ui/MarketplacePanel.tsx").then((m) => ({ default: m.MarketplacePanel })),
@@ -10,22 +10,22 @@ const MarketplacePanel = lazy(() =>
 export default defineRendererModule({
   id: MODULE_ID,
   contributes: {
-    rightPanels: [
+    settings: [
       {
-        id: MARKETPLACE_PANEL_ID,
+        id: "marketplace",
+        label: "Marketplace",
         title: "Marketplace",
         icon: ({ size }) => <ShoppingBag size={size} />,
-        commandId: "view.marketplace",
         component: MarketplacePanel,
       },
     ],
     commands: [
       {
-        id: "view.marketplace",
-        title: "Toggle Marketplace Panel",
-        category: "View",
+        id: "settings.marketplace",
+        title: "Settings: Marketplace",
+        category: "App",
         keywords: "show hide marketplace plugins mcp extensions packages",
-        run: (host) => host.panels.toggle("right", MARKETPLACE_PANEL_ID),
+        run: (host) => host.settings.open("marketplace"),
       },
     ],
   },

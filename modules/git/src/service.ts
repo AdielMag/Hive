@@ -1,7 +1,17 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import type { PiRuntimeInfo } from "@hive/module-sdk/main";
-import type { GitBranchDetail, GitCommitLog, GitFileStatus, GitGraphCommit, GitRepoStatus } from "./shared.ts";
+import type {
+  GitBranchDetail,
+  GitCommitDetail,
+  GitCommitFile,
+  GitCommitLog,
+  GitFileStatus,
+  GitGraphCommit,
+  GitGraphOptions,
+  GitRepoStatus,
+  GitTag,
+} from "./shared.ts";
 
 export type { GitFileStatus, GitRepoStatus, GitCommitLog };
 
@@ -304,13 +314,108 @@ export async function getGitBranchDetails(cwd: string): Promise<GitBranchDetail[
   }
 }
 
-export async function getGitGraph(cwd: string, maxCount = 120): Promise<GitGraphCommit[]> {
+/** Rejects ref-like arguments that git would parse as options. */
+function safeRef(ref: string, what = "ref"): string {
+  const r = ref.trim();
+  if (!r || r.startsWith("-") || /[\s~^:?*[\\]/.test(r) || r.includes("..")) throw new Error(`Invalid ${what}: "${ref}"`);
+  return r;
+}
+
+export async function gitCreateBranchFrom(cwd: string, branch: string, startPoint: string, checkout = true): Promise<string> {
+  const name = safeRef(branch, "branch name");
+  const from = safeRef(startPoint, "start point");
+  return runGit(checkout ? ["checkout", "-b", name, from] : ["branch", name, from], cwd);
+}
+
+export async function gitRenameBranch(cwd: string, oldName: string, newName: string): Promise<string> {
+  return runGit(["branch", "-m", safeRef(oldName, "branch name"), safeRef(newName, "branch name")], cwd);
+}
+
+export async function gitMerge(cwd: string, branch: string): Promise<string> {
+  return runGit(["merge", "--no-edit", safeRef(branch, "branch name")], cwd);
+}
+
+export async function getGitTags(cwd: string): Promise<GitTag[]> {
   try {
-    const fmt = ["%H", "%h", "%P", "%an", "%ar", "%D", "%s"].join("%x00");
-    const raw = await runGit(["log", "--all", "--date-order", "-n", String(maxCount), `--pretty=format:${fmt}`], cwd);
+    const fmt = ["%(refname:short)", "%(objectname:short)", "%(creatordate:relative)", "%(subject)"].join("%00");
+    const raw = await runGit(["for-each-ref", `--format=${fmt}`, "--sort=-creatordate", "refs/tags"], cwd);
+    return raw
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((line) => {
+        const [name = "", hash = "", relativeDate = "", subject = ""] = line.split("\0");
+        return { name, hash, relativeDate, subject };
+      });
+  } catch {
+    return [];
+  }
+}
+
+function parseNumstatByPath(raw: string): Map<string, { additions?: number; deletions?: number }> {
+  const out = new Map<string, { additions?: number; deletions?: number }>();
+  for (const line of raw.split("\n")) {
+    const [a, d, ...rest] = line.split("\t");
+    const path = rest.join("\t");
+    if (!path) continue;
+    out.set(path, a === "-" || d === "-" ? {} : { additions: Number(a), deletions: Number(d) });
+  }
+  return out;
+}
+
+export async function getGitCommitDetail(cwd: string, hash: string): Promise<GitCommitDetail | null> {
+  try {
+    const rev = safeRef(hash, "commit");
+    const fmt = ["%H", "%h", "%P", "%an", "%ae", "%aI", "%cn", "%s", "%b"].join("%x00");
+    const meta = await runGit(["show", "-s", `--format=${fmt}`, rev], cwd);
+    const [full = "", shortHash = "", parents = "", author = "", authorEmail = "", date = "", committer = "", subject = "", ...bodyParts] = meta.split("\0");
+    const diffArgs = ["show", "--format=", "-m", "--first-parent", "--no-renames"];
+    const [names, nums, contains] = await Promise.all([
+      runGit([...diffArgs, "--name-status", rev], cwd).catch(() => ""),
+      runGit([...diffArgs, "--numstat", rev], cwd).catch(() => ""),
+      runGit(["branch", "-a", "--contains", rev, "--format=%(refname:short)"], cwd).catch(() => ""),
+    ]);
+    const stats = parseNumstatByPath(nums);
+    const files: GitCommitFile[] = [];
+    for (const line of names.split("\n")) {
+      const [code, ...rest] = line.split("\t");
+      const path = rest.join("\t");
+      if (!code || !path) continue;
+      files.push({
+        path,
+        status: code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified",
+        ...(stats.get(path) ?? {}),
+      });
+    }
+    return {
+      hash: full,
+      shortHash,
+      parents: parents.split(" ").filter(Boolean),
+      author,
+      authorEmail,
+      date,
+      committer,
+      subject,
+      body: bodyParts.join("\0").trim(),
+      containedIn: contains
+        .split("\n")
+        .map((s) => s.trim())
+        .filter((s) => s && !s.endsWith("/HEAD") && !s.startsWith("(HEAD"))
+        .slice(0, 12),
+      files,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getGitGraph(cwd: string, maxCount = 120, options?: GitGraphOptions): Promise<GitGraphCommit[]> {
+  try {
+    const fmt = ["%H", "%h", "%P", "%an", "%ar", "%D", "%aI", "%ae", "%s"].join("%x00");
+    const scope = options?.ref ? [safeRef(options.ref)] : ["--all"];
+    const raw = await runGit(["log", ...scope, "--date-order", "-n", String(maxCount), `--pretty=format:${fmt}`], cwd);
     if (!raw.trim()) return [];
     return raw.split("\n").filter(Boolean).map((line) => {
-      const [hash = "", shortHash = "", parents = "", author = "", relativeDate = "", refs = "", message = ""] = line.split("\0");
+      const [hash = "", shortHash = "", parents = "", author = "", relativeDate = "", refs = "", date = "", authorEmail = "", message = ""] = line.split("\0");
       return {
         hash,
         shortHash,
@@ -318,6 +423,8 @@ export async function getGitGraph(cwd: string, maxCount = 120): Promise<GitGraph
         author,
         relativeDate,
         message,
+        date,
+        authorEmail,
         refs: refs.split(",").map((r) => r.trim()).filter((r) => r && !r.endsWith("/HEAD")),
       };
     });

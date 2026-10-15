@@ -45,7 +45,7 @@ export interface OpenTabSpec {
   reuse?: (tab: ModuleTab) => boolean;
 }
 
-export type PanelSide = "left" | "right";
+export type PanelSide = "left" | "right" | "bottom";
 
 export interface ToastOptions {
   message: string;
@@ -224,6 +224,11 @@ export interface ModuleHost {
     onBridgeEvent(listener: (evt: { key: string; data: unknown }) => void): () => void;
     /** Send a custom record to a session's Pi extensions over the bridge (`studio:from-gui`). */
     emitToBridge(key: string, data: unknown): Promise<void>;
+    /**
+     * Run before the user's prompt is sent to session `key`. Return a promise to do something first (e.g. compact): the prompt is
+     * held, shown as queued, and sent when it settles. Return nothing to let it through. Skipped for slash commands and mid-turn sends.
+     */
+    onBeforeSend(hook: (key: string) => Promise<unknown> | null | undefined | void): () => void;
     activeProject(): { id: string; name: string; path: string } | null;
     /** Set the active session's agent mode (e.g. "auto-edit", "manual"). */
     setMode(mode: string): void;
@@ -362,6 +367,8 @@ export interface RailItemContribution extends ContributionBase {
 export interface RendererContributions {
   leftPanels?: PanelContribution[];
   rightPanels?: PanelContribution[];
+  /** Dock panels shown under the editor area (Rider-style tool windows). */
+  bottomPanels?: PanelContribution[];
   tabKinds?: TabKindContribution[];
   toolCards?: ToolCardContribution[];
   railItems?: RailItemContribution[];

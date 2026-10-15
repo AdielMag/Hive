@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { shell } from "electron";
 import { pathToFileURL } from "node:url";
+import { isSafeExternalUrl } from "../safe-url.ts";
 
 export interface AuthAccountInfo {
   providerId: string;
@@ -147,13 +148,13 @@ export class AuthService {
       // Interaction handler
       const interaction = {
         notify: (event: any) => {
-          if (event.type === "auth_url" && event.url) {
-            shell.openExternal(event.url);
+          if (event.type === "auth_url" && event.url && isSafeExternalUrl(event.url)) {
+            void shell.openExternal(event.url);
           }
         },
         prompt: async (prompt: any) => {
           if (prompt.type === "auth_url" && prompt.url) {
-            shell.openExternal(prompt.url);
+            if (isSafeExternalUrl(prompt.url)) void shell.openExternal(prompt.url);
             return "";
           }
           if (prompt.type === "manual_code") {

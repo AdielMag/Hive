@@ -43,6 +43,7 @@ export class GuiStore {
   private readonly sessionMetaPath: string;
 
   private projects: ProjectEntry[] = [];
+  private lastOpenedProjectId?: string;
   private sessionMeta: Record<string, SessionMetaEntry> = {};
   private uiState: UiStateFile = { schemaVersion: 1, tabs: [], activeTabId: null };
 
@@ -66,6 +67,16 @@ export class GuiStore {
 
   getProjects(): ProjectEntry[] {
     return [...this.projects];
+  }
+
+  getLastOpenedProjectId(): string | undefined {
+    return this.lastOpenedProjectId;
+  }
+
+  setLastOpenedProjectId(id?: string): void {
+    if (this.lastOpenedProjectId === id) return;
+    this.lastOpenedProjectId = id;
+    this.saveProjects();
   }
 
   getProject(id: string): ProjectEntry | undefined {
@@ -180,6 +191,7 @@ export class GuiStore {
     const projectsData = this.readFileSafely<ProjectsFile>(this.projectsPath);
     if (projectsData && projectsData.schemaVersion === 1 && Array.isArray(projectsData.projects)) {
       this.projects = projectsData.projects;
+      this.lastOpenedProjectId = projectsData.lastOpenedProjectId;
     }
 
     // 2. Session Meta
@@ -199,6 +211,7 @@ export class GuiStore {
     const file: ProjectsFile = {
       schemaVersion: 1,
       projects: this.projects,
+      ...(this.lastOpenedProjectId ? { lastOpenedProjectId: this.lastOpenedProjectId } : {}),
     };
     this.writeFileAtomically(this.projectsPath, JSON.stringify(file, null, 2));
   }

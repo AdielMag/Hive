@@ -44,6 +44,7 @@ export interface StaticCommandDeclaration {
 export interface StaticContributions {
   leftPanels?: string[];
   rightPanels?: string[];
+  bottomPanels?: string[];
   tabKinds?: string[];
   commands?: StaticCommandDeclaration[];
 }

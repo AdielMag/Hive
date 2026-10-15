@@ -247,11 +247,21 @@ export default function studioBridge(pi: ExtensionAPI): void {
     pi.events.emit(channel, { requestId, agentId });
   };
 
+  let pendingCheckpointPromise: Promise<void> | null = null;
+  let resolvePendingCheckpoint: (() => void) | null = null;
+  let currentTurnUserTs: number | null = null;
+
   const handleStudioMessage = (msg: StudioToBridge) => {
     if (msg.type === "config") {
       linkedProjects = msg.linkedProjects ?? [];
     } else if (msg.type === "emit") {
       pi.events.emit(msg.topic, msg.data);
+    } else if (msg.type === "checkpoint_done") {
+      if (resolvePendingCheckpoint) {
+        resolvePendingCheckpoint();
+        resolvePendingCheckpoint = null;
+        pendingCheckpointPromise = null;
+      }
     }
   };
 
@@ -371,7 +381,26 @@ export default function studioBridge(pi: ExtensionAPI): void {
     }
   });
 
-  pi.on("message_end", async (event) => {
+  pi.on("message_end", async (event, ctx) => {
+    const rawMsg = event.message as any;
+    if (rawMsg?.role === "user") {
+      const userTs = rawMsg.timestamp ?? Date.now();
+      currentTurnUserTs = userTs;
+      const reqId = `cp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      pendingCheckpointPromise = new Promise<void>((resolve) => {
+        resolvePendingCheckpoint = resolve;
+        // Safety timeout so tool gate never hangs indefinitely if Studio fails to respond
+        setTimeout(resolve, 15_000);
+      });
+      send({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: "checkpoint_request",
+        reqId,
+        sessionId: ctx.sessionManager.getSessionId?.() ?? "default",
+        userTs,
+      });
+    }
+
     const msg = event.message as { customType?: string; details?: { id?: string; others?: Array<{ id?: string }> } } | undefined;
     if (msg?.customType === "subagent-notification") {
       let changed = false;
@@ -385,6 +414,15 @@ export default function studioBridge(pi: ExtensionAPI): void {
     }
   });
 
+  // Tool gate: wait for before-prompt checkpoint to complete before modifying files
+  pi.on("tool_call", async () => {
+    if (pendingCheckpointPromise) {
+      try {
+        await pendingCheckpointPromise;
+      } catch {}
+    }
+  });
+
   // Checkpoint boundaries
   pi.on("agent_start", async (_event, ctx) => {
     send({
@@ -392,16 +430,28 @@ export default function studioBridge(pi: ExtensionAPI): void {
       type: "boundary",
       phase: "agent_start",
       leafEntryId: ctx.sessionManager.getLeafId?.() ?? null,
+      userTs: currentTurnUserTs ?? undefined,
     });
   });
 
   pi.on("turn_end", async (_event, ctx) => {
+    const leafId = ctx.sessionManager.getLeafId?.() ?? null;
     send({
       v: BRIDGE_PROTOCOL_VERSION,
       type: "boundary",
       phase: "turn_end",
-      leafEntryId: ctx.sessionManager.getLeafId?.() ?? null,
+      leafEntryId: leafId,
+      userTs: currentTurnUserTs ?? undefined,
     });
+    if (currentTurnUserTs && leafId) {
+      send({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: "checkpoint_bind",
+        sessionId: ctx.sessionManager.getSessionId?.() ?? "default",
+        userTs: currentTurnUserTs,
+        leafEntryId: leafId,
+      });
+    }
   });
 
   pi.on("agent_settled", async (_event, ctx) => {
@@ -411,9 +461,11 @@ export default function studioBridge(pi: ExtensionAPI): void {
       type: "boundary",
       phase: "agent_settled",
       leafEntryId: ctx.sessionManager.getLeafId?.() ?? null,
+      userTs: currentTurnUserTs ?? undefined,
     });
     buildAndSendRegistry(ctx);
     broadcastSubagentActivity();
+    currentTurnUserTs = null;
   });
 
   // Hidden command for command-context actions

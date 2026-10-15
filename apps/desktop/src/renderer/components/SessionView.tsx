@@ -1,6 +1,7 @@
 import React from "react";
 import { Transcript } from "./Transcript.tsx";
 import { Composer } from "./Composer.tsx";
+import { WorktreeBar } from "./WorktreeBar.tsx";
 import { useUi } from "../store/ui-store.ts";
 import { useDrag } from "../hooks/useDrag.ts";
 
@@ -28,6 +29,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       className={`session-view${isActivePane ? " is-active" : " is-inactive"}`}
       onClick={!isActivePane ? onActivate : undefined}
     >
+      <WorktreeBar tabId={tabId} />
       <Transcript tabId={tabId} />
       <div className="resizer resizer--row" onMouseDown={startDrag} title="Drag to resize" />
       <div className="session-view__composer-wrap">

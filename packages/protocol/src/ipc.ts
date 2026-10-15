@@ -13,7 +13,7 @@ import type {
 export type { SessionStats } from "@earendil-works/pi-coding-agent";
 export type { Model } from "@earendil-works/pi-ai";
 import type { BridgeAction, BridgeToStudio, LinkedProject } from "./bridge.ts";
-import type { ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry } from "./projects.ts";
+import type { ProjectDefaults, ProjectEntry, SessionCatalogItem, SessionMetaEntry, SessionWorktree } from "./projects.ts";
 import type { ModulesSnapshot, SetModulesEnabledResult } from "@hive/module-sdk";
 import type {
   ContextFileInfo,
@@ -86,11 +86,24 @@ export interface UpdateProgress {
   message?: string;
 }
 
-export interface PiUpdateInfo {
+/** A Pi extension (npm package under Pi's agent dir) that Hive keeps up to date alongside Pi. */
+export interface PiExtensionUpdate {
+  name: string;
   hasUpdate: boolean;
   currentVersion?: string;
   latestVersion?: string;
   error?: string;
+}
+
+export interface PiUpdateInfo {
+  /** True when Pi itself OR any entry in `extensions` has an update. */
+  hasUpdate: boolean;
+  /** True when the Pi CLI itself has an update. */
+  cliHasUpdate?: boolean;
+  currentVersion?: string;
+  latestVersion?: string;
+  error?: string;
+  extensions?: PiExtensionUpdate[];
 }
 
 export interface SessionStatusUpdate {
@@ -122,12 +135,50 @@ export interface StartSessionRequest {
   projectPath: string;
   /** Resume this session file; omit to start a new session. */
   sessionPath?: string;
+  /** Run a new session in its own git worktree (default true; set false to work in the main tree). Ignored on resume. */
+  useWorktree?: boolean;
+  /** Branch to fork the worktree from (default: the main tree's current HEAD). */
+  baseBranch?: string;
+  /** Session title; used to name the worktree branch/folder. */
+  title?: string;
 }
 
 export interface StartSessionResult {
   key: string;
   projectPath: string;
+  /** Present when the session runs in a git worktree (its cwd is `worktree.worktreePath`). */
+  worktree?: SessionWorktree;
 }
+
+export interface WorktreeStatus {
+  /** False when the worktree folder is gone. */
+  exists: boolean;
+  /** Commits on the session branch not in the base branch. */
+  ahead: number;
+  /** Commits on the base branch not in the session branch. */
+  behind: number;
+  /** Uncommitted (modified/untracked) files in the worktree. */
+  dirty: number;
+}
+
+export interface WorktreeRemoveOptions {
+  /** Remove even with uncommitted changes and delete an unmerged branch. */
+  force?: boolean;
+  /** Also delete the session branch (default true). */
+  deleteBranch?: boolean;
+}
+
+export type WorktreeRemoveResult = { ok: true; branchDeleted: boolean } | { ok: false; error: string };
+
+export type WorktreeMergeResult =
+  | { ok: true; alreadyUpToDate: boolean; /** Uncommitted files left behind in the worktree (not merged). */ uncommitted: number }
+  | {
+      ok: false;
+      reason: "dirty-main" | "base-not-checked-out" | "conflict" | "error";
+      error: string;
+      /** Conflicting files (reason "conflict"; the merge is aborted). */
+      conflicts?: string[];
+    };
 
 export type RpcResult = { ok: true; data?: unknown } | { ok: false; error: string };
 
@@ -156,10 +207,17 @@ export const IPC = {
   projectsAdd: "projects:add",
   projectsUpdate: "projects:update",
   projectsRemove: "projects:remove",
+  projectsGetLastOpened: "projects:get-last-opened",
+  projectsSetLastOpened: "projects:set-last-opened",
   sessionsListAll: "sessions:list-all",
   sessionsReadFile: "sessions:read-file",
   sessionsDelete: "sessions:delete",
   sessionsUpdateMeta: "sessions:update-meta",
+  sessionsGenerateTitle: "sessions:generate-title",
+  // Session worktrees
+  worktreeStatus: "worktree:status",
+  worktreeRemove: "worktree:remove",
+  worktreeMerge: "worktree:merge",
   trustCheck: "trust:check",
   trustSet: "trust:set",
   // Settings & Compaction
@@ -210,6 +268,11 @@ export const IPC = {
   aiContextFiles: "ai:context-files",
   subagentLocate: "subagents:locate",
   subagentRead: "subagents:read",
+  // Checkpoints
+  checkpointsList: "checkpoints:list",
+  checkpointsDiffInfo: "checkpoints:diff-info",
+  checkpointsDiffText: "checkpoints:diff-text",
+  checkpointsRestore: "checkpoints:restore",
 } as const;
 
 export type LibraryKind = "skill" | "agent";
@@ -381,11 +444,21 @@ export interface StudioApi {
     },
   ): Promise<ProjectEntry>;
   removeProject(id: string): Promise<boolean>;
+  getLastOpenedProjectId(): Promise<string | undefined>;
+  setLastOpenedProjectId(id?: string): Promise<void>;
   listAllSessions(): Promise<SessionCatalogItem[]>;
   readSessionFile(sessionPath: string): Promise<{ entries: SessionEntry[]; leafId: string | null }>;
   deleteSessionFile(sessionPath: string): Promise<boolean>;
   /** Patch Studio-side session metadata (title / archived / pinned). */
   updateSessionMeta(sessionPath: string, updates: Partial<SessionMetaEntry>): Promise<SessionMetaEntry>;
+  /** One-shot LLM call that names a session from its first prompt. Resolves "" on failure. */
+  generateSessionTitle(cwd: string, prompt: string, model?: string, sessionPath?: string): Promise<string>;
+  /** Ahead/behind (vs the base branch) and dirty count of a session worktree. */
+  worktreeStatus(worktree: SessionWorktree): Promise<WorktreeStatus>;
+  /** Remove a session worktree (and by default its branch). */
+  worktreeRemove(worktree: SessionWorktree, options?: WorktreeRemoveOptions): Promise<WorktreeRemoveResult>;
+  /** Merge the session branch into its base branch in the main tree. Aborts cleanly on conflicts / a dirty main tree. */
+  worktreeMerge(worktree: SessionWorktree): Promise<WorktreeMergeResult>;
   checkTrust(path: string): Promise<{ hasTrustResources: boolean; trusted: boolean }>;
   setTrust(path: string, trusted: boolean): Promise<void>;
 
@@ -447,6 +520,12 @@ export interface StudioApi {
   onOpenLink(listener: (data: { url: string; title?: string }) => void): () => void;
   /** Page zoom (Ctrl +/-/0). */
   zoom(direction: "in" | "out" | "reset"): void;
+
+  // Checkpoints
+  listCheckpoints(sessionId: string): Promise<any[]>;
+  getCheckpointDiffInfo(turnId: string): Promise<any>;
+  getCheckpointDiffText(turnId: string, filePath?: string): Promise<string>;
+  restoreCheckpoint(turnId: string, mode: "turn" | "rewind"): Promise<any>;
 
   /** Installable feature modules. Module code talks to its main half only through `invoke` / `on`. */
   modules: ModulesApi;
