@@ -118,47 +118,159 @@
 /* Tool Batch Group */
 .msg-tool-batch {
   margin: 4px 0;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: var(--bg-card, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
   overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.msg-tool-batch.is-open {
+  border-color: var(--border-prominent, rgba(255, 255, 255, 0.12));
 }
 .msg-tool-batch__head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
-  padding: 6px 10px;
+  min-height: 32px;
+  padding: 4px 10px;
   border: none;
   background: transparent;
   color: var(--text-primary, #fff);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
+  user-select: none;
 }
 .msg-tool-batch__head:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.035);
+}
+.msg-tool-batch .msg-chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.msg-tool-batch.is-open .msg-chevron {
+  transform: rotate(90deg);
 }
 .msg-tool-batch__icon {
-  color: var(--frame-text-muted);
+  color: var(--accent-base, #e69740);
+  flex-shrink: 0;
 }
 .msg-tool-batch__title {
-  flex: 1;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+  font-size: 11.5px;
+  white-space: nowrap;
 }
-.msg-tool-batch__summary {
+.msg-tool-batch__pills {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  flex-wrap: nowrap;
+  margin-left: 2px;
+}
+.msg-tool-batch__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4.5px;
+  padding: 1.5px 6.5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  font-family: var(--font-mono, monospace);
   font-size: 11px;
-  color: var(--frame-text-muted);
-  font-weight: normal;
-  margin-left: 4px;
+  color: var(--text-secondary, #b0a9a3);
+  max-width: 175px;
+  white-space: nowrap;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.msg-tool-batch__pill.is-clickable {
+  cursor: pointer;
+}
+.msg-tool-batch__pill.is-clickable:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text-primary, #fff);
+  text-decoration: none;
+}
+.msg-tool-batch__pill.is-running {
+  border-color: rgba(230, 151, 64, 0.45);
+  background: rgba(230, 151, 64, 0.09);
+  color: var(--text-primary);
+}
+.msg-tool-batch__pill.is-error {
+  border-color: rgba(229, 83, 75, 0.45);
+  color: var(--danger, #e5534b);
+  background: rgba(229, 83, 75, 0.08);
+}
+.msg-tool-batch__pill-op {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+.msg-tool-batch__pill-op.is-read {
+  color: #58a6ff;
+}
+.msg-tool-batch__pill-op.is-edit {
+  color: #d29922;
+}
+.msg-tool-batch__pill-op.is-write {
+  color: #57ab5a;
+}
+.msg-tool-batch__pill-op.is-bash {
+  color: #bc8cff;
+}
+.msg-tool-batch__pill-op.is-search {
+  color: #39c5cf;
+}
+.msg-tool-batch__pill-op.is-default {
+  color: var(--text-muted);
+}
+.msg-tool-batch__pill-target {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-tool-batch__pill-more {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted);
+  padding: 1.5px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  cursor: default;
+}
+.msg-tool-batch__status {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+.msg-tool-batch__status .is-ok {
+  color: var(--success, #57ab5a);
+}
+.msg-tool-batch__status .is-error {
+  color: var(--danger, #e5534b);
 }
 .msg-tool-batch__body {
-  padding: 4px 8px 8px;
+  padding: 6px 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  background: rgba(0, 0, 0, 0.15);
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.16);
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
 }
 
 /* Usage Panel in Right Dock */

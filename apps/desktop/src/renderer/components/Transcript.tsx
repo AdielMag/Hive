@@ -48,10 +48,19 @@ import { detectAuthError } from "../lib/auth-errors.ts";
 import { useContributions } from "../modules/registry.ts";
 import { ModuleToolCard } from "../modules/ModuleViews.tsx";
 import { isFilePath, openFileInTab, renderTextWithFileLinks } from "../lib/file-links.tsx";
+import {
+  extractToolPill,
+  groupTimelineItems,
+  type ToolBatchItem,
+  type ToolCallBlockT,
+} from "./transcript/tool-batch.ts";
 
 export function scrollToToolCall(id: string): void {
   const sel = CSS.escape(id);
-  const el = document.querySelector(`[data-tool-call-id="${sel}"]`) || document.querySelector(`[data-item-key="${sel}"]`);
+  const el =
+    document.querySelector(`[data-tool-call-id="${sel}"]`) ||
+    document.querySelector(`[data-tool-call-ids~="${sel}"]`) ||
+    document.querySelector(`[data-item-key="${sel}"]`);
   if (el) {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.classList.add("is-flash");
@@ -108,8 +117,19 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
   }, [isDisplayed, targetTabId, tabTranscript, targetTab?.sessionPath]);
 
   const registry = useActiveRegistry();
+  const toolCards = useContributions("toolCards");
 
   const timeline = useMemo(() => buildTimeline(transcript), [transcript]);
+
+  const isCustomCard = useCallback(
+    (block: ToolCallBlockT) => toolCards.some((c) => c.match({ name: block.name, arguments: block.arguments ?? {} })),
+    [toolCards]
+  );
+
+  const groupedItems = useMemo(
+    () => groupTimelineItems(timeline.items, timeline.toolResults, transcript.tools, isCustomCard),
+    [timeline.items, timeline.toolResults, transcript.tools, isCustomCard]
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const [showJump, setShowJump] = useState(false);
@@ -175,9 +195,19 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
                 <div className="transcript__empty-sub">Ask Pi a question or hand it a task in this project.</div>
               </div>
             )}
-            {timeline.items.map((item) => (
-              <TimelineRow key={item.key} item={item} results={resultsFor(item, timeline.toolResults)} tools={transcript.tools} />
-            ))}
+            {groupedItems.map((groupItem) => {
+              if (groupItem.kind === "toolBatch") {
+                return <ToolBatchGroup key={groupItem.key} items={groupItem.items} />;
+              }
+              return (
+                <TimelineRow
+                  key={groupItem.item.key}
+                  item={groupItem.item}
+                  results={resultsFor(groupItem.item, timeline.toolResults)}
+                  tools={transcript.tools}
+                />
+              );
+            })}
             {transcript.running && !transcript.streaming && (
               <div className="transcript__working">
                 <Loader2 size={13} className="spin" /> Working…
@@ -208,17 +238,32 @@ export const NestedTimeline: React.FC<{ timeline: Timeline; sessionRunning?: boo
     sessionRunning,
   }, [outerCtx, fallbackRender, sessionRunning]);
 
+  const toolCards = useContributions("toolCards");
+  const isCustomCard = useCallback(
+    (block: ToolCallBlockT) => toolCards.some((c) => c.match({ name: block.name, arguments: block.arguments ?? {} })),
+    [toolCards]
+  );
+  const groupedItems = useMemo(
+    () => groupTimelineItems(timeline.items, timeline.toolResults, {}, isCustomCard),
+    [timeline.items, timeline.toolResults, isCustomCard]
+  );
+
   return (
     <TranscriptContext.Provider value={effectiveCtx}>
       <div className="nested-timeline" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {timeline.items.map((item) => (
-          <TimelineRow
-            key={item.key}
-            item={item}
-            results={resultsFor(item, timeline.toolResults)}
-            tools={{}}
-          />
-        ))}
+        {groupedItems.map((groupItem) => {
+          if (groupItem.kind === "toolBatch") {
+            return <ToolBatchGroup key={groupItem.key} items={groupItem.items} />;
+          }
+          return (
+            <TimelineRow
+              key={groupItem.item.key}
+              item={groupItem.item}
+              results={resultsFor(groupItem.item, timeline.toolResults)}
+              tools={{}}
+            />
+          );
+        })}
       </div>
     </TranscriptContext.Provider>
   );
@@ -412,55 +457,100 @@ const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; da
   );
 };
 
-// Batch consecutive tool calls in an assistant message
-interface ToolBatchGroupProps {
-  blocks: ToolCallBlockT[];
-  results: ToolResultView[];
-  tools: ToolRuns;
-}
-
-const ToolBatchGroup: React.FC<ToolBatchGroupProps> = ({ blocks, results, tools }) => {
+const ToolBatchGroup: React.FC<{ items: ToolBatchItem[] }> = ({ items }) => {
   const [open, setOpen] = useState(false);
 
   // Summarize tools in batch
   const counts: Record<string, number> = {};
-  for (const b of blocks) {
-    counts[b.name] = (counts[b.name] ?? 0) + 1;
+  for (const item of items) {
+    counts[item.block.name] = (counts[item.block.name] ?? 0) + 1;
   }
   const summaryStr = Object.entries(counts)
     .map(([name, count]) => (count > 1 ? `${name} ×${count}` : name))
     .join(", ");
 
-  const hasRunning = blocks.some((b) => tools[b.id]?.status === "running" || (!b.complete && !results.some((r) => r.toolCallId === b.id)));
-  const hasError = blocks.some((b) => results.some((r) => r.toolCallId === b.id && r.isError));
+  const hasRunning = items.some((i) => i.running);
+  const hasError = items.some((i) => i.result?.isError);
+
+  const pills = useMemo(
+    () => items.map((i) => extractToolPill(i.block, i.result, i.running)),
+    [items]
+  );
+
+  const maxVisible = 5;
+  const visiblePills = pills.slice(0, maxVisible);
+  const hiddenCount = pills.length - maxVisible;
+  const remainingTooltip = hiddenCount > 0 ? pills.slice(maxVisible).map((p) => p.tooltip).join("\n") : "";
+
+  const batchIds = items.map((i) => i.block.id).join(" ");
+  const itemKeys = items.map((i) => i.itemKey).join(" ");
 
   return (
-    <div className={`msg-tool-batch${open ? " is-open" : ""}`}>
-      <button className="msg-tool-batch__head" onClick={() => setOpen(!open)}>
+    <div
+      className={`msg-tool-batch${open ? " is-open" : ""}`}
+      data-tool-call-id={batchIds}
+      data-tool-call-ids={batchIds}
+      data-item-key={itemKeys}
+    >
+      <button
+        type="button"
+        className="msg-tool-batch__head"
+        onClick={() => setOpen(!open)}
+        title={`Click to ${open ? "collapse" : "expand"} ${items.length} tool calls (${summaryStr})`}
+      >
         <ChevronRight size={13} className="msg-chevron" />
         <Wrench size={13} className="msg-tool-batch__icon" />
         <span className="msg-tool-batch__title">
-          {blocks.length} tool calls <span className="msg-tool-batch__summary">({summaryStr})</span>
+          {items.length} tool calls
         </span>
-        {hasRunning ? (
-          <Loader2 size={13} className="spin msg-tool__status" />
-        ) : hasError ? (
-          <AlertCircle size={13} className="msg-tool__status is-error" />
-        ) : (
-          <CheckCircle2 size={13} className="msg-tool__status is-ok" />
-        )}
+        <div className="msg-tool-batch__pills">
+          {visiblePills.map((pill, idx) => (
+            <span
+              key={idx}
+              className={`msg-tool-batch__pill${pill.isError ? " is-error" : ""}${pill.isRunning ? " is-running" : ""}${pill.filePath ? " is-clickable" : ""}`}
+              title={pill.filePath ? `Open ${pill.filePath} in tab · ${pill.tooltip}` : pill.tooltip}
+              onClick={
+                pill.filePath
+                  ? (e) => {
+                      e.stopPropagation();
+                      void openFileInTab(pill.filePath!);
+                    }
+                  : undefined
+              }
+            >
+              <span className={`msg-tool-batch__pill-op is-${pill.opCategory}`}>{pill.op}</span>
+              <span className="msg-tool-batch__pill-target">{pill.target}</span>
+            </span>
+          ))}
+          {hiddenCount > 0 && (
+            <span className="msg-tool-batch__pill-more" title={remainingTooltip}>
+              +{hiddenCount} more
+            </span>
+          )}
+        </div>
+        <div className="msg-tool-batch__status">
+          {hasRunning ? (
+            <Loader2 size={13} className="spin" />
+          ) : hasError ? (
+            <AlertCircle size={13} className="is-error" />
+          ) : (
+            <CheckCircle2 size={13} className="is-ok" />
+          )}
+        </div>
       </button>
 
       {open && (
         <div className="msg-tool-batch__body">
-          {blocks.map((block, idx) => (
-            <ToolCall
-              key={block.id || idx}
-              block={block}
-              result={results.find((r) => r.toolCallId === block.id)}
-              run={tools[block.id]}
-              running={tools[block.id]?.status === "running"}
-            />
+          {items.map((item, idx) => (
+            <React.Fragment key={item.block.id || idx}>
+              {item.thinking && <ThinkingBlock text={item.thinking} live={false} />}
+              <ToolCall
+                block={item.block}
+                result={item.result}
+                run={item.run}
+                running={item.running}
+              />
+            </React.Fragment>
           ))}
         </div>
       )}
@@ -482,52 +572,9 @@ const AssistantMessage: React.FC<{
     .join("\n\n");
   const lastTextIndex = item.blocks.map((b) => b.type).lastIndexOf("text");
 
-  // Group consecutive tool calls together
-  const groupedBlocks: Array<
-    | { kind: "single"; block: AssistantBlock; originalIdx: number }
-    | { kind: "toolBatch"; blocks: ToolCallBlockT[]; originalIdx: number }
-  > = [];
-
-  let currentBatch: ToolCallBlockT[] = [];
-  let batchStartIdx = 0;
-
-  item.blocks.forEach((block, idx) => {
-    if (block.type === "toolCall") {
-      if (currentBatch.length === 0) batchStartIdx = idx;
-      currentBatch.push(block);
-    } else {
-      if (currentBatch.length === 1) {
-        groupedBlocks.push({ kind: "single", block: currentBatch[0]!, originalIdx: batchStartIdx });
-      } else if (currentBatch.length > 1) {
-        groupedBlocks.push({ kind: "toolBatch", blocks: currentBatch, originalIdx: batchStartIdx });
-      }
-      currentBatch = [];
-      groupedBlocks.push({ kind: "single", block, originalIdx: idx });
-    }
-  });
-
-  if (currentBatch.length === 1) {
-    groupedBlocks.push({ kind: "single", block: currentBatch[0]!, originalIdx: batchStartIdx });
-  } else if (currentBatch.length > 1) {
-    groupedBlocks.push({ kind: "toolBatch", blocks: currentBatch, originalIdx: batchStartIdx });
-  }
-
   return (
     <div className="msg-assistant" data-item-key={itemKey}>
-      {groupedBlocks.map((group) => {
-        if (group.kind === "toolBatch") {
-          return (
-            <ToolBatchGroup
-              key={`batch-${group.originalIdx}`}
-              blocks={group.blocks}
-              results={results}
-              tools={tools}
-            />
-          );
-        }
-
-        const block = group.block;
-        const idx = group.originalIdx;
+      {item.blocks.map((block, idx) => {
         if (block.type === "thinking") return <ThinkingBlock key={idx} text={block.thinking} live={item.streaming && idx === item.blocks.length - 1} />;
         if (block.type === "text") return block.text ? <Markdown key={idx} text={block.text} streaming={item.streaming && idx === lastTextIndex} /> : null;
         if (block.type === "toolCall") {
@@ -637,8 +684,6 @@ const ThinkingBlock: React.FC<{ text: string; live: boolean }> = ({ text, live }
 };
 
 // ---- Tool calls ----
-
-type ToolCallBlockT = Extract<AssistantBlock, { type: "toolCall" }>;
 
 const TOOL_META: Record<string, { icon: React.ReactNode; label: string }> = {
   read: { icon: <FileText size={13} />, label: "Read" },
