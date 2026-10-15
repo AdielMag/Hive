@@ -2,6 +2,19 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.29.0 — 2026-10-15 · [diff](https://github.com/AdielMag/Hive/compare/v0.28.0...v0.29.0)
+
+### ✨ Features
+
+- **workspace:** redesign topbar picker, sessions rail, bottom terminal, usage & jev panel, transcript batching ([`02d7bad`](https://github.com/AdielMag/Hive/commit/02d7bad6346afdc5c912cf2de2f1a4c750b00921))
+
+### 🐛 Fixes
+
+- **worktrees:** use realpathSync.native to expand Windows 8.3 short paths ([`ec6d107`](https://github.com/AdielMag/Hive/commit/ec6d107661664b4175c6f20bf23ef4e1fe7934b7))
+- **worktrees:** add diagnostics and use realpathSync for path comparisons ([`d067890`](https://github.com/AdielMag/Hive/commit/d067890171f21ba148fb330d25e044fc67d6fe8d))
+- **worktrees:** canonicalize paths using realpathSync to handle 8.3 short paths on windows runners ([`5b1533d`](https://github.com/AdielMag/Hive/commit/5b1533d1d8b7fbf929cbf8247c820018fa09253d))
+- **ci:** fix eslint prefer-const and adjust unit test timeout for windows ([`cb6c7af`](https://github.com/AdielMag/Hive/commit/cb6c7afb8ad55662f841fd0260072f0e83caf180))
+
 ## v0.28.0 — 2026-10-11 · [diff](https://github.com/AdielMag/Hive/compare/v0.27.1...v0.28.0)
 
 ### ✨ Features
