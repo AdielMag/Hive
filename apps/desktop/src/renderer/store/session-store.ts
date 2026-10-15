@@ -1777,7 +1777,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       const nextTab = remaining.find((t) => t.id === nextActiveTabId) ?? remaining[remaining.length - 1]!;
       await get().switchTab(nextTab.id);
     } else if (remaining.length === 0) {
-      set({ activeTabId: null, activeProject: null, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });
+      const currentProject = get().activeProject ?? (tab?.projectId ? get().projects.find((p) => p.id === tab.projectId) ?? null : null);
+      set({ activeTabId: null, activeProject: currentProject, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });
     }
   },
 

@@ -574,6 +574,8 @@
   position: relative;
   display: inline-flex;
   align-items: center;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 .project-picker__trigger {
   display: inline-flex;
@@ -589,6 +591,8 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.12s ease;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 .project-picker__trigger:hover,
 .project-picker__trigger.is-open {
@@ -634,6 +638,8 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 .project-picker__section-title {
   font-size: 10px;

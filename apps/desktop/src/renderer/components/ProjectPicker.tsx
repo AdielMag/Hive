@@ -31,14 +31,14 @@ export const ProjectPicker: React.FC = () => {
     setOpen(false);
     if (activeProject?.id !== p.id) {
       void setActiveProject(p);
-      const st = useSessionStore.getState();
-      const hasTab = st.tabs.some((t) => t.projectId === p.id);
-      if (!hasTab) {
-        void newSessionTab(p.id);
-      } else {
-        const firstTab = st.tabs.find((t) => t.projectId === p.id);
-        if (firstTab) void st.switchTab(firstTab.id);
-      }
+    }
+    const st = useSessionStore.getState();
+    const hasTab = st.tabs.some((t) => t.projectId === p.id);
+    if (!hasTab) {
+      void newSessionTab(p.id);
+    } else {
+      const firstTab = st.tabs.find((t) => t.projectId === p.id);
+      if (firstTab && st.activeTabId !== firstTab.id) void st.switchTab(firstTab.id);
     }
   };
 

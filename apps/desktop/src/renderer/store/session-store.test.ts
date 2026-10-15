@@ -797,3 +797,32 @@ describe("tool calls that wait on the user", () => {
     expect(useSessionStore.getState().sessionAwaitingUser[tabId]).toBeUndefined();
   });
 });
+
+describe("closeTab activeProject preservation", () => {
+  it("preserves activeProject when closing all tabs", async () => {
+    const project = { id: "p1", name: "Test Project", path: "/test/path", color: "#123456" } as any;
+    vi.stubGlobal("window", {
+      studio: {
+        stopSession: vi.fn(async () => {}),
+        getProjects: vi.fn(async () => [project]),
+        listAllSessions: vi.fn(async () => []),
+      },
+    });
+
+    useSessionStore.setState({
+      projects: [project],
+      activeProject: project,
+      tabs: [{ id: "tab_1", title: "Tab 1", kind: "session", projectId: "p1" } as any],
+      activeTabId: "tab_1",
+    });
+
+    await useSessionStore.getState().closeTab("tab_1");
+
+    expect(useSessionStore.getState().tabs).toHaveLength(0);
+    expect(useSessionStore.getState().activeTabId).toBeNull();
+    expect(useSessionStore.getState().activeProject).toEqual(project);
+
+    vi.unstubAllGlobals();
+  });
+});
+
