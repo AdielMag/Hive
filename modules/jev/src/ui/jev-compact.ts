@@ -27,6 +27,8 @@ export function requestJevCompact(host: ModuleHost, key: string): Promise<void> 
       offEvents();
       if (timer) clearTimeout(timer);
       if (startTimer) clearTimeout(startTimer);
+      timer = undefined;
+      startTimer = undefined;
       if (err) {
         jevStore.stopCompacting(key);
         reject(err);
