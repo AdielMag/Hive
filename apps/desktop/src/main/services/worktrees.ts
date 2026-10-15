@@ -54,8 +54,12 @@ async function git(cwd: string, args: string[], extra: string[] = []): Promise<G
 
 function norm(p: string): string {
   try {
-    p = realpathSync(p);
-  } catch {}
+    p = realpathSync.native(p);
+  } catch {
+    try {
+      p = realpathSync(p);
+    } catch {}
+  }
   return normalize(resolve(p)).replace(/[\\/]+$/, "").replace(/\\/g, "/").toLowerCase();
 }
 
