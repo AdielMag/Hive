@@ -109,6 +109,52 @@ describe("github client", () => {
     expect(res.ok && res.data[0]?.steps[0]?.state).toBe("success");
     expect(res.ok && res.data[0]?.state).toBe("failure");
   });
+
+  it("executes github actions commands via gh api CLI", async () => {
+    const calls: Array<{ args: string[]; options?: any }> = [];
+    const execGh = vi.fn(async (args: string[], options?: any) => {
+      calls.push({ args, options });
+      return {
+        stdout: JSON.stringify({ total_count: 1, workflow_runs: [{ id: 10, run_number: 2, status: "completed", conclusion: "success", name: "Build" }] }),
+        stderr: "",
+        status: 0,
+      };
+    });
+
+    const client = createGithubClient({ getToken: async () => "gh-tok", execGh });
+    const res = await client.runs(repo, { branch: "main" });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.runs[0]?.state).toBe("success");
+      expect(calls[0]?.args[0]).toBe("api");
+      expect(calls[0]?.args[1]).toContain("repos/o/r/actions/runs");
+      expect(calls[0]?.args[1]).toContain("branch=main");
+      expect(calls[0]?.options?.env?.GH_TOKEN).toBe("gh-tok");
+    }
+  });
+
+  it("maps gh api CLI errors to ApiError codes", async () => {
+    const authErrClient = createGithubClient({
+      getToken: async () => null,
+      execGh: async () => ({ stdout: "", stderr: "gh: Bad credentials (HTTP 401)", status: 1 }),
+    });
+    const r1 = await authErrClient.workflows(repo);
+    expect(r1).toMatchObject({ ok: false, code: "unauthorized" });
+
+    const notFoundClient = createGithubClient({
+      getToken: async () => null,
+      execGh: async () => ({ stdout: "", stderr: "gh: Not Found (HTTP 404)", status: 1 }),
+    });
+    const r2 = await notFoundClient.workflows(repo);
+    expect(r2).toMatchObject({ ok: false, code: "not_found" });
+
+    const rateLimitClient = createGithubClient({
+      getToken: async () => null,
+      execGh: async () => ({ stdout: "", stderr: "gh: API rate limit exceeded (HTTP 403)", status: 1 }),
+    });
+    const r3 = await rateLimitClient.workflows(repo);
+    expect(r3).toMatchObject({ ok: false, code: "rate_limited" });
+  });
 });
 
 describe("token provider", () => {

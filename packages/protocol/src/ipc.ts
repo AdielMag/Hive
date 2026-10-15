@@ -65,8 +65,13 @@ export type PiLocateResult =
   | { ok: true; info: PiInstallInfo }
   | { ok: false; error: string; searched: string[] };
 
+export type GhLocateResult =
+  | { ok: true; version: string; path: string }
+  | { ok: false; error: string; searched: string[] };
+
 export interface Bootstrap {
   pi: PiLocateResult;
+  gh: GhLocateResult;
   appVersion: string;
   platform: string;
   /** Folder to open at startup (env HIVE_PROJECT, else last used). */
@@ -190,6 +195,7 @@ export const IPC = {
   bootstrap: "studio:bootstrap",
   piRelocate: "studio:pi-relocate",
   piChoose: "studio:pi-choose",
+  ghRelocate: "studio:gh-relocate",
   pickFolder: "studio:pick-folder",
   startSession: "session:start",
   stopSession: "session:stop",
@@ -409,6 +415,8 @@ export interface CompactionSettings {
 
 export interface StudioApi {
   bootstrap(): Promise<Bootstrap>;
+  /** Search for GitHub CLI (`gh`) again (fresh PATH). */
+  relocateGh(): Promise<GhLocateResult>;
   /** Search for Pi again (fresh PATH). On success the app restarts itself to start using it. */
   relocatePi(): Promise<PiLocateResult>;
   /** Let the user pick Pi's location. Null if cancelled; on success the app restarts. */

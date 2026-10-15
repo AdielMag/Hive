@@ -413,9 +413,11 @@ const PiUpdateCard: React.FC = () => {
 const AboutTab: React.FC = () => {
   const bootstrap = useSessionStore((s) => s.bootstrap);
   const pi = bootstrap?.pi;
+  const gh = bootstrap?.gh;
   const rows: Array<[string, string]> = [
     ["Hive", `v${bootstrap?.appVersion ?? "?"}`],
     ["Pi CLI", pi?.ok ? `v${pi.info.version} (${pi.info.support})` : "not detected"],
+    ["GitHub CLI", gh?.ok ? `v${gh.version}` : "not detected"],
     ["Pi location", pi?.ok ? pi.info.cliPath : "—"],
     ["Node for Pi", pi?.ok ? pi.info.nodePath : "—"],
     ["Platform", bootstrap?.platform ?? "?"],

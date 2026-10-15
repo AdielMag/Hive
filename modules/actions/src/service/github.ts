@@ -14,6 +14,7 @@ import type {
   WorkflowInputs,
 } from "../shared.ts";
 import { parse as parseYaml } from "yaml";
+import { spawn } from "node:child_process";
 
 const API = "https://api.github.com";
 
@@ -123,13 +124,124 @@ class ApiError extends Error {
   }
 }
 
+export type GhExecFn = (
+  args: string[],
+  options?: { input?: string; env?: NodeJS.ProcessEnv },
+) => Promise<{ stdout: string; stderr: string; status: number }>;
+
+export function defaultExecGh(
+  args: string[],
+  options?: { input?: string; env?: NodeJS.ProcessEnv },
+): Promise<{ stdout: string; stderr: string; status: number }> {
+  return new Promise((resolve, reject) => {
+    try {
+      const child = spawn("gh", args, {
+        windowsHide: true,
+        env: options?.env ?? process.env,
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (d: Buffer) => {
+        stdout += d.toString();
+      });
+      child.stderr.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
+      child.on("error", (err) => reject(err));
+      child.on("close", (code) => {
+        resolve({ stdout, stderr, status: code ?? 0 });
+      });
+      if (options?.input) {
+        child.stdin.write(options.input);
+      }
+      child.stdin.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 export interface GithubClientOptions {
   getToken: () => Promise<string | null>;
   fetchImpl?: typeof fetch;
+  execGh?: GhExecFn;
 }
 
-export function createGithubClient({ getToken, fetchImpl = fetch }: GithubClientOptions) {
+export function createGithubClient({ getToken, fetchImpl, execGh = defaultExecGh }: GithubClientOptions) {
   const etags = new Map<string, { etag: string; body: unknown; token: string | null }>();
+
+  async function requestViaGh(
+    method: "GET" | "POST",
+    path: string,
+    params: Record<string, string | number | undefined> = {},
+    body?: unknown,
+  ): Promise<any> {
+    const write = method !== "GET";
+    const url = new URL(API + (path.startsWith("/") ? path : `/${path}`));
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
+    const endpoint = url.pathname.replace(/^\//, "") + (url.search ? url.search : "");
+    const token = await getToken();
+
+    const args = ["api", endpoint, "-X", method, "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28"];
+    const env = token ? { ...process.env, GH_TOKEN: token } : process.env;
+
+    if (write && body !== undefined) {
+      args.push("--input", "-");
+    }
+
+    let result: { stdout: string; stderr: string; status: number };
+    try {
+      result = await execGh(args, {
+        input: write && body !== undefined ? JSON.stringify(body) : undefined,
+        env,
+      });
+    } catch (err: any) {
+      throw new ApiError("network", `Could not execute GitHub CLI (\`gh\`): ${err?.message ?? err}`);
+    }
+
+    const { stdout, stderr, status } = result;
+
+    if (status === 0) {
+      if (!stdout.trim()) return null;
+      try {
+        return JSON.parse(stdout);
+      } catch {
+        return stdout;
+      }
+    }
+
+    const combinedErr = `${stderr}\n${stdout}`;
+    if (combinedErr.includes("HTTP 401") || combinedErr.includes("Bad credentials") || combinedErr.includes("gh auth login")) {
+      throw new ApiError("unauthorized", "GitHub rejected the token or authentication is required (run `gh auth login`).");
+    }
+    if (combinedErr.includes("HTTP 404")) {
+      throw new ApiError(
+        "not_found",
+        token ? "Repository not found, or the token has no access to its Actions." : "Repository not found. If it is private, add a GitHub token or run `gh auth login`.",
+      );
+    }
+    if (combinedErr.includes("rate limit") || combinedErr.includes("HTTP 429")) {
+      throw new ApiError("rate_limited", `GitHub API rate limit reached.${token ? "" : " Add a token or log in with 'gh auth login'."}`);
+    }
+    if (write && (combinedErr.includes("HTTP 403") || combinedErr.includes("HTTP 404"))) {
+      throw new ApiError("unauthorized", "GitHub refused the action. The token needs write access to Actions (repo scope / actions:write).");
+    }
+    if (combinedErr.includes("HTTP 403")) {
+      throw new ApiError("unauthorized", "Access denied. The token needs permission to read Actions (repo / actions:read).");
+    }
+    if (combinedErr.includes("HTTP 422") || combinedErr.includes("HTTP 409")) {
+      let detail: string | undefined;
+      try {
+        const parsed = JSON.parse(stdout || stderr);
+        detail = parsed?.message;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError("unknown", detail || `GitHub returned error status ${status}: ${stderr.trim() || stdout.trim()}`);
+    }
+
+    throw new ApiError("unknown", `GitHub CLI returned error ${status}: ${stderr.trim() || stdout.trim()}`);
+  }
 
   async function request(
     method: "GET" | "POST",
@@ -137,6 +249,9 @@ export function createGithubClient({ getToken, fetchImpl = fetch }: GithubClient
     params: Record<string, string | number | undefined> = {},
     body?: unknown,
   ): Promise<any> {
+    if (!fetchImpl) {
+      return requestViaGh(method, path, params, body);
+    }
     const write = method !== "GET";
     const url = new URL(API + path);
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") url.searchParams.set(k, String(v));

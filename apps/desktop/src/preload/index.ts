@@ -3,6 +3,7 @@ import {
   IPC,
   type Bootstrap,
   type CompactionSettings,
+  type GhLocateResult,
   type PiLocateResult,
   type ModuleEventMessage,
   type BridgeActionRequest,
@@ -27,6 +28,10 @@ import {
 const api: StudioApi = {
   bootstrap(): Promise<Bootstrap> {
     return ipcRenderer.invoke(IPC.bootstrap);
+  },
+
+  relocateGh(): Promise<GhLocateResult> {
+    return ipcRenderer.invoke(IPC.ghRelocate);
   },
 
   relocatePi(): Promise<PiLocateResult> {

@@ -21,7 +21,7 @@ export const App: React.FC = () => {
     void init();
   }, [init]);
 
-  const bootstrapped = !isInitializing && !!bootstrap?.pi?.ok;
+  const bootstrapped = !isInitializing && !!bootstrap?.pi?.ok && !!bootstrap?.gh?.ok;
   useEffect(() => {
     if (bootstrapped) void useModules.getState().init();
   }, [bootstrapped]);
@@ -39,6 +39,7 @@ export const App: React.FC = () => {
   }
 
   if (bootstrap?.pi && !bootstrap.pi.ok) return <PiMissing searched={bootstrap.pi.searched} error={bootstrap.pi.error} />;
+  if (bootstrap?.gh && !bootstrap.gh.ok) return <GhMissing searched={bootstrap.gh.searched} error={bootstrap.gh.error} platform={bootstrap.platform} />;
 
   return (
     <ErrorBoundary label="Hive">
@@ -124,3 +125,85 @@ const PiMissing: React.FC<{ searched: string[]; error: string }> = (initial) => 
     </div>
   );
 };
+
+const GhMissing: React.FC<{ searched: string[]; error: string; platform?: string }> = ({ searched, error, platform }) => {
+  const [copied, setCopied] = useState(false);
+  const [result, setResult] = useState({ searched, error });
+  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<string | null>(null);
+
+  const isWin = (platform ?? navigator.platform).toLowerCase().startsWith("win");
+  const isMac = (platform ?? navigator.platform).toLowerCase().startsWith("mac") || (platform ?? navigator.platform).toLowerCase().startsWith("darwin");
+  const installCmd = isWin ? "winget install --id GitHub.cli" : isMac ? "brew install gh" : "sudo apt install gh";
+
+  const runCheck = async () => {
+    setBusy(true);
+    try {
+      const r = await window.studio.relocateGh();
+      if (r.ok) {
+        setFound(`Found GitHub CLI v${r.version} — continuing…`);
+        useSessionStore.setState((s) => ({
+          bootstrap: s.bootstrap ? { ...s.bootstrap, gh: r } : s.bootstrap,
+        }));
+      } else {
+        setResult({ searched: r.searched, error: r.error });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="boot">
+      <div className="ui-card boot__card">
+        <div className="boot__card-title">
+          {found ? <Check size={18} color="var(--success)" /> : <AlertTriangle size={18} color="var(--warning)" />}
+          {found ? "GitHub CLI found" : "GitHub CLI (gh) not found"}
+        </div>
+        {found ? (
+          <p className="boot__text">{found}</p>
+        ) : (
+          <>
+            <p className="boot__text selectable">
+              Hive requires the GitHub CLI (<code>gh</code>) to run GitHub commands and operate correctly. {result.error}
+            </p>
+            <div className="boot__cmd">
+              <code className="selectable">{installCmd}</code>
+              <button
+                className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
+                title="Copy"
+                onClick={async () => {
+                  if (await copyText(installCmd)) {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1200);
+                  }
+                }}
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+              </button>
+            </div>
+            <p className="boot__text">
+              Installed already? Press <b>Check again</b> — Hive will refresh your PATH and detect it.
+            </p>
+            {result.searched.length > 0 && (
+              <details className="boot__details">
+                <summary>Searched {result.searched.length} locations</summary>
+                <ul className="selectable">
+                  {result.searched.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="ui-btn ui-btn--primary" disabled={busy} onClick={() => void runCheck()}>
+                <RefreshCw size={13} className={busy ? "spin" : undefined} /> Check again
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+

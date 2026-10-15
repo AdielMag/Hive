@@ -5,7 +5,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, type BrowserWindow } from "electron";
-import type { PiLocateResult } from "@hive/protocol";
+import type { GhLocateResult, PiLocateResult } from "@hive/protocol";
 import { ensureHiveDataDir } from "./migrate-legacy.ts";
 import { GuiStore } from "./store/index.ts";
 import { SessionCatalogService } from "./services/catalog.ts";
@@ -15,6 +15,7 @@ import { AppUpdaterService } from "./services/updater.ts";
 import { PiUpdaterService } from "./services/pi-updater.ts";
 import { ModelsService } from "./services/models.ts";
 import { PiInstallService } from "./services/pi-install.ts";
+import { GhInstallService } from "./services/gh-install.ts";
 import { CheckpointService } from "./services/checkpoints/service.ts";
 import { IPC } from "@hive/protocol";
 import { MainModuleHost } from "./modules/host.ts";
@@ -24,6 +25,8 @@ import { moduleRootPath, piAgentDir } from "./paths.ts";
 export interface AppContext {
   pi: PiLocateResult;
   piInstall: PiInstallService;
+  gh: GhLocateResult;
+  ghInstall: GhInstallService;
   testMode: boolean;
   getWindow(): BrowserWindow | null;
   guiStore: GuiStore;
@@ -44,6 +47,8 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
   const hiveDataDir = ensureHiveDataDir(userData);
   const piInstall = new PiInstallService(userData);
   const pi = piInstall.locate();
+  const ghInstall = new GhInstallService();
+  const gh = ghInstall.locate();
   const testMode = (process.env.HIVE_TEST_MODE ?? process.env.PI_STUDIO_TEST_MODE) === "1";
   const testProviderPath = testMode
     ? resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../packages/test-provider/index.ts")
@@ -57,6 +62,8 @@ export function createAppContext(getWindow: () => BrowserWindow | null): AppCont
   return {
     pi,
     piInstall,
+    gh,
+    ghInstall,
     testMode,
     getWindow,
     guiStore,

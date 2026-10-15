@@ -5,7 +5,7 @@ Parent plan: `docs/planning/lean-core-modules.md` (§5 table, §6 coupling, §7 
 ## State
 - Branch `feat/modules-m4`, created from `main` @ `b6bffe1`. Work here, merge to `main` with `--no-ff` when green, then **delete the branch (local and remote)**. The user asked for this.
 - Pushing to `main` triggers `release.yml`. Every `feat`/`fix` push cuts a release and installed apps auto-update. Tell the user before pushing.
-- Not confirmed: the Release workflow result for `b6bffe1`. Check with `curl "https://api.github.com/repos/AdielMag/Hive/actions/runs?per_page=3&branch=main"`. There is no `gh` CLI.
+- Not confirmed: the Release workflow result for `b6bffe1`. Check with gh: `gh run list --repo AdielMag/Hive --branch main --limit 3` (or `gh api repos/AdielMag/Hive/actions/runs?per_page=3&branch=main`).
 - Other sessions edit this checkout (they own `modules/plan-previewer`, `modules/bash-guard`, the pane/split layout and the subagent viewer). Before every commit run `git status`. Stage explicit paths only.
 
 ## Scope

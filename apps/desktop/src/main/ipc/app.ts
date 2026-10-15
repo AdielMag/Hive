@@ -11,6 +11,7 @@ const TEXT_EXT = ["ts", "tsx", "js", "jsx", "json", "md", "txt", "css", "html", 
 export function registerAppIpc(ctx: AppContext): void {
   handle(IPC.bootstrap, (): Bootstrap => ({
     pi: ctx.pi,
+    gh: ctx.gh,
     appVersion: app.getVersion(),
     platform: process.platform,
     initialProjectPath: process.env.HIVE_PROJECT ?? process.env.PI_STUDIO_PROJECT ?? null,
@@ -29,6 +30,11 @@ export function registerAppIpc(ctx: AppContext): void {
   };
 
   handle(IPC.piRelocate, () => restartIfFound(ctx.piInstall.relocate()));
+
+  handle(IPC.ghRelocate, () => {
+    ctx.gh = ctx.ghInstall.relocate();
+    return ctx.gh;
+  });
 
   handle(IPC.piChoose, async () => {
     const win = ctx.getWindow();

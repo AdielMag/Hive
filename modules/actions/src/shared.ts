@@ -5,7 +5,7 @@ export const ACTIONS_PANEL_ID = "actions";
 /** Normalised run / job / step state, collapsing GitHub's `status` + `conclusion` pair. */
 export type ActionsState = "queued" | "running" | "success" | "failure" | "cancelled" | "skipped" | "neutral";
 
-export type TokenSource = "env" | "saved" | "git" | "none";
+export type TokenSource = "gh" | "env" | "saved" | "git" | "none";
 
 export interface ActionsRepo {
   owner: string;

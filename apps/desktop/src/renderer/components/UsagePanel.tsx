@@ -1,15 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Coins, Cpu, Layers, Zap, X } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
 
 export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { stats, activeProject, activeKey, allSessions } = useSessionStore((s) => ({
-    stats: s.stats,
-    activeProject: s.activeProject,
-    activeKey: s.activeKey,
-    allSessions: s.allSessions,
-  }));
+  const { stats, activeProject, activeKey, allSessions } = useSessionStore(
+    useShallow((s) => ({
+      stats: s.stats,
+      activeProject: s.activeProject,
+      activeKey: s.activeKey,
+      allSessions: s.allSessions,
+    })),
+  );
 
   const [scope, setScope] = useState<"project" | "global">("project");
   const [timeRange, setTimeRange] = useState<"today" | "7d" | "30d" | "all">("all");

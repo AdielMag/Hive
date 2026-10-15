@@ -1,16 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, FolderPlus, FolderKanban } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import type { ProjectEntry } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
 import { openProjectFolder } from "../features/commands/registry.ts";
 
 export const ProjectPicker: React.FC = () => {
-  const { projects, activeProject, setActiveProject, newSessionTab } = useSessionStore((s) => ({
-    projects: s.projects,
-    activeProject: s.activeProject,
-    setActiveProject: s.setActiveProject,
-    newSessionTab: s.newSessionTab,
-  }));
+  const { projects, activeProject, setActiveProject, newSessionTab } = useSessionStore(
+    useShallow((s) => ({
+      projects: s.projects,
+      activeProject: s.activeProject,
+      setActiveProject: s.setActiveProject,
+      newSessionTab: s.newSessionTab,
+    })),
+  );
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 

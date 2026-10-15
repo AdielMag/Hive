@@ -10,6 +10,43 @@ export interface ResolvedToken {
 
 const GIT_CACHE_MS = 5 * 60_000;
 
+/** Asks GitHub CLI for an authentication token for github.com. */
+function ghAuthToken(env: NodeJS.ProcessEnv): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn("gh", ["auth", "token"], {
+        windowsHide: true,
+        env,
+      });
+      let out = "";
+      let settled = false;
+      const done = (v: string | null) => {
+        if (settled) return;
+        settled = true;
+        resolve(v);
+      };
+      const timer = setTimeout(() => {
+        child.kill();
+        done(null);
+      }, 5000);
+      child.stdout.on("data", (d: Buffer) => {
+        out += d.toString();
+      });
+      child.on("error", () => done(null));
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        if (code === 0 && out.trim()) {
+          done(out.trim());
+        } else {
+          done(null);
+        }
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 /** Asks the user's git credential helper for a github.com token. Never prompts; resolves null on any failure. */
 function gitCredentialFill(env: NodeJS.ProcessEnv): Promise<string | null> {
   return new Promise((resolve) => {
@@ -52,6 +89,7 @@ function gitCredentialFill(env: NodeJS.ProcessEnv): Promise<string | null> {
 export function createTokenProvider(dataDir: () => string, env: NodeJS.ProcessEnv = process.env) {
   const file = () => join(dataDir(), "token.json");
   let gitCache: { at: number; token: string | null } | null = null;
+  let ghCache: { at: number; token: string | null } | null = null;
 
   function readSaved(): string | null {
     try {
@@ -70,21 +108,33 @@ export function createTokenProvider(dataDir: () => string, env: NodeJS.ProcessEn
     return token;
   }
 
+  async function fromGh(): Promise<string | null> {
+    if (ghCache && Date.now() - ghCache.at < GIT_CACHE_MS) return ghCache.token;
+    const token = await ghAuthToken(env);
+    ghCache = { at: Date.now(), token };
+    return token;
+  }
+
   return {
     async resolve(): Promise<ResolvedToken> {
       const fromEnv = env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim();
       if (fromEnv) return { token: fromEnv, source: "env" };
       const saved = readSaved();
       if (saved) return { token: saved, source: "saved" };
+      const viaGh = await fromGh();
+      if (viaGh) return { token: viaGh, source: "gh" };
       const viaGit = await fromGit();
       if (viaGit) return { token: viaGit, source: "git" };
       return { token: null, source: "none" };
     },
     save(token: string): void {
       writeFileSync(file(), JSON.stringify({ token: token.trim() }), { mode: 0o600 });
+      ghCache = null;
+      gitCache = null;
     },
     clear(): void {
       rmSync(file(), { force: true });
+      ghCache = null;
       gitCache = null;
     },
   };
