@@ -125,12 +125,15 @@ export class PiUpdaterService {
     return basename(parent) === "lib" && process.platform !== "win32" ? dirname(parent) : parent;
   }
 
-  async install(): Promise<{ success: boolean; message: string }> {
+  async install(target?: string): Promise<{ success: boolean; message: string }> {
     const info = await this.check();
     const messages: string[] = [];
     let success = true;
 
-    if (info.cliHasUpdate) {
+    const shouldUpdateCli = !target || target === "all" || target === "cli";
+    const shouldUpdateExtensions = !target || target === "all" || target === "extensions" || (target !== "cli");
+
+    if (shouldUpdateCli && info.cliHasUpdate) {
       const args = ["install", "-g", `${PACKAGE}@latest`];
       const prefix = this.prefix();
       if (prefix) {
@@ -145,20 +148,37 @@ export class PiUpdaterService {
       messages.push(res.ok ? `Pi CLI updated to ${info.latestVersion ?? "latest"}.` : `Pi CLI: ${res.output}`);
     }
 
-    const dir = this.extensionsDir();
-    for (const ext of info.extensions ?? []) {
-      if (!ext.hasUpdate) continue;
-      if (!existsSync(dir)) {
-        success = false;
-        messages.push(`${ext.name}: ${dir} not found`);
-        continue;
+    if (shouldUpdateExtensions) {
+      const dir = this.extensionsDir();
+      for (const ext of info.extensions ?? []) {
+        if (!ext.hasUpdate) continue;
+        if (target && target !== "all" && target !== "extensions" && target !== ext.name) continue;
+        if (!existsSync(dir)) {
+          success = false;
+          messages.push(`${ext.name}: ${dir} not found`);
+          continue;
+        }
+        const res = await runNpm(["install", `${ext.name}@latest`], dir);
+        success &&= res.ok;
+        messages.push(res.ok ? `${ext.name} updated to ${ext.latestVersion}.` : `${ext.name}: ${res.output}`);
       }
-      const res = await runNpm(["install", `${ext.name}@latest`], dir);
-      success &&= res.ok;
-      messages.push(res.ok ? `${ext.name} updated to ${ext.latestVersion}.` : `${ext.name}: ${res.output}`);
     }
 
     if (!messages.length) {
+      if (target === "cli") {
+        if (info.error) return { success: false, message: info.error };
+        return { success: true, message: "Pi CLI is already up to date." };
+      }
+      if (target === "extensions") {
+        const extError = info.extensions?.find((e) => e.error)?.error;
+        if (extError) return { success: false, message: extError };
+        return { success: true, message: "Extensions are already up to date." };
+      }
+      if (target && target !== "all") {
+        const ext = info.extensions?.find((e) => e.name === target);
+        if (ext?.error) return { success: false, message: ext.error };
+        return { success: true, message: `${target} is already up to date.` };
+      }
       if (info.error) return { success: false, message: info.error };
       const extError = info.extensions?.find((e) => e.error)?.error;
       if (extError) return { success: false, message: extError };

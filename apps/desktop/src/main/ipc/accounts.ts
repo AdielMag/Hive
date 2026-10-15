@@ -35,7 +35,10 @@ export function registerAccountIpc(ctx: AppContext): void {
   );
 
   handle(IPC.piUpdateCheck, () => ctx.piUpdater.check());
-  handle(IPC.piUpdateApply, () => ctx.piUpdater.install());
+  handle(IPC.piUpdateApply, (payload?: { target?: string } | string) => {
+    const target = typeof payload === "string" ? payload : payload?.target;
+    return ctx.piUpdater.install(target);
+  });
 
   handle(IPC.modelsGetCatalog, () => ctx.models.getModelsCatalog());
   handle(IPC.modelsSaveEnabled, ({ enabledModels }: { enabledModels: string[] }) =>

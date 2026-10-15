@@ -356,55 +356,156 @@ const UpdatesTab: React.FC<{ info: UpdateInfo | null; checking: boolean; onCheck
         {info?.hasUpdate && install && <UpdateProgressBar progress={install} />}
         {info?.hasUpdate && info.notes && <pre className="settings__notes selectable">{info.notes}</pre>}
       </div>
-      <PiUpdateCard />
+      <PiCliUpdateCard />
+      <PiExtensionsUpdateCard />
     </div>
   );
 };
 
-const PiUpdateCard: React.FC = () => {
+const PiCliUpdateCard: React.FC = () => {
   const pi = useSessionStore((s) => s.bootstrap?.pi);
   const info = useUpdates((s) => s.piInfo);
   const checking = useUpdates((s) => s.piChecking);
   const installing = useUpdates((s) => s.piInstalling);
-  const result = useUpdates((s) => s.piResult);
+  const installingTarget = useUpdates((s) => s.installingTarget);
+  const result = useUpdates((s) => s.piCliResult);
   const checkPi = useUpdates((s) => s.checkPi);
   const applyPi = useUpdates((s) => s.applyPiUpdate);
   const current = info?.currentVersion ?? (pi?.ok ? pi.info.version : undefined);
-  const updates = [
-    ...(info?.cliHasUpdate ? [`Pi ${info.latestVersion}`] : []),
-    ...(info?.extensions ?? []).filter((e) => e.hasUpdate).map((e) => `${e.name} ${e.latestVersion}`),
-  ];
+  const isCliInstalling = installing && (installingTarget === "cli" || installingTarget === "all");
+
   return (
     <div className="ui-card" style={{ padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div>
-          <div className="ui-row__title">Pi CLI & Extensions {current ? `(Pi v${current})` : ""}</div>
+          <div className="ui-row__title">Pi CLI {current ? `(v${current})` : ""}</div>
           <div className="ui-row__hint">
-            {installing
+            {isCliInstalling
               ? "Installing with npm…"
-              : info?.hasUpdate
-                ? `Update available: ${updates.join(", ")}`
+              : info?.cliHasUpdate
+                ? `Update available: v${info.latestVersion}`
                 : checking
                   ? "Checking npm…"
                   : info?.error
                     ? `${info.error}. Try again in a moment.`
-                    : info
-                      ? "Pi CLI and extensions are up to date"
-                      : "Not checked yet"}
+                    : current
+                      ? "Pi CLI is up to date"
+                      : !pi?.ok
+                        ? "Pi CLI was not detected"
+                        : "Not checked yet"}
           </div>
         </div>
         <button className="ui-btn" onClick={() => void checkPi()} disabled={checking || installing}>
           <RefreshCw size={13} className={checking ? "spin" : undefined} /> Check now
         </button>
       </div>
-      {info?.hasUpdate && (
+      {info?.cliHasUpdate && (
         <div className="settings__update">
-          <div className="ui-row__title">{updates.join(", ")} ready</div>
-          <button className="ui-btn ui-btn--primary" onClick={() => void applyPi()} disabled={installing}>
-            {installing ? <RefreshCw size={13} className="spin" /> : <Download size={13} />} {installing ? "Installing…" : updates.length > 1 ? "Update all" : "Update"}
+          <div className="ui-row__title">v{info.latestVersion} is ready</div>
+          <button className="ui-btn ui-btn--primary" onClick={() => void applyPi("cli")} disabled={installing}>
+            {isCliInstalling ? <RefreshCw size={13} className="spin" /> : <Download size={13} />}{" "}
+            {isCliInstalling ? "Installing…" : "Update"}
           </button>
         </div>
       )}
+      {result && <pre className="settings__notes selectable">{result.message}</pre>}
+    </div>
+  );
+};
+
+const PiExtensionsUpdateCard: React.FC = () => {
+  const info = useUpdates((s) => s.piInfo);
+  const checking = useUpdates((s) => s.piChecking);
+  const installing = useUpdates((s) => s.piInstalling);
+  const installingTarget = useUpdates((s) => s.installingTarget);
+  const result = useUpdates((s) => s.piExtResult);
+  const checkPi = useUpdates((s) => s.checkPi);
+  const applyPi = useUpdates((s) => s.applyPiUpdate);
+
+  const extensions = info?.extensions ?? [];
+  const pendingUpdates = extensions.filter((e) => e.hasUpdate);
+  const hasUpdates = pendingUpdates.length > 0;
+  const isAllExtInstalling = installing && (installingTarget === "extensions" || installingTarget === "all");
+
+  return (
+    <div className="ui-card" style={{ padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <div>
+          <div className="ui-row__title">Pi Extensions</div>
+          <div className="ui-row__hint">
+            {isAllExtInstalling
+              ? "Installing extensions with npm…"
+              : hasUpdates
+                ? `${pendingUpdates.length} extension update${pendingUpdates.length > 1 ? "s" : ""} available`
+                : checking
+                  ? "Checking npm…"
+                  : extensions.length > 0
+                    ? "All extensions are up to date"
+                    : info
+                      ? "No extensions detected in ~/.pi/agent/npm"
+                      : "Not checked yet"}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {hasUpdates && pendingUpdates.length > 1 && (
+            <button className="ui-btn ui-btn--primary" onClick={() => void applyPi("extensions")} disabled={installing}>
+              {isAllExtInstalling ? <RefreshCw size={13} className="spin" /> : <Download size={13} />}{" "}
+              {isAllExtInstalling ? "Installing…" : "Update all"}
+            </button>
+          )}
+          <button className="ui-btn" onClick={() => void checkPi()} disabled={checking || installing}>
+            <RefreshCw size={13} className={checking ? "spin" : undefined} /> Check now
+          </button>
+        </div>
+      </div>
+
+      {extensions.length > 0 && (
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column" }}>
+          {extensions.map((ext) => {
+            const isThisInstalling = installing && (isAllExtInstalling || installingTarget === ext.name);
+            return (
+              <div
+                key={ext.name}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "10px 0",
+                  borderTop: "1px solid var(--border-subtle)",
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 13, color: "var(--text-primary)" }}>{ext.name}</div>
+                  <div className="ui-row__hint" style={{ margin: "2px 0 0" }}>
+                    {ext.hasUpdate ? (
+                      <span>
+                        v{ext.currentVersion ?? "?"} → <span style={{ color: "var(--accent-base)", fontWeight: 600 }}>v{ext.latestVersion}</span>
+                      </span>
+                    ) : ext.error ? (
+                      <span style={{ color: "var(--danger)" }}>v{ext.currentVersion ?? "?"} ({ext.error})</span>
+                    ) : (
+                      <span>v{ext.currentVersion ?? "?"} (up to date)</span>
+                    )}
+                  </div>
+                </div>
+                {ext.hasUpdate ? (
+                  <button
+                    className="ui-btn ui-btn--sm ui-btn--primary"
+                    onClick={() => void applyPi(ext.name)}
+                    disabled={installing}
+                  >
+                    {isThisInstalling ? <RefreshCw size={12} className="spin" /> : <Download size={12} />}
+                    {isThisInstalling ? "Updating…" : "Update"}
+                  </button>
+                ) : (
+                  <span className="ui-chip ui-chip--muted">Latest</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {result && <pre className="settings__notes selectable">{result.message}</pre>}
     </div>
   );
