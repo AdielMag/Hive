@@ -7,6 +7,11 @@ describe("titleFromPrompt", () => {
     expect(titleFromPrompt("[Mode: Ask - Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.]\n\nExplain the architecture")).toBe("Explain the architecture");
   });
 
+  it("strips leading slash commands", () => {
+    expect(titleFromPrompt("/plan fix authentication bug")).toBe("fix authentication bug");
+    expect(titleFromPrompt("/implement add worktrees section")).toBe("add worktrees section");
+  });
+
   it("drops attached file blocks", () => {
     expect(titleFromPrompt("Review this\n\n--- Attached File: a.ts ---\nconst x = 1;\n--- End of File ---")).toBe("Review this");
   });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { getGitStatus, getGitBranches, getGitDiff, parseNumstat, parseStatusV2 } from "./service.ts";
+import { getGitStatus, getGitBranches, getGitBranchDetails, getGitWorktrees, getGitDiff, parseNumstat, parseStatusV2 } from "./service.ts";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -73,5 +73,33 @@ describe("Git operations", () => {
     expect(m.get("a.ts")).toEqual({ additions: 3, deletions: 1 });
     expect(m.has("img.png")).toBe(false);
     expect(m.get("dir/b c.ts")).toEqual({ additions: 0, deletions: 5 });
+  });
+
+  it("lists worktrees and identifies worktree branches", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hive-git-wt-"));
+    const wtDir = mkdtempSync(join(tmpdir(), "hive-git-linked-wt-"));
+    try {
+      const git = (...args: string[]) =>
+        execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir, stdio: "ignore" });
+      git("init", "-q");
+      git("checkout", "-q", "-b", "main");
+      git("commit", "-q", "--allow-empty", "-m", "init");
+      git("worktree", "add", "-b", "feat-wt", wtDir);
+
+      const worktrees = await getGitWorktrees(dir);
+      expect(worktrees.length).toBe(2);
+      expect(worktrees[0]?.isMain).toBe(true);
+      expect(worktrees[0]?.branch).toBe("main");
+      expect(worktrees[1]?.isMain).toBe(false);
+      expect(worktrees[1]?.branch).toBe("feat-wt");
+
+      const branches = await getGitBranchDetails(dir);
+      const featBranch = branches.find((b) => b.name === "feat-wt");
+      expect(featBranch?.isWorktree).toBe(true);
+      expect(featBranch?.worktreePath).toBeDefined();
+    } finally {
+      rmSync(wtDir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

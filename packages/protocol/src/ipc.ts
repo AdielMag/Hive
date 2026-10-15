@@ -175,6 +175,8 @@ export interface WorktreeRemoveOptions {
 
 export type WorktreeRemoveResult = { ok: true; branchDeleted: boolean } | { ok: false; error: string };
 
+export type WorktreeRenameResult = { ok: true; branch: string } | { ok: false; error: string };
+
 export type WorktreeMergeResult =
   | { ok: true; alreadyUpToDate: boolean; /** Uncommitted files left behind in the worktree (not merged). */ uncommitted: number }
   | {
@@ -224,6 +226,7 @@ export const IPC = {
   worktreeStatus: "worktree:status",
   worktreeRemove: "worktree:remove",
   worktreeMerge: "worktree:merge",
+  worktreeRenameBranch: "worktree:renameBranch",
   trustCheck: "trust:check",
   trustSet: "trust:set",
   // Settings & Compaction
@@ -467,6 +470,8 @@ export interface StudioApi {
   worktreeRemove(worktree: SessionWorktree, options?: WorktreeRemoveOptions): Promise<WorktreeRemoveResult>;
   /** Merge the session branch into its base branch in the main tree. Aborts cleanly on conflicts / a dirty main tree. */
   worktreeMerge(worktree: SessionWorktree): Promise<WorktreeMergeResult>;
+  /** Rename the session worktree's branch (e.g. to a descriptive name based on the user's initial request). */
+  worktreeRenameBranch(worktree: SessionWorktree, newTitle: string): Promise<WorktreeRenameResult>;
   checkTrust(path: string): Promise<{ hasTrustResources: boolean; trusted: boolean }>;
   setTrust(path: string, trusted: boolean): Promise<void>;
 

@@ -13,7 +13,7 @@ import {
 import { existsSync } from "node:fs";
 import type { AppContext } from "../context.ts";
 import { generateSessionTitle } from "../services/session-title.ts";
-import { isManagedWorktree, mergeWorktree, removeWorktree, worktreeStatus } from "../services/worktrees.ts";
+import { isManagedWorktree, mergeWorktree, removeWorktree, renameWorktreeBranch, worktreeStatus } from "../services/worktrees.ts";
 import { handle } from "./util.ts";
 
 const NO_PI = { ok: false as const, error: "Pi CLI not available" };
@@ -72,6 +72,9 @@ export function registerSessionIpc(ctx: AppContext): void {
     removeWorktree(requireWorktree(worktree), { force: options?.force === true, deleteBranch: options?.deleteBranch !== false }),
   );
   handle(IPC.worktreeMerge, ({ worktree }: { worktree: SessionWorktree }) => mergeWorktree(requireWorktree(worktree)));
+  handle(IPC.worktreeRenameBranch, ({ worktree, newTitle }: { worktree: SessionWorktree; newTitle: string }) =>
+    renameWorktreeBranch(requireWorktree(worktree), newTitle),
+  );
   handle(IPC.trustCheck, ({ path }: { path: string }) => ctx.catalog?.checkTrust(path) ?? { hasTrustResources: false, trusted: true });
   handle(IPC.trustSet, async ({ path, trusted }: { path: string; trusted: boolean }) => {
     await ctx.catalog?.setTrust(path, trusted);

@@ -11,6 +11,7 @@ import {
   GitBranch,
   GitCommit,
   GitMerge,
+  Layers,
   Pencil,
   Plus,
   RefreshCw,
@@ -20,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
-import { GitCommands, type GitBranchDetail, type GitCommitDetail, type GitGraphCommit, type GitRepoStatus, type GitTag } from "@hive-module/git/shared";
+import { GitCommands, type GitBranchDetail, type GitCommitDetail, type GitGraphCommit, type GitRepoStatus, type GitTag, type GitWorktreeDetail } from "@hive-module/git/shared";
 import { gitApi } from "./branches-host.ts";
 import { GraphCell, graphWidth, laneColor, layoutGraph } from "./graph.tsx";
 import { Avatar, ContextMenu, RefChip, useColResize, type MenuEntry, type RefKind } from "./bits.tsx";
@@ -54,6 +55,7 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const [status, setStatus] = useState<GitRepoStatus | null>(null);
   const [branches, setBranches] = useState<GitBranchDetail[]>([]);
   const [tags, setTags] = useState<GitTag[]>([]);
+  const [worktrees, setWorktrees] = useState<GitWorktreeDetail[]>([]);
   const [graph, setGraph] = useState<GitGraphCommit[]>([]);
   const [scope, setScope] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE);
@@ -90,17 +92,19 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     setLoading(true);
     try {
       const api = gitApi();
-      const [repoStatus, details, tagList, commits] = await Promise.all([
+      const [repoStatus, details, tagList, commits, wtList] = await Promise.all([
         api.getGitStatus(cwd),
         api.getGitBranchDetails(cwd),
         api.getGitTags(cwd),
         api.getGitGraph(cwd, limit, scope ? { ref: scope } : undefined),
+        api.getGitWorktrees(cwd),
       ]);
       if (id !== reqId.current) return;
       setStatus(repoStatus);
       setBranches(details);
       setTags(tagList);
       setGraph(commits);
+      setWorktrees(wtList);
       // A scoped branch/tag that vanished (deleted, pruned) would leave an empty log: fall back to all.
       if (scope && !details.some((b) => b.name === scope) && !tagList.some((t) => t.name === scope)) setScope(null);
       refreshRailStatus();
@@ -120,6 +124,7 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     setStatus(null);
     setBranches([]);
     setTags([]);
+    setWorktrees([]);
     setGraph([]);
   }, [cwd]);
 
@@ -226,6 +231,30 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     void run(() => gitApi().gitMerge(cwd, b.name), `Merged "${b.name}" into "${into}"`, "Merge failed");
   };
 
+  const removeWorktree = async (wt: GitWorktreeDetail) => {
+    if (!cwd || wt.isMain || wt.isCurrent) return;
+    const folder = wt.path.split(/[\\/]/).filter(Boolean).pop() || wt.path;
+    if (!confirm(`Remove worktree "${folder}" (${wt.branchLabel})?`)) return;
+    try {
+      await gitApi().gitWorktreeRemove(cwd, wt.path);
+      toast(`Removed worktree "${folder}"`);
+      await refreshAll();
+    } catch (err) {
+      const msg = errText(err);
+      if (/contains modified|untracked/i.test(msg) && confirm(`Worktree "${folder}" has uncommitted changes. Force remove?`)) {
+        try {
+          await gitApi().gitWorktreeRemove(cwd, wt.path, true);
+          toast(`Force-removed worktree "${folder}"`);
+          await refreshAll();
+        } catch (err2) {
+          toast(`Failed to remove worktree: ${errText(err2)}`, "error");
+        }
+      } else {
+        toast(`Failed to remove worktree: ${msg}`, "error");
+      }
+    }
+  };
+
   const handleFetch = async () => {
     if (!cwd) return;
     setFetching(true);
@@ -310,16 +339,33 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
 
   const refMenu = (e: React.MouseEvent, target: RefTarget) => {
     e.preventDefault();
+    if (target.kind === "worktree") {
+      const wt = target.worktree;
+      const folder = wt.path.split(/[\\/]/).filter(Boolean).pop() || wt.path;
+      const items: MenuEntry[] = [];
+      if (wt.branch) {
+        items.push({ label: `Show only this in log`, icon: <GitBranch size={13} />, run: () => setScope(wt.branch!) });
+        items.push({ label: `New branch from "${wt.branch}"…`, icon: <Plus size={13} />, run: () => openDialog({ kind: "new", from: wt.branch! }) });
+      }
+      items.push("sep", { label: "Copy worktree path", icon: <Copy size={13} />, run: () => copy(wt.path) });
+      if (wt.branch) items.push({ label: "Copy branch name", icon: <Copy size={13} />, run: () => copy(wt.branch!) });
+      if (!wt.isMain && !wt.isCurrent) {
+        items.push("sep", { label: "Remove worktree", icon: <Trash2 size={13} />, danger: true, run: () => void removeWorktree(wt) });
+      }
+      setMenu({ x: e.clientX, y: e.clientY, title: `Worktree: ${folder}`, items });
+      return;
+    }
     const b = target.kind === "tag" ? null : target.branch;
     const name = target.kind === "tag" ? target.tag.name : target.branch.name;
     const items: MenuEntry[] = [];
-    if (b && !b.isCurrent) items.push({ label: b.isRemote ? "Checkout (create tracking branch)" : "Checkout", icon: <GitCommit size={13} />, run: () => checkout(b) });
+    if (b && !b.isCurrent && !b.isWorktree) items.push({ label: b.isRemote ? "Checkout (create tracking branch)" : "Checkout", icon: <GitCommit size={13} />, run: () => checkout(b) });
+    if (b && b.isWorktree && !b.isCurrent) items.push({ label: `Worktree: ${b.worktreePath}`, icon: <Layers size={13} />, run: () => copy(b.worktreePath!) });
     if (target.kind === "tag") items.push({ label: "Checkout (detached HEAD)", icon: <GitCommit size={13} />, run: () => checkoutRef(name, `tag "${name}"`) });
     items.push({ label: `New branch from "${name}"…`, icon: <Plus size={13} />, run: () => openDialog({ kind: "new", from: name }) });
     if (b && !b.isCurrent) items.push({ label: `Merge "${name}" into "${currentLabel}"`, icon: <GitMerge size={13} />, run: () => merge(b) });
     if (b && !b.isRemote) items.push({ label: "Rename…", icon: <Pencil size={13} />, run: () => openDialog({ kind: "rename", name }) });
     items.push("sep", { label: "Show only this in log", icon: <GitBranch size={13} />, run: () => setScope(name) }, { label: "Copy name", icon: <Copy size={13} />, run: () => copy(name) });
-    if (b && !b.isRemote && !b.isCurrent) items.push("sep", { label: "Delete", icon: <Trash2 size={13} />, danger: true, run: () => void deleteBranch(b) });
+    if (b && !b.isRemote && !b.isCurrent && !b.isWorktree) items.push("sep", { label: "Delete", icon: <Trash2 size={13} />, danger: true, run: () => void deleteBranch(b) });
     setMenu({ x: e.clientX, y: e.clientY, title: name, items });
   };
 
@@ -420,6 +466,7 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           <BranchTree
             branches={branches}
             tags={tags}
+            worktrees={worktrees}
             currentLabel={currentLabel}
             scope={scope}
             onScope={setScope}
@@ -427,6 +474,7 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
             onDelete={(b) => void deleteBranch(b)}
             onMenu={refMenu}
             onTagMenu={tagMenu}
+            onRemoveWorktree={removeWorktree}
           />
         </div>
         <div className="bw__vresize" onMouseDown={startTreeResize} />

@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { normalize, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { PiRuntimeInfo } from "@hive/module-sdk/main";
 import type {
@@ -11,6 +12,7 @@ import type {
   GitGraphOptions,
   GitRepoStatus,
   GitTag,
+  GitWorktreeDetail,
 } from "./shared.ts";
 
 export type { GitFileStatus, GitRepoStatus, GitCommitLog };
@@ -283,17 +285,22 @@ export async function getGitLog(cwd: string, maxCount = 30): Promise<GitCommitLo
   }
 }
 
+function normPath(p: string): string {
+  return normalize(resolve(p)).replace(/[\\/]+$/, "").replace(/\\/g, "/").toLowerCase();
+}
+
 export async function getGitBranchDetails(cwd: string): Promise<GitBranchDetail[]> {
   try {
-    const fmt = ["%(refname)", "%(objectname:short)", "%(upstream:short)", "%(upstream:track,nobracket)", "%(committerdate:relative)", "%(HEAD)", "%(subject)"].join("%00");
+    const fmt = ["%(refname)", "%(objectname:short)", "%(upstream:short)", "%(upstream:track,nobracket)", "%(committerdate:relative)", "%(HEAD)", "%(subject)", "%(worktreepath)"].join("%00");
     const raw = await runGit(["for-each-ref", `--format=${fmt}`, "--sort=-committerdate", "refs/heads", "refs/remotes"], cwd);
     const out: GitBranchDetail[] = [];
     for (const line of raw.split("\n")) {
       if (!line.trim()) continue;
-      const [ref = "", hash = "", upstream = "", track = "", relativeDate = "", head = "", subject = ""] = line.split("\0");
+      const [ref = "", hash = "", upstream = "", track = "", relativeDate = "", head = "", subject = "", worktreePath = ""] = line.split("\0");
       const isRemote = ref.startsWith("refs/remotes/");
       const name = ref.replace(/^refs\/(heads|remotes)\//, "");
       if (isRemote && (name.endsWith("/HEAD") || !name.includes("/"))) continue;
+      const wt = worktreePath.trim();
       out.push({
         name,
         isRemote,
@@ -306,12 +313,78 @@ export async function getGitBranchDetails(cwd: string): Promise<GitBranchDetail[
         ahead: Number(/ahead (\d+)/.exec(track)?.[1] ?? 0),
         behind: Number(/behind (\d+)/.exec(track)?.[1] ?? 0),
         gone: track === "gone",
+        ...(wt ? { worktreePath: wt, isWorktree: true } : {}),
       });
     }
     return out;
   } catch {
     return [];
   }
+}
+
+export async function getGitWorktrees(cwd: string): Promise<GitWorktreeDetail[]> {
+  try {
+    const raw = await runGit(["worktree", "list", "--porcelain"], cwd);
+    const lines = raw.split("\n");
+    const out: GitWorktreeDetail[] = [];
+    let current: Partial<GitWorktreeDetail> = {};
+
+    const commitEntry = () => {
+      if (current.path) {
+        const isMain = out.length === 0;
+        const normCwd = normPath(cwd);
+        const normP = normPath(current.path);
+        const isCurrent = normCwd === normP;
+        const branchRef = current.branch || null;
+        const branch = branchRef ? branchRef.replace(/^refs\/heads\//, "") : null;
+        out.push({
+          path: current.path,
+          head: current.head || "",
+          branch,
+          branchLabel: branch || "(detached HEAD)",
+          isMain,
+          isCurrent,
+          locked: !!current.locked,
+          lockReason: current.lockReason,
+          prunable: !!current.prunable,
+        });
+      }
+      current = {};
+    };
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) {
+        commitEntry();
+        continue;
+      }
+      if (line.startsWith("worktree ")) {
+        if (current.path) commitEntry();
+        current.path = line.slice(9).trim();
+      } else if (line.startsWith("HEAD ")) {
+        current.head = line.slice(5).trim();
+      } else if (line.startsWith("branch ")) {
+        current.branch = line.slice(7).trim();
+      } else if (line === "detached") {
+        current.branch = null;
+      } else if (line.startsWith("locked")) {
+        current.locked = true;
+        current.lockReason = line.slice(6).trim() || undefined;
+      } else if (line.startsWith("prunable")) {
+        current.prunable = true;
+      }
+    }
+    commitEntry();
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export async function gitWorktreeRemove(cwd: string, worktreePath: string, force = false): Promise<string> {
+  const p = worktreePath.trim();
+  if (!p) throw new Error("Missing worktree path");
+  return runGit(["worktree", "remove", ...(force ? ["--force"] : []), p], cwd);
 }
 
 /** Rejects ref-like arguments that git would parse as options. */

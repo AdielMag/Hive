@@ -34,6 +34,8 @@ export default defineMainModule({
     h(M.fetch, (cwd: string) => git.gitFetch(cwd));
     h(M.pull, (cwd: string) => git.gitPull(cwd));
     h(M.push, (cwd: string) => git.gitPush(cwd));
+    h(M.worktrees, (cwd: string) => git.getGitWorktrees(cwd));
+    h(M.worktreeRemove, (cwd: string, path: string, force?: boolean) => git.gitWorktreeRemove(cwd, path, force));
     h(M.generateCommitMessage, (cwd: string, model?: string) => {
       const pi = ctx.pi();
       if (pi === null) throw new Error("Pi CLI not available to generate commit message");
