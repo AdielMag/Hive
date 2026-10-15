@@ -52,7 +52,7 @@ async function git(cwd: string, args: string[], extra: string[] = []): Promise<G
   }
 }
 
-function normKey(p: string): string {
+function norm(p: string): string {
   try {
     p = realpathSync(p);
   } catch {}
@@ -60,7 +60,7 @@ function normKey(p: string): string {
 }
 
 function samePath(a: string, b: string): boolean {
-  return normKey(a) === normKey(b);
+  return norm(a) === norm(b);
 }
 
 /** Short, filesystem/branch-safe slug fragment from a title ("" if nothing usable). */
@@ -92,8 +92,8 @@ export function projectPathFromWorktreeCwd(cwd: string): string | null {
 /** True when `wt.worktreePath` is a direct child of `<projectPath>/.hive-worktrees` and the branch is Hive's. */
 export function isManagedWorktree(wt: SessionWorktree): boolean {
   if (!wt.projectPath || !wt.worktreePath || !wt.branch.startsWith(BRANCH_PREFIX)) return false;
-  const dir = normKey(join(wt.projectPath, WORKTREES_DIR));
-  const p = normKey(wt.worktreePath);
+  const dir = norm(join(wt.projectPath, WORKTREES_DIR));
+  const p = norm(wt.worktreePath);
   return p.startsWith(dir + "/") && !p.slice(dir.length + 1).includes("/");
 }
 
@@ -172,12 +172,19 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Sessi
   try {
     const projectPath = opts.projectPath;
     const top = await git(projectPath, ["rev-parse", "--show-toplevel"]);
-    if (!top.ok || !top.stdout.trim()) return null; // not a git repo
+    if (!top.ok || !top.stdout.trim()) {
+      console.warn("[worktrees] rev-parse --show-toplevel failed:", top.stderr);
+      return null; // not a git repo
+    }
     if (!samePath(top.stdout.trim(), projectPath)) {
-      console.warn("[worktrees] project is not the repository root; skipping worktree");
+      console.warn(`[worktrees] project is not the repository root (top: "${top.stdout.trim()}", project: "${projectPath}"); skipping worktree`);
       return null;
     }
-    if (!(await git(projectPath, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])).ok) return null; // no commits
+    const headCommit = await git(projectPath, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
+    if (!headCommit.ok) {
+      console.warn("[worktrees] rev-parse HEAD^{commit} failed:", headCommit.stderr);
+      return null; // no commits
+    }
 
     const cur = await git(projectPath, ["symbolic-ref", "--short", "-q", "HEAD"]);
     const currentBranch = cur.ok && cur.stdout.trim() ? cur.stdout.trim() : "HEAD";
@@ -275,10 +282,10 @@ export async function listOrphans(
   knownPaths: Iterable<string>,
 ): Promise<Array<{ worktreePath: string; branch?: string }>> {
   const known = new Set<string>();
-  for (const p of knownPaths) known.add(normKey(p));
+  for (const p of knownPaths) known.add(norm(p));
   const r = await git(projectPath, ["worktree", "list", "--porcelain"]);
   if (!r.ok) return [];
-  const dir = normKey(join(projectPath, WORKTREES_DIR));
+  const dir = norm(join(projectPath, WORKTREES_DIR));
   const out: Array<{ worktreePath: string; branch?: string }> = [];
   for (const block of r.stdout.split(/\r?\n\r?\n/)) {
     let path: string | undefined;
@@ -288,7 +295,7 @@ export async function listOrphans(
       else if (line.startsWith("branch ")) branch = line.slice("branch ".length).trim().replace(/^refs\/heads\//, "");
     }
     if (!path) continue;
-    const k = normKey(path);
+    const k = norm(path);
     if (k.startsWith(dir + "/") && !known.has(k)) out.push({ worktreePath: path.split("/").join(sep), branch });
   }
   return out;
