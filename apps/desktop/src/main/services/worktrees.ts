@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, appendFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, appendFileSync, realpathSync } from "node:fs";
 import { join, normalize, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import type {
@@ -53,6 +53,9 @@ async function git(cwd: string, args: string[], extra: string[] = []): Promise<G
 }
 
 function normKey(p: string): string {
+  try {
+    p = realpathSync(p);
+  } catch {}
   return normalize(resolve(p)).replace(/[\\/]+$/, "").replace(/\\/g, "/").toLowerCase();
 }
 
