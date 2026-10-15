@@ -8,6 +8,7 @@ import type {
   WorktreeMergeResult,
   WorktreeRemoveOptions,
   WorktreeRemoveResult,
+  WorktreeRenameResult,
   WorktreeStatus,
 } from "@hive/protocol";
 
@@ -16,7 +17,7 @@ const execFileAsync = promisify(execFile);
 /** Folder (inside the repo root) that holds session worktrees. */
 export const WORKTREES_DIR = ".hive-worktrees";
 const BRANCH_PREFIX = "hive/";
-const MAX_SLUG_TITLE = 24;
+const MAX_SLUG_TITLE = 36;
 
 export interface CreateWorktreeOptions {
   /** Main tree path; must be the repository root. */
@@ -69,10 +70,17 @@ function samePath(a: string, b: string): boolean {
 
 /** Short, filesystem/branch-safe slug fragment from a title ("" if nothing usable). */
 export function sanitizeSlug(title: string | undefined): string {
-  const s = (title ?? "")
+  if (!title) return "";
+  let s = title
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
+    .toLowerCase();
+  // Strip slash commands e.g. /plan, /debug
+  s = s.replace(/^\s*\/[a-z0-9_-]+\s*/, "");
+  // Strip common conversational preamble so slug gets straight to the subject
+  s = s.replace(/^(?:can\s+you\s+(?:please\s+)?|could\s+you\s+(?:please\s+)?|please\s+|i\s+want\s+(?:to\s+)?|i\s+need\s+(?:to\s+)?|help\s+me\s+(?:to\s+)?)/, "");
+  if (s.trim() === "new session") return "";
+  s = s
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, MAX_SLUG_TITLE)
@@ -80,8 +88,9 @@ export function sanitizeSlug(title: string | undefined): string {
   return s;
 }
 
-function makeSlug(title: string | undefined): string {
-  return `${sanitizeSlug(title) || "session"}-${randomBytes(3).toString("hex")}`;
+export function makeSlug(title: string | undefined): string {
+  const base = sanitizeSlug(title);
+  return `${base || "session"}-${randomBytes(3).toString("hex")}`;
 }
 
 /**
@@ -275,6 +284,30 @@ export async function removeWorktree(wt: SessionWorktree, opts: WorktreeRemoveOp
       branchDeleted = (await git(wt.projectPath, ["branch", force ? "-D" : "-d", wt.branch])).ok;
     }
     return { ok: true, branchDeleted };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Rename the git branch of a session worktree to a descriptive name based on the user's initial request. */
+export async function renameWorktreeBranch(
+  wt: SessionWorktree,
+  newTitleOrSlug: string,
+): Promise<WorktreeRenameResult> {
+  try {
+    if (!isManagedWorktree(wt)) return { ok: false, error: "Not a Hive session worktree" };
+    const slug = makeSlug(newTitleOrSlug);
+    const newBranch = `${BRANCH_PREFIX}${slug}`;
+    if (wt.branch === newBranch) return { ok: true, branch: newBranch };
+    if (await branchExists(wt.projectPath, newBranch)) {
+      return { ok: false, error: `Branch ${newBranch} already exists` };
+    }
+    const r = await git(wt.projectPath, ["branch", "-m", wt.branch, newBranch]);
+    if (!r.ok) {
+      return { ok: false, error: r.stderr.trim() || "git branch -m failed" };
+    }
+    wt.branch = newBranch;
+    return { ok: true, branch: newBranch };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

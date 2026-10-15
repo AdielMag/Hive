@@ -10,6 +10,7 @@ import {
   mergeWorktree,
   projectPathFromWorktreeCwd,
   removeWorktree,
+  renameWorktreeBranch,
   sanitizeSlug,
   worktreeStatus,
 } from "./worktrees.ts";
@@ -169,10 +170,25 @@ describe("worktrees", { timeout: 60_000 }, () => {
 
   it("sanitizes slugs and maps worktree cwd back to the project", () => {
     expect(sanitizeSlug("  Héllo / World: CON?? ")).toBe("hello-world-con");
-    expect(sanitizeSlug("a".repeat(80)).length).toBeLessThanOrEqual(24);
+    expect(sanitizeSlug("a".repeat(80)).length).toBeLessThanOrEqual(36);
     expect(sanitizeSlug("***")).toBe("");
+    expect(sanitizeSlug("can you please fix the login bug")).toBe("fix-the-login-bug");
+    expect(sanitizeSlug("/plan add worktrees to branch tree")).toBe("add-worktrees-to-branch-tree");
+    expect(sanitizeSlug("New Session")).toBe("");
     expect(projectPathFromWorktreeCwd("C:\\p\\repo\\.hive-worktrees\\fix-ab12cd")).toBe("C:\\p\\repo");
     expect(projectPathFromWorktreeCwd("/p/repo/.hive-worktrees/fix-ab12cd/src")).toBe("/p/repo");
     expect(projectPathFromWorktreeCwd("/p/repo")).toBeNull();
+  });
+
+  it("renames worktree branch to a descriptive name", async () => {
+    initRepo(repo);
+    const wt = (await createWorktree({ projectPath: repo, title: "session" }))!;
+    expect(wt.branch).toMatch(/^hive\/session-[0-9a-f]{6}$/);
+
+    const res = await renameWorktreeBranch(wt, "fix login authentication bug");
+    expect(res.ok).toBe(true);
+    expect(res.branch).toMatch(/^hive\/fix-login-authentication-bug-[0-9a-f]{6}$/);
+    expect(wt.branch).toBe(res.branch);
+    expect(git(wt.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(res.branch);
   });
 });

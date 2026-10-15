@@ -10,6 +10,7 @@ export const NEW_SESSION_TITLE = "New Session";
 export function titleFromPrompt(text: string | undefined | null, max = 60): string {
   if (!text) return "";
   let t = text.replace(MODE_PREFIX, "");
+  t = t.replace(/^\s*\/[a-zA-Z0-9_-]+\s*/, "");
   const fileIdx = t.indexOf(ATTACHED_FILE);
   if (fileIdx >= 0) t = t.slice(0, fileIdx);
   t = t.replace(/\s+/g, " ").trim();

@@ -159,6 +159,10 @@ const api: StudioApi = {
     return ipcRenderer.invoke(IPC.worktreeMerge, { worktree });
   },
 
+  worktreeRenameBranch(worktree: SessionWorktree, newTitle: string) {
+    return ipcRenderer.invoke(IPC.worktreeRenameBranch, { worktree, newTitle });
+  },
+
   checkTrust(path: string) {
     return ipcRenderer.invoke(IPC.trustCheck, { path });
   },

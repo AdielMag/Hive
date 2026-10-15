@@ -364,7 +364,8 @@ export interface SessionStoreState {
   dismissCompaction: (key: string) => void;
   loadModelsCatalog: () => Promise<void>;
   saveEnabledModels: (keys: string[]) => Promise<void>;
-  ensureActiveSession: (targetTabId?: string) => Promise<string | null>;
+  ensureActiveSession: (targetTabId?: string, opts?: { title?: string }) => Promise<string | null>;
+  renameWorktreeBranch: (tabId: string, newTitle: string) => Promise<void>;
   addAttachments: (items: AttachedItem[]) => void;
   removeAttachment: (id: string) => void;
   clearAttachments: () => void;
@@ -1270,7 +1271,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
   },
 
-  ensureActiveSession: async (targetTabId?: string): Promise<string | null> => {
+  ensureActiveSession: async (targetTabId?: string, opts?: { title?: string }): Promise<string | null> => {
     const { tabs, activeTabId, projects } = get();
     const tabId = targetTabId || activeTabId;
     if (!tabId) return null;
@@ -1296,11 +1297,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       set({ isLoadingModels: true });
       try {
         // Worktree options only matter for a brand-new session; a resume reuses the recorded worktree.
+        const titleToUse = opts?.title ?? (tab.title && tab.title !== NEW_SESSION_TITLE ? tab.title : undefined);
         const newSessionOpts = tab.sessionPath
           ? {}
           : {
               useWorktree: !get().newSessionInMainTree,
-              ...(tab.title && tab.title !== NEW_SESSION_TITLE ? { title: tab.title } : {}),
+              ...(titleToUse ? { title: titleToUse } : {}),
             };
         const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath, ...newSessionOpts });
         set((s) => ({
@@ -1594,7 +1596,30 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       stats: null,
     });
 
-    void get().ensureActiveSession(tabId);
+    // Do not eagerly spawn a live process or worktree until the user sends their initial request,
+    // so the worktree branch name can be descriptive based on that request and no orphaned worktrees are created.
+  },
+
+  renameWorktreeBranch: async (tabId: string, newTitle: string) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab?.worktree) return;
+    try {
+      const res = await window.studio.worktreeRenameBranch(tab.worktree, newTitle);
+      if (res.ok && res.branch) {
+        const updatedWorktree = { ...tab.worktree, branch: res.branch };
+        set((s) => ({
+          tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, worktree: updatedWorktree } : t)),
+          allSessions: s.allSessions.map((x) =>
+            x.path === tab.sessionPath ? { ...x, worktree: updatedWorktree } : x,
+          ),
+        }));
+        if (tab.sessionPath) {
+          await window.studio.updateSessionMeta(tab.sessionPath, { worktree: updatedWorktree });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to rename worktree branch", err);
+    }
   },
 
   openLibraryTab: () => {
@@ -1793,12 +1818,29 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     playUiSound("prompt_send");
 
+    const { activeTabId } = get();
+    const curTab = get().tabs.find((t) => t.id === activeTabId);
+    const isFirstPrompt = curTab?.title === NEW_SESSION_TITLE || !curTab?.sessionPath;
+    const autoTitle = titleFromPrompt(promptText, 40) || attachments[0]?.name || "";
+
     // Promote cold tab to live process if needed
     if (!activeKey) {
-      activeKey = await get().ensureActiveSession();
+      if (autoTitle && activeTabId && isFirstPrompt) {
+        set((s) => ({
+          tabs: s.tabs.map((t) => (t.id === activeTabId && t.title === NEW_SESSION_TITLE ? { ...t, title: autoTitle } : t)),
+        }));
+      }
+      activeKey = await get().ensureActiveSession(activeTabId ?? undefined, { title: autoTitle || undefined });
       if (!activeKey) return;
       // The snapshot above predates the session start; don't act on a stale `running`.
       transcript = get().transcript;
+    } else if (isFirstPrompt && autoTitle && activeTabId) {
+      // If the session was already running and had a worktree with a placeholder branch (e.g. hive/session-xxxx),
+      // rename the worktree branch to a descriptive name based on the user's initial request!
+      const runningTab = get().tabs.find((t) => t.id === activeTabId);
+      if (runningTab?.worktree && /^hive\/session-[a-f0-9]+$/i.test(runningTab.worktree.branch)) {
+        void get().renameWorktreeBranch(runningTab.id, autoTitle);
+      }
     }
 
     const images: Array<{ type: "image"; data: string; mimeType: string }> = [];
@@ -1848,11 +1890,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set({ promptText: "", attachments: [] });
 
     // Name a fresh tab after its first prompt so the header reflects the conversation right away.
-    const { activeTabId } = get();
-    const isFirstPrompt = get().tabs.find((t) => t.id === activeTabId)?.title === NEW_SESSION_TITLE;
-    const autoTitle = promptText.trim().startsWith("/")
-      ? ""
-      : titleFromPrompt(promptText, 40) || attachments[0]?.name || "";
     if (autoTitle && activeTabId) {
       set((s) => ({
         tabs: s.tabs.map((t) => (t.id === activeTabId && t.title === NEW_SESSION_TITLE ? { ...t, title: autoTitle } : t)),

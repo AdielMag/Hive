@@ -48,6 +48,30 @@ export interface GitBranchDetail {
   behind: number;
   /** Upstream is configured but the remote branch no longer exists. */
   gone: boolean;
+  /** Path of the worktree if this branch is checked out in one. */
+  worktreePath?: string;
+  /** True if this branch is currently checked out in a worktree. */
+  isWorktree?: boolean;
+}
+
+export interface GitWorktreeDetail {
+  /** Absolute path of the worktree root. */
+  path: string;
+  /** Checked out commit hash. */
+  head: string;
+  /** Short branch name (e.g. "hive/fix-1" or "main"), or null if detached. */
+  branch: string | null;
+  /** Branch label or "(detached HEAD)". */
+  branchLabel: string;
+  /** True for the main (root) repository worktree. */
+  isMain: boolean;
+  /** True if this worktree is the active working directory. */
+  isCurrent: boolean;
+  /** True if locked. */
+  locked?: boolean;
+  lockReason?: string;
+  /** True if marked prunable by git. */
+  prunable?: boolean;
 }
 
 export interface GitGraphCommit {
@@ -124,6 +148,8 @@ export const GitMethods = {
   pull: "pull",
   push: "push",
   generateCommitMessage: "generateCommitMessage",
+  worktrees: "worktrees",
+  worktreeRemove: "worktreeRemove",
 } as const;
 
 /** Command ids other modules may run (`host.commands.run`). */
@@ -162,6 +188,8 @@ export interface GitApi {
   gitPull(cwd: string): Promise<string>;
   gitPush(cwd: string): Promise<string>;
   generateCommitMessage(cwd: string, model?: string): Promise<string>;
+  getGitWorktrees(cwd: string): Promise<GitWorktreeDetail[]>;
+  gitWorktreeRemove(cwd: string, path: string, force?: boolean): Promise<string>;
 }
 
 type Invoke = <T = unknown>(method: string, ...args: unknown[]) => Promise<T>;
@@ -195,5 +223,7 @@ export function createGitApi(invoke: Invoke): GitApi {
     gitPull: (cwd) => invoke(M.pull, cwd),
     gitPush: (cwd) => invoke(M.push, cwd),
     generateCommitMessage: (cwd, model) => invoke(M.generateCommitMessage, cwd, model),
+    getGitWorktrees: (cwd) => invoke(M.worktrees, cwd),
+    gitWorktreeRemove: (cwd, path, force) => invoke(M.worktreeRemove, cwd, path, force),
   };
 }

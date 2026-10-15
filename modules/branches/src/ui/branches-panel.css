@@ -289,6 +289,12 @@
   color: var(--text-muted);
   flex-shrink: 0;
 }
+.bw__tag-pill--worktree {
+  color: var(--accent-base);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.08);
+  font-weight: 600;
+}
 .bw__tag-pill--danger {
   color: var(--danger);
   border-color: var(--danger);

@@ -1,13 +1,14 @@
 /** Left column of the tool window: HEAD, Local / Remote branch trees and Tags (like Rider's Git branches tree). */
 import React, { useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Cloud, Folder, GitBranch, Laptop, Search, Star, Tag, Trash2, GitCommit } from "lucide-react";
-import type { GitBranchDetail, GitTag } from "@hive-module/git/shared";
+import { Check, ChevronDown, ChevronRight, Cloud, Folder, GitBranch, Laptop, Layers, Search, Star, Tag, Trash2, GitCommit } from "lucide-react";
+import type { GitBranchDetail, GitTag, GitWorktreeDetail } from "@hive-module/git/shared";
 import { SyncBadges } from "./bits.tsx";
 
 export type RefTarget =
   | { kind: "local"; branch: GitBranchDetail }
   | { kind: "remote"; branch: GitBranchDetail }
-  | { kind: "tag"; tag: GitTag };
+  | { kind: "tag"; tag: GitTag }
+  | { kind: "worktree"; worktree: GitWorktreeDetail };
 
 interface TreeNode {
   key: string;
@@ -51,6 +52,7 @@ const countLeaves = (n: TreeNode): number => (n.branch ? 1 : 0) + n.children.red
 export const BranchTree: React.FC<{
   branches: GitBranchDetail[];
   tags: GitTag[];
+  worktrees?: GitWorktreeDetail[];
   currentLabel: string;
   scope: string | null;
   onScope(ref: string | null): void;
@@ -58,7 +60,8 @@ export const BranchTree: React.FC<{
   onDelete(b: GitBranchDetail): void;
   onMenu(e: React.MouseEvent, target: RefTarget): void;
   onTagMenu(e: React.MouseEvent, tag: GitTag): void;
-}> = ({ branches, tags, currentLabel, scope, onScope, onCheckout, onDelete, onMenu, onTagMenu }) => {
+  onRemoveWorktree?(wt: GitWorktreeDetail): void;
+}> = ({ branches, tags, worktrees = [], currentLabel, scope, onScope, onCheckout, onDelete, onMenu, onTagMenu, onRemoveWorktree }) => {
   const [filter, setFilter] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ tags: true });
   const toggle = (k: string) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
@@ -87,6 +90,15 @@ export const BranchTree: React.FC<{
   const localCount = local.reduce((s, n) => s + countLeaves(n), 0);
   const remoteCount = remotes.reduce((s, r) => s + r.count, 0);
   const current = branches.find((b) => !b.isRemote && b.isCurrent);
+  const filteredWorktrees = useMemo(() => {
+    if (!q) return worktrees;
+    return worktrees.filter(
+      (w) =>
+        w.path.toLowerCase().includes(q) ||
+        (w.branch && w.branch.toLowerCase().includes(q)) ||
+        w.branchLabel.toLowerCase().includes(q),
+    );
+  }, [worktrees, q]);
 
   const Chev = ({ isOpen }: { isOpen: boolean }) => (isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />);
 
@@ -101,29 +113,34 @@ export const BranchTree: React.FC<{
             key={n.key}
             className={`bw__node${selected ? " is-scope" : ""}${b.isCurrent ? " is-current" : ""}`}
             style={{ paddingLeft: pad + 14 }}
-            title={`${b.name}\n${b.hash} · ${b.subject}\n${b.relativeDate}${b.upstream ? `\nTracks ${b.upstream}` : ""}`}
+            title={`${b.name}\n${b.hash} · ${b.subject}\n${b.relativeDate}${b.upstream ? `\nTracks ${b.upstream}` : ""}${b.worktreePath ? `\nWorktree: ${b.worktreePath}` : ""}`}
             onClick={() => onScope(selected ? null : b.name)}
-            onDoubleClick={() => onCheckout(b)}
+            onDoubleClick={() => !b.isWorktree && onCheckout(b)}
             onContextMenu={(e) => onMenu(e, { kind: remote ? "remote" : "local", branch: b })}
           >
             {b.isCurrent ? (
               <Star size={12} color="var(--accent-base)" fill="var(--accent-base)" style={{ flexShrink: 0 }} />
+            ) : b.isWorktree ? (
+              <Layers size={12} color="var(--accent-base)" style={{ flexShrink: 0 }} />
             ) : remote ? (
               <Cloud size={12} color="#4f9cf9" style={{ flexShrink: 0 }} />
             ) : (
               <GitBranch size={12} color="#5fb865" style={{ flexShrink: 0 }} />
             )}
             <span className="bw__label">{n.label}</span>
-            {!remote && !b.upstream && !b.isCurrent && <span className="bw__tag-pill" title="Not published to any remote">local</span>}
+            {b.isWorktree && !b.isCurrent && (
+              <span className="bw__tag-pill bw__tag-pill--worktree" title={`Checked out in worktree: ${b.worktreePath}`}>worktree</span>
+            )}
+            {!remote && !b.upstream && !b.isCurrent && !b.isWorktree && <span className="bw__tag-pill" title="Not published to any remote">local</span>}
             {b.gone && <span className="bw__tag-pill bw__tag-pill--danger" title="Remote branch was deleted">gone</span>}
             <SyncBadges ahead={b.ahead} behind={b.behind} hideOnHover />
             <span className="bw__actions">
-              {!b.isCurrent && (
+              {!b.isCurrent && !b.isWorktree && (
                 <button type="button" className="bw__mini" title={remote ? "Checkout (track)" : "Checkout"} onClick={(e) => { e.stopPropagation(); onCheckout(b); }}>
                   <GitCommit size={12} />
                 </button>
               )}
-              {!remote && !b.isCurrent && (
+              {!remote && !b.isCurrent && !b.isWorktree && (
                 <button type="button" className="bw__mini" title={`Delete ${b.name}`} onClick={(e) => { e.stopPropagation(); onDelete(b); }}>
                   <Trash2 size={12} />
                 </button>
@@ -175,6 +192,64 @@ export const BranchTree: React.FC<{
             <Star size={12} color="var(--accent-base)" fill="var(--accent-base)" style={{ flexShrink: 0 }} />
             <span className="bw__label">HEAD ({currentLabel})</span>
           </div>
+        )}
+
+        {worktrees.length > 0 && (
+          <>
+            <div className="bw__node is-section" style={{ paddingLeft: 8 }} onClick={() => toggle("worktrees")}>
+              <Chev isOpen={open("worktrees")} />
+              <Layers size={12} color="var(--accent-base)" />
+              <span className="bw__label">Worktrees</span>
+              <span className="bw__count">{filteredWorktrees.length}</span>
+            </div>
+            {open("worktrees") &&
+              (filteredWorktrees.length === 0 ? (
+                <div className="bw__empty">No matching worktrees</div>
+              ) : (
+                filteredWorktrees.map((wt) => {
+                  const isSelected = !!wt.branch && scope === wt.branch;
+                  const folder = wt.path.split(/[\\/]/).filter(Boolean).pop() || wt.path;
+                  return (
+                    <div
+                      key={wt.path}
+                      className={`bw__node${isSelected ? " is-scope" : ""}${wt.isCurrent ? " is-current" : ""}`}
+                      style={{ paddingLeft: 22 }}
+                      title={`Worktree: ${wt.path}\nBranch: ${wt.branchLabel}\nHead: ${wt.head}${wt.isMain ? "\n(Main repository)" : ""}${wt.isCurrent ? "\n(Current worktree)" : ""}`}
+                      onClick={() => wt.branch && onScope(isSelected ? null : wt.branch)}
+                      onContextMenu={(e) => onMenu(e, { kind: "worktree", worktree: wt })}
+                    >
+                      {wt.isCurrent ? (
+                        <Star size={12} color="var(--accent-base)" fill="var(--accent-base)" style={{ flexShrink: 0 }} />
+                      ) : (
+                        <Layers size={12} color={wt.isMain ? "#4f9cf9" : "var(--accent-base)"} style={{ flexShrink: 0 }} />
+                      )}
+                      <span className="bw__label">{wt.branchLabel}</span>
+                      {wt.isMain ? (
+                        <span className="bw__tag-pill" title="Main repository worktree">root</span>
+                      ) : (
+                        <span className="bw__tag-pill bw__tag-pill--worktree" title={`Worktree folder: ${folder}`}>worktree</span>
+                      )}
+                      {wt.locked && <span className="bw__tag-pill bw__tag-pill--danger" title={wt.lockReason || "Locked"}>locked</span>}
+                      <span className="bw__actions">
+                        {!wt.isMain && !wt.isCurrent && onRemoveWorktree && (
+                          <button
+                            type="button"
+                            className="bw__mini"
+                            title={`Remove worktree (${folder})`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveWorktree(wt);
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })
+              ))}
+          </>
         )}
 
         <div className="bw__node is-section" style={{ paddingLeft: 8 }} onClick={() => toggle("local")}>
