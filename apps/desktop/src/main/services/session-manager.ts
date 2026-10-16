@@ -73,6 +73,16 @@ export class MainSessionManager {
     if (request.sessionPath) {
       const recorded = this.store?.getSessionMeta(request.sessionPath).worktree;
       if (recorded && existsSync(recorded.worktreePath)) worktree = recorded;
+      else if (recorded && request.useWorktree !== false) {
+        // The worktree was deleted (e.g. merged and cleaned up, or removed by hand). Don't fall back to the main
+        // tree: give the session a fresh worktree forked from the same base.
+        const title = recorded.branch.replace(/^hive\//, "").replace(/-[0-9a-f]{6}$/, "").replace(/-/g, " ");
+        const base = recorded.baseBranch === "HEAD" ? undefined : recorded.baseBranch;
+        worktree =
+          (await createWorktree({ projectPath: recorded.projectPath || request.projectPath, title: request.title ?? title, baseBranch: base })) ??
+          (base ? ((await createWorktree({ projectPath: recorded.projectPath || request.projectPath, title: request.title ?? title })) ?? undefined) : undefined);
+        createdWorktree = !!worktree;
+      }
     } else if (request.useWorktree !== false) {
       worktree =
         (await createWorktree({ projectPath: request.projectPath, title: request.title, baseBranch: request.baseBranch })) ?? undefined;

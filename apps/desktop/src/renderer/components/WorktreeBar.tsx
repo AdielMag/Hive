@@ -142,6 +142,14 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
     setNotice(null);
     try {
       const res = await window.studio.worktreeMerge(wt);
+      if (res.ok && res.uncommitted === 0 && sessionPath) {
+        // Merged and nothing left behind: delete the worktree + branch and archive the session.
+        if (await removeSessionWorktree(sessionPath, wt, false)) {
+          await useSessionStore.getState().setSessionArchived(sessionPath, true);
+          toast({ kind: "success", message: `${mergeSuccessMessage(res, wt.baseBranch)} Worktree removed and session archived.` });
+          return;
+        }
+      }
       setNotice(
         res.ok
           ? { kind: "ok", text: mergeSuccessMessage(res, wt.baseBranch) }
