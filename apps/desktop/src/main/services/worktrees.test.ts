@@ -186,7 +186,7 @@ describe("worktrees", { timeout: 60_000 }, () => {
     expect(wt.branch).toMatch(/^hive\/session-[0-9a-f]{6}$/);
 
     const res = await renameWorktreeBranch(wt, "fix login authentication bug");
-    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error(res.error);
     expect(res.branch).toMatch(/^hive\/fix-login-authentication-bug-[0-9a-f]{6}$/);
     expect(wt.branch).toBe(res.branch);
     expect(git(wt.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(res.branch);
