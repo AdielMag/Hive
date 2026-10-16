@@ -2,6 +2,39 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.30.0 — 2026-10-16 · [diff](https://github.com/AdielMag/Hive/compare/v0.29.1...v0.30.0)
+
+### ✨ Features
+
+- **worktree:** follow session worktree in git panels, auto commit, topbar redesign ([`5a06372`](https://github.com/AdielMag/Hive/commit/5a063720eb9be3ab00b2e0004ea8d571a78c364b))
+- **module-sdk:** add cwd to ToolCardCall interface ([`a590f72`](https://github.com/AdielMag/Hive/commit/a590f725ee27528c66aae4653bc8e5c55ab1d83b))
+- **transcript:** batch consecutive tool operations in single row with light data pills ([`17e2302`](https://github.com/AdielMag/Hive/commit/17e23025f40724941d31ca0b3a5ebd7a65422733))
+- **renderer:** redesign session usage and cost breakdown panel ([`9d63ca3`](https://github.com/AdielMag/Hive/commit/9d63ca3fb27a92185e79ba2f4ac3b134905c670e))
+- **updater:** separate Pi CLI and extensions in Settings Updates ([`135ca0c`](https://github.com/AdielMag/Hive/commit/135ca0c575ace09aeb442dcbfac169cecc7cfdae))
+- **branches:** show worktrees in git branches window and use descriptive session branch names ([`26d621c`](https://github.com/AdielMag/Hive/commit/26d621c307378e3fc59d77f526f8399c896da12a))
+
+### 🐛 Fixes
+
+- **desktop:** narrow WorktreeRenameResult in worktrees test ([`876db8e`](https://github.com/AdielMag/Hive/commit/876db8e441fb6bae13d3505bdcbeb9f3fbae3843))
+- **module-sdk:** restore worktree on ActiveSessionContext ([`8342333`](https://github.com/AdielMag/Hive/commit/83423332203101648b848415c097506b6ca60931))
+- **plan-previewer:** scope plan approval to its own session ([`f3d0cff`](https://github.com/AdielMag/Hive/commit/f3d0cff46a7c320791d53769a2e0165c7c6582d4))
+- **cache-bar:** decide auto-compact at send time from live store ([`0fad5c4`](https://github.com/AdielMag/Hive/commit/0fad5c47fff14b30436378e7dacd26a6ed8ac984))
+- **workbench:** restore project dropdown interactivity and preserve active project on tab close ([`3a3ba1c`](https://github.com/AdielMag/Hive/commit/3a3ba1c604b48d0ff0fd1bceb94a0c3254c9ebd9))
+
+### ♻️ Refactoring
+
+- **module-sdk:** remove worktree from ActiveSessionContext ([`ce49076`](https://github.com/AdielMag/Hive/commit/ce4907651cbe99a9b374a7dea69a7de919057fbe))
+
+### 🧹 Other changes
+
+- Merge branch 'hive/session-acf623' ([`4b97b52`](https://github.com/AdielMag/Hive/commit/4b97b523ce52e18f95b84fd7f0e984a26597ba06))
+- Merge branch 'hive/session-8cbf84' ([`8e90968`](https://github.com/AdielMag/Hive/commit/8e90968d6be5214005b3b6761d5cd1e4cb022aaf))
+- Merge branch 'hive/session-71fa15' ([`a74e615`](https://github.com/AdielMag/Hive/commit/a74e61523c56e3f3a1dbb8c889e02a3510f34d9d))
+- Merge branch 'hive/session-a74331' ([`8279a03`](https://github.com/AdielMag/Hive/commit/8279a03ee85cc4bed655c6c2522960fc02de631e))
+- Merge branch 'hive/session-97e79d' ([`798dee2`](https://github.com/AdielMag/Hive/commit/798dee2fd2a66a4b63b5667c038c7787caa299c4))
+- Merge branch 'hive/session-f4ba53' ([`eac27ad`](https://github.com/AdielMag/Hive/commit/eac27adbd0edcfeea1e366cdcf3e86a87a141710))
+- Merge branch 'hive/session-944426' ([`adfb662`](https://github.com/AdielMag/Hive/commit/adfb6623a86e8d8751b1bffa29ce483c7227ef58))
+
 ## v0.29.1 — 2026-10-15 · [diff](https://github.com/AdielMag/Hive/compare/v0.29.0...v0.29.1)
 
 ### 🐛 Fixes
