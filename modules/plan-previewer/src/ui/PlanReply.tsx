@@ -1,14 +1,13 @@
 import React from "react";
 import { Bot, X } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
-import { usePlanStore } from "./plan-store.ts";
+import { usePlan } from "./plan-store.ts";
 
 /** The agent's latest reply to the review, dismissible. Renders nothing when there is none (or it was dismissed). */
 export const PlanReply: React.FC<{ Markdown: ModuleHost["ui"]["Markdown"] }> = ({ Markdown }) => {
-  const reply = usePlanStore((s) => s.planData?.agentResponses?.at(-1));
-  const dismissedAt = usePlanStore((s) => s.dismissedReplyAt);
-  const dismissReply = usePlanStore((s) => s.dismissReply);
-  if (!reply || reply.timestamp === dismissedAt) return null;
+  const { planData, dismissedReplyAt, dismissReply } = usePlan();
+  const reply = planData?.agentResponses?.at(-1);
+  if (!reply || reply.timestamp === dismissedReplyAt) return null;
   return (
     <aside className="plan-reply" aria-label="Agent reply">
       <div className="plan-reply__head">

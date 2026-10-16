@@ -313,7 +313,16 @@ describe("resolvePlanPath", () => {
     expect(resolvePlanPath("./x/../plan.md", "/home/p", [])).toBe("/home/p/plan.md");
   });
   it("prefers a path the CLI announced", () => {
-    expect(resolvePlanPath("docs/plan.md", "C:/wrong", ["C:\\Users\\me\\Hive\\docs\\plan.md"])).toBe("C:/Users/me/Hive/docs/plan.md");
+    expect(resolvePlanPath("docs/plan.md", null, ["C:\\Users\\me\\Hive\\docs\\plan.md"])).toBe("C:/Users/me/Hive/docs/plan.md");
+    expect(resolvePlanPath("docs/plan.md", "C:/Users/me/Hive", ["C:\\Users\\me\\Hive\\docs\\plan.md"])).toBe("C:/Users/me/Hive/docs/plan.md");
+  });
+  it("never borrows another project's announced plan", () => {
+    expect(resolvePlanPath("plan.md", "C:/projA", ["C:/projB/plan.md"])).toBe("C:/projA/plan.md");
+  });
+  it("prefers the announced path inside the card's own project", () => {
+    const recent = ["C:/projB/docs/plan.md", "C:/projA/docs/plan.md"];
+    expect(resolvePlanPath("docs/plan.md", "C:/projA", recent)).toBe("C:/projA/docs/plan.md");
+    expect(resolvePlanPath("docs/plan.md", "C:/projB", recent)).toBe("C:/projB/docs/plan.md");
   });
   it("falls back to the newest announced path with no arg", () => {
     expect(resolvePlanPath(null, null, ["/a/plan.md"])).toBe("/a/plan.md");

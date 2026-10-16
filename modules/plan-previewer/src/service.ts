@@ -11,6 +11,7 @@ import {
   type PlanAgentQuestion,
   type PlanUpdatedEvent,
 } from "./shared.ts";
+import { normalizePlanPath, samePlanPath } from "./plan-utils.ts";
 
 /** Pushes an event to the renderer (the module's `ctx.ipc.emit`). */
 export type PlanEventSink = (event: string, payload: OpenPlanTabEvent | PlanUpdatedEvent) => void;
@@ -22,19 +23,24 @@ export interface PlanSessionMarker {
   updatedAt: string;
 }
 
+interface PlanSessionRecord {
+  filePath: string;
+  sessionContext: string;
+  fileVersion: number;
+  planApproved: boolean;
+  agentResponses: PlanAgentResponse[];
+  agentQuestions: PlanQuestionRound[];
+  questionRoundId: number;
+  watcher: fs.FSWatcher | null;
+  selfWriteUntil: number;
+}
+
 export class PlanPreviewerService {
   private server: http.Server | null = null;
   private port = 3456;
   private actualPort: number | null = null;
   private activePlanPath: string | null = null;
-  private sessionContext = "";
-  private fileVersion = 1;
-  private planApproved = false;
-  private agentResponses: PlanAgentResponse[] = [];
-  private agentQuestions: PlanQuestionRound[] = [];
-  private questionRoundId = 0;
-  private activeWatcher: fs.FSWatcher | null = null;
-  private selfWriteUntil = 0;
+  private plans = new Map<string, PlanSessionRecord>();
   private pendingFeedbackWaiters: Array<{
     res: http.ServerResponse;
     timer: NodeJS.Timeout;
@@ -89,10 +95,41 @@ export class PlanPreviewerService {
     this.server = server;
   }
 
-  private updateActiveMarker() {
-    if (this.activePlanPath && this.actualPort) {
-      writeSessionMarker(this.activePlanPath, this.actualPort, process.pid);
+  private updateActiveMarker(filePath?: string) {
+    const target = filePath || this.activePlanPath;
+    if (target && this.actualPort) {
+      writeSessionMarker(target, this.actualPort, process.pid);
     }
+  }
+
+  private getPlanRecord(filePath: string): PlanSessionRecord | null {
+    const resolved = path.resolve(filePath);
+    for (const [key, rec] of this.plans.entries()) {
+      if (samePlanPath(key, resolved) || samePlanPath(rec.filePath, resolved)) return rec;
+    }
+    return null;
+  }
+
+  private getOrCreatePlanRecord(filePath: string, context?: string): PlanSessionRecord {
+    const resolved = path.resolve(filePath);
+    let rec = this.getPlanRecord(resolved);
+    if (!rec) {
+      rec = {
+        filePath: resolved,
+        sessionContext: context || extractDerivedContext(resolved),
+        fileVersion: 1,
+        planApproved: false,
+        agentResponses: [],
+        agentQuestions: [],
+        questionRoundId: 0,
+        watcher: null,
+        selfWriteUntil: 0,
+      };
+      this.plans.set(normalizePlanPath(resolved).toLowerCase(), rec);
+    } else if (context) {
+      rec.sessionContext = context;
+    }
+    return rec;
   }
 
   private handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -111,32 +148,39 @@ export class PlanPreviewerService {
     const pathname = url.pathname;
 
     if (req.method === "GET" && pathname === "/api/status") {
+      const planFileQuery = url.searchParams.get("planFile") || url.searchParams.get("filePath");
+      const targetPath = planFileQuery ? path.resolve(planFileQuery) : this.activePlanPath;
+      const rec = targetPath ? this.getPlanRecord(targetPath) : null;
       this.json(res, {
         success: true,
         running: true,
         port: this.getPort(),
         pid: process.pid,
-        planFile: this.activePlanPath,
-        sessionContext: this.sessionContext,
-        fileVersion: this.fileVersion,
-        agentResponses: this.agentResponses,
-        agentQuestions: this.agentQuestions,
-        planApproved: this.planApproved,
+        planFile: rec?.filePath ?? targetPath,
+        sessionContext: rec?.sessionContext ?? "",
+        fileVersion: rec?.fileVersion ?? 1,
+        agentResponses: rec?.agentResponses ?? [],
+        agentQuestions: rec?.agentQuestions ?? [],
+        planApproved: rec?.planApproved ?? false,
       });
       return;
     }
 
     if (req.method === "GET" && pathname === "/api/version") {
+      const planFileQuery = url.searchParams.get("planFile") || url.searchParams.get("filePath");
+      const targetPath = planFileQuery ? path.resolve(planFileQuery) : this.activePlanPath;
+      const rec = targetPath ? this.getPlanRecord(targetPath) : null;
       let mtime = 0;
-      if (this.activePlanPath && fs.existsSync(this.activePlanPath)) {
+      const fPath = rec?.filePath ?? targetPath;
+      if (fPath && fs.existsSync(fPath)) {
         try {
-          mtime = fs.statSync(this.activePlanPath).mtimeMs;
+          mtime = fs.statSync(fPath).mtimeMs;
         } catch {}
       }
       this.json(res, {
-        fileVersion: this.fileVersion,
+        fileVersion: rec?.fileVersion ?? 1,
         mtime,
-        planFile: this.activePlanPath,
+        planFile: fPath,
       });
       return;
     }
@@ -147,11 +191,13 @@ export class PlanPreviewerService {
     }
 
     if (req.method === "GET" && pathname === "/api/plan") {
-      if (!this.activePlanPath || !fs.existsSync(this.activePlanPath)) {
+      const planFileQuery = url.searchParams.get("planFile") || url.searchParams.get("filePath");
+      const targetPath = planFileQuery ? path.resolve(planFileQuery) : this.activePlanPath;
+      if (!targetPath || !fs.existsSync(targetPath)) {
         this.json(res, { success: false, error: "No active plan file" }, 404);
         return;
       }
-      const data = this.buildPlanPreviewData(this.activePlanPath);
+      const data = this.buildPlanPreviewData(targetPath);
       this.json(res, { success: true, ...data });
       return;
     }
@@ -159,37 +205,37 @@ export class PlanPreviewerService {
     if (req.method === "POST" && pathname === "/api/notify") {
       this.readBody(req, (body) => {
         const { filePath, context, response, questions, origin } = body ?? {};
-        if (filePath) {
-          const resolvedPath = path.resolve(filePath);
-          this.setActivePlan(resolvedPath, context);
+        const targetPath = filePath ? path.resolve(filePath) : this.activePlanPath;
+        if (!targetPath) {
+          this.json(res, { success: false, error: "No plan file provided" }, 400);
+          return;
         }
-        if (context) this.sessionContext = context;
+        this.setActivePlan(targetPath, context);
+        const rec = this.getOrCreatePlanRecord(targetPath, context);
         if (typeof response === "string" && response.trim()) {
-          this.agentResponses.push({
+          rec.agentResponses.push({
             text: response.trim(),
             timestamp: new Date().toISOString(),
-            fileVersion: this.fileVersion + 1,
+            fileVersion: rec.fileVersion + 1,
           });
         }
         if (Array.isArray(questions) && questions.length > 0) {
-          this.pushQuestionRound(questions);
+          this.pushQuestionRound(rec, questions);
         }
-        this.fileVersion++;
+        rec.fileVersion++;
 
         // Notify the renderer to open/focus the plan tab
-        if (this.activePlanPath) {
-          this.emit(PlanEvents.openTab, {
-            filePath: this.activePlanPath,
-            context: this.sessionContext,
-            origin: sanitizeOrigin(origin),
-          });
-        }
+        this.emit(PlanEvents.openTab, {
+          filePath: rec.filePath,
+          context: rec.sessionContext,
+          origin: sanitizeOrigin(origin),
+        });
 
         this.json(res, {
           success: true,
-          fileVersion: this.fileVersion,
-          planFile: this.activePlanPath,
-          agentQuestions: this.agentQuestions,
+          fileVersion: rec.fileVersion,
+          planFile: rec.filePath,
+          agentQuestions: rec.agentQuestions,
         });
       });
       return;
@@ -253,28 +299,17 @@ export class PlanPreviewerService {
 
   public setActivePlan(filePath: string, context?: string) {
     const resolved = path.resolve(filePath);
-    if (this.activePlanPath === resolved) {
-      if (context) this.sessionContext = context;
-      return;
-    }
-
-    if (this.activePlanPath) {
-      clearSessionMarker(this.activePlanPath);
-    }
-
     this.activePlanPath = resolved;
-    this.sessionContext = context || extractDerivedContext(resolved);
-    this.fileVersion = 1;
-    this.planApproved = false;
-    this.agentResponses = [];
-    this.agentQuestions = [];
-    this.questionRoundId = 0;
+    const rec = this.getOrCreatePlanRecord(resolved, context);
+    // Setting a plan active again (CLI notify) starts a fresh review round for it
+    rec.planApproved = false;
+    if (context) rec.sessionContext = context;
 
-    this.updateActiveMarker();
-    this.attachWatcher(resolved);
+    this.updateActiveMarker(resolved);
+    this.attachWatcher(rec);
   }
 
-  private pushQuestionRound(rawQuestions: any[]) {
+  private pushQuestionRound(rec: PlanSessionRecord, rawQuestions: any[]) {
     const questions: PlanAgentQuestion[] = rawQuestions.map((q, idx) => ({
       id: q.id || `q-${idx + 1}`,
       type: q.type || (Array.isArray(q.options) && q.options.length ? "choice" : "text"),
@@ -292,31 +327,31 @@ export class PlanPreviewerService {
     }));
 
     if (!questions.length) return;
-    this.questionRoundId++;
+    rec.questionRoundId++;
     const round: PlanQuestionRound = {
-      roundId: this.questionRoundId,
+      roundId: rec.questionRoundId,
       status: "pending",
-      fileVersion: this.fileVersion + 1,
+      fileVersion: rec.fileVersion + 1,
       questions,
       timestamp: new Date().toISOString(),
     };
-    this.agentQuestions.push(round);
+    rec.agentQuestions.push(round);
   }
 
-  private attachWatcher(targetPath: string) {
-    if (this.activeWatcher) {
+  private attachWatcher(rec: PlanSessionRecord) {
+    if (rec.watcher) {
       try {
-        this.activeWatcher.close();
+        rec.watcher.close();
       } catch {}
-      this.activeWatcher = null;
+      rec.watcher = null;
     }
 
     try {
-      this.activeWatcher = fs.watch(targetPath, () => {
-        if (Date.now() < this.selfWriteUntil) return;
-        this.fileVersion++;
-        const content = fs.existsSync(targetPath) ? fs.readFileSync(targetPath, "utf8") : "";
-        this.emit(PlanEvents.updated, { filePath: targetPath, fileVersion: this.fileVersion, content });
+      rec.watcher = fs.watch(rec.filePath, () => {
+        if (Date.now() < rec.selfWriteUntil) return;
+        rec.fileVersion++;
+        const content = fs.existsSync(rec.filePath) ? fs.readFileSync(rec.filePath, "utf8") : "";
+        this.emit(PlanEvents.updated, { filePath: rec.filePath, fileVersion: rec.fileVersion, content });
       });
     } catch {}
   }
@@ -328,40 +363,44 @@ export class PlanPreviewerService {
   }
 
   private buildPlanPreviewData(p: string): PlanPreviewData {
+    const resolved = path.resolve(p);
+    const rec = this.getOrCreatePlanRecord(resolved);
     let content = "";
     let stats: fs.Stats | null = null;
     try {
-      content = fs.readFileSync(p, "utf8");
-      stats = fs.statSync(p);
+      content = fs.readFileSync(resolved, "utf8");
+      stats = fs.statSync(resolved);
     } catch {}
 
     const createdAt = stats?.birthtime && !isNaN(stats.birthtime.getTime()) ? stats.birthtime : (stats?.mtime ?? new Date());
     const updatedAt = stats?.mtime ?? new Date();
 
     return {
-      filename: path.basename(p),
-      filePath: p,
+      filename: path.basename(resolved),
+      filePath: resolved,
       content,
-      fileVersion: this.fileVersion,
+      fileVersion: rec.fileVersion,
       createdAt: createdAt.toISOString(),
       updatedAt: updatedAt.toISOString(),
       callerAgent: { id: "pi", name: "Hive Agent" },
-      sessionContext: this.sessionContext || extractDerivedContext(p, content),
-      agentResponses: this.agentResponses,
-      agentQuestions: this.agentQuestions,
-      planApproved: this.planApproved,
+      sessionContext: rec.sessionContext || extractDerivedContext(resolved, content),
+      agentResponses: rec.agentResponses,
+      agentQuestions: rec.agentQuestions,
+      planApproved: rec.planApproved,
     };
   }
 
   public savePlanContent(filePath: string, content: string): { success: boolean; fileVersion: number; error?: string } {
     try {
       const p = path.resolve(filePath);
-      this.selfWriteUntil = Date.now() + 500;
+      const rec = this.getOrCreatePlanRecord(p);
+      rec.selfWriteUntil = Date.now() + 500;
       fs.writeFileSync(p, content, "utf8");
-      this.fileVersion++;
-      return { success: true, fileVersion: this.fileVersion };
+      rec.fileVersion++;
+      return { success: true, fileVersion: rec.fileVersion };
     } catch (err: any) {
-      return { success: false, fileVersion: this.fileVersion, error: err.message };
+      const rec = this.getPlanRecord(filePath);
+      return { success: false, fileVersion: rec?.fileVersion ?? 1, error: err.message };
     }
   }
 
@@ -371,6 +410,7 @@ export class PlanPreviewerService {
       if (!planFile) {
         return { success: false, error: "No plan file provided" };
       }
+      const rec = this.getOrCreatePlanRecord(planFile);
 
       // If user provided updated markdown content, save it
       if (typeof payload.content === "string") {
@@ -380,7 +420,7 @@ export class PlanPreviewerService {
       const answers = Array.isArray(payload.answers) ? payload.answers : [];
       if (answers.length > 0) {
         const answeredRounds = new Set(answers.map((a) => a.roundId).filter(Boolean));
-        this.agentQuestions.forEach((round) => {
+        rec.agentQuestions.forEach((round) => {
           if (answeredRounds.has(round.roundId)) {
             round.status = "answered";
             round.answers = answers.filter((a) => a.roundId === round.roundId);
@@ -390,13 +430,20 @@ export class PlanPreviewerService {
       }
 
       if (payload.status === "approved") {
-        this.planApproved = true;
+        rec.planApproved = true;
+        // Approved plans are done: stop watching (a later notify re-attaches via setActivePlan).
+        if (rec.watcher) {
+          try {
+            rec.watcher.close();
+          } catch {}
+          rec.watcher = null;
+        }
       }
 
       const feedbackData = {
         timestamp: new Date().toISOString(),
         planFile,
-        sessionContext: this.sessionContext,
+        sessionContext: rec.sessionContext,
         callerAgent: "pi",
         callerName: "Hive Agent",
         status: payload.status,
@@ -414,12 +461,12 @@ export class PlanPreviewerService {
       const mdPath = path.join(dir, ".plan-feedback.md");
       fs.writeFileSync(mdPath, generateFeedbackMarkdown(feedbackData), "utf8");
 
-      // Notify all waiting CLI HTTP requests
+      // Notify only waiting CLI HTTP requests for THIS planFile
       const matchingWaiters = this.pendingFeedbackWaiters.filter(
-        (w) => !w.planFile || path.resolve(w.planFile) === planFile,
+        (w) => w.planFile && samePlanPath(w.planFile, planFile),
       );
       this.pendingFeedbackWaiters = this.pendingFeedbackWaiters.filter(
-        (w) => w.planFile && path.resolve(w.planFile) !== planFile,
+        (w) => !w.planFile || !samePlanPath(w.planFile, planFile),
       );
 
       matchingWaiters.forEach((waiter) => {
@@ -434,15 +481,16 @@ export class PlanPreviewerService {
   }
 
   public dispose() {
-    if (this.activeWatcher) {
-      try {
-        this.activeWatcher.close();
-      } catch {}
-      this.activeWatcher = null;
+    for (const rec of this.plans.values()) {
+      if (rec.watcher) {
+        try {
+          rec.watcher.close();
+        } catch {}
+        rec.watcher = null;
+      }
+      clearSessionMarker(rec.filePath);
     }
-    if (this.activePlanPath) {
-      clearSessionMarker(this.activePlanPath);
-    }
+    this.plans.clear();
     this.pendingFeedbackWaiters.forEach((w) => {
       clearTimeout(w.timer);
       this.json(w.res, { success: true, timeout: true, closed: true });

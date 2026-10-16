@@ -89,6 +89,69 @@ describe("PlanPreviewerService", () => {
   });
 });
 
+describe("PlanPreviewerService isolation between concurrent plans", () => {
+  let dirs: string[] = [];
+  let service: PlanPreviewerService | null = null;
+
+  afterEach(() => {
+    service?.dispose();
+    service = null;
+    for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });
+    dirs = [];
+  });
+
+  const makePlan = (name: string): string => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), `hive-plan-${name}-`));
+    dirs.push(dir);
+    const file = path.join(dir, "plan.md");
+    fs.writeFileSync(file, `# ${name}\n`, "utf8");
+    return file;
+  };
+
+  const approve = (svc: PlanPreviewerService, filePath: string) =>
+    svc.submitFeedback({ filePath, status: "approved", comment: "", executionMode: "auto-edit", choices: [], questions: [], answers: [] });
+
+  it("approving one plan does not mark the other approved", () => {
+    const a = makePlan("a");
+    const b = makePlan("b");
+    service = new PlanPreviewerService();
+    service.setActivePlan(a, "A");
+    service.setActivePlan(b, "B");
+
+    expect(approve(service, a).success).toBe(true);
+    expect(service.getPlanData(a)?.planApproved).toBe(true);
+    expect(service.getPlanData(b)?.planApproved).toBe(false);
+  });
+
+  it("approving one plan releases only its own waiting CLI call", async () => {
+    const a = makePlan("a");
+    const b = makePlan("b");
+    service = new PlanPreviewerService();
+    service.start(0);
+    await new Promise((r) => setTimeout(r, 50));
+    const base = `http://127.0.0.1:${service.getPort()}`;
+    for (const f of [a, b]) {
+      await fetch(`${base}/api/notify`, { method: "POST", body: JSON.stringify({ filePath: f, context: "ctx" }) });
+    }
+
+    const waitA = fetch(`${base}/api/wait-feedback?planFile=${encodeURIComponent(a)}&timeout=5`).then((r) => r.json());
+    const waitB = fetch(`${base}/api/wait-feedback?planFile=${encodeURIComponent(b)}&timeout=1`).then((r) => r.json());
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(approve(service, a).success).toBe(true);
+
+    const resA = await waitA;
+    expect(resA.timeout).toBe(false);
+    expect(resA.feedback?.status).toBe("approved");
+
+    // B was never approved: its wait only ends by timing out, never with feedback.
+    const resB = await waitB;
+    expect(resB.timeout).toBe(true);
+    expect(resB.feedback).toBeUndefined();
+    expect(service.getPlanData(b)?.planApproved).toBe(false);
+  });
+});
+
 describe("sanitizeOrigin", () => {
   it("keeps only non-empty string fields", () => {
     expect(sanitizeOrigin({ sessionFile: "/s.jsonl", sessionId: 5, cwd: " " })).toEqual({ sessionFile: "/s.jsonl", sessionId: undefined, cwd: undefined });

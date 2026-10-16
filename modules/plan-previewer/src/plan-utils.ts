@@ -439,9 +439,23 @@ export function resolvePlanPath(arg: string | null, projectPath: string | null |
   if (isAbsolutePath(arg)) return normalizePlanPath(arg);
   const rel = normalizePlanPath(arg);
   const lower = rel.toLowerCase();
-  const hit = recent.map(normalizePlanPath).find((p) => p.toLowerCase().endsWith(`/${lower}`));
+
+  // 1. If projectPath is provided, first look for a recently announced plan belonging to this project/session:
+  if (projectPath) {
+    const projNorm = normalizePlanPath(projectPath).toLowerCase().replace(/\/+$/, "") + "/";
+    const hitInProject = recent
+      .map(normalizePlanPath)
+      .find((p) => (p.toLowerCase() + "/").startsWith(projNorm) && (p.toLowerCase().endsWith(`/${lower}`) || p.toLowerCase() === lower));
+    if (hitInProject) return hitInProject;
+    // The session's cwd is authoritative: never borrow a plan announced by another project/session.
+    return normalizePlanPath(`${projectPath}/${arg}`);
+  }
+
+  // 2. No session cwd known: look for any recently announced plan matching by name suffix:
+  const hit = recent.map(normalizePlanPath).find((p) => p.toLowerCase().endsWith(`/${lower}`) || p.toLowerCase() === lower);
   if (hit) return hit;
-  return projectPath ? normalizePlanPath(`${projectPath}/${arg}`) : rel;
+
+  return rel;
 }
 
 /** Case-insensitive, separator-insensitive path equality (supports relative vs absolute suffix matches). */

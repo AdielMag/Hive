@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
-import { usePlanStore } from "./plan-store.ts";
+import { usePlan } from "./plan-store.ts";
 
 interface Props {
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -15,7 +15,7 @@ const IGNORE = ".plan-decision, .plan-ask, .plan-reply, input, textarea, button"
  * Saved notes stay highlighted in the text (see PlanPreviewerTab) and are listed in the review bar's notes chip.
  */
 export const PlanSelectionPopover: React.FC<Props> = ({ containerRef, disabled }) => {
-  const addAnnotation = usePlanStore((s) => s.addAnnotation);
+  const { addAnnotation } = usePlan();
   const [anchor, setAnchor] = useState<{ x: number; y: number; text: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState("");
