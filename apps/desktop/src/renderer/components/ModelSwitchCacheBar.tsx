@@ -83,6 +83,48 @@ export function useKeepRecent(): KeepRecent {
   return keep;
 }
 
+const keepRecentTokensFor = (ctxWindow: number, keep: KeepRecent) =>
+  Math.min(Math.round((ctxWindow * keep.percent) / 100), keep.maxTokens > 0 ? keep.maxTokens : Infinity);
+
+/**
+ * Decide at send time (from the live store, not the last render) whether to compact before this prompt goes out.
+ * Render-derived state is unreliable around tab switches: stale `running`, stats not refetched yet, or another tab
+ * compacting all used to make the hook silently skip. The caller (sendMessage) has already confirmed the session is idle.
+ */
+function compactAtSend(key: string, keep: KeepRecent): Promise<unknown> | undefined {
+  const s = useSessionStore.getState();
+  const model = s.selectedModel;
+  const tabId = s.activeTabId;
+  if (s.activeKey !== key || !tabId || !model) return undefined;
+  if (s.compactionStates[key]?.phase === "compacting" || s.transcript.compaction) return undefined;
+  const last = lastResponse(s.transcript);
+  if (!last) return undefined;
+  const expired = isCacheExpired(last);
+  const switched = !sameModel(model, last.provider, last.model);
+  if (!switched && !expired) return undefined;
+  // A switch only counts as "mid-session" when recent; an expired cache is cold however old the session is.
+  if (!expired && !isRecent(last)) return undefined;
+  const responseKey = `${tabId}|${last.key}`;
+  if (compactedAfter.has(responseKey) || dismissed.has(`${responseKey}|${model.provider}/${model.id}`)) return undefined;
+  const contextTokens = s.stats?.contextUsage?.tokens ?? s.transcript.lastUsage?.totalTokens ?? 0;
+  const ctxWindow = model.contextWindow ?? s.stats?.contextUsage?.contextWindow ?? 200_000;
+  const advice = estimateSwitchSavings({
+    contextTokens,
+    baselineTokens: last.baselineTokens,
+    keepRecentTokens: keepRecentTokensFor(ctxWindow, keep),
+  });
+  if (!isWorthCompacting(advice)) return undefined;
+  compactedAfter.add(responseKey);
+  return s
+    .compactSession(key, {
+      saved: advice.savedTokens,
+      before: advice.contextTokens,
+      fallbackTokensAfter: advice.afterCompactTokens,
+      toName: modelName(model, "the new model"),
+    })
+    .catch(() => {});
+}
+
 export const ModelSwitchCacheBar: React.FC = () => {
   const {
     transcript,
@@ -136,10 +178,7 @@ export const ModelSwitchCacheBar: React.FC = () => {
       contextTokens,
       baselineTokens: last.baselineTokens,
       // Pi compacts with the current (new) model's per-model override.
-      keepRecentTokens: Math.min(
-        Math.round((ctxWindow * keepRecent.percent) / 100),
-        keepRecent.maxTokens > 0 ? keepRecent.maxTokens : Infinity,
-      ),
+      keepRecentTokens: keepRecentTokensFor(ctxWindow, keepRecent),
     });
   }, [coldCache, last, contextTokens, ctxWindow, keepRecent]);
 
@@ -154,7 +193,7 @@ export const ModelSwitchCacheBar: React.FC = () => {
 
   const toName = modelName(selectedModel, "the new model");
 
-  // Only one compaction at a time (the phase slot is shared by all tabs).
+  // The manual button defers while another tab compacts; the send-time hook doesn't care (compaction state is per session).
   const busyElsewhere = Object.entries(compactionStates).some(([k, s]) => k !== activeKey && s?.phase === "compacting");
 
   const dismiss = () => {
@@ -193,12 +232,10 @@ export const ModelSwitchCacheBar: React.FC = () => {
     isWorthCompacting(advice) &&
     !compactedAfter.has(responseKey) &&
     !dismissed.has(dismissKey);
-  // Sending a message while this nudge is showing (not dismissed with X) compacts first; the prompt is held until it's done.
-  const autoCompactRef = useRef<(() => Promise<void>) | null>(null);
-  autoCompactRef.current = eligible && !busyElsewhere && !currentCompaction ? compactFirst : null;
-  useEffect(() => {
-    return registerPreSendHook((key) => (useSessionStore.getState().activeKey === key ? autoCompactRef.current?.() : undefined));
-  }, []);
+  // Sending a message while this nudge is not dismissed with X compacts first; the prompt is held until it's done.
+  const keepRecentRef = useRef(keepRecent);
+  keepRecentRef.current = keepRecent;
+  useEffect(() => registerPreSendHook((key) => compactAtSend(key, keepRecentRef.current)), []);
 
   if (currentCompaction?.phase === "compacting") {
     const saved = currentCompaction.saved;
