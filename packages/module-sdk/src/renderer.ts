@@ -283,6 +283,8 @@ export interface ToolCardCall {
   result?: { text: string; isError: boolean; details?: unknown };
   /** Live execution timing (only while/after the call runs in this window; absent for reopened sessions). */
   run?: { startedAt?: number; endedAt?: number; status?: string };
+  /** Working directory of the session running the tool, if known. */
+  cwd?: string;
 }
 
 /** Props of a tool card component. */
