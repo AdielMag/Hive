@@ -86,11 +86,24 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const missing = status?.exists === false;
   const parts = status && !missing ? worktreeStatusParts(status) : [];
 
+  const canAutoCommit = stagedCount > 0 || (status?.dirty ?? 0) > 0;
+
   const onAutoCommit = async () => {
-    if (stagedCount === 0 || busy !== null) return;
+    if (!canAutoCommit || busy !== null) return;
     setBusy("autocommit");
     setNotice(null);
     try {
+      // Auto-stage everything unstaged/untracked (skip the app-managed node_modules link).
+      const gs = (await window.studio.modules.invoke("git", "status", wt.worktreePath)) as {
+        unstaged?: { path: string }[];
+        untracked?: { path: string }[];
+      };
+      const toStage = [...(gs.unstaged ?? []), ...(gs.untracked ?? [])]
+        .map((f) => f.path)
+        .filter((p) => !/^node_modules\/?$/.test(p));
+      for (const file of new Set(toStage)) {
+        await window.studio.modules.invoke("git", "stage", wt.worktreePath, file);
+      }
       const generated = (await window.studio.modules.invoke(
         "git",
         "generateCommitMessage",
@@ -228,15 +241,15 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
           <button
             className="ui-btn ui-btn--sm wt-bar__btn--autocommit"
             onClick={() => void onAutoCommit()}
-            disabled={busy !== null || stagedCount === 0}
+            disabled={busy !== null || !canAutoCommit}
             title={
-              stagedCount === 0
-                ? "Stage files first (via Git Stages panel) to auto-commit with AI"
-                : `Generate AI commit message with ${resolvedCommitModel.name || "AI"} and commit ${stagedCount} staged file(s)`
+              !canAutoCommit
+                ? "No changes to commit"
+                : `Stage all changes, generate AI commit message with ${resolvedCommitModel.name || "AI"} and commit`
             }
           >
             {busy === "autocommit" ? <Loader2 size={12} className="spin" /> : <Sparkles size={12} />}
-            <span>Auto commit{stagedCount > 0 ? ` (${stagedCount})` : ""}</span>
+            <span>Auto commit{status && status.dirty > 0 ? ` (${status.dirty})` : ""}</span>
           </button>
         )}
         {!missing && (
