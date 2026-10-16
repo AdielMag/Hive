@@ -48,8 +48,20 @@ const errText = (err: unknown): string => {
 };
 
 export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
-  const { project } = host.hooks.useActiveSession();
-  const cwd = project?.path ?? null;
+  const { project, worktree } = host.hooks.useActiveSession();
+  const rootProjectPath = project?.path ?? null;
+  const worktreePath = worktree?.worktreePath ?? null;
+  const [manualBranch, setManualBranch] = useState<string | null>(null);
+
+  const prevWorktreePathRef = useRef(worktreePath);
+  useEffect(() => {
+    if (prevWorktreePathRef.current !== worktreePath) {
+      prevWorktreePathRef.current = worktreePath;
+      setManualBranch(null);
+    }
+  }, [worktreePath]);
+
+  const cwd = (!manualBranch && worktreePath) ? worktreePath : rootProjectPath;
 
   const [status, setStatus] = useState<GitRepoStatus | null>(null);
   const [branches, setBranches] = useState<GitBranchDetail[]>([]);
@@ -187,14 +199,24 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const checkoutTarget = (b: GitBranchDetail) => (b.isRemote ? b.name.slice(b.name.indexOf("/") + 1) : b.name);
 
   const checkout = (b: GitBranchDetail) => {
-    if (!cwd || b.isCurrent) return;
+    if (!rootProjectPath || b.isCurrent) return;
     const target = checkoutTarget(b);
-    void run(() => gitApi().gitCheckout(cwd, target), `Checked out "${target}"`, "Checkout failed");
+    if (worktree && target === worktree.branch) {
+      setManualBranch(null);
+      return;
+    }
+    setManualBranch(target);
+    void run(() => gitApi().gitCheckout(rootProjectPath, target), `Checked out "${target}"`, "Checkout failed");
   };
 
   const checkoutRef = (ref: string, label: string) => {
-    if (!cwd) return;
-    void run(() => gitApi().gitCheckout(cwd, ref), `Checked out ${label}`, "Checkout failed");
+    if (!rootProjectPath) return;
+    if (worktree && ref === worktree.branch) {
+      setManualBranch(null);
+      return;
+    }
+    setManualBranch(ref);
+    void run(() => gitApi().gitCheckout(rootProjectPath, ref), `Checked out ${label}`, "Checkout failed");
   };
 
   const deleteBranch = async (b: GitBranchDetail) => {
@@ -268,7 +290,9 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     const d = dialog;
     setDialog(null);
     if (d.kind === "new") {
-      await run(() => gitApi().gitCreateBranchFrom(cwd, name, d.from, dialogCheckout), `Created "${name}"${dialogCheckout ? " and checked it out" : ""}`, "Failed to create branch");
+      const targetPath = rootProjectPath ?? cwd;
+      await run(() => gitApi().gitCreateBranchFrom(targetPath, name, d.from, dialogCheckout), `Created "${name}"${dialogCheckout ? " and checked it out" : ""}`, "Failed to create branch");
+      if (dialogCheckout) setManualBranch(name);
     } else if (name !== d.name) {
       await run(() => gitApi().gitRenameBranch(cwd, d.name, name), `Renamed "${d.name}" to "${name}"`, "Rename failed");
     }

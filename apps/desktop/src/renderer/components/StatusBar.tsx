@@ -1,7 +1,7 @@
 /** Bottom status bar on the window frame: Pi version, run state, extension statuses, live quota meters. */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Coins, ExternalLink, Terminal, Volume2, VolumeX, X } from "lucide-react";
+import { Coins, ExternalLink, Volume2, VolumeX, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { parseAnsi } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
@@ -113,15 +113,6 @@ export const StatusBar: React.FC = () => {
       </div>
 
       <ModuleStatusItems />
-
-      <button
-        className={`statusbar__btn${useUi.getState().bottom === "terminal" ? " is-active" : ""}`}
-        onClick={() => useUi.getState().toggleBottom("terminal")}
-        title="Toggle Bottom Terminal (Ctrl+`)"
-        aria-label="Toggle Bottom Terminal"
-      >
-        <Terminal size={12} />
-      </button>
 
       <button
         className="statusbar__btn"
