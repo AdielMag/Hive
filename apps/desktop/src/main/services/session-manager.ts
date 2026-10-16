@@ -30,6 +30,7 @@ import { createWorktree, removeWorktree } from "./worktrees.ts";
 export interface SessionMetaStore {
   getSessionMeta(sessionPath: string): SessionMetaEntry;
   updateSessionMeta(sessionPath: string, updates: Partial<SessionMetaEntry>): SessionMetaEntry;
+  getProjectByPath?(dirPath: string): { links?: LinkedProject[] } | undefined;
 }
 
 interface ActiveSession {
@@ -134,7 +135,11 @@ export class MainSessionManager {
     });
 
     bridge.onMessage((msg) => {
-      if (msg.type === "registry") {
+      if (msg.type === "hello") {
+        // Deliver the project's linked folders so the agent sees the extended workspace.
+        const links = this.store?.getProjectByPath?.(session.projectPath)?.links ?? [];
+        if (links.length > 0) void bridge.setLinkedProjects(links).catch(() => {});
+      } else if (msg.type === "registry") {
         session.registry = {
           sessionId: msg.sessionId,
           cwd: msg.cwd,
@@ -278,6 +283,12 @@ export class MainSessionManager {
     const session = this.sessions.get(key);
     if (!session) return;
     await session.bridge.setLinkedProjects(links);
+  }
+
+  /** Pushes a project's current links to all of its live sessions. */
+  async refreshProjectLinks(projectPath: string, links: LinkedProject[]): Promise<void> {
+    const targets = [...this.sessions.values()].filter((s) => s.projectPath === projectPath);
+    await Promise.allSettled(targets.map((s) => s.bridge.setLinkedProjects(links)));
   }
 
   async stopAll(): Promise<void> {
