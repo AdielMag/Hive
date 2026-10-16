@@ -38,9 +38,11 @@ export function registerSessionIpc(ctx: AppContext): void {
   handle(IPC.projectsAdd, ({ path, name, color }: { path: string; name?: string; color?: string }) =>
     ctx.guiStore.addProject(path, name, color),
   );
-  handle(IPC.projectsUpdate, ({ id, updates }: { id: string; updates: Parameters<AppContext["guiStore"]["updateProject"]>[1] }) =>
-    ctx.guiStore.updateProject(id, updates),
-  );
+  handle(IPC.projectsUpdate, ({ id, updates }: { id: string; updates: Parameters<AppContext["guiStore"]["updateProject"]>[1] }) => {
+    const updated = ctx.guiStore.updateProject(id, updates);
+    if (updates.links) void ctx.sessions?.refreshProjectLinks(updated.path, updated.links);
+    return updated;
+  });
   handle(IPC.projectsRemove, ({ id }: { id: string }) => ctx.guiStore.removeProject(id));
   handle(IPC.projectsGetLastOpened, () => ctx.guiStore.getLastOpenedProjectId());
   handle(IPC.projectsSetLastOpened, ({ id }: { id?: string }) => ctx.guiStore.setLastOpenedProjectId(id));
