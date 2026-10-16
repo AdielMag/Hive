@@ -4,7 +4,7 @@
  */
 import type { ComponentType, ReactNode } from "react";
 import type { TranscriptState } from "@hive/pi-adapter";
-import type { SessionRegistry, SessionWorktree } from "@hive/protocol";
+import type { SessionRegistry } from "@hive/protocol";
 import type { ArcTheme } from "@hive/theme-engine";
 
 /** The subset of a workbench tab a module sees. `data` carries module-specific state. */
@@ -84,8 +84,6 @@ export interface SessionCatalogLite {
 /** The model a core "AI feature" resolves to under the user's Settings → Models preference. */
 export interface ActiveSessionContext {
   project: { id: string; name: string; path: string } | null;
-  /** Git worktree the active session runs in (undefined if main tree or no session tab). */
-  worktree?: SessionWorktree;
   transcript: TranscriptState;
   registry: SessionRegistry | null;
   /** Model selected in the active session tab (provider is Pi's provider id, e.g. "antigravity"). */
