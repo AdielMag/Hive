@@ -81,6 +81,8 @@ const TranscriptContext = createContext<{
   renderNested: (timeline: Timeline) => React.ReactNode;
   /** Whether the session is currently executing a run. */
   sessionRunning: boolean;
+  /** Working directory of the session this transcript belongs to (worktree path or project path). */
+  cwd?: string;
 } | null>(null);
 
 const EMPTY_TRANSCRIPT = createTranscript();
@@ -155,9 +157,10 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
   );
 
   const sessionRunning = transcript.running;
+  const sessionCwd = targetTab?.worktree?.worktreePath ?? activeProject?.path;
   const ctxValue = useMemo(
-    () => ({ annotations, renderNested, sessionRunning }),
-    [annotations, renderNested, sessionRunning],
+    () => ({ annotations, renderNested, sessionRunning, cwd: sessionCwd }),
+    [annotations, renderNested, sessionRunning, sessionCwd],
   );
   const empty = timeline.items.length === 0 && !transcript.running;
 
@@ -802,6 +805,7 @@ const ToolCall: React.FC<{
           running,
           result: result ? { text: result.text, isError: result.isError, details: result.details } : undefined,
           run: run ? { startedAt: run.startedAt, endedAt: run.endedAt, status: run.status } : undefined,
+          cwd: ctx?.cwd,
         }}
         RawBody={RawBody}
       />

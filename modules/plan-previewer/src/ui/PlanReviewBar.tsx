@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Loader2, MessageSquare, Trash2 } from "lucide-react";
 import { countUnansweredAgentQuestions, decisionProgress, hasReviewActivity, pendingRounds } from "../plan-review.ts";
-import { usePlanStore, type FeedbackStatus, type PlanAnnotation } from "./plan-store.ts";
+import { usePlan, type FeedbackStatus, type PlanAnnotation } from "./plan-store.ts";
 import { PlanMenu } from "./PlanMenu.tsx";
 import { planHost } from "./plan-host.ts";
 
@@ -16,7 +16,7 @@ const MAX_ROWS = 6;
 
 /** The single action surface: comment, progress, notes, Request changes, Approve / Send answers, and states. */
 export const PlanReviewBar: React.FC<Props> = ({ onJumpToDecision, onJumpToNote, onJumpToAsk }) => {
-  const s = usePlanStore();
+  const s = usePlan();
   const { phase, isSubmitting, footerComment, selectedExecutionMode } = s;
   const commentRef = useRef<HTMLTextAreaElement>(null);
 

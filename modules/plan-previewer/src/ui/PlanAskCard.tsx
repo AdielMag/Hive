@@ -2,7 +2,7 @@ import React from "react";
 import { MessageCircleQuestion } from "lucide-react";
 import type { PlanAgentQuestion, PlanQuestionRound } from "../shared.ts";
 import { agentAnswerKey } from "../plan-review.ts";
-import { usePlanStore } from "./plan-store.ts";
+import { usePlan } from "./plan-store.ts";
 
 interface Props {
   rounds: PlanQuestionRound[];
@@ -12,8 +12,7 @@ interface Props {
 
 /** Agent `--ask` questions, pinned at the top of the document while they are pending. */
 export const PlanAskCard: React.FC<Props> = ({ rounds, scope = "" }) => {
-  const agentAnswers = usePlanStore((s) => s.agentAnswers);
-  const setAgentAnswer = usePlanStore((s) => s.setAgentAnswer);
+  const { agentAnswers, setAgentAnswer } = usePlan();
   const total = rounds.reduce((n, r) => n + r.questions.length, 0);
   if (total === 0) return null;
 

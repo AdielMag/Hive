@@ -18,13 +18,14 @@ export function usePlanSync(host: ModuleHost, filePath: string | null, agentWait
     if (!filePath) return;
     const offUpdated = host.ipc.on<PlanUpdatedEvent>(PlanEvents.updated, (data) => {
       const st = usePlanStore.getState();
-      if (samePlanPath(data.filePath, st.planData?.filePath) && typeof data.content === "string") {
-        st.updateFromDisk(data.content, data.fileVersion);
+      if (samePlanPath(data.filePath, filePath) && typeof data.content === "string") {
+        st.updateFromDisk(filePath, data.content, data.fileVersion);
       }
     });
     const offOpen = host.ipc.on<OpenPlanTabEvent>(PlanEvents.openTab, (data) => {
-      const st = usePlanStore.getState();
-      if (samePlanPath(data.filePath, st.planData?.filePath)) void st.refresh();
+      if (samePlanPath(data.filePath, filePath)) {
+        void usePlanStore.getState().refresh(filePath);
+      }
     });
     return () => {
       offUpdated();

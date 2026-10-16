@@ -1,6 +1,6 @@
 import React from "react";
 import { ExternalLink, FileText, MoreHorizontal, PanelLeft, X } from "lucide-react";
-import { usePlanStore, type PlanPhase } from "./plan-store.ts";
+import { usePlan, usePlanStore, type PlanPhase } from "./plan-store.ts";
 import { PlanMenu, type PlanMenuItem } from "./PlanMenu.tsx";
 
 interface Props {
@@ -22,16 +22,13 @@ export const STATUS: Record<PlanPhase, { label: string; tone: string }> = {
 };
 
 export const PlanHeader: React.FC<Props> = ({ hasBothViews, outlineVisible, onToggleOutline, onCopyPath, onClose, onOpenAsTab }) => {
-  const planData = usePlanStore((s) => s.planData);
-  const phase = usePlanStore((s) => s.phase);
+  const { planData, phase, lastUpdate, clearLastUpdate } = usePlan();
   const viewMode = usePlanStore((s) => s.viewMode);
   const widthMode = usePlanStore((s) => s.widthMode);
   const outlineOpen = usePlanStore((s) => s.outlineOpen);
-  const lastUpdate = usePlanStore((s) => s.lastUpdate);
   const setViewMode = usePlanStore((s) => s.setViewMode);
   const setWidthMode = usePlanStore((s) => s.setWidthMode);
   const setOutlineOpen = usePlanStore((s) => s.setOutlineOpen);
-  const clearLastUpdate = usePlanStore((s) => s.clearLastUpdate);
 
   const status = STATUS[phase];
   const menuItems: PlanMenuItem[] = [

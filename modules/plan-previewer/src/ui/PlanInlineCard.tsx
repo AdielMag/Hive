@@ -10,7 +10,7 @@ import {
   segmentPlan,
 } from "../plan-utils.ts";
 import { pendingRounds } from "../plan-review.ts";
-import { usePlanStore } from "./plan-store.ts";
+import { PlanProvider, usePlan, usePlanStore } from "./plan-store.ts";
 import { usePlanSync } from "./use-plan-sync.ts";
 import { registerInlineCard } from "./card-registry.ts";
 import { applyBadges } from "./plan-dom.ts";
@@ -30,14 +30,23 @@ interface Props {
 }
 
 const announcedPlans = new Set<string>();
+const callToPath = new Map<string, string>();
 
 /** Transcript card for a `plan-previewer` bash call: live review while it blocks, a compact record once settled. */
 export const PlanToolCard: React.FC<Props> = ({ host, call }) => {
   const command = typeof call.arguments.command === "string" ? call.arguments.command : "";
   const arg = useMemo(() => parsePlanCommandPath(command), [command]);
   const recent = usePlanStore((s) => s.recentPaths);
-  const projectPath = host.sessions.activeProject()?.path ?? null;
-  const filePath = useMemo(() => resolvePlanPath(arg, projectPath, recent), [arg, projectPath, recent]);
+  const sessionCwd = call.cwd ?? host.sessions.activeProject()?.path ?? null;
+
+  const filePath = useMemo(() => {
+    const bound = callToPath.get(call.id);
+    if (bound) return bound;
+    const resolved = resolvePlanPath(arg, sessionCwd, recent);
+    // Pin only once the command is final (not while its arguments are still streaming).
+    if (resolved && call.complete) callToPath.set(call.id, resolved);
+    return resolved;
+  }, [call.id, call.complete, arg, sessionCwd, recent]);
 
   if (call.result) return <PlanSettledCard host={host} call={call} filePath={filePath} />;
   if (!call.complete || !filePath) {
@@ -52,18 +61,27 @@ export const PlanToolCard: React.FC<Props> = ({ host, call }) => {
   return <LivePlanCard host={host} filePath={filePath} />;
 };
 
-const LivePlanCard: React.FC<{ host: ModuleHost; filePath: string }> = ({ host, filePath }) => {
+const LivePlanCard: React.FC<{ host: ModuleHost; filePath: string }> = ({ host, filePath }) => (
+  <PlanProvider filePath={filePath}>
+    <LivePlanCardInner host={host} filePath={filePath} />
+  </PlanProvider>
+);
+
+const LivePlanCardInner: React.FC<{ host: ModuleHost; filePath: string }> = ({ host, filePath }) => {
   const Markdown = host.ui.Markdown;
   // A live card means the call is blocked on the user: the agent has acted, so any earlier "sent" state is over.
   usePlanSync(host, filePath, true);
   useEffect(() => registerInlineCard(filePath), [filePath]);
   // The popup belongs to this card: never leave it flagged open once the card is gone (call settled).
-  useEffect(() => () => usePlanStore.getState().closeModal(), []);
+  useEffect(
+    () => () => {
+      const st = usePlanStore.getState();
+      if (samePlanPath(st.modalFilePath, filePath)) st.closeModal();
+    },
+    [filePath],
+  );
 
-  const planData = usePlanStore((s) => s.planData);
-  const error = usePlanStore((s) => s.error);
-  const phase = usePlanStore((s) => s.phase);
-  const openModal = usePlanStore((s) => s.openModal);
+  const { planData, error, phase, openModal } = usePlan(filePath);
   const readOnly = phase === "sent" || phase === "approved";
   const rounds = pendingRounds(planData?.agentQuestions);
   const ready = planData !== null && samePlanPath(planData.filePath, filePath);

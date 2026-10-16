@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import type { DecisionItem } from "../plan-utils.ts";
 import { resolveChoice } from "../plan-review.ts";
-import { usePlanStore } from "./plan-store.ts";
+import { usePlan } from "./plan-store.ts";
 import { InlineText } from "./InlineText.tsx";
 import { planHost } from "./plan-host.ts";
 
@@ -15,10 +15,8 @@ interface Props {
 
 /** One inline decision ([!CHOICE] radio group or [!QUESTION] answer). Resolved cards fold to a single line. */
 export const DecisionCard: React.FC<Props> = ({ item, readOnly, scope = "" }) => {
-  const selections = usePlanStore((s) => s.selections);
-  const answer = usePlanStore((s) => s.draftAnswers[item.key] ?? "");
-  const selectChoice = usePlanStore((s) => s.selectChoice);
-  const setDraftAnswer = usePlanStore((s) => s.setDraftAnswer);
+  const { selections, draftAnswers, selectChoice, setDraftAnswer } = usePlan();
+  const answer = draftAnswers[item.key] ?? "";
 
   const [editing, setEditing] = useState(false);
   const rootRef = useRef<HTMLElement>(null);

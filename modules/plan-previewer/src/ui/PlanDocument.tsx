@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import { activeViewMarkdown, extractPlanViews, segmentPlan, stripMoreMarker, type TocHeading } from "../plan-utils.ts";
 import { pendingRounds } from "../plan-review.ts";
-import { usePlanStore, type PlanAnnotation } from "./plan-store.ts";
+import { PlanProvider, usePlan, usePlanStore, type PlanAnnotation } from "./plan-store.ts";
 import { usePlanSync } from "./use-plan-sync.ts";
 import { applyBadges, applyHeadingIds, findTextRange, scrollToRange, setNoteHighlights } from "./plan-dom.ts";
 import { PlanHeader } from "./PlanHeader.tsx";
@@ -34,16 +34,18 @@ interface Props {
 const OUTLINE_MIN_WIDTH = 1100;
 
 /** The whole review UI (header, outline, document, review bar), shared by the plan tab and the popup. */
-export const PlanDocument: React.FC<Props> = ({ host, filePath, sync, onClose, onOpenAsTab }) => {
+export const PlanDocument: React.FC<Props> = ({ host, filePath, sync, onClose, onOpenAsTab }) => (
+  <PlanProvider filePath={filePath}>
+    <PlanDocumentInner host={host} filePath={filePath} sync={sync} onClose={onClose} onOpenAsTab={onOpenAsTab} />
+  </PlanProvider>
+);
+
+const PlanDocumentInner: React.FC<Props> = ({ host, filePath, sync, onClose, onOpenAsTab }) => {
   const Markdown = host.ui.Markdown;
-  const planData = usePlanStore((s) => s.planData);
-  const loading = usePlanStore((s) => s.loading);
-  const error = usePlanStore((s) => s.error);
+  const { planData, loading, error, phase, annotations } = usePlan(filePath);
   const viewMode = usePlanStore((s) => s.viewMode);
   const widthMode = usePlanStore((s) => s.widthMode);
   const outlineOpen = usePlanStore((s) => s.outlineOpen);
-  const phase = usePlanStore((s) => s.phase);
-  const annotations = usePlanStore((s) => s.annotations);
   const { loadPlan, setOutlineOpen } = usePlanStore.getState();
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -148,11 +150,11 @@ export const PlanDocument: React.FC<Props> = ({ host, filePath, sync, onClose, o
   }, []);
 
   const copyPath = useCallback(async () => {
-    const path = usePlanStore.getState().planData?.filePath;
+    const path = planData?.filePath;
     if (!path) return;
     const ok = await host.clipboard.copy(path);
     host.toast({ message: ok ? "Plan path copied" : "Could not copy the path", kind: ok ? "success" : "error" });
-  }, [host]);
+  }, [host, planData?.filePath]);
 
   if (loading && !planData) {
     return (
