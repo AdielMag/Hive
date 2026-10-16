@@ -1311,6 +1311,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           tabs: s.tabs.map((t) =>
             t.id === tabId ? { ...t, activeKey: res.key, isCold: false, ...(res.worktree ? { worktree: res.worktree } : {}) } : t,
           ),
+          // A resumed session may have been given a fresh worktree (its old one was deleted): keep the catalog in sync.
+          ...(res.worktree && tab.sessionPath
+            ? {
+                allSessions: s.allSessions.map((x) =>
+                  x.path === tab.sessionPath && x.worktree?.worktreePath !== res.worktree!.worktreePath ? { ...x, worktree: res.worktree } : x,
+                ),
+              }
+            : {}),
         }));
         await hydrateSession(res.key, tabId);
         if (get().activeKey === res.key) void refreshStats(res.key);
