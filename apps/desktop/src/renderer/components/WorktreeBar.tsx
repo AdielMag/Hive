@@ -1,8 +1,9 @@
 /** Thin header above the transcript for sessions running in their own git worktree. */
-import React, { useEffect, useRef, useState } from "react";
-import { FolderOpen, GitBranch, GitMerge, Loader2, Trash2 } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Check, GitBranch, GitMerge, Loader2, Sparkles, Trash2 } from "lucide-react";
 import type { WorktreeStatus } from "@hive/protocol";
 import { useSessionStore, useSessionWorktree } from "../store/session-store.ts";
+import { resolveFeatureModel, useFeatureModelStore } from "../store/feature-models-store.ts";
 import { removeSessionWorktree } from "../store/worktree-actions.ts";
 import { toast } from "../modules/toast-store.ts";
 import {
@@ -24,9 +25,22 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const id = tabId ?? activeTabId;
   const wt = useSessionWorktree(id);
   const sessionPath = useSessionStore((s) => s.tabs.find((t) => t.id === id)?.sessionPath);
+
   const [status, setStatus] = useState<WorktreeStatus | null>(null);
-  const [busy, setBusy] = useState<"merge" | "discard" | null>(null);
+  const [stagedCount, setStagedCount] = useState<number>(0);
+  const [busy, setBusy] = useState<"merge" | "discard" | "autocommit" | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  const pref = useFeatureModelStore((s) => s.config.gitCommit);
+  const selectedModel = useSessionStore((s) => s.selectedModel);
+  const defaultModel = useSessionStore((s) => s.defaultModel);
+  const allModels = useSessionStore((s) => s.allCatalogModels);
+  const defaultProvider = useSessionStore((s) => s.defaultProvider);
+  const resolvedCommitModel = useMemo(
+    () => resolveFeatureModel(pref, selectedModel, defaultModel, allModels, defaultProvider),
+    [pref, selectedModel, defaultModel, allModels, defaultProvider],
+  );
+
   const wtRef = useRef(wt);
   wtRef.current = wt;
   const path = wt?.worktreePath;
@@ -35,8 +49,16 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
     const cur = wtRef.current;
     if (!cur || document.visibilityState === "hidden") return;
     try {
-      const next = await window.studio.worktreeStatus(cur);
-      if (wtRef.current?.worktreePath === cur.worktreePath) setStatus(next);
+      const [nextWt, gitStatus] = await Promise.all([
+        window.studio.worktreeStatus(cur),
+        window.studio.modules
+          .invoke("git", "status", cur.worktreePath)
+          .catch(() => null) as Promise<{ staged?: unknown[] } | null>,
+      ]);
+      if (wtRef.current?.worktreePath === cur.worktreePath) {
+        setStatus(nextWt);
+        setStagedCount(Array.isArray(gitStatus?.staged) ? gitStatus.staged.length : 0);
+      }
     } catch {
       // keep the last known status
     }
@@ -45,6 +67,7 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
   // Poll while this view is mounted (only the visible tab of a pane is) and the window is visible.
   useEffect(() => {
     setStatus(null);
+    setStagedCount(0);
     setNotice(null);
     if (!path) return;
     const run = () => void refresh();
@@ -62,6 +85,31 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
   if (!wt) return null;
   const missing = status?.exists === false;
   const parts = status && !missing ? worktreeStatusParts(status) : [];
+
+  const onAutoCommit = async () => {
+    if (stagedCount === 0 || busy !== null) return;
+    setBusy("autocommit");
+    setNotice(null);
+    try {
+      const generated = (await window.studio.modules.invoke(
+        "git",
+        "generateCommitMessage",
+        wt.worktreePath,
+        resolvedCommitModel.id || undefined,
+      )) as string;
+      await window.studio.modules.invoke("git", "commit", wt.worktreePath, generated.trim());
+      const firstLine = generated.trim().split("\n")[0] ?? "Changes committed";
+      toast({ kind: "success", message: `Committed: ${firstLine}` });
+      setNotice({ kind: "ok", text: `Committed: ${firstLine}` });
+      void refresh();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ kind: "error", message: `Auto commit failed: ${msg}` });
+      setNotice({ kind: "error", text: `Auto commit failed: ${msg}` });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const onMerge = async () => {
     const dirty = status?.dirty ?? 0;
@@ -142,25 +190,31 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
 
   return (
     <div className={`wt-bar${missing ? " is-missing" : ""}`} title={worktreeTooltipLines(wt).join("\n")}>
-      <span className="wt-bar__branch">
-        <GitBranch size={13} />
+      <div className="wt-bar__branch-pill">
+        <GitBranch size={13} className="wt-bar__branch-icon" />
         <span className="wt-bar__branch-name">{wt.branch}</span>
-      </span>
-      <span className="wt-bar__base">{"\u2190"} {wt.baseBranch}</span>
+        <span className="wt-bar__arrow">{"\u2190"}</span>
+        <span className="wt-bar__base-name">{wt.baseBranch}</span>
+      </div>
+
       {missing ? (
-        <span className="wt-bar__msg">worktree missing</span>
+        <span className="wt-bar__badge is-missing">worktree missing</span>
       ) : (
-        <>
-          {status && parts.length > 0 && (
-            <span className="wt-bar__stats">
-              {status.ahead > 0 && <span className="wt-bar__stat--ahead">{status.ahead} ahead</span>}
-              {status.behind > 0 && <span>{status.behind} behind</span>}
-              {status.dirty > 0 && <span className="wt-bar__stat--dirty">{status.dirty} uncommitted</span>}
+        <div className="wt-bar__badges">
+          {status && status.ahead > 0 && <span className="wt-bar__badge is-ahead">+{status.ahead} ahead</span>}
+          {status && status.behind > 0 && <span className="wt-bar__badge is-behind">{status.behind} behind</span>}
+          {stagedCount > 0 && <span className="wt-bar__badge is-staged">{stagedCount} staged</span>}
+          {status && status.dirty > 0 && (
+            <span className="wt-bar__badge is-dirty">{status.dirty} uncommitted</span>
+          )}
+          {status && parts.length === 0 && stagedCount === 0 && (
+            <span className="wt-bar__badge is-clean">
+              <Check size={11} /> clean
             </span>
           )}
-          {status && parts.length === 0 && <span className="wt-bar__stats">clean</span>}
-        </>
+        </div>
       )}
+
       {notice ? (
         <span className={`wt-bar__msg is-${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"} title={notice.text}>
           {notice.text}
@@ -168,19 +222,26 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
       ) : (
         <span className="wt-bar__spacer" />
       )}
-      <span className="wt-bar__actions">
+
+      <div className="wt-bar__actions">
         {!missing && (
           <button
-            className="ui-btn ui-btn--ghost ui-btn--sm"
-            onClick={() => void window.studio.showItemInFolder(wt.worktreePath)}
-            title="Open worktree folder"
+            className="ui-btn ui-btn--sm wt-bar__btn--autocommit"
+            onClick={() => void onAutoCommit()}
+            disabled={busy !== null || stagedCount === 0}
+            title={
+              stagedCount === 0
+                ? "Stage files first (via Git Stages panel) to auto-commit with AI"
+                : `Generate AI commit message with ${resolvedCommitModel.name || "AI"} and commit ${stagedCount} staged file(s)`
+            }
           >
-            <FolderOpen size={12} /> Open folder
+            {busy === "autocommit" ? <Loader2 size={12} className="spin" /> : <Sparkles size={12} />}
+            <span>Auto commit{stagedCount > 0 ? ` (${stagedCount})` : ""}</span>
           </button>
         )}
         {!missing && (
           <button
-            className="ui-btn ui-btn--sm"
+            className="ui-btn ui-btn--sm wt-bar__btn--merge"
             onClick={() => void onMerge()}
             disabled={busy !== null || !status || status.ahead === 0}
             title={status && status.ahead === 0 ? "Nothing to merge" : `Merge into ${wt.baseBranch}`}
@@ -189,14 +250,14 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
           </button>
         )}
         <button
-          className="ui-btn ui-btn--ghost ui-btn--sm"
+          className="ui-btn ui-btn--ghost ui-btn--sm wt-bar__btn--discard"
           onClick={() => void onDiscard()}
           disabled={busy !== null}
           title="Delete the worktree and its branch"
         >
           {busy === "discard" ? <Loader2 size={12} className="spin" /> : <Trash2 size={12} />} Discard
         </button>
-      </span>
+      </div>
     </div>
   );
 };

@@ -85,6 +85,9 @@ export const WorkbenchLayout: React.FC = () => {
   const railItems = useContributions("railItems");
   const needsOnboarding = useModules((s) => s.ready && !s.onboarded);
 
+  const terminalPanel = bottomModulePanels.find((p) => p.id === "terminal");
+  const leftBottomPanels = bottomModulePanels.filter((p) => p.id !== "terminal");
+
   return (
     <div className="shell">
       {projects.length === 0 && <OnboardingGate />}
@@ -106,8 +109,8 @@ export const WorkbenchLayout: React.FC = () => {
           {leftModulePanels.map((p) => (
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.left === p.id} onClick={() => ui.toggleLeft(p.id)} />
           ))}
-          {bottomModulePanels.length > 0 && <div className="rail__divider" />}
-          {bottomModulePanels.map((p) => (
+          {leftBottomPanels.length > 0 && <div className="rail__divider" />}
+          {leftBottomPanels.map((p) => (
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.bottom === p.id} onClick={() => ui.toggleBottom(p.id)} />
           ))}
           <div className="rail__spacer" />
@@ -178,6 +181,15 @@ export const WorkbenchLayout: React.FC = () => {
           {rightModulePanels.map((p) => (
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id} onClick={() => ui.toggleRight(p.id)} />
           ))}
+          <div className="rail__spacer" />
+          {terminalPanel && (
+            <ModuleRailButton
+              key={`${terminalPanel.moduleId}:${terminalPanel.id}`}
+              panel={terminalPanel}
+              active={ui.bottom === terminalPanel.id}
+              onClick={() => ui.toggleBottom(terminalPanel.id)}
+            />
+          )}
         </nav>
       </div>
 

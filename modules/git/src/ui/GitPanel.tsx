@@ -195,14 +195,26 @@ const FileRow: React.FC<FileRowProps> = ({ file, onOpen, actions }) => {
 };
 
 export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
-  const { project: activeProject } = host.hooks.useActiveSession();
-  const projectPath = activeProject?.path;
+  const { project: activeProject, worktree } = host.hooks.useActiveSession();
+  const rootProjectPath = activeProject?.path;
+  const worktreePath = worktree?.worktreePath;
+  const [manualBranch, setManualBranch] = useState<string | null>(null);
+
+  const prevWorktreePathRef = useRef(worktreePath);
+  useEffect(() => {
+    if (prevWorktreePathRef.current !== worktreePath) {
+      prevWorktreePathRef.current = worktreePath;
+      setManualBranch(null);
+    }
+  }, [worktreePath]);
+
+  const effectiveCwd = (!manualBranch && worktreePath) ? worktreePath : rootProjectPath;
   const resolvedCommitModel = host.hooks.useFeatureModel("gitCommit");
   const AiModelChip = host.ui.AiModelChip;
 
   const [status, setStatus] = useState<GitRepoStatus | null>(null);
   const [branches, setBranches] = useState<string[]>([]);
-  const [commitMsg, setCommitMsg] = useState(() => (projectPath ? (drafts.get(projectPath) ?? "") : ""));
+  const [commitMsg, setCommitMsg] = useState(() => (effectiveCwd ? (drafts.get(effectiveCwd) ?? "") : ""));
   const [loading, setLoading] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -236,7 +248,7 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
 
   const refreshGit = useCallback(
     async (silent = false) => {
-      if (!projectPath) return;
+      if (!effectiveCwd) return;
       const id = ++requestId.current;
       if (!silent) {
         setLoading(true);
@@ -244,9 +256,9 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
       }
       try {
         const [s, b] = await Promise.all([
-          gitApi().getGitStatus(projectPath),
+          gitApi().getGitStatus(effectiveCwd),
           gitApi()
-            .getGitBranches(projectPath)
+            .getGitBranches(effectiveCwd)
             .catch(() => [] as string[]),
         ]);
         if (id !== requestId.current) return;
@@ -263,19 +275,19 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         if (!silent && id === requestId.current) setLoading(false);
       }
     },
-    [projectPath],
+    [effectiveCwd],
   );
 
   // Initial load + project switch (restores that project's draft message).
   useEffect(() => {
     setStatus(null);
-    setCommitMsg(projectPath ? (drafts.get(projectPath) ?? "") : "");
+    setCommitMsg(effectiveCwd ? (drafts.get(effectiveCwd) ?? "") : "");
     void refreshGit();
-  }, [projectPath, refreshGit]);
+  }, [effectiveCwd, refreshGit]);
 
   // Keep the lists fresh while the panel is open: agents edit files behind our back.
   useEffect(() => {
-    if (!projectPath) return;
+    if (!effectiveCwd) return;
     const tick = () => {
       if (document.visibilityState === "visible") void refreshGit(true);
     };
@@ -285,13 +297,13 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
       clearInterval(timer);
       window.removeEventListener("focus", tick);
     };
-  }, [projectPath, refreshGit]);
+  }, [effectiveCwd, refreshGit]);
 
   useEffect(() => {
-    if (!projectPath) return;
-    if (commitMsg) drafts.set(projectPath, commitMsg);
-    else drafts.delete(projectPath);
-  }, [projectPath, commitMsg]);
+    if (!effectiveCwd) return;
+    if (commitMsg) drafts.set(effectiveCwd, commitMsg);
+    else drafts.delete(effectiveCwd);
+  }, [effectiveCwd, commitMsg]);
 
   useEffect(() => {
     if (branchOpen) setTimeout(() => branchInputRef.current?.focus(), 30);
@@ -307,9 +319,9 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
 
   /** Runs a git action, surfaces failures in the banner and re-reads status. */
   const act = async (label: string, fn: (cwd: string) => Promise<unknown>) => {
-    if (!projectPath) return;
+    if (!effectiveCwd) return;
     try {
-      await fn(projectPath);
+      await fn(effectiveCwd);
       await refreshGit(true);
     } catch (err) {
       setErrorMessage(`${label} failed: ${errText(err)}`);
@@ -331,11 +343,17 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   };
 
   const handleCheckoutBranch = async (branch: string) => {
-    if (!projectPath || branch === status?.branch) return closeBranch();
+    if (!rootProjectPath || branch === status?.branch) return closeBranch();
+    // Picking the session's own branch just re-binds the panel to its worktree.
+    if (worktree && branch === worktree.branch) {
+      setManualBranch(null);
+      return closeBranch();
+    }
     setLoading(true);
     setErrorMessage(null);
     try {
-      await gitApi().gitCheckout(projectPath, branch);
+      await gitApi().gitCheckout(rootProjectPath, branch);
+      setManualBranch(branch);
       closeBranch();
       await refreshGit();
     } catch (err) {
@@ -346,11 +364,12 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
 
   const handleCreateBranch = async (name: string) => {
     const trimmed = name.trim();
-    if (!projectPath || !trimmed) return;
+    if (!rootProjectPath || !trimmed) return;
     setLoading(true);
     setErrorMessage(null);
     try {
-      await gitApi().gitCreateBranch(projectPath, trimmed);
+      await gitApi().gitCreateBranch(rootProjectPath, trimmed);
+      setManualBranch(trimmed);
       closeBranch();
       await refreshGit();
     } catch (err) {
@@ -360,17 +379,17 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   };
 
   const handleViewDiff = (filePath: string, staged: boolean) => {
-    if (activeProject) void openDiffTab(host, activeProject, filePath, staged);
+    if (activeProject && effectiveCwd) void openDiffTab(host, { id: activeProject.id, path: effectiveCwd }, filePath, staged);
   };
 
   const handleSync = async (op: "fetch" | "pull" | "push") => {
-    if (!projectPath || syncOp) return;
+    if (!effectiveCwd || syncOp) return;
     setSyncOp(op);
     setErrorMessage(null);
     try {
-      if (op === "fetch") await gitApi().gitFetch(projectPath);
-      else if (op === "pull") await gitApi().gitPull(projectPath);
-      else await gitApi().gitPush(projectPath);
+      if (op === "fetch") await gitApi().gitFetch(effectiveCwd);
+      else if (op === "pull") await gitApi().gitPull(effectiveCwd);
+      else await gitApi().gitPush(effectiveCwd);
       await refreshGit(true);
     } catch (err) {
       setErrorMessage(`${op.charAt(0).toUpperCase()}${op.slice(1)} failed: ${errText(err)}`);
@@ -387,11 +406,11 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const canCommit = hasMsg && stagedCount > 0 && !isCommitting;
 
   const handleGenerateAiCommitMessage = async () => {
-    if (!projectPath || stagedCount === 0 || isGeneratingAi) return;
+    if (!effectiveCwd || stagedCount === 0 || isGeneratingAi) return;
     setIsGeneratingAi(true);
     setErrorMessage(null);
     try {
-      const generated = await gitApi().generateCommitMessage(projectPath, resolvedCommitModel.id || undefined);
+      const generated = await gitApi().generateCommitMessage(effectiveCwd, resolvedCommitModel.id || undefined);
       if (generated) setCommitMsg(generated);
     } catch (err) {
       setErrorMessage(`AI message generation failed: ${errText(err)}`);
@@ -402,17 +421,17 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
 
   const runCommit = async (mode: "commit" | "push" | "amend") => {
     setCommitMenuOpen(false);
-    if (!projectPath || !hasMsg || isCommitting) return;
+    if (!effectiveCwd || !hasMsg || isCommitting) return;
     if (mode !== "amend" && stagedCount === 0) return;
     if (mode === "amend" && !confirm("Replace the last commit with these changes and message?")) return;
     setIsCommitting(true);
     setErrorMessage(null);
     try {
-      await gitApi().gitCommit(projectPath, commitMsg.trim(), mode === "amend");
+      await gitApi().gitCommit(effectiveCwd, commitMsg.trim(), mode === "amend");
       setCommitMsg("");
       if (mode === "push") {
         try {
-          await gitApi().gitPush(projectPath);
+          await gitApi().gitPush(effectiveCwd);
         } catch (err) {
           setErrorMessage(`Committed, but push failed: ${errText(err)}`);
         }

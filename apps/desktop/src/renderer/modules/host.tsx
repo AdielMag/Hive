@@ -21,7 +21,7 @@ import { Slot } from "./ModuleViews.tsx";
 import { AiModelChip } from "../components/AiModelChip.tsx";
 import { ContextBreakdownPanel } from "../components/ContextBreakdownPanel.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
-import { registerPreSendHook, useSessionStore } from "../store/session-store.ts";
+import { registerPreSendHook, useSessionStore, useSessionWorktree } from "../store/session-store.ts";
 import { useAppearance } from "../features/appearance/appearance-store.ts";
 import { useUi, type SettingsTabId } from "../store/ui-store.ts";
 import { subscribeSessionEvents } from "./session-bus.ts";
@@ -71,6 +71,9 @@ function useTheme() {
 
 function useActiveSession(): ActiveSessionContext {
   const activeProject = useSessionStore((s) => s.activeProject);
+  // Last displayed session tab: stays put while a file/diff tab is focused, null once no tab is open.
+  const displayedTabId = useSessionStore((s) => s.displayedTabId);
+  const worktree = useSessionWorktree(displayedTabId);
   const transcript = useSessionStore((s) => s.transcript);
   const registry = useActiveRegistry();
   const selected = useSessionStore((s) => s.selectedModel);
@@ -79,7 +82,7 @@ function useActiveSession(): ActiveSessionContext {
   const id = selected?.id;
   const name = selected?.name;
   const model = useMemo(() => (provider && id ? { provider, id, name } : null), [provider, id, name]);
-  return { project: activeProject, transcript, registry, model, reloadEpoch };
+  return { project: activeProject, worktree, transcript, registry, model, reloadEpoch };
 }
 const HostCodeBlock: ModuleHost["ui"]["CodeBlock"] = (props) => <CodeBlock {...props} />;
 const HostHighlightedSource: ModuleHost["ui"]["HighlightedSource"] = (props) => <HighlightedSource {...props} />;
