@@ -35,17 +35,19 @@ interface Account {
   needsAttention?: boolean;
 }
 
-const TABS: Array<{ id: CoreSettingsTabId; label: string; icon: React.ReactNode; title: string }> = [
-  { id: "appearance", label: "Appearance", icon: <Palette size={15} />, title: "Appearance" },
-  { id: "sound", label: "Sound", icon: <Volume2 size={15} />, title: "Sound & Audio Effects" },
-  { id: "models", label: "Models", icon: <Cpu size={15} />, title: "Models" },
-  { id: "compaction", label: "Compaction", icon: <Minimize2 size={15} />, title: "Auto-Compaction & Context" },
-  { id: "accounts", label: "AI Providers", icon: <Key size={15} />, title: "AI providers & accounts" },
-  { id: "keyboard", label: "Keyboard", icon: <Keyboard size={15} />, title: "Keyboard Shortcuts" },
-  { id: "modules", label: "Modules", icon: <Puzzle size={15} />, title: "Modules" },
-  { id: "updates", label: "Updates", icon: <Download size={15} />, title: "Updates" },
-  { id: "about", label: "About", icon: <Info size={15} />, title: "About Hive" },
+type NavGroup = "General" | "AI" | "Extensions" | "App";
+const TABS: Array<{ id: CoreSettingsTabId; group: NavGroup; label: string; icon: React.ReactNode; title: string }> = [
+  { id: "appearance", group: "General", label: "Appearance", icon: <Palette size={15} />, title: "Appearance" },
+  { id: "sound", group: "General", label: "Sound", icon: <Volume2 size={15} />, title: "Sound & Audio Effects" },
+  { id: "keyboard", group: "General", label: "Keyboard", icon: <Keyboard size={15} />, title: "Keyboard Shortcuts" },
+  { id: "models", group: "AI", label: "Models", icon: <Cpu size={15} />, title: "Models" },
+  { id: "accounts", group: "AI", label: "AI Providers", icon: <Key size={15} />, title: "AI providers & accounts" },
+  { id: "compaction", group: "AI", label: "Context", icon: <Minimize2 size={15} />, title: "Context & auto-compaction" },
+  { id: "modules", group: "Extensions", label: "Modules", icon: <Puzzle size={15} />, title: "Modules" },
+  { id: "updates", group: "App", label: "Updates", icon: <Download size={15} />, title: "Updates" },
+  { id: "about", group: "App", label: "About", icon: <Info size={15} />, title: "About Hive" },
 ];
+const GROUPS: NavGroup[] = ["General", "AI", "Extensions", "App"];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialTab = "appearance" }) => {
   const [tab, setTab] = useState<SettingsTabId>(initialTab);
@@ -82,37 +84,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       <div className="settings" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()}>
         <nav className="settings__nav">
           <div className="settings__brand">Settings</div>
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`settings__nav-btn${tab === t.id ? " is-active" : ""}`}
-              onClick={() => {
-                if (tab !== t.id) playUiSound("tab_switch");
-                setTab(t.id);
-              }}
-            >
-              {t.icon}
-              <span>{t.label}</span>
-              {t.id === "updates" && (update?.hasUpdate || piHasUpdate) && <span className="ui-chip ui-chip--accent">New</span>}
-            </button>
+          {GROUPS.map((g) => (
+            <div key={g} role="group" aria-labelledby={`settings-nav-${g}`} className="settings__nav-section">
+              <div id={`settings-nav-${g}`} className="settings__nav-group">{g}</div>
+              {TABS.filter((t) => t.group === g).map((t) => (
+                <button
+                  key={t.id}
+                  className={`settings__nav-btn${tab === t.id ? " is-active" : ""}`}
+                  onClick={() => {
+                    if (tab !== t.id) playUiSound("tab_switch");
+                    setTab(t.id);
+                  }}
+                >
+                  {t.icon}
+                  <span>{t.label}</span>
+                  {t.id === "updates" && (update?.hasUpdate || piHasUpdate) && <span className="ui-chip ui-chip--accent">New</span>}
+                </button>
+              ))}
+              {g === "Extensions" &&
+                moduleSettings.map((t) => {
+                  const key = `${t.moduleId}:${t.id}`;
+                  const Icon = t.icon;
+                  return (
+                    <button
+                      key={key}
+                      className={`settings__nav-btn${tab === key ? " is-active" : ""}`}
+                      onClick={() => {
+                        if (tab !== key) playUiSound("tab_switch");
+                        setTab(key);
+                      }}
+                    >
+                      {Icon ? <Icon size={15} /> : <Puzzle size={15} />}
+                      <span>{t.label}</span>
+                    </button>
+                  );
+                })}
+            </div>
           ))}
-          {moduleSettings.map((t) => {
-            const key = `${t.moduleId}:${t.id}`;
-            const Icon = t.icon;
-            return (
-              <button
-                key={key}
-                className={`settings__nav-btn${tab === key ? " is-active" : ""}`}
-                onClick={() => {
-                  if (tab !== key) playUiSound("tab_switch");
-                  setTab(key);
-                }}
-              >
-                {Icon ? <Icon size={15} /> : <Puzzle size={15} />}
-                <span>{t.label}</span>
-              </button>
-            );
-          })}
         </nav>
         <section className="settings__main">
           <header className="settings__header">

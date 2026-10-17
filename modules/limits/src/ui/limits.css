@@ -124,13 +124,13 @@
   transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .quota-meter__fill.is-ok {
-  background: linear-gradient(90deg, #3fb27f, #57d39b);
+  background: var(--success);
 }
 .quota-meter__fill.is-warn {
-  background: linear-gradient(90deg, #d39b2a, #f0b94a);
+  background: var(--warning);
 }
 .quota-meter__fill.is-danger {
-  background: linear-gradient(90deg, #d9483f, #f06a5f);
+  background: var(--danger);
 }
 .quota-meter__sub {
   display: flex;
@@ -233,10 +233,10 @@
   color: var(--frame-text);
 }
 .sb-quota__pct--warn {
-  color: #e0a43a;
+  color: var(--warning);
 }
 .sb-quota__pct--danger {
-  color: #e5534b;
+  color: var(--danger);
 }
 
 /* Cards/meters inside the popover: lighter panels with clear edges and readable tracks. */
