@@ -102,8 +102,9 @@ export const WorkbenchLayout: React.FC = () => {
     ? Math.min(ui.rightWidth, availableForRight)
     : Math.min(ui.rightWidth, Math.max(LIMITS.rightWidth[0], windowWidth - RAIL_WIDTH * 2 - 80));
 
+  // Crossing the narrow threshold in either direction never leaves an overlay open by surprise.
   useEffect(() => {
-    if (!rightAutoHidden) setRightOverlayOpen(false);
+    setRightOverlayOpen(false);
   }, [rightAutoHidden]);
 
   // Any caller that opens a right panel (rail, context ring, status bar, module host, shortcuts) opens the
@@ -113,8 +114,8 @@ export const WorkbenchLayout: React.FC = () => {
     const prev = prevRight.current;
     prevRight.current = ui.right;
     if (!ui.right) setRightOverlayOpen(false);
-    else if (ui.right !== prev) setRightOverlayOpen(true);
-  }, [ui.right]);
+    else if (ui.right !== prev && rightAutoHidden) setRightOverlayOpen(true);
+  }, [ui.right, rightAutoHidden]);
 
   // Explicit close (Esc, outside click, panel close button) is user intent, so it also clears ui.right.
   const closeRightOverlay = useCallback(() => {
@@ -134,7 +135,7 @@ export const WorkbenchLayout: React.FC = () => {
     const onDown = (e: PointerEvent) => {
       const t = e.target instanceof Element ? e.target : null;
       // Portaled popovers/menus live outside .shell; only clicks on the workbench itself dismiss the overlay.
-      if (!t?.closest(".shell") || t.closest(".panel--overlay, .rail--right, .modal, [role='dialog'], [role='menu'], [role='listbox']")) return;
+      if (!t?.closest(".shell") || t.closest(".panel--overlay, .rail--right, [data-right-opener], .modal, [role='dialog'], [role='menu'], [role='listbox']")) return;
       closeRightOverlay();
     };
     window.addEventListener("keydown", onKey);

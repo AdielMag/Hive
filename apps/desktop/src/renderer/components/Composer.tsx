@@ -775,7 +775,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             <ThinkingPicker />
 
             {/* Context Ring */}
-            <span style={{ flexShrink: 0, display: "inline-flex" }}>
+            <span data-right-opener style={{ flexShrink: 0, display: "inline-flex" }}>
             <ContextRing
               tokens={contextTokens}
               total={contextWindow}
