@@ -10,6 +10,7 @@ export interface ModeMeta {
   icon: React.ReactNode;
   color: string;
   bgTint: string;
+  writes: boolean;
 }
 
 export const MODES: ModeMeta[] = [
@@ -20,6 +21,7 @@ export const MODES: ModeMeta[] = [
     icon: <Sparkles size={13} />,
     color: "#3fb950",
     bgTint: "rgba(63, 185, 80, 0.15)",
+    writes: true,
   },
   {
     id: "ask",
@@ -28,6 +30,7 @@ export const MODES: ModeMeta[] = [
     icon: <MessageCircleQuestion size={13} />,
     color: "#38bdf8",
     bgTint: "rgba(56, 189, 248, 0.15)",
+    writes: false,
   },
   {
     id: "plan",
@@ -36,6 +39,7 @@ export const MODES: ModeMeta[] = [
     icon: <Compass size={13} />,
     color: "#e3b341",
     bgTint: "rgba(227, 179, 65, 0.15)",
+    writes: false,
   },
   {
     id: "manual",
@@ -44,6 +48,7 @@ export const MODES: ModeMeta[] = [
     icon: <CheckSquare size={13} />,
     color: "#58a6ff",
     bgTint: "rgba(88, 166, 255, 0.15)",
+    writes: true,
   },
   {
     id: "debug",
@@ -52,6 +57,7 @@ export const MODES: ModeMeta[] = [
     icon: <Bug size={13} />,
     color: "#bc8cff",
     bgTint: "rgba(188, 140, 255, 0.15)",
+    writes: true,
   },
 ];
 
@@ -88,19 +94,25 @@ export const ModePicker: React.FC = () => {
           display: "flex",
           alignItems: "center",
           gap: 5,
-          background: open ? "var(--bg-elevated)" : "var(--bg-card)",
-          border: `1px solid ${activeMode.bgTint.replace("0.15", "0.4")}`,
+          background: open
+            ? "var(--bg-elevated)"
+            : activeMode.writes
+            ? "color-mix(in srgb, var(--warning) 14%, transparent)"
+            : "var(--bg-card)",
+          border: activeMode.writes
+            ? "1px solid color-mix(in srgb, var(--warning) 40%, transparent)"
+            : "1px solid var(--border-subtle)",
           borderRadius: 4,
           padding: "3px 8px",
           fontSize: 11,
-          color: activeMode.color,
+          color: activeMode.writes ? "var(--warning)" : "var(--text-secondary)",
           cursor: "pointer",
           maxWidth: 140,
           minWidth: 0,
-          transition: "all 0.15s ease",
+          transition: "background-color 150ms ease-out, border-color 150ms ease-out",
         }}
       >
-        <span style={{ display: "inline-flex", flexShrink: 0, color: activeMode.color }}>{activeMode.icon}</span>
+        <span style={{ display: "inline-flex", flexShrink: 0, color: activeMode.writes ? "var(--warning)" : "var(--text-secondary)" }}>{activeMode.icon}</span>
         <span
           className="composer-hide-md"
           style={{
