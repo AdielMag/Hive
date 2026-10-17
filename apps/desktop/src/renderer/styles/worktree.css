@@ -145,6 +145,42 @@
   margin-left: auto;
 }
 
+/* Discard button styling */
+.wt-bar__btn--discard {
+  color: var(--danger);
+  margin-right: 12px;
+  position: relative;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.wt-bar__btn--discard:only-child {
+  margin-right: 0;
+}
+
+.wt-bar__btn--discard::after {
+  content: "";
+  position: absolute;
+  right: -7px;
+  top: 3px;
+  bottom: 3px;
+  width: 1px;
+  background: var(--border-subtle);
+  pointer-events: none;
+}
+
+.wt-bar__btn--discard:only-child::after {
+  display: none;
+}
+
+.wt-bar__btn--discard:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.wt-bar__btn--discard:disabled {
+  opacity: 0.45;
+}
+
 /* Auto commit button styling */
 .wt-bar__btn--autocommit {
   background: rgba(var(--accent-rgb, 99, 102, 241), 0.1);

@@ -3,7 +3,7 @@ import {
   Archive,
   ArchiveRestore,
   GitBranch,
-  MessageSquare,
+  Loader2,
   MessageSquarePlus,
   Pencil,
   Trash2,
@@ -12,9 +12,9 @@ import { useShallow } from "zustand/react/shallow";
 import type { SessionCatalogItem } from "@hive/protocol";
 import { transcriptAwaitsUser, useSessionStore } from "../store/session-store.ts";
 import { sessionDisplayTitle } from "../lib/session-title.ts";
-import { formatAgo } from "../lib/format.ts";
+import { formatAgo, formatAgoShort } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
-import { worktreeChipLabel, worktreeTooltipLines } from "../lib/worktree.ts";
+import { worktreeChipLabel, worktreeShortLabel, worktreeTooltipLines } from "../lib/worktree.ts";
 import { archiveSession } from "../store/worktree-actions.ts";
 
 type SessionBadge = "running" | "input" | "done" | "error";
@@ -150,6 +150,7 @@ export const SessionsPanel: React.FC = () => {
             type="text"
             className="sessions-panel__search-input"
             placeholder="Search sessions…"
+            aria-label="Search sessions"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -173,6 +174,11 @@ export const SessionsPanel: React.FC = () => {
                 key={s.path}
                 className={`sessions-panel__item${isCurrent ? " is-active" : ""}`}
                 onClick={() => !isEditing && void openSessionTab(s.path, activeProject.id)}
+                title={
+                  s.worktree
+                    ? `${display}${badge ? ` (${BADGE_LABEL[badge]})` : ""}\n${formatAgo(new Date(s.modified).getTime())}\n${worktreeChipLabel(s.worktree)}\n${worktreeTooltipLines(s.worktree).join("\n")}`
+                    : `${display}${badge ? ` (${BADGE_LABEL[badge]})` : ""}\n${formatAgo(new Date(s.modified).getTime())}`
+                }
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setContextMenu({
@@ -207,9 +213,11 @@ export const SessionsPanel: React.FC = () => {
                 }}
               >
                 <div className="sessions-panel__item-main">
-                  <div className="sessions-panel__item-icon">
-                    <MessageSquare size={13} />
-                  </div>
+                  {badge === "running" && (
+                    <div className="sessions-panel__item-icon">
+                      <Loader2 size={12} className="spin sessions-panel__item-busy" />
+                    </div>
+                  )}
                   {isEditing ? (
                     <input
                       autoFocus
@@ -229,7 +237,7 @@ export const SessionsPanel: React.FC = () => {
                       {display}
                     </span>
                   )}
-                  {badge && (
+                  {badge && badge !== "running" && (
                     <span
                       className={`sessions-panel__badge sessions-panel__badge--${badge}`}
                       title={BADGE_LABEL[badge]}
@@ -238,15 +246,19 @@ export const SessionsPanel: React.FC = () => {
                 </div>
 
                 <div className="sessions-panel__item-meta">
-                  <span className="sessions-panel__item-time">{formatAgo(new Date(s.modified).getTime())}</span>
+                  <span className="sessions-panel__item-time">
+                    {formatAgoShort(new Date(s.modified).getTime())}
+                  </span>
                   {s.worktree && (
-                    <span
-                      className="sessions-panel__chip"
-                      title={worktreeTooltipLines(s.worktree).join("\n")}
-                    >
-                      <GitBranch size={10} />
-                      {worktreeChipLabel(s.worktree)}
-                    </span>
+                    <>
+                      <span className="sessions-panel__meta-sep">·</span>
+                      <span className={`sessions-panel__branch${isCurrent ? " is-active" : ""}`}>
+                        <GitBranch size={10} className="sessions-panel__branch-icon" />
+                        <span className="sessions-panel__branch-text">
+                          {isCurrent ? worktreeChipLabel(s.worktree) : worktreeShortLabel(s.worktree.branch)}
+                        </span>
+                      </span>
+                    </>
                   )}
                 </div>
               </div>

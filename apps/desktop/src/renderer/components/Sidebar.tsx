@@ -21,11 +21,11 @@ import { useShallow } from "zustand/react/shallow";
 import type { ProjectEntry, SessionCatalogItem } from "@hive/protocol";
 import { transcriptAwaitsUser, useSessionStore } from "../store/session-store.ts";
 import { sessionDisplayTitle } from "../lib/session-title.ts";
-import { formatAgo } from "../lib/format.ts";
+import { formatAgo, formatAgoShort } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
 import { ProjectSettingsModal, type ProjectSettingsSection } from "./ProjectSettingsModal.tsx";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
-import { worktreeChipLabel, worktreeTooltipLines } from "../lib/worktree.ts";
+import { worktreeChipLabel, worktreeShortLabel, worktreeTooltipLines } from "../lib/worktree.ts";
 import { archiveSession } from "../store/worktree-actions.ts";
 
 const VISIBLE_SESSIONS = 5;
@@ -240,41 +240,60 @@ export const Sidebar: React.FC = () => {
         title={
           isRenaming
             ? undefined
-            : `${title}${badge ? ` (${BADGE_LABEL[badge]})` : ""}${Number.isFinite(modified) ? `\n${formatAgo(modified)}` : ""}${sess.worktree ? `\n${worktreeTooltipLines(sess.worktree).join("\n")}` : ""}`
+            : `${title}${badge ? ` (${BADGE_LABEL[badge]})` : ""}${Number.isFinite(modified) ? `\n${formatAgo(modified)}` : ""}${
+                sess.worktree ? `\n${worktreeChipLabel(sess.worktree)}\n${worktreeTooltipLines(sess.worktree).join("\n")}` : ""
+              }`
         }
       >
-        {badge === "running" ? (
-          <Loader2 size={12} className="spin sb-session__icon sb-session__busy" />
-        ) : (
-          <MessageSquare size={12} className="sb-session__icon" />
-        )}
-        {isRenaming ? (
-          <RenameInput
-            initial={sess.title || title}
-            onDone={(value) => {
-              setRenaming(null);
-              if (value !== null && value.trim() !== (sess.title || title)) void renameSession(sess.path, value);
-            }}
-          />
-        ) : (
-          <span className="sb-session__title">{title}</span>
-        )}
-        {!isRenaming && (
-          <>
-            {sess.worktree && <span className="sb-session__wt">{worktreeChipLabel(sess.worktree)}</span>}
-            {badge && badge !== "running" && <span className={`sb-session__dot sb-session__dot--${badge}`} aria-hidden />}
-            {sess.messageCount > 0 && <span className="sb-session__count">{sess.messageCount}</span>}
-            <button
-              className="sb-icon-btn sb-session__action"
-              onClick={(e) => {
-                e.stopPropagation();
-                void (sess.archived ? setSessionArchived(sess.path, false) : archiveSession(sess));
+        <div className="sb-session__row sb-session__row--title">
+          {badge === "running" && (
+            <Loader2 size={12} className="spin sb-session__icon sb-session__busy" />
+          )}
+          {isRenaming ? (
+            <RenameInput
+              initial={sess.title || title}
+              onDone={(value) => {
+                setRenaming(null);
+                if (value !== null && value.trim() !== (sess.title || title)) void renameSession(sess.path, value);
               }}
-              title={sess.archived ? "Unarchive session" : "Archive session (right-click for more)"}
-            >
-              {sess.archived ? <ArchiveRestore size={12} /> : <Archive size={12} />}
-            </button>
-          </>
+            />
+          ) : (
+            <span className="sb-session__title">{title}</span>
+          )}
+          {!isRenaming && (
+            <>
+              {badge && badge !== "running" && <span className={`sb-session__dot sb-session__dot--${badge}`} aria-hidden />}
+              {sess.messageCount > 0 && <span className="sb-session__count">{sess.messageCount}</span>}
+              <button
+                className="sb-icon-btn sb-session__action"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void (sess.archived ? setSessionArchived(sess.path, false) : archiveSession(sess));
+                }}
+                title={sess.archived ? "Unarchive session" : "Archive session (right-click for more)"}
+              >
+                {sess.archived ? <ArchiveRestore size={12} /> : <Archive size={12} />}
+              </button>
+            </>
+          )}
+        </div>
+        {!isRenaming && (
+          <div className="sb-session__row sb-session__meta">
+            {Number.isFinite(modified) && (
+              <span className="sb-session__age">{formatAgoShort(modified)}</span>
+            )}
+            {sess.worktree && (
+              <>
+                {Number.isFinite(modified) && <span className="sb-session__meta-sep">·</span>}
+                <span className={`sb-session__branch${isActive ? " is-active" : ""}`}>
+                  <GitBranch size={10} className="sb-session__branch-icon" />
+                  <span className="sb-session__branch-text">
+                    {isActive ? worktreeChipLabel(sess.worktree) : worktreeShortLabel(sess.worktree.branch)}
+                  </span>
+                </span>
+              </>
+            )}
+          </div>
         )}
       </div>
     );
