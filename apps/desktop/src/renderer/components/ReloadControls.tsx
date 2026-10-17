@@ -7,6 +7,7 @@ import React from "react";
 import { CheckCircle2, Loader2, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
+import { Tooltip } from "./Tooltip.tsx";
 import "../styles/reload-controls.css";
 
 export const ReloadButton: React.FC = () => {
@@ -30,16 +31,19 @@ export const ReloadButton: React.FC = () => {
           ? "Retry reload"
           : "Reload Pi: extensions, skills, prompts, MCP";
   return (
-    <button
-      type="button"
-      className={`reload-btn${reloading ? " is-reloading" : ""}${phase === "error" ? " is-error" : ""}`}
-      onClick={() => void reloadPi()}
-      disabled={disabled}
-      title={title}
-      aria-label="Reload Pi"
-    >
-      <RefreshCw size={12} className={reloading ? "spin" : undefined} />
-    </button>
+    <Tooltip side="top" label={title}>
+      <span style={{ display: "inline-flex", flexShrink: 0 }}>
+        <button
+          type="button"
+          className={`reload-btn${reloading ? " is-reloading" : ""}${phase === "error" ? " is-error" : ""}`}
+          onClick={() => void reloadPi()}
+          disabled={disabled}
+          aria-label="Reload Pi (extensions, skills, prompts, MCP)"
+        >
+          <RefreshCw size={12} className={reloading ? "spin" : undefined} />
+        </button>
+      </span>
+    </Tooltip>
   );
 };
 

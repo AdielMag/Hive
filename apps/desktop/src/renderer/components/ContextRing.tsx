@@ -1,4 +1,6 @@
 import React from "react";
+import { Tooltip } from "./Tooltip.tsx";
+import { contextTone } from "../lib/context-tone.ts";
 
 interface ContextRingProps {
   tokens: number;
@@ -23,9 +25,10 @@ export const ContextRing: React.FC<ContextRingProps> = ({
   const clampedPercent = known ? Math.min(100, Math.max(0, percent)) : 0;
   const offset = circumference - (clampedPercent / 100) * circumference;
 
-  let strokeColor = "#57ab5a"; // green
-  if (clampedPercent > 80) strokeColor = "#e5534b"; // red
-  else if (clampedPercent > 50) strokeColor = "#c69026"; // amber
+  const tone = known ? contextTone(clampedPercent) : "unknown";
+  const strokeColor =
+    tone === "danger" ? "var(--danger)" : tone === "warning" ? "var(--warning)" : "rgba(var(--fg-rgb), 0.55)";
+  const labelColor = tone === "danger" ? "var(--danger)" : tone === "warning" ? "var(--warning)" : "var(--text-secondary)";
 
   const formattedTokens =
     tokens >= 1_000_000
@@ -40,10 +43,16 @@ export const ContextRing: React.FC<ContextRingProps> = ({
       ? `${Math.round(total / 1000)}k`
       : `${total}`;
 
+  const label = known
+    ? `Context: ${formattedTokens} of ${formattedTotal} tokens used (${Math.round(clampedPercent)}%). Open breakdown`
+    : "Context limit unknown. Open breakdown";
+
   return (
-    <div
+    <Tooltip side="top" label={label}>
+    <button
+      type="button"
       onClick={onClick}
-      title={known ? `Context: ${tokens.toLocaleString()} / ${total.toLocaleString()} tokens (${clampedPercent.toFixed(1)}%)` : "Context limit unknown"}
+      aria-label={label}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -51,6 +60,9 @@ export const ContextRing: React.FC<ContextRingProps> = ({
         cursor: onClick ? "pointer" : "default",
         padding: "2px 6px",
         borderRadius: 4,
+        border: "none",
+        font: "inherit",
+        color: "inherit",
         background: "rgba(var(--fg-rgb), 0.04)",
         opacity: known ? 1 : 0.5,
       }}
@@ -77,9 +89,10 @@ export const ContextRing: React.FC<ContextRingProps> = ({
           style={{ transition: "stroke-dashoffset 0.3s ease" }}
         />
       </svg>
-      <span style={{ fontSize: 11, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ fontSize: 11, color: labelColor, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
         {known ? `${formattedTokens}/${formattedTotal}` : "—/—"}
       </span>
-    </div>
+    </button>
+    </Tooltip>
   );
 };

@@ -54,3 +54,56 @@
   /* Soft halo: the composer is focused most of the time, so it must stay quiet. */
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-base) 16%, transparent) !important;
 }
+
+/* One-time Auto Edit callout above the mode pill */
+.auto-edit-hint {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  width: max-content;
+  max-width: 280px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-prominent);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  z-index: 50;
+  animation: auto-edit-hint-in 160ms ease-out;
+}
+.auto-edit-hint__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--warning);
+}
+.auto-edit-hint__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.auto-edit-hint__btn {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border-prominent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.auto-edit-hint__btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+@keyframes auto-edit-hint-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auto-edit-hint { animation: none; }
+}
