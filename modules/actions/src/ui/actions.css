@@ -400,6 +400,9 @@
   background: var(--ga-tint);
   color: var(--text-muted);
 }
+.ga-listbox__search:focus-within {
+  box-shadow: 0 0 0 2px var(--accent-base);
+}
 .ga-listbox__search input {
   flex: 1;
   min-width: 0;
@@ -517,6 +520,11 @@
   border-color: var(--accent-base);
   outline: none;
 }
+.ga-select:focus-visible,
+.ga-input:focus-visible {
+  border-color: var(--accent-base);
+  box-shadow: 0 0 0 2px var(--accent-base);
+}
 .ga-input {
   flex: 1;
 }
@@ -532,6 +540,7 @@
 }
 .ga-input-wrap:focus-within {
   border-color: var(--accent-base);
+  box-shadow: 0 0 0 2px var(--accent-base);
 }
 .ga-input--bare {
   border: none;
@@ -540,6 +549,9 @@
 }
 .ga-input--bare:focus {
   outline: none;
+}
+.ga-input--bare:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-base);
 }
 
 /* ── banners, token card, dispatch sheet ── */
@@ -664,25 +676,17 @@
   --s: var(--text-muted);
   position: relative;
   margin-bottom: 6px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid color-mix(in srgb, var(--s) 35%, transparent);
   border-radius: var(--ga-radius);
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--s) 8%, transparent);
   overflow: hidden;
   transition: border-color 0.12s, background 0.12s;
 }
-.ga-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--s);
-  opacity: 0.85;
-}
 .ga-card:hover {
-  border-color: var(--border-prominent, var(--border-subtle));
+  border-color: color-mix(in srgb, var(--s) 50%, var(--border-prominent, var(--border-subtle)));
 }
 .ga-card.is-open {
-  border-color: color-mix(in srgb, var(--s) 40%, var(--border-subtle));
+  border-color: color-mix(in srgb, var(--s) 55%, var(--border-subtle));
 }
 .ga-card--failure:not(.is-open) {
   background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 7%, var(--bg-card)), var(--bg-card) 60%);
@@ -691,7 +695,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 10px 10px 13px;
+  padding: 10px 12px;
   cursor: pointer;
 }
 .ga-card__head:focus-visible {
@@ -1211,6 +1215,7 @@
 }
 .ga-rs__search:focus-within {
   border-color: var(--accent-base);
+  box-shadow: 0 0 0 2px var(--accent-base);
 }
 .ga-rs__search input {
   flex: 1;
