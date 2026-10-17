@@ -14,4 +14,15 @@ describe("ModePicker MODES", () => {
     const ids = MODES.map((m) => m.id);
     expect(ids).toEqual(["auto-edit", "ask", "plan", "manual", "debug"]);
   });
+
+  it("marks file-writing modes correctly", () => {
+    const writesMap = Object.fromEntries(MODES.map((m) => [m.id, m.writes]));
+    expect(writesMap).toEqual({
+      "auto-edit": true,
+      ask: false,
+      plan: false,
+      manual: true,
+      debug: true,
+    });
+  });
 });
