@@ -6,6 +6,24 @@ export function worktreeChipLabel(wt: Pick<SessionWorktree, "branch" | "baseBran
   return `${wt.branch} \u2190 ${wt.baseBranch}`;
 }
 
+/**
+ * Short label for a session branch (e.g. for sidebar session rows):
+ * - strips a leading `hive/` prefix;
+ * - strips a trailing `-<6 hex>` id suffix if present;
+ * - middle-truncates with `…` to `max` chars.
+ */
+export function worktreeShortLabel(branch: string, max = 22): string {
+  if (!branch) return "";
+  let cleaned = branch.replace(/^hive\//, "");
+  cleaned = cleaned.replace(/-[0-9a-fA-F]{6}$/, "");
+  if (cleaned.length <= max) return cleaned;
+  if (max <= 0) return "";
+  if (max === 1) return "\u2026";
+  const front = Math.ceil((max - 1) / 2);
+  const back = max - 1 - front;
+  return `${cleaned.slice(0, front)}\u2026${cleaned.slice(cleaned.length - back)}`;
+}
+
 /** Tooltip lines: full path, branch and base. */
 export function worktreeTooltipLines(wt: SessionWorktree): string[] {
   return [`Worktree: ${wt.worktreePath}`, `Branch: ${wt.branch}`, `Base: ${wt.baseBranch}`];

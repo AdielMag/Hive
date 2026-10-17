@@ -245,6 +245,14 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
       )}
 
       <div className="wt-bar__actions">
+        <button
+          className="ui-btn ui-btn--ghost ui-btn--sm wt-bar__btn--discard"
+          onClick={() => void onDiscard()}
+          disabled={busy !== null}
+          title="Delete the worktree and its branch"
+        >
+          {busy === "discard" ? <Loader2 size={12} className="spin" /> : <Trash2 size={12} />} Discard
+        </button>
         {!missing && (
           <button
             className="ui-btn ui-btn--sm wt-bar__btn--autocommit"
@@ -270,14 +278,6 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
             {busy === "merge" ? <Loader2 size={12} className="spin" /> : <GitMerge size={12} />} Merge
           </button>
         )}
-        <button
-          className="ui-btn ui-btn--ghost ui-btn--sm wt-bar__btn--discard"
-          onClick={() => void onDiscard()}
-          disabled={busy !== null}
-          title="Delete the worktree and its branch"
-        >
-          {busy === "discard" ? <Loader2 size={12} className="spin" /> : <Trash2 size={12} />} Discard
-        </button>
       </div>
     </div>
   );

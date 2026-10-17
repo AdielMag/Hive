@@ -5,6 +5,7 @@ import {
   mergeFailureMessage,
   mergeSuccessMessage,
   worktreeChipLabel,
+  worktreeShortLabel,
   worktreeStatusParts,
   worktreeTooltipLines,
 } from "./worktree.ts";
@@ -22,6 +23,41 @@ describe("worktree labels", () => {
   it("formats the chip and tooltip", () => {
     expect(worktreeChipLabel(wt)).toBe("hive/fix-1 \u2190 main");
     expect(worktreeTooltipLines(wt)).toEqual(["Worktree: /p/.hive-worktrees/fix-1", "Branch: hive/fix-1", "Base: main"]);
+  });
+
+  describe("worktreeShortLabel", () => {
+    it("leaves a short name untouched", () => {
+      expect(worktreeShortLabel("feature")).toBe("feature");
+      expect(worktreeShortLabel("main")).toBe("main");
+    });
+
+    it("strips the leading hive/ prefix", () => {
+      expect(worktreeShortLabel("hive/feature")).toBe("feature");
+      expect(worktreeShortLabel("hive/fix-1")).toBe("fix-1");
+    });
+
+    it("strips the trailing 6-hex id suffix", () => {
+      expect(worktreeShortLabel("hive/feature-ecb26b")).toBe("feature");
+      expect(worktreeShortLabel("hive/session-105a2d")).toBe("session");
+      expect(worktreeShortLabel("branch-name-123456")).toBe("branch-name");
+      // Does not strip non-hex or different length suffixes
+      expect(worktreeShortLabel("fix-12345")).toBe("fix-12345");
+      expect(worktreeShortLabel("fix-1234567")).toBe("fix-1234567");
+      expect(worktreeShortLabel("fix-ghijkl")).toBe("fix-ghijkl");
+    });
+
+    it("truncates from the middle with an ellipsis to the exact max length", () => {
+      const longBranch = "hive/use-taste-skills-and-emil-diesi-ecb26b";
+      // stripped: "use-taste-skills-and-emil-diesi" (length 31)
+      const shortened = worktreeShortLabel(longBranch, 22);
+      expect(shortened.length).toBe(22);
+      expect(shortened).toBe("use-taste-s\u2026emil-diesi");
+
+      // Odd max length
+      const odd = worktreeShortLabel(longBranch, 15);
+      expect(odd.length).toBe(15);
+      expect(odd).toBe("use-tas\u2026l-diesi");
+    });
   });
 
   it("lists only non-zero status parts", () => {
