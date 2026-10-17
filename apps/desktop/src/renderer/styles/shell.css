@@ -1325,7 +1325,7 @@
   --bg-sidebar: transparent;
   --text-primary: var(--frame-text);
   --text-secondary: color-mix(in srgb, var(--frame-text) 74%, transparent);
-  --text-muted: color-mix(in srgb, var(--frame-text) 52%, transparent);
+  --text-muted: color-mix(in srgb, var(--frame-text) 66%, transparent);
   color: var(--frame-text);
 }
 .panel--left {

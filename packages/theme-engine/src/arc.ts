@@ -33,8 +33,8 @@ export const MAX_ARC_COLORS = 3;
 export const DEFAULT_ARC_THEME: ArcTheme = {
   colors: [{ hue: 65, sat: 0.65 }],
   mode: "dark",
-  intensity: 0.55,
-  grain: 0.35,
+  intensity: 0.45,
+  grain: 0.25,
 };
 
 export interface ArcPreset {
@@ -50,7 +50,7 @@ const preset = (id: string, name: string, colors: ArcColor[], mode: ArcMode = "d
 });
 
 export const ARC_PRESETS: ArcPreset[] = [
-  preset("honey", "Honey", [{ hue: 65, sat: 0.65 }], "dark", 0.55, 0.35),
+  preset("honey", "Honey", [{ hue: 65, sat: 0.65 }], "dark", 0.45, 0.25),
   preset("midnight", "Midnight", [{ hue: 265, sat: 0.55 }]),
   preset("ember", "Ember", [{ hue: 30, sat: 0.8 }, { hue: 350, sat: 0.7 }]),
   preset("lagoon", "Lagoon", [{ hue: 200, sat: 0.7 }, { hue: 170, sat: 0.6 }]),
@@ -89,11 +89,11 @@ export function arcFrameColor(color: ArcColor, dark: boolean, intensity: number)
   const i = clamp01(intensity);
   const s = clamp01(color.sat);
   if (dark) {
-    // soft tint (L .34, low chroma) -> deep jewel tone (L .24, rich chroma)
-    return hex(0.35 - i * 0.12, s * (0.035 + i * 0.12), color.hue);
+    // near-neutral dark frame (L .20 -> .16); i^2 keeps quiet low/mid intensities but full richness at i=1
+    return hex(0.2 - i * 0.04, s * (0.01 + 0.11 * i * i), color.hue);
   }
-  // pastel wash (L .95) -> saturated light colour (L .80)
-  return hex(0.955 - i * 0.15, s * (0.02 + i * 0.12), color.hue);
+  // pastel wash (L .955) -> saturated light colour (L .855)
+  return hex(0.955 - i * 0.1, s * (0.006 + 0.08 * i * i), color.hue);
 }
 
 export function arcFrameGradient(theme: ArcTheme, dark: boolean): string {
@@ -143,10 +143,10 @@ export function buildArcTokens(theme: ArcTheme, systemPrefersDark = true): ArcTo
   const primary = theme.colors[0] ?? DEFAULT_ARC_THEME.colors[0]!;
   const h = primary.hue;
   const s = clamp01(primary.sat);
-  const tint = s * (0.006 + theme.intensity * 0.012); // content surfaces stay calm
+  const tint = s * (0.002 + theme.intensity * 0.006); // content surfaces stay calm
 
   const surf = dark
-    ? { app: 0.175, sunken: 0.155, card: 0.205, hover: 0.235, elevated: 0.225, sidebar: 0.19 }
+    ? { app: 0.215, sunken: 0.195, card: 0.235, hover: 0.26, elevated: 0.275, sidebar: 0.19 }
     : { app: 0.99, sunken: 0.965, card: 1.0, hover: 0.945, elevated: 1.0, sidebar: 0.975 };
 
   const bgApp = hex(surf.app, tint, h);
@@ -158,7 +158,7 @@ export function buildArcTokens(theme: ArcTheme, systemPrefersDark = true): ArcTo
 
   const textPrimary = solveText(bgApp, dark ? ["#eceef2", "#ffffff"] : ["#1d2026", "#000000"], 7);
   const textSecondary = solveText(bgApp, dark ? [hex(0.74, 0.012, h), hex(0.82, 0.01, h)] : [hex(0.45, 0.015, h), hex(0.35, 0.015, h)], 4.5);
-  const textMuted = solveText(bgApp, dark ? [hex(0.58, 0.012, h), hex(0.64, 0.012, h)] : [hex(0.6, 0.012, h), hex(0.52, 0.012, h)], 3);
+  const textMuted = solveText(bgApp, dark ? [hex(0.58, 0.012, h), hex(0.64, 0.012, h), hex(0.7, 0.012, h)] : [hex(0.6, 0.012, h), hex(0.52, 0.012, h), hex(0.45, 0.012, h)], 4.5);
 
   const accentChroma = Math.max(0.05, 0.04 + s * 0.15);
   const accentBase = dark ? hex(0.74, accentChroma, h) : hex(0.54, accentChroma, h);
@@ -167,7 +167,7 @@ export function buildArcTokens(theme: ArcTheme, systemPrefersDark = true): ArcTo
 
   const frameMid = frameAverage(theme, dark);
   const frameText = solveText(frameMid, dark ? ["#f3f4f7", "#ffffff"] : ["#1b1d22", "#000000"], 7);
-  const frameMuted = solveText(frameMid, dark ? ["rgba(255,255,255,0.62)", "rgba(255,255,255,0.75)"] : ["rgba(0,0,0,0.55)", "rgba(0,0,0,0.7)"], 3);
+  const frameMuted = solveText(frameMid, dark ? ["rgba(255,255,255,0.62)", "rgba(255,255,255,0.7)", "rgba(255,255,255,0.8)"] : ["rgba(0,0,0,0.55)", "rgba(0,0,0,0.7)", "rgba(0,0,0,0.8)"], 4.5);
   const fg = dark ? "255, 255, 255" : "0, 0, 0";
 
   const vars: Record<string, string> = {
