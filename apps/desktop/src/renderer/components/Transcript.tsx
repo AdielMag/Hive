@@ -41,7 +41,9 @@ import { CodeBlock } from "./code/CodeBlock.tsx";
 import { ImageThumbnail } from "./ImageThumbnail.tsx";
 import { languageFromPath } from "../lib/highlight/languages.ts";
 import { copyText } from "../lib/clipboard.ts";
-import { formatCost, formatElapsed, formatTokens } from "../lib/format.ts";
+import { formatAgoShort, formatCost, formatElapsed, formatTokens } from "../lib/format.ts";
+import { isSubagentSession } from "../lib/subagent-sessions.ts";
+import { sessionDisplayTitle } from "../lib/session-title.ts";
 import { QueuedMessagesList } from "./transcript/QueuedMessages.tsx";
 import { AuthErrorActions } from "./AuthErrorActions.tsx";
 import { detectAuthError } from "../lib/auth-errors.ts";
@@ -95,6 +97,67 @@ const TranscriptContext = createContext<{
 } | null>(null);
 
 const EMPTY_TRANSCRIPT = createTranscript();
+
+const STARTER_PROMPTS = [
+  "Explain how this project is structured",
+  "Find and fix a failing test",
+  "Review my uncommitted changes",
+] as const;
+
+export const TranscriptEmptyState: React.FC<{ projectId?: string; currentSessionPath?: string }> = ({
+  projectId,
+  currentSessionPath,
+}) => {
+  const allSessions = useSessionStore((s) => s.allSessions);
+  const openSessionTab = useSessionStore((s) => s.openSessionTab);
+  const setPromptText = useSessionStore((s) => s.setPromptText);
+
+  const recent = useMemo(() => {
+    if (!projectId) return [];
+    return allSessions
+      .filter((s) => s.projectId === projectId && !s.archived && !isSubagentSession(s) && s.path !== currentSessionPath)
+      .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
+      .slice(0, 3);
+  }, [allSessions, projectId, currentSessionPath]);
+
+  const applyStarter = (text: string) => {
+    setPromptText(text);
+    requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus());
+  };
+
+  return (
+    <div className="transcript__empty">
+      <div className="transcript__empty-icon">
+        <Sparkles size={20} />
+      </div>
+      <div className="transcript__empty-title">What are we building?</div>
+      <div className="transcript__empty-sub">Ask Pi a question or hand it a task in this project.</div>
+      {recent.length > 0 && projectId && (
+        <div className="transcript__empty-section">
+          <div className="transcript__empty-label">Recent</div>
+          {recent.map((s) => (
+            <button
+              key={s.path}
+              type="button"
+              className="transcript__empty-recent"
+              onClick={() => void openSessionTab(s.path, projectId)}
+            >
+              <span className="transcript__empty-recent-title">{sessionDisplayTitle(s, 60)}</span>
+              <span className="transcript__empty-recent-time">{formatAgoShort(new Date(s.modified).getTime())}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="transcript__empty-chips">
+        {STARTER_PROMPTS.map((text) => (
+          <button key={text} type="button" className="transcript__empty-chip" onClick={() => applyStarter(text)}>
+            {text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const activeTabId = useSessionStore((s) => s.activeTabId);
@@ -190,13 +253,7 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
         <div ref={scrollRef} className="transcript" onScroll={onScroll}>
           <div className="transcript__inner">
             {empty && (
-              <div className="transcript__empty">
-                <div className="transcript__empty-icon">
-                  <Sparkles size={20} />
-                </div>
-                <div className="transcript__empty-title">What are we building?</div>
-                <div className="transcript__empty-sub">Ask Pi a question or hand it a task in this project.</div>
-              </div>
+              <TranscriptEmptyState projectId={activeProject?.id} currentSessionPath={targetTab?.sessionPath} />
             )}
             {groupedItems.map((groupItem) => {
               if (groupItem.kind === "toolBatch") {

@@ -92,4 +92,29 @@ describe("WelcomeView", () => {
     expect(html).toContain("Start a New Session");
     expect(html).toContain("No previous sessions in this project yet");
   });
+
+  it("excludes subagent sessions from the project session list", () => {
+    const project = { id: "proj_sub", name: "Sub Project", path: "C:/work/sub", color: "#00aaee" } as any;
+    const parent = "C:/work/sub/.pi/parent.jsonl";
+    setStoreState({
+      activeProject: project,
+      allSessions: [
+        { id: "p", projectId: "proj_sub", path: parent, name: "", title: "User session", modified: new Date().toISOString() },
+        {
+          id: "c",
+          projectId: "proj_sub",
+          path: "C:/work/sub/.pi/child.jsonl",
+          name: "reviewer#54da68dd",
+          parentSessionPath: parent,
+          title: "Subagent run title",
+          modified: new Date().toISOString(),
+        },
+      ] as any[],
+      bootstrap: null,
+    });
+
+    const html = renderToStaticMarkup(React.createElement(WelcomeView));
+    expect(html).toContain("User session");
+    expect(html).not.toContain("Subagent run title");
+  });
 });
