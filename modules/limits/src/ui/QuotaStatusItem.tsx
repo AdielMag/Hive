@@ -2,14 +2,15 @@ import React, { useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Gauge, RefreshCw, X } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
-import { formatAgo } from "@hive/module-sdk/format";
+import { formatAgo, formatDuration } from "@hive/module-sdk/format";
 import { useLimits, useNow } from "./limits-store.ts";
 import { ProviderQuotaCard, usageTone } from "./quota-ui.tsx";
 import { useHoverPopover } from "./useHoverPopover.ts";
 import { buildMeters } from "./meters.ts";
 
 const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "openai-codex": "Codex" };
-const POOL_TAG: Record<string, string> = { Gemini: "Gem", "Claude·GPT": "3P" };
+/** Antigravity quota pools: Gemini models vs. third-party (Claude + GPT-OSS) models. */
+const POOL_LABEL: Record<string, string> = { Gemini: "Gemini", "Claude·GPT": "Claude/GPT" };
 const TONE_COLOR = { ok: "#3fb27f", warn: "#e0a43a", danger: "#e5534b" } as const;
 
 /** One thin track; the 5h bar sits above the 7d bar so a subscription costs ~one icon + 28px + a number. */
@@ -57,7 +58,12 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
             const worst = Math.max(used5 ?? 0, usedWk ?? 0);
             const tone = usageTone(worst);
             const detail = [used5 !== undefined && `5h ${Math.round(used5)}%`, usedWk !== undefined && `7d ${Math.round(usedWk)}%`].filter(Boolean).join(" · ");
-            const tip = `${m.label} — ${detail}${m.active === true ? " (active model)" : ""}`;
+            const resetAt = (used5 !== undefined ? m.w5?.resetsAt : undefined) ?? m.wk?.resetsAt;
+            const poolName = m.pool ? (POOL_LABEL[m.pool] ?? m.pool) : undefined;
+            const resets = resetAt ? `, resets in ${formatDuration(resetAt - now)}` : "";
+            const tip = poolName
+              ? `Quota pool: ${poolName} (${m.label}) — ${Math.round(worst)}% used${resets} · ${detail}${m.active === true ? " (active model)" : ""}`
+              : `${m.label} — ${Math.round(worst)}% used${resets} · ${detail}`;
             return (
               <span
                 key={m.key}
@@ -65,7 +71,7 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
                 title={tip}
               >
                 <ProviderIcon provider={m.providerId} size={12} />
-                {m.pool && <span className="sb-quota__pool">{POOL_TAG[m.pool] ?? m.pool}</span>}
+                {m.pool && <span className="sb-quota__pool">{POOL_LABEL[m.pool] ?? m.pool}</span>}
                 <span className="sb-quota__tracks" aria-hidden>
                   <Track used={used5} />
                   <Track used={usedWk} />

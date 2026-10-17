@@ -1,6 +1,7 @@
 /** Stacked column & animated spline line chart (SVG) with gridlines, axis labels and interactive tooltip. */
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { niceScale, type Series, type StackedColumn, type UsageMetric } from "./usage-series.ts";
+import { monotoneSplinePath } from "./spline.ts";
 import { formatCost, formatTokens } from "@hive/module-sdk/format";
 
 export type ChartType = "bars" | "line";
@@ -19,28 +20,6 @@ interface Props {
 
 const H = 220;
 const PAD = { top: 12, right: 8, bottom: 26, left: 52 };
-
-/** Catmull-Rom spline converted to cubic bezier SVG path string */
-function getSmoothSplinePath(points: Array<[number, number]>): string {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M ${points[0]![0]},${points[0]![1]}`;
-
-  let d = `M ${points[0]![0].toFixed(1)},${points[0]![1].toFixed(1)}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(0, i - 1)]!;
-    const p1 = points[i]!;
-    const p2 = points[i + 1]!;
-    const p3 = points[Math.min(points.length - 1, i + 2)]!;
-
-    const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
-    const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
-    const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
-
-    d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
-  }
-  return d;
-}
 
 export const UsageChart: React.FC<Props> = ({
   series,
@@ -95,7 +74,7 @@ export const UsageChart: React.FC<Props> = ({
     });
   }, [series, columns, slot, scale.max]);
 
-  const totalSpline = useMemo(() => getSmoothSplinePath(totalPoints), [totalPoints]);
+  const totalSpline = useMemo(() => monotoneSplinePath(totalPoints, PAD.top, PAD.top + innerH), [totalPoints, innerH]);
 
   const areaPath = useMemo(() => {
     if (totalPoints.length === 0) return "";
@@ -145,7 +124,7 @@ export const UsageChart: React.FC<Props> = ({
             {series.map((s, si) => {
               const pts = seriesPoints[si];
               if (!pts || pts.length < 2) return null;
-              const pathD = getSmoothSplinePath(pts);
+              const pathD = monotoneSplinePath(pts, PAD.top, PAD.top + innerH);
               return (
                 <path
                   key={s.key}

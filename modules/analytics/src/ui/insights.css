@@ -73,7 +73,7 @@
   font-variant-numeric: tabular-nums;
 }
 .usage-kpi__delta.is-up {
-  color: var(--warning);
+  color: var(--danger);
 }
 .usage-kpi__delta.is-down {
   color: var(--success);

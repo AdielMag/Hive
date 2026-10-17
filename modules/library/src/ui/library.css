@@ -330,7 +330,7 @@
 }
 .lib-chip--clickable {
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 .lib-chip--clickable:hover {
   background: rgba(var(--fg-rgb), 0.12);
@@ -1321,4 +1321,15 @@ button.lib-chip {
 }
 .lib-detail__more:hover {
   text-decoration: underline;
+}
+
+/* Visible keyboard focus where the base rule drops the outline */
+.lib-sidebar__search-box input:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-base);
+}
+.lib-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-base);
+}
+.lib-model-picker__search input:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-base);
 }

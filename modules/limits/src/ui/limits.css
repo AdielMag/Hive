@@ -226,6 +226,7 @@
   border-radius: inherit;
 }
 .sb-quota__pct {
+  font-variant-numeric: tabular-nums;
   min-width: 3ch;
   text-align: right;
   font-weight: 600;

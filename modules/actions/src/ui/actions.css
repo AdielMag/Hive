@@ -1425,3 +1425,11 @@
   padding: 0 14px;
   flex-shrink: 0;
 }
+
+/* Visible keyboard focus where the base rule drops the outline */
+.ga-listbox__search input:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-base);
+}
+.ga-rs__search input:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-base);
+}

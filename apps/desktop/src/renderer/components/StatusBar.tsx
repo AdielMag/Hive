@@ -91,7 +91,7 @@ export const StatusBar: React.FC = () => {
 
   return (
     <footer className="statusbar">
-      <span className="statusbar__item">pi {piVersion}</span>
+      <span className="statusbar__item" style={{ color: "var(--text-muted)" }}>pi {piVersion}</span>
       {isRunning && (
         <span className="statusbar__item statusbar__running">
           <span className="pulse-dot" /> running

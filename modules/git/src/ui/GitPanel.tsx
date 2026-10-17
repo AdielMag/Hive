@@ -484,12 +484,12 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           type="button"
           className={`gp-branch${branchOpen ? " gp-branch--open" : ""}`}
           onClick={() => setBranchOpen((v) => !v)}
-          title="Switch or create branch"
+          title={status?.branch ? `${status.branch} — switch or create branch` : "Switch or create branch"}
           aria-haspopup="listbox"
           aria-expanded={branchOpen}
         >
           <GitBranch size={14} className="gp-branch__icon" />
-          <span className="gp-branch__name">{status?.branch || "HEAD"}</span>
+          <span className="gp-branch__name" title={status?.branch || undefined}>{status?.branch || "HEAD"}</span>
           <ChevronDown size={13} className="gp-branch__chev" />
         </button>
 

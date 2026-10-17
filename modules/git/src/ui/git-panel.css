@@ -70,8 +70,9 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 96px;
+  overflow: hidden;
   height: 30px;
   padding: 0 8px 0 9px;
   border: 1px solid var(--border-subtle);
@@ -699,4 +700,9 @@
 .gp-split .gp-pop--menu {
   left: 0;
   right: 0;
+}
+
+/* Visible keyboard focus where the base rule drops the outline */
+.gp-search input:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-base);
 }

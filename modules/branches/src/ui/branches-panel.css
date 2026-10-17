@@ -714,3 +714,14 @@
     transform: rotate(360deg);
   }
 }
+
+/* Visible keyboard focus where the base rule drops the outline */
+.bw__search input:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-base);
+}
+.bw__filter input:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-base);
+}
+.bw__dialog input[type="text"]:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-base);
+}

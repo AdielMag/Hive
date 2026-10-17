@@ -532,3 +532,8 @@ button.tools-row:hover {
   color: var(--accent, var(--text-primary));
   background: var(--bg-hover, rgba(127, 127, 127, 0.15));
 }
+
+/* Visible keyboard focus where the base rule drops the outline */
+.tools-panel__input:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-base);
+}
