@@ -136,10 +136,13 @@
   text-align: left;
   cursor: pointer;
 }
-.plan-menu__item:hover,
+.plan-menu__item:hover {
+  background: rgba(var(--fg-rgb), 0.07);
+}
 .plan-menu__item:focus-visible {
   background: rgba(var(--fg-rgb), 0.07);
   outline: none;
+  box-shadow: 0 0 0 2px var(--accent-base);
 }
 .plan-menu__check {
   display: inline-flex;
@@ -266,6 +269,11 @@
   outline: none;
   border-color: var(--accent-base);
 }
+.plan-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-base);
+  box-shadow: 0 0 0 2px var(--accent-base);
+}
 .plan-input::placeholder { color: var(--text-muted); }
 
 .plan-option {
@@ -287,6 +295,7 @@
 .plan-option:focus-visible {
   outline: none;
   border-color: var(--accent-base);
+  box-shadow: 0 0 0 2px var(--accent-base);
 }
 .plan-option[aria-checked="true"] {
   background: var(--accent-subtle);
@@ -339,7 +348,10 @@
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
 }
-.plan-decision.is-open { box-shadow: inset 3px 0 0 var(--accent-base); }
+.plan-decision.is-open {
+  border-color: color-mix(in srgb, var(--accent-base) 35%, transparent);
+  background: color-mix(in srgb, var(--accent-base) 8%, transparent);
+}
 .plan-decision.is-folded {
   padding: 6px 8px 6px 12px;
   background: transparent;
@@ -416,8 +428,8 @@
   margin: 16px 0;
   padding: 10px 14px;
   border-radius: 6px;
-  border-left: 3px solid var(--tone);
-  background: color-mix(in srgb, var(--tone) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tone) 35%, transparent);
+  background: color-mix(in srgb, var(--tone) 8%, transparent);
 }
 .plan-callout--tip { --tone: var(--success); }
 .plan-callout--important { --tone: var(--accent-base); }
@@ -454,7 +466,10 @@
 }
 .plan-reply__head > span { flex: 1; }
 .plan-reply__body .md { font-size: 13px; line-height: 1.6; margin-top: 4px; }
-.plan-ask { box-shadow: inset 3px 0 0 var(--accent-base); }
+.plan-ask {
+  border-color: color-mix(in srgb, var(--accent-base) 35%, transparent);
+  background: color-mix(in srgb, var(--accent-base) 8%, transparent);
+}
 .plan-ask__head { color: var(--accent-base); margin-bottom: 8px; }
 .plan-ask__item + .plan-ask__item {
   margin-top: 12px;
@@ -730,6 +745,9 @@
   overflow: hidden;
   outline: none;
   animation: plan-rise 0.16s ease;
+}
+.plan-modal:focus-visible {
+  box-shadow: var(--shadow-pop), 0 0 0 2px var(--accent-base);
 }
 .plan-modal .plan-view { height: 100%; }
 @keyframes plan-fade { from { opacity: 0; } }
