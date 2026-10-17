@@ -13,6 +13,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { sessionDisplayTitle } from "../lib/session-title.ts";
 import { formatAgo } from "../lib/format.ts";
+import { isSubagentSession } from "../lib/subagent-sessions.ts";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import hiveIcon from "../assets/hive-icon.png";
 
@@ -41,13 +42,14 @@ export const WelcomeView: React.FC = () => {
   const projectSessions = useMemo(() => {
     if (!activeProject) return [];
     return allSessions
+      .filter((s) => !isSubagentSession(s))
       .filter((s) => s.projectId === activeProject.id || (!s.projectId && s.cwd === activeProject.path))
       .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
       .slice(0, 8);
   }, [allSessions, activeProject]);
 
   const recentSessions = useMemo(() => {
-    return allSessions.slice(0, 4);
+    return allSessions.filter((s) => !isSubagentSession(s)).slice(0, 4);
   }, [allSessions]);
 
   return (
@@ -59,7 +61,6 @@ export const WelcomeView: React.FC = () => {
         alignItems: "center",
         justifyContent: "center",
         padding: "32px 24px",
-        background: "radial-gradient(ellipse at 50% 30%, rgba(var(--accent-rgb), 0.08) 0%, transparent 70%)",
         userSelect: "none",
         overflowY: "auto",
         boxSizing: "border-box",
