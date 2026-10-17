@@ -18,7 +18,8 @@ import { SubagentDetailModal } from "./SubagentDetailModal.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { SessionErrorBanner } from "./SessionErrorBanner.tsx";
 import { useSessionStore } from "../store/session-store.ts";
-import { useUi, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
+import { useWindowWidth } from "../hooks/useWindowWidth.ts";
+import { useUi, LIMITS, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
 import { useContributions, useModules } from "../modules/registry.ts";
 import { ModulePanelView, ModuleRailButton, ModuleRailItemButton } from "../modules/ModuleViews.tsx";
 import { ToastHost } from "../modules/ToastHost.tsx";
@@ -35,6 +36,12 @@ const named = <T extends string>(loader: () => Promise<Record<T, React.Component
   lazy(() => loader().then((m) => ({ default: m[key] })));
 const SettingsModal = named(() => import("./SettingsModal.tsx"), "SettingsModal");
 
+/** Below this window width the right panel never docks; it opens as an overlay instead. */
+const NARROW_WIDTH = 1200;
+/** Minimum width the centre column must keep when the right panel is docked. */
+const CENTER_MIN = 480;
+const RAIL_WIDTH = 48;
+
 const Loading: React.FC = () => <div className="ui-skeleton" style={{ margin: 16, height: 120, flex: "none" }} />;
 
 export const WorkbenchLayout: React.FC = () => {
@@ -42,13 +49,14 @@ export const WorkbenchLayout: React.FC = () => {
   const projectsShortcut = useShortcut("view.projects");
   const settingsShortcut = useShortcut("settings.open");
 
-  const { tabs, activeTabId, error, switchTab, projects } = useSessionStore(
+  const { tabs, activeTabId, error, switchTab, projects, projectsLoaded } = useSessionStore(
     useShallow((s) => ({
       tabs: s.tabs,
       activeTabId: s.activeTabId,
       error: s.error,
       switchTab: s.switchTab,
       projects: s.projects,
+      projectsLoaded: s.projectsLoaded,
     })),
   );
   const tabIdsKey = tabs.map((t) => t.id).join(",");
@@ -83,6 +91,52 @@ export const WorkbenchLayout: React.FC = () => {
   const rightModulePanels = useContributions("rightPanels");
   const bottomModulePanels = useContributions("bottomPanels");
   const railItems = useContributions("railItems");
+  const windowWidth = useWindowWidth();
+  const [rightOverlayOpen, setRightOverlayOpen] = useState(false);
+  const availableForRight = windowWidth - RAIL_WIDTH * 2 - (ui.left ? ui.leftWidth : 0) - CENTER_MIN;
+  const rightAutoHidden = windowWidth < NARROW_WIDTH || availableForRight < LIMITS.rightWidth[0];
+  // Auto-hide is derived, never persisted: ui.right stays whatever the user chose.
+  const rightDocked = !!ui.right && !rightAutoHidden;
+  const rightOverlay = !!ui.right && rightAutoHidden && rightOverlayOpen;
+  const rightPanelWidth = rightDocked
+    ? Math.min(ui.rightWidth, availableForRight)
+    : Math.min(ui.rightWidth, Math.max(LIMITS.rightWidth[0], windowWidth - RAIL_WIDTH * 2 - 80));
+
+  useEffect(() => {
+    if (!rightAutoHidden) setRightOverlayOpen(false);
+  }, [rightAutoHidden]);
+
+  useEffect(() => {
+    if (!rightOverlay) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setRightOverlayOpen(false);
+    };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      if (t?.closest(".panel--overlay, .rail--right, .modal, [role='dialog']")) return;
+      setRightOverlayOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [rightOverlay]);
+
+  const onRightRailClick = (id: RightPanel) => {
+    if (!rightAutoHidden) {
+      ui.toggleRight(id);
+      return;
+    }
+    if (rightOverlayOpen && ui.right === id) {
+      setRightOverlayOpen(false);
+      return;
+    }
+    if (ui.right !== id) ui.toggleRight(id);
+    setRightOverlayOpen(true);
+  };
+
   const needsOnboarding = useModules((s) => s.ready && !s.onboarded);
 
   const terminalPanel = bottomModulePanels.find((p) => p.id === "terminal");
@@ -90,7 +144,7 @@ export const WorkbenchLayout: React.FC = () => {
 
   return (
     <div className="shell">
-      {projects.length === 0 && <OnboardingGate />}
+      {projectsLoaded && projects.length === 0 && <OnboardingGate />}
       <div className="shell__grain grain-overlay-bg" />
       <AppTitleBar />
 
@@ -114,9 +168,11 @@ export const WorkbenchLayout: React.FC = () => {
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.bottom === p.id} onClick={() => ui.toggleBottom(p.id)} />
           ))}
           <div className="rail__spacer" />
+          {railItems.length > 0 && <div className="rail__divider" role="separator" />}
           {railItems.map((item) => (
             <ModuleRailItemButton key={`${item.moduleId}:${item.id}`} item={item} />
           ))}
+          {railItems.length > 0 && <div className="rail__divider" role="separator" />}
           <RailButton
             icon={<Settings size={18} />}
             title={settingsShortcut ? `Settings (${settingsShortcut})` : "Settings"}
@@ -166,11 +222,16 @@ export const WorkbenchLayout: React.FC = () => {
         )}
         </div>
 
-        {ui.right && (
-          <SidePanel side="right" width={ui.rightWidth} onResize={(w) => ui.setSize({ rightWidth: w })}>
+        {(rightDocked || rightOverlay) && ui.right && (
+          <SidePanel
+            side="right"
+            width={rightPanelWidth}
+            overlay={rightOverlay}
+            onResize={(w) => ui.setSize({ rightWidth: rightDocked ? Math.min(w, availableForRight) : w })}
+          >
             <ErrorBoundary label="Side panel">
               <Suspense fallback={<Loading />}>
-                <RightPanelContent panel={ui.right} onClose={() => ui.toggleRight(ui.right!)} />
+                <RightPanelContent panel={ui.right} onClose={() => (rightAutoHidden ? setRightOverlayOpen(false) : ui.toggleRight(ui.right!))} />
               </Suspense>
             </ErrorBoundary>
           </SidePanel>
@@ -179,7 +240,7 @@ export const WorkbenchLayout: React.FC = () => {
         {/* Right rail */}
         <nav className="rail rail--right">
           {rightModulePanels.map((p) => (
-            <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id} onClick={() => ui.toggleRight(p.id)} />
+            <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id && (!rightAutoHidden || rightOverlayOpen)} onClick={() => onRightRailClick(p.id)} />
           ))}
           <div className="rail__spacer" />
           {terminalPanel && (
@@ -217,10 +278,10 @@ const LeftPanelContent: React.FC<{ panel: LeftPanel; onClose(): void }> = ({ pan
 const RightPanelContent: React.FC<{ panel: RightPanel; onClose(): void }> = ({ panel, onClose }) =>
   panel === "usage" ? <UsagePanel onClose={onClose} /> : <ModulePanelView side="right" panelId={panel} onClose={onClose} />;
 
-const SidePanel: React.FC<{ side: "left" | "right"; width: number; onResize(w: number): void; children: React.ReactNode }> = ({ side, width, onResize, children }) => {
+const SidePanel: React.FC<{ side: "left" | "right"; width: number; overlay?: boolean; onResize(w: number): void; children: React.ReactNode }> = ({ side, width, overlay, onResize, children }) => {
   const start = useDrag("col", (dx, w0) => onResize(side === "left" ? w0 + dx : w0 - dx), () => width);
   return (
-    <aside className={`panel panel--${side}`} style={{ width }}>
+    <aside className={`panel panel--${side}${overlay ? " panel--overlay" : ""}`} style={{ width }}>
       <div className="panel__inner">{children}</div>
       <div className={`resizer resizer--col resizer--${side}`} onMouseDown={start} />
     </aside>

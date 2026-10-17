@@ -1,6 +1,6 @@
 /** Frameless window title bar: app menus, active project, update badge and caption buttons. */
 import React, { useEffect, useRef, useState } from "react";
-import { Copy, Download, Minus, Search, Square, X } from "lucide-react";
+import { Copy, Minus, Search, Square, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { ProjectPicker } from "./ProjectPicker.tsx";
 import { useSessionStore } from "../store/session-store.ts";
@@ -171,7 +171,7 @@ export const AppTitleBar: React.FC = () => {
             title={installing ? "Installing update — click for details" : `Hive v${update.latestVersion} is available — click for details`}
             style={installing ? ({ "--update-pct": `${installPct ?? 0}%` } as React.CSSProperties) : undefined}
           >
-            <Download size={11} className={installing ? "update-progress__bounce" : undefined} />{" "}
+            <span className="titlebar__update-dot" aria-hidden />
             {installing
               ? install?.phase === "launching"
                 ? "Restarting…"

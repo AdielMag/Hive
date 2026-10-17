@@ -156,7 +156,9 @@
   padding: 0 10px;
   border-radius: var(--radius-md, 6px);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
 }
 
 /* Meta & Stats Row */
@@ -238,7 +240,9 @@
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
   position: relative;
   top: 1px;
 }

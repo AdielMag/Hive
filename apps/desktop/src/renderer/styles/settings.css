@@ -146,6 +146,7 @@
 .settings__input:focus {
   outline: none;
   border-color: var(--accent-base);
+  box-shadow: 0 0 0 1px var(--accent-base);
 }
 .settings__update {
   display: flex;
@@ -251,7 +252,12 @@
   background: #57ab5a;
 }
 .update-progress__bounce {
-  animation: update-bounce 1s ease-in-out infinite;
+  animation: update-in 400ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-progress__bounce {
+    animation: none;
+  }
 }
 @keyframes update-sheen {
   to {
@@ -266,13 +272,10 @@
     transform: translateX(300%);
   }
 }
-@keyframes update-bounce {
-  0%,
-  100% {
-    transform: translateY(-1px);
-  }
-  50% {
-    transform: translateY(2px);
+@keyframes update-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
   }
 }
 
@@ -502,7 +505,9 @@
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.12s;
+  transition-timing-function: ease;
 }
 .modules__filter-pill:hover {
   background: rgba(var(--fg-rgb), 0.08);
@@ -570,9 +575,8 @@
   border-color: var(--border-prominent);
 }
 .modules__card.is-on {
-  border-left: 3px solid var(--accent-base);
-  border-color: rgba(var(--accent-rgb), 0.28);
-  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.03) 0%, var(--bg-card) 45%);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  background: color-mix(in srgb, var(--accent-base) 10%, var(--bg-card));
 }
 .modules__card:not(.is-on) {
   opacity: 0.85;
@@ -597,7 +601,9 @@
   border: 1px solid var(--border-subtle);
   color: var(--text-muted);
   flex-shrink: 0;
-  transition: all 0.15s ease;
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
 }
 .modules__card.is-on .modules__card-icon {
   background: rgba(var(--accent-rgb), 0.12);
