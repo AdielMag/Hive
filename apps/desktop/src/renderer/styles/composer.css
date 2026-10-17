@@ -32,3 +32,24 @@
   .composer-editor { padding: 8px 8px 6px; }
   .composer-hide-lg { display: none; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .composer *,
+  .composer *::before,
+  .composer *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.composer-send {
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), background-color 0.15s ease, color 0.15s ease;
+}
+.composer-send:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* The textarea drops its own outline; show focus on the editor box instead. */
+.composer-editor:focus-within {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-base) 55%, transparent) !important;
+}

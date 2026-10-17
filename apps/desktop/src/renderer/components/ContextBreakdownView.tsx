@@ -126,7 +126,7 @@ export function useContextBreakdown(): ContextBreakdownData {
     };
   }, [registry, contextFiles]);
   const contextTokens = stats?.contextUsage?.tokens ?? transcript.lastUsage?.totalTokens ?? 0;
-  const contextWindow = selectedModel?.contextWindow ?? stats?.contextUsage?.contextWindow ?? 200_000;
+  const contextWindow = selectedModel?.contextWindow ?? stats?.contextUsage?.contextWindow ?? 0;
   const breakdown = useMemo(
     // Only subdivide the system residual once Pi reports an exact total; before that the view stays as it was.
     () => estimateContextBreakdown(transcript, contextTokens, contextTokens > 0 ? systemParts : null),
@@ -441,7 +441,7 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
           <Donut segments={segments} percent={percent} hovered={hovered} onHover={setHovered} />
           <div className="ctx-hero__stats">
             <span className="ctx-hero__tokens">{fmtK(shownTokens)}</span>
-            <span className="ctx-hero__of">of {fmtK(contextWindow)} tokens</span>
+            <span className="ctx-hero__of">{contextWindow > 0 ? `of ${fmtK(contextWindow)} tokens` : "context limit unknown"}</span>
             <span
               className={`ctx-hero__status${status.hot ? " is-hot" : ""}`}
               style={{ ["--ctx-status" as string]: status.color }}

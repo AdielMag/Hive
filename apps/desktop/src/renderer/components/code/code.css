@@ -278,8 +278,10 @@
 }
 .md blockquote {
   margin: 0 0 10px;
-  padding: 2px 0 2px 12px;
-  border-left: 3px solid var(--accent-base);
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-base) 30%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-base) 10%, var(--bg-card));
   color: var(--text-secondary);
 }
 .md hr {
@@ -305,7 +307,7 @@
   color: var(--accent-base);
   border-color: rgba(var(--accent-rgb), 0.35);
   background: rgba(var(--accent-rgb), 0.08);
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .md :not(pre) > code.md-code-file:hover,
 .md-code-file:hover {
@@ -317,7 +319,7 @@
   color: var(--accent-base);
   text-decoration: none;
   border-bottom: 1px dashed rgba(var(--accent-rgb), 0.4);
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .md a.md-file-link:hover {
   border-bottom-style: solid;

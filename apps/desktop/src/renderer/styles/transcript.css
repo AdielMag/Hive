@@ -431,7 +431,7 @@ div.msg-tool__head {
   color: var(--text-muted);
   font-size: 11px;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .transcript__queue-clear-btn:hover {
@@ -516,7 +516,7 @@ div.msg-tool__head {
   font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.12s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .msg-queued__btn:hover {
@@ -633,7 +633,7 @@ div.msg-tool__head {
   font-size: 10.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .composer-queue-bar__btn:hover {
@@ -813,4 +813,13 @@ div.msg-tool__head {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transcript-wrap *,
+  .transcript-wrap *::before,
+  .transcript-wrap *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

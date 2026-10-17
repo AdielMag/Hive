@@ -9,6 +9,8 @@ interface ThinkingLevelMeta {
   badge?: string;
 }
 
+const DEFAULT_THINKING_LEVEL = "medium";
+
 const THINKING_META: Record<string, ThinkingLevelMeta> = {
   off: { label: "Off", desc: "No reasoning tokens (fastest response)" },
   minimal: { label: "Minimal", desc: "Brief reasoning before answer" },
@@ -59,7 +61,8 @@ export const ThinkingPicker: React.FC = () => {
     }
   }, [supportsReasoning, selectedThinkingLevel, currentLevel, availableLevels, setThinkingLevel]);
 
-  const isReasoningActive = currentLevel !== "off" && supportsReasoning;
+  // Accent only when the level differs from the default ("medium"); otherwise stay neutral.
+  const isReasoningActive = supportsReasoning && currentLevel !== DEFAULT_THINKING_LEVEL;
 
   const currentMeta = THINKING_META[currentLevel] || {
     label: currentLevel.charAt(0).toUpperCase() + currentLevel.slice(1),
@@ -88,7 +91,7 @@ export const ThinkingPicker: React.FC = () => {
           alignItems: "center",
           gap: 5,
           background: open ? "var(--bg-elevated)" : "var(--bg-card)",
-          border: `1px solid ${isReasoningActive ? "rgba(var(--accent-rgb), 0.4)" : "var(--border-subtle)"}`,
+          border: `1px solid ${isReasoningActive ? "color-mix(in srgb, var(--accent-base) 45%, transparent)" : "var(--border-subtle)"}`,
           borderRadius: 4,
           padding: "3px 8px",
           fontSize: 11,
@@ -96,8 +99,7 @@ export const ThinkingPicker: React.FC = () => {
           cursor: "pointer",
           maxWidth: 160,
           minWidth: 0,
-          boxShadow: isReasoningActive ? "0 0 6px rgba(var(--accent-rgb), 0.12)" : "none",
-          transition: "all 0.15s ease",
+          transition: "background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease",
         }}
       >
         <Brain

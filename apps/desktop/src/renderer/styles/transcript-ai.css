@@ -151,7 +151,7 @@
   background: rgba(83, 155, 245, 0.08);
   border: 1px solid rgba(83, 155, 245, 0.2);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   max-width: 100%;
 }
 .msg-agent-card__activity:hover {
@@ -396,5 +396,14 @@
   }
   100% {
     box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transcript-wrap *,
+  .transcript-wrap *::before,
+  .transcript-wrap *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

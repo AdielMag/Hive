@@ -17,9 +17,10 @@ export const ContextRing: React.FC<ContextRingProps> = ({
   strokeWidth = 3,
   onClick,
 }) => {
+  const known = total > 0;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const clampedPercent = Math.min(100, Math.max(0, percent));
+  const clampedPercent = known ? Math.min(100, Math.max(0, percent)) : 0;
   const offset = circumference - (clampedPercent / 100) * circumference;
 
   let strokeColor = "#57ab5a"; // green
@@ -42,7 +43,7 @@ export const ContextRing: React.FC<ContextRingProps> = ({
   return (
     <div
       onClick={onClick}
-      title={`Context: ${tokens.toLocaleString()} / ${total.toLocaleString()} tokens (${clampedPercent.toFixed(1)}%)`}
+      title={known ? `Context: ${tokens.toLocaleString()} / ${total.toLocaleString()} tokens (${clampedPercent.toFixed(1)}%)` : "Context limit unknown"}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -51,6 +52,7 @@ export const ContextRing: React.FC<ContextRingProps> = ({
         padding: "2px 6px",
         borderRadius: 4,
         background: "rgba(var(--fg-rgb), 0.04)",
+        opacity: known ? 1 : 0.5,
       }}
     >
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
@@ -75,8 +77,8 @@ export const ContextRing: React.FC<ContextRingProps> = ({
           style={{ transition: "stroke-dashoffset 0.3s ease" }}
         />
       </svg>
-      <span style={{ fontSize: 11, color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
-        {formattedTokens}/{formattedTotal}
+      <span style={{ fontSize: 11, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+        {known ? `${formattedTokens}/${formattedTotal}` : "—/—"}
       </span>
     </div>
   );

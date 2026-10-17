@@ -10,24 +10,12 @@
   padding: 7px 8px 7px 8px;
   border-radius: 10px;
   overflow: hidden;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--csb) 13%, transparent), color-mix(in srgb, var(--csb) 3%, transparent) 75%),
-    var(--bg-card);
+  background: color-mix(in srgb, var(--csb) 10%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--csb) 30%, transparent);
   font-size: 11.5px;
   color: var(--text-primary);
   white-space: nowrap;
   animation: fade-up 0.18s ease;
-}
-
-/* Left accent rail */
-.cache-switch-bar::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--csb);
-  opacity: 0.85;
 }
 
 .cache-switch-bar.is-busy {
