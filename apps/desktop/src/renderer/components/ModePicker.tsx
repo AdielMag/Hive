@@ -1,7 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Compass, Sparkles, MessageCircleQuestion, CheckSquare, Bug, ChevronDown, Check } from "lucide-react";
+import { Compass, Sparkles, MessageCircleQuestion, CheckSquare, Bug, ChevronDown, Check, TriangleAlert } from "lucide-react";
 import type { AgentMode } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
+import { getStoredItem, setStoredItem } from "../lib/storage.ts";
+
+export const AUTO_EDIT_HINT_KEY = "hive.hint.auto-edit";
+
+/** Show the one-time Auto Edit callout while Auto Edit is selected and it hasn't been dismissed. */
+export function shouldShowAutoEditHint(mode: AgentMode | undefined, stored: string | null): boolean {
+  return (mode ?? "auto-edit") === "auto-edit" && stored !== "seen";
+}
 
 export interface ModeMeta {
   id: AgentMode;
@@ -65,6 +73,12 @@ export const ModePicker: React.FC = () => {
   const { selectedMode, setMode } = useSessionStore();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [hintSeen, setHintSeen] = useState(() => getStoredItem(AUTO_EDIT_HINT_KEY) === "seen");
+  const markHintSeen = () => {
+    setStoredItem(AUTO_EDIT_HINT_KEY, "seen");
+    setHintSeen(true);
+  };
+  const showHint = !open && shouldShowAutoEditHint(selectedMode, hintSeen ? "seen" : null);
 
   useEffect(() => {
     if (!open) return;
@@ -82,6 +96,7 @@ export const ModePicker: React.FC = () => {
   const handleSelect = (mode: AgentMode) => {
     setMode(mode);
     setOpen(false);
+    if (!hintSeen) markHintSeen();
   };
 
   return (
@@ -134,6 +149,18 @@ export const ModePicker: React.FC = () => {
           }}
         />
       </button>
+
+      {showHint && (
+        <div className="auto-edit-hint" role="status">
+          <TriangleAlert size={13} className="auto-edit-hint__icon" aria-hidden="true" />
+          <div className="auto-edit-hint__body">
+            <span>Auto Edit: Pi changes files without asking. Switch to Manual to approve each edit.</span>
+            <button type="button" className="auto-edit-hint__btn" onClick={markHintSeen}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       {open && (
         <div

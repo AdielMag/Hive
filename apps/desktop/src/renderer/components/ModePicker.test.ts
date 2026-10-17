@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODES } from "./ModePicker.tsx";
+import { MODES, shouldShowAutoEditHint } from "./ModePicker.tsx";
 
 describe("ModePicker MODES", () => {
   it("includes ask mode with appropriate metadata", () => {
@@ -24,5 +24,14 @@ describe("ModePicker MODES", () => {
       manual: true,
       debug: true,
     });
+  });
+});
+
+describe("shouldShowAutoEditHint", () => {
+  it("shows only for auto-edit until stored as seen", () => {
+    expect(shouldShowAutoEditHint("auto-edit", null)).toBe(true);
+    expect(shouldShowAutoEditHint(undefined, null)).toBe(true);
+    expect(shouldShowAutoEditHint("auto-edit", "seen")).toBe(false);
+    expect(shouldShowAutoEditHint("manual", null)).toBe(false);
   });
 });
