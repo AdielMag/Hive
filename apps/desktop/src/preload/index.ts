@@ -14,6 +14,7 @@ import {
   type RpcResult,
   type SessionEventBatch,
   type SessionStatusUpdate,
+  type SessionStartProgress,
   type StartSessionRequest,
   type StartSessionResult,
   type StudioApi,
@@ -88,6 +89,12 @@ const api: StudioApi = {
     const handler = (_event: Electron.IpcRendererEvent, update: SessionStatusUpdate) => listener(update);
     ipcRenderer.on(IPC.evtStatus, handler);
     return () => ipcRenderer.removeListener(IPC.evtStatus, handler);
+  },
+
+  onSessionStartProgress(listener: (progress: SessionStartProgress) => void): () => void {
+    const handler = (_event: Electron.IpcRendererEvent, progress: SessionStartProgress) => listener(progress);
+    ipcRenderer.on(IPC.evtStartProgress, handler);
+    return () => ipcRenderer.removeListener(IPC.evtStartProgress, handler);
   },
 
   onUiRequest(listener: (message: UiRequestMessage) => void): () => void {
