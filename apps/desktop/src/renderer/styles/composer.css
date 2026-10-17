@@ -51,5 +51,6 @@
 
 /* The textarea drops its own outline; show focus on the editor box instead. */
 .composer-editor:focus-within {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-base) 55%, transparent) !important;
+  /* Soft halo: the composer is focused most of the time, so it must stay quiet. */
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-base) 16%, transparent) !important;
 }

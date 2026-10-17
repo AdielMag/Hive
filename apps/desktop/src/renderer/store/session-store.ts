@@ -1427,6 +1427,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       });
     } catch (err) {
       console.error("refreshCatalog failed", err);
+      if (!get().projectsLoaded) set({ projectsLoaded: true });
     }
   },
 

@@ -106,35 +106,56 @@ export const WorkbenchLayout: React.FC = () => {
     if (!rightAutoHidden) setRightOverlayOpen(false);
   }, [rightAutoHidden]);
 
+  // Any caller that opens a right panel (rail, context ring, status bar, module host, shortcuts) opens the
+  // overlay while auto-hidden; clearing ui.right closes it. The initial (persisted) value never auto-opens.
+  const prevRight = useRef(ui.right);
+  useEffect(() => {
+    const prev = prevRight.current;
+    prevRight.current = ui.right;
+    if (!ui.right) setRightOverlayOpen(false);
+    else if (ui.right !== prev) setRightOverlayOpen(true);
+  }, [ui.right]);
+
+  // Explicit close (Esc, outside click, panel close button) is user intent, so it also clears ui.right.
+  const closeRightOverlay = useCallback(() => {
+    setRightOverlayOpen(false);
+    useUi.getState().showRight(null);
+  }, []);
+
   useEffect(() => {
     if (!rightOverlay) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setRightOverlayOpen(false);
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector(".modal, [role='dialog'], [role='menu'], [role='listbox']")) return;
+      const t = e.target instanceof Element ? e.target : null;
+      if (t?.closest("input, textarea, select, [contenteditable='true']") && !t.closest(".panel--overlay")) return;
+      closeRightOverlay();
     };
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Element | null;
-      if (t?.closest(".panel--overlay, .rail--right, .modal, [role='dialog']")) return;
-      setRightOverlayOpen(false);
+    const onDown = (e: PointerEvent) => {
+      const t = e.target instanceof Element ? e.target : null;
+      // Portaled popovers/menus live outside .shell; only clicks on the workbench itself dismiss the overlay.
+      if (!t?.closest(".shell") || t.closest(".panel--overlay, .rail--right, .modal, [role='dialog'], [role='menu'], [role='listbox']")) return;
+      closeRightOverlay();
     };
     window.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onDown);
+    document.addEventListener("pointerdown", onDown);
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("pointerdown", onDown);
     };
-  }, [rightOverlay]);
+  }, [rightOverlay, closeRightOverlay]);
 
   const onRightRailClick = (id: RightPanel) => {
     if (!rightAutoHidden) {
       ui.toggleRight(id);
       return;
     }
-    if (rightOverlayOpen && ui.right === id) {
-      setRightOverlayOpen(false);
+    if (ui.right === id) {
+      if (rightOverlayOpen) closeRightOverlay();
+      else setRightOverlayOpen(true);
       return;
     }
-    if (ui.right !== id) ui.toggleRight(id);
-    setRightOverlayOpen(true);
+    useUi.getState().showRight(id);
   };
 
   const needsOnboarding = useModules((s) => s.ready && !s.onboarded);
@@ -231,7 +252,7 @@ export const WorkbenchLayout: React.FC = () => {
           >
             <ErrorBoundary label="Side panel">
               <Suspense fallback={<Loading />}>
-                <RightPanelContent panel={ui.right} onClose={() => (rightAutoHidden ? setRightOverlayOpen(false) : ui.toggleRight(ui.right!))} />
+                <RightPanelContent panel={ui.right} onClose={() => (rightAutoHidden ? closeRightOverlay() : ui.toggleRight(ui.right!))} />
               </Suspense>
             </ErrorBoundary>
           </SidePanel>
