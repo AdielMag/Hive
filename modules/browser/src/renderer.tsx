@@ -47,8 +47,8 @@ export default defineRendererModule({
     settings: [
       {
         id: "browser",
-        label: "Browser & RAM",
-        title: "Hive Browser & Memory Management",
+        label: "Browser",
+        title: "Browser & memory",
         icon: ({ size }) => <Globe size={size} />,
         component: BrowserSettingsContent,
       },

@@ -11,7 +11,7 @@ import { buildMeters } from "./meters.ts";
 const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "openai-codex": "Codex" };
 /** Antigravity quota pools: Gemini models vs. third-party (Claude + GPT-OSS) models. */
 const POOL_LABEL: Record<string, string> = { Gemini: "Gemini", "Claude·GPT": "Claude/GPT" };
-const TONE_COLOR = { ok: "#3fb27f", warn: "#e0a43a", danger: "#e5534b" } as const;
+const TONE_COLOR = { ok: "var(--success)", warn: "var(--warning)", danger: "var(--danger)" } as const;
 
 /** One thin track; the 5h bar sits above the 7d bar so a subscription costs ~one icon + 28px + a number. */
 const Track: React.FC<{ used?: number }> = ({ used }) => (
@@ -48,7 +48,7 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
           onMouseLeave={quotaPop.onLeave}
           onFocus={quotaPop.onEnter}
           onBlur={quotaPop.onLeave}
-          title="Subscription limits — hover or click for full window details"
+          title="Subscription limits — hover for full window details · Click to pin details"
           aria-haspopup="dialog"
           aria-expanded={quotaPop.open}
         >

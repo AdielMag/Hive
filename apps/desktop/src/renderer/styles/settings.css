@@ -27,6 +27,22 @@
   font-weight: 700;
   padding: 4px 10px 14px;
 }
+.settings__nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings__nav-group {
+  margin: 12px 0 2px;
+  padding: 0 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.settings__brand + .settings__nav-section .settings__nav-group {
+  margin-top: 0;
+}
 .settings__nav-btn {
   display: flex;
   align-items: center;

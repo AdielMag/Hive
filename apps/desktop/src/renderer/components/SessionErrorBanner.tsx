@@ -3,6 +3,7 @@ import { AlertCircle, Copy, Check, X, ChevronDown, ChevronUp } from "lucide-reac
 import { copyText } from "../lib/clipboard.ts";
 import { useSessionStore } from "../store/session-store.ts";
 import { detectAuthError } from "../lib/auth-errors.ts";
+import { summarizeError } from "../lib/error-summary.ts";
 import { AuthErrorActions } from "./AuthErrorActions.tsx";
 
 export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
@@ -12,9 +13,20 @@ export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const lines = error.split("\n");
-  const hasMultipleLines = lines.length > 1 || error.length > 120;
-  const firstLine = lines[0] ?? error;
+  const activeKey = useSessionStore((s) => s.activeKey);
+  const compactSession = useSessionStore((s) => s.compactSession);
+  const { headline, action } = summarizeError(error);
+  const [compacting, setCompacting] = useState(false);
+  const canCompact = action === "compact" && !auth && !!activeKey;
+  const handleCompact = async () => {
+    if (!activeKey || compacting) return;
+    setCompacting(true);
+    try {
+      await compactSession(activeKey);
+    } finally {
+      setCompacting(false);
+    }
+  };
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -46,24 +58,34 @@ export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
           <AlertCircle size={15} style={{ flexShrink: 0, color: "var(--danger)" }} />
           <div
-            style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: expanded ? "normal" : "nowrap",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11.5,
-              fontWeight: 500,
-              userSelect: "text",
-            }}
-            title={error}
+            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5, fontWeight: 500, userSelect: "text" }}
           >
-            {expanded ? error : firstLine}
+            {headline}
           </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           {auth && <AuthErrorActions auth={auth} tone="banner" />}
-          {hasMultipleLines && (
+          {canCompact && (
+            <button
+              type="button"
+              onClick={() => void handleCompact()}
+              disabled={compacting}
+              style={{
+                background: "rgba(229, 83, 75, 0.2)",
+                border: "1px solid rgba(229, 83, 75, 0.4)",
+                borderRadius: 4,
+                color: "var(--danger)",
+                padding: "2px 8px",
+                fontSize: 11,
+                fontWeight: 500,
+                cursor: compacting ? "default" : "pointer",
+              }}
+            >
+              {compacting ? "Compacting…" : "Compact conversation"}
+            </button>
+          )}
+          {(
             <button
               type="button"
               onClick={() => setExpanded(!expanded)}
@@ -81,7 +103,7 @@ export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
               }}
             >
               {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-              <span>{expanded ? "Collapse" : "Details"}</span>
+              <span>Details</span>
             </button>
           )}
 
@@ -131,6 +153,23 @@ export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
           )}
         </div>
       </div>
+      {expanded && (
+        <pre
+          style={{
+            margin: "6px 0 2px 23px",
+            maxHeight: 160,
+            overflow: "auto",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--text-muted)",
+            userSelect: "text",
+          }}
+        >
+          {error}
+        </pre>
+      )}
     </div>
   );
 };
