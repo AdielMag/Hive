@@ -21,6 +21,7 @@ import { useSessionStore } from "../store/session-store.ts";
 import { useWindowWidth } from "../hooks/useWindowWidth.ts";
 import { useUi, LIMITS, type LeftPanel, type RightPanel } from "../store/ui-store.ts";
 import { useContributions, useModules } from "../modules/registry.ts";
+import { Tooltip } from "./Tooltip.tsx";
 import { ModulePanelView, ModuleRailButton, ModuleRailItemButton } from "../modules/ModuleViews.tsx";
 import { ToastHost } from "../modules/ToastHost.tsx";
 import { OnboardingPicker } from "../features/modules/OnboardingPicker.tsx";
@@ -178,14 +179,15 @@ export const WorkbenchLayout: React.FC = () => {
           </div>
           <RailButton
             icon={<MessageSquare size={18} />}
-            title={projectsShortcut ? `Sessions (${projectsShortcut})` : "Sessions"}
+            title="Sessions"
+            shortcut={projectsShortcut}
             active={ui.left === "projects"}
             onClick={() => ui.toggleLeft("projects")}
           />
           {leftModulePanels.map((p) => (
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.left === p.id} onClick={() => ui.toggleLeft(p.id)} />
           ))}
-          {leftBottomPanels.length > 0 && <div className="rail__divider" />}
+          {leftBottomPanels.length > 0 && <div className="rail__divider" role="separator" />}
           {leftBottomPanels.map((p) => (
             <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.bottom === p.id} onClick={() => ui.toggleBottom(p.id)} />
           ))}
@@ -197,7 +199,8 @@ export const WorkbenchLayout: React.FC = () => {
           {railItems.length > 0 && <div className="rail__divider" role="separator" />}
           <RailButton
             icon={<Settings size={18} />}
-            title={settingsShortcut ? `Settings (${settingsShortcut})` : "Settings"}
+            title="Settings"
+            shortcut={settingsShortcut}
             active={ui.settingsOpen}
             onClick={() => ui.openSettings()}
           />
@@ -262,7 +265,7 @@ export const WorkbenchLayout: React.FC = () => {
         {/* Right rail */}
         <nav className="rail rail--right">
           {rightModulePanels.map((p) => (
-            <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id && (!rightAutoHidden || rightOverlayOpen)} onClick={() => onRightRailClick(p.id)} />
+            <ModuleRailButton key={`${p.moduleId}:${p.id}`} panel={p} active={ui.right === p.id && (!rightAutoHidden || rightOverlayOpen)} onClick={() => onRightRailClick(p.id)} side="left" />
           ))}
           <div className="rail__spacer" />
           {terminalPanel && (
@@ -271,6 +274,7 @@ export const WorkbenchLayout: React.FC = () => {
               panel={terminalPanel}
               active={ui.bottom === terminalPanel.id}
               onClick={() => ui.toggleBottom(terminalPanel.id)}
+              side="left"
             />
           )}
         </nav>
@@ -356,14 +360,17 @@ function useDrag(axis: "row" | "col", onMove: (delta: number, start: number) => 
 const RailButton: React.FC<{
   icon: React.ReactNode;
   title: string;
+  shortcut?: string | null;
   active: boolean;
   onClick(): void;
   badge?: React.ReactNode;
-}> = ({ icon, title, active, onClick, badge }) => (
-  <button className={`rail__btn${active ? " is-active" : ""}`} onClick={onClick} title={title} aria-label={title} aria-pressed={active}>
-    <span className="rail__icon-wrap">
-      {icon}
-      {badge}
-    </span>
-  </button>
+}> = ({ icon, title, shortcut, active, onClick, badge }) => (
+  <Tooltip label={title} shortcut={shortcut || undefined} side="right">
+    <button className={`rail__btn${active ? " is-active" : ""}`} onClick={onClick} aria-label={title} aria-pressed={active}>
+      <span className="rail__icon-wrap">
+        {icon}
+        {badge}
+      </span>
+    </button>
+  </Tooltip>
 );

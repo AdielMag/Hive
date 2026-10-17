@@ -77,7 +77,6 @@ export const ProjectPicker: React.FC = () => {
       >
         {activeProject ? (
           <>
-            <span className="project-picker__dot" style={{ background: activeProject.color }} />
             <FolderKanban size={13} className="project-picker__icon" />
             <span className="project-picker__name">{activeProject.name}</span>
           </>

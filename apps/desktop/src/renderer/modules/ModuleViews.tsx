@@ -3,6 +3,7 @@ import React from "react";
 import { Loader2, PackageOpen, Puzzle } from "lucide-react";
 import type { TabItem } from "@hive/protocol";
 import type { ModuleTab, PanelContribution, RailItemContribution, ToolCardCall, ToolCardContribution } from "@hive/module-sdk/renderer";
+import { Tooltip } from "../components/Tooltip.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import { ownerOfPanel, ownerOfTabKind } from "./manifests.ts";
@@ -107,45 +108,48 @@ export const ModulePanelView: React.FC<{ side: "left" | "right" | "bottom"; pane
 };
 
 /** Rail button for a contributed panel (own component so the shortcut hook runs per button). */
-export const ModuleRailButton: React.FC<{ panel: PanelContribution & { moduleId: string }; active: boolean; onClick(): void }> = ({ panel, active, onClick }) => {
+export const ModuleRailButton: React.FC<{ panel: PanelContribution & { moduleId: string }; active: boolean; onClick(): void; side?: "left" | "right" }> = ({ panel, active, onClick, side = "right" }) => {
   const shortcut = useShortcut(panel.commandId ?? "");
   const host = useModuleHost(panel.moduleId);
   const Icon = panel.icon;
-  const baseTitle = shortcut ? `${panel.title} (${shortcut})` : panel.title;
+  const baseTitle = panel.title;
   // `useTitle` is a hook, but a panel only exists once its module (and so its host) is loaded, so the call is stable per button.
   const title = host && panel.useTitle ? panel.useTitle(host, baseTitle) : baseTitle;
   const Badge = panel.badge;
   return (
-    <button className={`rail__btn${active ? " is-active" : ""}`} onClick={onClick} title={title} aria-label={title} aria-pressed={active}>
-      {host && Badge ? (
-        <span className="rail__icon-wrap">
+    <Tooltip label={title} shortcut={shortcut || undefined} side={side}>
+      <button className={`rail__btn${active ? " is-active" : ""}`} onClick={onClick} aria-label={title} aria-pressed={active}>
+        {host && Badge ? (
+          <span className="rail__icon-wrap">
+            <Icon size={18} />
+            <Badge host={host} />
+          </span>
+        ) : (
           <Icon size={18} />
-          <Badge host={host} />
-        </span>
-      ) : (
-        <Icon size={18} />
-      )}
-    </button>
+        )}
+      </button>
+    </Tooltip>
   );
 };
 
 /** Rail button for a contributed action/tab (e.g. Library, Usage). */
-export const ModuleRailItemButton: React.FC<{ item: RailItemContribution & { moduleId: string } }> = ({ item }) => {
+export const ModuleRailItemButton: React.FC<{ item: RailItemContribution & { moduleId: string }; side?: "left" | "right" }> = ({ item, side = "right" }) => {
   const shortcut = useShortcut(item.commandId ?? "");
   const host = useModuleHost(item.moduleId);
   const Icon = item.icon;
-  const title = shortcut ? `${item.title} (${shortcut})` : item.title;
+  const title = item.title;
   const active = host && item.active ? item.active(host) : false;
   return (
-    <button
-      className={`rail__btn${active ? " is-active" : ""}`}
-      onClick={() => host && item.onClick(host)}
-      title={title}
-      aria-label={title}
-      aria-pressed={active}
-    >
-      <Icon size={18} />
-    </button>
+    <Tooltip label={title} shortcut={shortcut || undefined} side={side}>
+      <button
+        className={`rail__btn${active ? " is-active" : ""}`}
+        onClick={() => host && item.onClick(host)}
+        aria-label={title}
+        aria-pressed={active}
+      >
+        <Icon size={18} />
+      </button>
+    </Tooltip>
   );
 };
 

@@ -1593,11 +1593,11 @@
   bottom: -5px;
   height: 2px;
   border-radius: 2px;
-  background: var(--tab-color);
+  background: var(--accent-base);
 }
 .tab__icon {
   display: inline-flex;
-  color: var(--tab-color);
+  color: var(--accent-base);
   flex-shrink: 0;
 }
 .tab__title {
@@ -1651,7 +1651,7 @@
   bottom: 1px;
   height: 2px;
   border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--tab-color), transparent) no-repeat;
+  background: linear-gradient(90deg, transparent, var(--accent-base), transparent) no-repeat;
   background-size: 40% 100%;
   animation: tab-sweep 1.6s ease-in-out infinite;
   pointer-events: none;

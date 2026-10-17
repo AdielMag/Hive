@@ -50,7 +50,6 @@ export const TabStrip: React.FC<TabStripProps> = ({
   const {
     tabs: allTabs,
     activeTabId: storeActiveTabId,
-    projects,
     switchTab,
     closeTab: storeCloseTab,
     newSessionTab,
@@ -70,7 +69,6 @@ export const TabStrip: React.FC<TabStripProps> = ({
     useShallow((s) => ({
       tabs: s.tabs,
       activeTabId: s.activeTabId,
-      projects: s.projects,
       switchTab: s.switchTab,
       closeTab: s.closeTab,
       newSessionTab: s.newSessionTab,
@@ -327,7 +325,6 @@ export const TabStrip: React.FC<TabStripProps> = ({
         )}
         {tabs.map((tab) => {
           const active = tab.id === activeTabId;
-          const project = projects.find((p) => p.id === tab.projectId);
           const isSession = !tab.kind || tab.kind === "session";
           const isSubagent = tab.kind === "subagent";
           const subagentRunning =
@@ -383,7 +380,6 @@ export const TabStrip: React.FC<TabStripProps> = ({
               onDragEnd={handleDragEnd}
               onContextMenu={(e) => openContextMenu(e, tab)}
               className={`tab${active ? " is-active" : ""}${busy ? " is-running" : ""}${unseen ? ` has-unseen is-${unseen}` : ""}${needsInput ? " needs-input" : ""}`}
-              style={{ ["--tab-color" as string]: project?.color ?? "var(--accent-base)" }}
               onClick={() => handleSelect(tab.id)}
               onAuxClick={(e) => {
                 if (e.button === 1) handleClose(tab.id);
