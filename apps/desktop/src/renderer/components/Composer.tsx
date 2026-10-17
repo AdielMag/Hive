@@ -462,6 +462,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           readOnly={isReloading}
+          aria-label="Message"
           placeholder={
             isReloading
               ? "Reloading Pi…"
@@ -832,10 +833,12 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               </>
             ) : (
               <button
+                className="composer-send"
                 onClick={() => void sendPrompt()}
                 disabled={!canSend}
                 title="Send"
                 style={{
+                  transition: "transform 120ms cubic-bezier(0.23,1,0.32,1), background-color 0.15s ease, color 0.15s ease",
                   display: "flex",
                   alignItems: "center",
                   gap: 4,

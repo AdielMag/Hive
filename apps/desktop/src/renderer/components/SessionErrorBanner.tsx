@@ -101,7 +101,7 @@ export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
               fontSize: 11,
               fontWeight: 500,
               cursor: "pointer",
-              transition: "all 0.15s ease",
+              transition: "background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease",
             }}
           >
             {copied ? <Check size={11} /> : <Copy size={11} />}

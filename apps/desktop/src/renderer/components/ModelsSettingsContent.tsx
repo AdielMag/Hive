@@ -515,7 +515,7 @@ export const ModelsSettingsContent: React.FC = () => {
                 fontSize: 11,
                 fontWeight: 500,
                 cursor: "pointer",
-                transition: "all 0.15s ease",
+                transition: "background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease",
               }}
             >
               All ({combinedModels.length})
@@ -539,7 +539,7 @@ export const ModelsSettingsContent: React.FC = () => {
                     fontSize: 11,
                     fontWeight: 500,
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    transition: "background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease",
                   }}
                 >
                   <ProviderIcon provider={p} size={12} />
@@ -668,7 +668,7 @@ export const ModelsSettingsContent: React.FC = () => {
                               alignItems: "center",
                               justifyContent: "center",
                               flexShrink: 0,
-                              transition: "all 0.15s ease",
+                              transition: "background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease",
                             }}
                           >
                             {enabled && <Check size={11} color="#fff" strokeWidth={3} />}

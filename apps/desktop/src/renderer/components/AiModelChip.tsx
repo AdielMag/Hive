@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { type ResolvedFeatureModel } from "../store/feature-models-store.ts";
+import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { ModelPickerPopover, type ModelPickerAnchor } from "./ModelPickerPopover.tsx";
 
@@ -30,6 +31,11 @@ export const AiModelChip: React.FC<AiModelChipProps> = ({
   title,
   feature,
 }) => {
+  const defaultModel = useSessionStore((s) => s.defaultModel);
+  // Accent only when this model differs from the store default.
+  const isCustom = Boolean(defaultModel) && model.id !== defaultModel;
+  const baseBg = isCustom ? "rgba(var(--accent-rgb), 0.12)" : "transparent";
+  const baseBorder = isCustom ? "rgba(var(--accent-rgb), 0.22)" : "var(--border-subtle)";
   const [picker, setPicker] = useState<ModelPickerAnchor | null>(null);
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -68,25 +74,25 @@ export const AiModelChip: React.FC<AiModelChipProps> = ({
         letterSpacing: "0.02em",
         padding: "1.5px 5px",
         borderRadius: "3.5px",
-        background: "rgba(var(--accent-rgb), 0.12)",
-        color: "var(--accent-base)",
-        border: "1px solid rgba(var(--accent-rgb), 0.22)",
+        background: baseBg,
+        color: isCustom ? "var(--accent-base)" : "var(--text-secondary)",
+        border: `1px solid ${baseBorder}`,
         userSelect: "none",
         cursor: clickable ? "pointer" : "inherit",
         verticalAlign: "middle",
-        transition: "all 0.12s ease",
+        transition: "background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease",
         ...style,
       }}
       onMouseEnter={(e) => {
         if (clickable) {
-          e.currentTarget.style.background = "rgba(var(--accent-rgb), 0.22)";
-          e.currentTarget.style.borderColor = "rgba(var(--accent-rgb), 0.4)";
+          e.currentTarget.style.background = isCustom ? "rgba(var(--accent-rgb), 0.22)" : "rgba(var(--fg-rgb), 0.05)";
+          e.currentTarget.style.borderColor = isCustom ? "rgba(var(--accent-rgb), 0.4)" : "var(--border-prominent)";
         }
       }}
       onMouseLeave={(e) => {
         if (clickable) {
-          e.currentTarget.style.background = style?.background?.toString() || "rgba(var(--accent-rgb), 0.12)";
-          e.currentTarget.style.borderColor = style?.borderColor?.toString() || "rgba(var(--accent-rgb), 0.22)";
+          e.currentTarget.style.background = style?.background?.toString() || baseBg;
+          e.currentTarget.style.borderColor = style?.borderColor?.toString() || baseBorder;
         }
       }}
     >

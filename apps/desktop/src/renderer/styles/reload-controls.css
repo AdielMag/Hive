@@ -38,24 +38,14 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 7px 8px 7px 12px;
+  padding: 7px 8px;
   border-radius: 10px;
   overflow: hidden;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--rb) 13%, transparent), color-mix(in srgb, var(--rb) 3%, transparent) 75%),
-    var(--bg-card);
+  background: color-mix(in srgb, var(--rb) 10%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--rb) 30%, transparent);
   font-size: 11.5px;
   color: var(--text-primary);
   animation: fade-up 0.18s ease;
-}
-.reload-bar::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--rb);
-  opacity: 0.85;
 }
 .reload-bar.is-success {
   --rb: var(--success);
