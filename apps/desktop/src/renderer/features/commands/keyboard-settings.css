@@ -43,6 +43,7 @@
 
 .kb-settings__search:focus {
   border-color: var(--accent-base);
+  box-shadow: 0 0 0 1px var(--accent-base);
 }
 
 .kb-settings__meta {

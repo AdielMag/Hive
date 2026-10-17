@@ -42,7 +42,9 @@
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition-property: background-color, color;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
   padding: 0;
 }
 

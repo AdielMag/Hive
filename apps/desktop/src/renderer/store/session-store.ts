@@ -292,6 +292,8 @@ export interface ExtensionWidgetState {
 export interface SessionStoreState {
   bootstrap: Bootstrap | null;
   projects: ProjectEntry[];
+  /** True once the first project list has loaded (or init failed); gates the onboarding screen. */
+  projectsLoaded: boolean;
   allSessions: SessionCatalogItem[];
   tabs: TabItem[];
   activeTabId: string | null;
@@ -958,6 +960,7 @@ export function useSessionWorktree(tabId: string | null | undefined): SessionWor
 export const useSessionStore = create<SessionStoreState>((set, get) => ({
   bootstrap: null,
   projects: [],
+  projectsLoaded: false,
   allSessions: [],
   tabs: [],
   activeTabId: null,
@@ -1267,7 +1270,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         }
       }
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err), isInitializing: false });
+      set({ error: err instanceof Error ? err.message : String(err), isInitializing: false, projectsLoaded: true });
     }
   },
 
@@ -1420,7 +1423,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           changed = true;
           return { ...t, title };
         });
-        return changed ? { projects, allSessions, tabs } : { projects, allSessions };
+        return changed ? { projects, projectsLoaded: true, allSessions, tabs } : { projects, projectsLoaded: true, allSessions };
       });
     } catch (err) {
       console.error("refreshCatalog failed", err);

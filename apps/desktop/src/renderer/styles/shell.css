@@ -100,7 +100,9 @@
   font-size: 11px;
   cursor: pointer;
   pointer-events: auto;
-  transition: all 0.15s ease;
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
 }
 .titlebar__search-trigger:hover {
   background: var(--frame-hover);
@@ -109,7 +111,8 @@
 }
 .titlebar__search-trigger kbd {
   font-size: 9.5px;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
   padding: 1px 4px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.08);
@@ -725,7 +728,9 @@
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-primary, #fff);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
   font-size: 11.5px;
   font-weight: 500;
 }
@@ -797,7 +802,9 @@
   font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.12s;
+  transition-timing-function: ease;
 }
 .sessions-panel__new-btn:hover {
   background: var(--frame-hover);
@@ -1016,7 +1023,9 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.12s;
+  transition-timing-function: ease;
   pointer-events: auto;
   -webkit-app-region: no-drag;
 }
@@ -1166,16 +1175,39 @@
   padding: 0 9px;
   margin-right: 8px;
   border-radius: 999px;
-  border: 1px solid rgba(87, 171, 90, 0.6);
-  background: rgba(87, 171, 90, 0.18);
-  color: #7ee08a;
+  border: 1px solid transparent;
+  background: var(--frame-hover);
+  color: var(--frame-text);
   font-size: 10.5px;
   font-weight: 600;
   cursor: pointer;
+  animation: titlebar-update-in 400ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  transition: background-color 0.15s ease;
+}
+.titlebar__update:hover {
+  background: var(--frame-active);
+}
+.titlebar__update-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-base);
+  flex-shrink: 0;
+}
+@keyframes titlebar-update-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .titlebar__update {
+    animation: none;
+  }
 }
 /* While installing, the badge fills left→right like a progress bar. */
 .titlebar__update.is-installing {
-  background: linear-gradient(90deg, rgba(87, 171, 90, 0.45) var(--update-pct, 0%), rgba(87, 171, 90, 0.12) var(--update-pct, 0%));
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.35) var(--update-pct, 0%), var(--frame-hover) var(--update-pct, 0%));
   font-variant-numeric: tabular-nums;
   transition: background 0.2s ease-out;
 }
@@ -1334,6 +1366,39 @@
 .panel--right {
   padding-left: 6px;
 }
+/* Narrow window: the right panel floats over the centre column's right edge instead of docking. */
+.shell__body {
+  position: relative;
+}
+.panel--overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 48px;
+  z-index: 20;
+  max-width: calc(100% - 96px);
+  box-shadow: var(--shadow-pop);
+  border-radius: 12px;
+  /* Floats over the card, so it needs a solid surface and app (not frame) text colours. */
+  --bg-sidebar: unset;
+  --text-primary: unset;
+  --text-secondary: unset;
+  --text-muted: unset;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  animation: panel-overlay-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+@keyframes panel-overlay-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel--overlay {
+    animation: none;
+  }
+}
 .panel__inner {
   flex: 1;
   min-width: 0;
@@ -1433,8 +1498,8 @@
 .rail__divider {
   width: 22px;
   height: 1px;
-  margin: 4px 0;
-  background: color-mix(in srgb, var(--frame-text) 20%, transparent);
+  margin: 8px 0;
+  background: var(--border-subtle);
   flex-shrink: 0;
 }
 
@@ -1623,7 +1688,16 @@
   transition: opacity 0.12s ease;
 }
 .tab__dot--done { --dot-color: var(--success); }
-.tab__dot--error { --dot-color: var(--danger); }
+.tab__dot--error {
+  --dot-color: var(--danger);
+  /* Ring, not a filled dot, so error isn't distinguished by hue alone. */
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--dot-color);
+  color: var(--dot-color);
+}
+.tab__dot--error::after {
+  display: none;
+}
 /* Waiting on you (an extension asked a question): amber, keeps pinging until answered. */
 .tab__dot--input { --dot-color: var(--warning); }
 .tab__dot--input::after { animation-iteration-count: infinite; }
@@ -1930,7 +2004,9 @@
   pointer-events: none;
   display: grid;
   place-items: center;
-  transition: all 0.1s ease;
+  transition-property: left, top, width, height;
+  transition-duration: 0.1s;
+  transition-timing-function: ease;
 }
 .pane-drop-preview--left { top: 0; bottom: 0; left: 0; width: 50%; }
 .pane-drop-preview--right { top: 0; bottom: 0; right: 0; width: 50%; }

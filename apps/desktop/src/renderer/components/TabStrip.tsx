@@ -24,6 +24,12 @@ import { useShortcut } from "../features/commands/useShortcut.ts";
 import { usePaneLayoutStore } from "../store/pane-layout-store.ts";
 import { ContextMenu, type ContextMenuEntry, type ContextMenuState } from "./ContextMenu.tsx";
 
+const DOT_LABELS: Record<"input" | "done" | "error", string> = {
+  input: "Waiting for you",
+  done: "Done",
+  error: "Error",
+};
+
 export interface TabStripProps {
   paneId?: string;
   tabIds?: string[];
@@ -405,7 +411,12 @@ export const TabStrip: React.FC<TabStripProps> = ({
                     <Loader2 size={12} className="spin" />
                   </span>
                 )}
-                {!busy && dotKind && <span className={`tab__dot tab__dot--${dotKind}`} aria-hidden />}
+                {!busy && dotKind && <span
+                    className={`tab__dot tab__dot--${dotKind}`}
+                    role="img"
+                    aria-label={DOT_LABELS[dotKind]}
+                    title={DOT_LABELS[dotKind]}
+                  />}
                 <button
                   className="tab__close"
                   aria-label={`Close ${tab.title}`}

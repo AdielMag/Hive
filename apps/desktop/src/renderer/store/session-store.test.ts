@@ -826,3 +826,16 @@ describe("closeTab activeProject preservation", () => {
   });
 });
 
+
+describe("projectsLoaded", () => {
+  it("is set once refreshCatalog loads projects, even when empty", async () => {
+    vi.stubGlobal("window", {
+      studio: { getProjects: vi.fn(async () => []), listAllSessions: vi.fn(async () => []) },
+    });
+    useSessionStore.setState({ projects: [], projectsLoaded: false });
+    await useSessionStore.getState().refreshCatalog();
+    expect(useSessionStore.getState().projectsLoaded).toBe(true);
+    expect(useSessionStore.getState().projects).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+});
