@@ -145,8 +145,11 @@ export class AuthService {
         throw new Error("Pi ModelRuntime.login is not available in installed Pi SDK");
       }
 
-      // Interaction handler
+      // Aborted when login ends, so any prompt still pending (e.g. a manual-paste prompt that lost the
+      // race against the loopback callback server) is released and its timer cleared.
+      const flow = new AbortController();
       const interaction = {
+        signal: flow.signal,
         notify: (event: any) => {
           if (event.type === "auth_url" && event.url && isSafeExternalUrl(event.url)) {
             void shell.openExternal(event.url);
@@ -157,30 +160,38 @@ export class AuthService {
             if (isSafeExternalUrl(prompt.url)) void shell.openExternal(prompt.url);
             return "";
           }
-          if (prompt.type === "manual_code") {
-            if (prompt.signal?.aborted) return "";
-            // Keep the prompt pending while the loopback callback server waits for the browser redirect.
-            // When the callback succeeds or fails, Pi aborts prompt.signal.
-            return new Promise<string>((resolve, reject) => {
-              const timer = setTimeout(() => {
-                reject(new Error("Sign-in timed out waiting for browser callback"));
-              }, 5 * 60 * 1000);
-
-              prompt.signal?.addEventListener(
-                "abort",
-                () => {
-                  clearTimeout(timer);
-                  resolve("");
-                },
-                { once: true },
-              );
-            });
+          // Hive has no paste UI: every prompt (manual_code, text, ...) stays pending while the loopback
+          // callback server waits for the browser redirect. Returning "" immediately makes flows that
+          // re-prompt on invalid input (Antigravity) spin in a microtask loop, starving the callback
+          // server and freezing the app.
+          const signals = [flow.signal, prompt.signal].filter(Boolean) as AbortSignal[];
+          if (signals.some((s) => s.aborted)) {
+            if (prompt.type === "manual_code") return "";
+            throw new Error("Login cancelled");
           }
-          return "";
+          return new Promise<string>((resolve, reject) => {
+            const done = () => {
+              clearTimeout(timer);
+              for (const s of signals) s.removeEventListener("abort", done);
+              // Only a manual_code prompt may resolve empty (Anthropic/OpenAI ignore it once the callback wins);
+              // others reject so re-prompt loops terminate.
+              if (prompt.type === "manual_code") resolve("");
+              else reject(new Error("Login cancelled"));
+            };
+            const timer = setTimeout(() => {
+              for (const s of signals) s.removeEventListener("abort", done);
+              reject(new Error("Sign-in timed out waiting for browser callback"));
+            }, 5 * 60 * 1000);
+            for (const s of signals) s.addEventListener("abort", done, { once: true });
+          });
         },
       };
 
-      await rt.login(providerId, "oauth", interaction);
+      try {
+        await rt.login(providerId, "oauth", interaction);
+      } finally {
+        flow.abort();
+      }
       return { success: true };
     } catch (err) {
       return {
