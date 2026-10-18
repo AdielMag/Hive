@@ -1973,7 +1973,27 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
 
     // A cold start already emptied the composer; don't wipe what the user typed while Pi was starting.
-    if (!coldStart) set({ promptText: "", attachments: [] });
+    // A warm (already started) idle session still takes a moment to echo the prompt: show it right away too.
+    const warmPending = !coldStart && !transcript.running && !!activeTabId && !get().pendingStarts[activeTabId];
+    if (!coldStart) {
+      set((s) => ({
+        promptText: "",
+        attachments: [],
+        ...(warmPending && activeTabId
+          ? {
+              pendingStarts: {
+                ...s.pendingStarts,
+                [activeTabId]: { text: promptText, attachmentNames: attachments.map((a) => a.name), step: "sending" as const },
+              },
+            }
+          : {}),
+      }));
+      if (warmPending && activeTabId) {
+        const tid = activeTabId;
+        pendingStartTimers.set(tid, setTimeout(() => clearPendingStart(tid), PENDING_START_TIMEOUT_MS));
+      }
+    }
+    const trackPending = coldStart || warmPending;
 
     // Name a fresh tab after its first prompt so the header reflects the conversation right away.
     if (autoTitle && activeTabId) {
@@ -2037,7 +2057,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     // Compaction in progress: hold the message, show it as queued, send it when compaction ends.
     if (compactFirst || get().compactionStates[activeKey]?.phase === "compacting") {
       // The held message is listed as queued; the startup indicator would duplicate it.
-      if (coldStart && activeTabId) clearPendingStart(activeTabId);
+      if (trackPending && activeTabId) clearPendingStart(activeTabId);
       const key = activeKey;
       const text = promptText.trim() || attachments[0]?.name || "";
       set((s) => ({
@@ -2075,7 +2095,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         });
         started = !!res?.ok && !promptText.trim().startsWith("/");
       } finally {
-        if (coldStart && activeTabId && !started) clearPendingStart(activeTabId);
+        if (trackPending && activeTabId && !started) clearPendingStart(activeTabId);
       }
     }
   },
