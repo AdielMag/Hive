@@ -183,6 +183,45 @@ export interface WorktreeRemoveOptions {
 
 export type WorktreeRemoveResult = { ok: true; branchDeleted: boolean } | { ok: false; error: string };
 
+/** A Hive worktree / branch (local and/or remote) no live session uses; offered for cleanup when tidying. */
+export interface TidyWorktreeCandidate {
+  branch: string;
+  /** Registered worktree folder, when one exists. */
+  worktreePath?: string;
+  hasLocalBranch: boolean;
+  /** `origin/<branch>` exists. */
+  hasRemoteBranch: boolean;
+  /** Commits on the branch not reachable from the main tree's HEAD (lost if deleted). */
+  unmerged: number;
+  /** Uncommitted files in the worktree folder. */
+  dirty: number;
+  reason: "archived-session" | "no-session" | "remote-only";
+}
+
+export interface TidyWorktreeScanRequest {
+  projectPath: string;
+  /** Branches and folders still used by non-archived sessions (never offered). */
+  liveBranches: string[];
+  livePaths: string[];
+  /** Branches of archived sessions (only affects the reason label). */
+  archivedBranches: string[];
+}
+
+export interface TidyWorktreeAction {
+  branch: string;
+  worktreePath?: string;
+  /** Delete the local worktree folder and local branch. */
+  deleteLocal: boolean;
+  /** Also delete `origin/<branch>`. */
+  deleteRemote: boolean;
+}
+
+export interface TidyWorktreeApplyResult {
+  branch: string;
+  ok: boolean;
+  error?: string;
+}
+
 export type WorktreeRenameResult = { ok: true; branch: string } | { ok: false; error: string };
 
 export type WorktreeMergeResult =
@@ -237,6 +276,8 @@ export const IPC = {
   worktreeRemove: "worktree:remove",
   worktreeMerge: "worktree:merge",
   worktreeRenameBranch: "worktree:renameBranch",
+  worktreeTidyScan: "worktree:tidyScan",
+  worktreeTidyApply: "worktree:tidyApply",
   trustCheck: "trust:check",
   trustSet: "trust:set",
   // Settings & Compaction
@@ -485,6 +526,10 @@ export interface StudioApi {
   worktreeMerge(worktree: SessionWorktree): Promise<WorktreeMergeResult>;
   /** Rename the session worktree's branch (e.g. to a descriptive name based on the user's initial request). */
   worktreeRenameBranch(worktree: SessionWorktree, newTitle: string): Promise<WorktreeRenameResult>;
+  /** Hive worktrees/branches (local + origin) not used by any live session. Fetches/prunes origin best-effort. */
+  worktreeTidyScan(request: TidyWorktreeScanRequest): Promise<TidyWorktreeCandidate[]>;
+  /** Delete the chosen worktrees/branches (force; the user confirmed each one). */
+  worktreeTidyApply(projectPath: string, actions: TidyWorktreeAction[]): Promise<TidyWorktreeApplyResult[]>;
   checkTrust(path: string): Promise<{ hasTrustResources: boolean; trusted: boolean }>;
   setTrust(path: string, trusted: boolean): Promise<void>;
 

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  applyTidyWorktrees,
   createWorktree,
   isManagedWorktree,
   listOrphans,
@@ -12,6 +13,7 @@ import {
   removeWorktree,
   renameWorktreeBranch,
   sanitizeSlug,
+  scanTidyWorktrees,
   worktreeStatus,
 } from "./worktrees.ts";
 
@@ -166,6 +168,37 @@ describe("worktrees", { timeout: 60_000 }, () => {
     const b = (await createWorktree({ projectPath: repo, title: "b" }))!;
     const orphans = await listOrphans(repo, [a.worktreePath]);
     expect(orphans.map((o) => o.branch)).toEqual([b.branch]);
+  });
+
+  it("tidy: scans unused worktrees/branches (local + remote) and deletes only what is chosen", async () => {
+    initRepo(repo);
+    const remote = join(tmp, "remote.git");
+    mkdirSync(remote);
+    git(remote, "init", "-q", "--bare");
+    git(repo, "remote", "add", "origin", remote);
+    const live = (await createWorktree({ projectPath: repo, title: "live" }))!;
+    const old = (await createWorktree({ projectPath: repo, title: "old" }))!;
+    const gone = (await createWorktree({ projectPath: repo, title: "gone" }))!;
+    git(repo, "push", "-q", "origin", old.branch, gone.branch);
+    await removeWorktree(gone, { force: true, deleteBranch: true }); // local gone, remote stays
+
+    const req = { projectPath: repo, liveBranches: [live.branch], livePaths: [live.worktreePath], archivedBranches: [] as string[] };
+    const found = await scanTidyWorktrees(req);
+    expect(found.map((c) => c.branch).sort()).toEqual([gone.branch, old.branch].sort());
+    expect(found.find((c) => c.branch === gone.branch)).toMatchObject({ reason: "remote-only", hasRemoteBranch: true, hasLocalBranch: false });
+    expect(found.find((c) => c.branch === old.branch)).toMatchObject({ worktreePath: old.worktreePath, hasLocalBranch: true, hasRemoteBranch: true });
+
+    const res = await applyTidyWorktrees(repo, [
+      { branch: old.branch, worktreePath: old.worktreePath, deleteLocal: true, deleteRemote: false },
+      { branch: gone.branch, deleteLocal: false, deleteRemote: true },
+      { branch: "main", deleteLocal: true, deleteRemote: true },
+    ]);
+    expect(res.map((r) => r.ok)).toEqual([true, true, false]);
+    expect(existsSync(old.worktreePath)).toBe(false);
+    expect(existsSync(live.worktreePath)).toBe(true);
+    const after = await scanTidyWorktrees(req);
+    expect(after.map((c) => c.branch)).toEqual([old.branch]); // only its remote copy is left
+    expect(after[0]).toMatchObject({ hasLocalBranch: false, hasRemoteBranch: true });
   });
 
   it("sanitizes slugs and maps worktree cwd back to the project", () => {

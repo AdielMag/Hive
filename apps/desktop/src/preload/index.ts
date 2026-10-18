@@ -24,6 +24,8 @@ import {
   type UiRequestMessage,
   type UpdateProgress,
   type WorktreeRemoveOptions,
+  type TidyWorktreeAction,
+  type TidyWorktreeScanRequest,
 } from "@hive/protocol";
 
 const api: StudioApi = {
@@ -172,6 +174,14 @@ const api: StudioApi = {
 
   worktreeRenameBranch(worktree: SessionWorktree, newTitle: string) {
     return ipcRenderer.invoke(IPC.worktreeRenameBranch, { worktree, newTitle });
+  },
+
+  worktreeTidyScan(request: TidyWorktreeScanRequest) {
+    return ipcRenderer.invoke(IPC.worktreeTidyScan, { request });
+  },
+
+  worktreeTidyApply(projectPath: string, actions: TidyWorktreeAction[]) {
+    return ipcRenderer.invoke(IPC.worktreeTidyApply, { projectPath, actions });
   },
 
   checkTrust(path: string) {

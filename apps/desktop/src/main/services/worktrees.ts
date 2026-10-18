@@ -5,6 +5,10 @@ import { join, normalize, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import type {
   SessionWorktree,
+  TidyWorktreeAction,
+  TidyWorktreeApplyResult,
+  TidyWorktreeCandidate,
+  TidyWorktreeScanRequest,
   WorktreeMergeResult,
   WorktreeRemoveOptions,
   WorktreeRemoveResult,
@@ -34,7 +38,7 @@ interface GitResult {
   stderr: string;
 }
 
-async function git(cwd: string, args: string[], extra: string[] = []): Promise<GitResult> {
+async function git(cwd: string, args: string[], extra: string[] = [], timeout?: number): Promise<GitResult> {
   try {
     const { stdout, stderr } = await execFileAsync(
       "git",
@@ -42,6 +46,7 @@ async function git(cwd: string, args: string[], extra: string[] = []): Promise<G
       {
         cwd,
         windowsHide: true,
+        timeout,
         maxBuffer: 16 * 1024 * 1024,
         env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
       },
@@ -313,13 +318,8 @@ export async function renameWorktreeBranch(
   }
 }
 
-/** Hive worktrees listed by git for `projectPath` whose folder is not in `knownPaths` (e.g. left by a crash). */
-export async function listOrphans(
-  projectPath: string,
-  knownPaths: Iterable<string>,
-): Promise<Array<{ worktreePath: string; branch?: string }>> {
-  const known = new Set<string>();
-  for (const p of knownPaths) known.add(norm(p));
+/** Hive worktrees (direct children of `.hive-worktrees`) git lists for `projectPath`. */
+async function listManagedWorktrees(projectPath: string): Promise<Array<{ worktreePath: string; branch?: string }>> {
   const r = await git(projectPath, ["worktree", "list", "--porcelain"]);
   if (!r.ok) return [];
   const dir = norm(join(projectPath, WORKTREES_DIR));
@@ -331,11 +331,130 @@ export async function listOrphans(
       if (line.startsWith("worktree ")) path = line.slice("worktree ".length).trim();
       else if (line.startsWith("branch ")) branch = line.slice("branch ".length).trim().replace(/^refs\/heads\//, "");
     }
-    if (!path) continue;
-    const k = norm(path);
-    if (k.startsWith(dir + "/") && !known.has(k)) out.push({ worktreePath: path.split("/").join(sep), branch });
+    if (path && norm(path).startsWith(dir + "/")) out.push({ worktreePath: path.split("/").join(sep), branch });
   }
   return out;
+}
+
+/** Hive worktrees listed by git for `projectPath` whose folder is not in `knownPaths` (e.g. left by a crash). */
+export async function listOrphans(
+  projectPath: string,
+  knownPaths: Iterable<string>,
+): Promise<Array<{ worktreePath: string; branch?: string }>> {
+  const known = new Set<string>();
+  for (const p of knownPaths) known.add(norm(p));
+  return (await listManagedWorktrees(projectPath)).filter((w) => !known.has(norm(w.worktreePath)));
+}
+
+const SAFE_BRANCH = /^hive\/[A-Za-z0-9._/-]+$/;
+
+async function refList(projectPath: string, prefix: string): Promise<string[]> {
+  const r = await git(projectPath, ["for-each-ref", "--format=%(refname)", prefix]);
+  return r.ok ? r.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : [];
+}
+
+/**
+ * Hive branches/worktrees (local and on origin) that no live session uses. Prunes stale remote-tracking refs
+ * first (best effort; offline is fine).
+ */
+export async function scanTidyWorktrees(req: TidyWorktreeScanRequest): Promise<TidyWorktreeCandidate[]> {
+  const { projectPath } = req;
+  const hasOrigin = (await git(projectPath, ["remote", "get-url", "origin"])).ok;
+  if (hasOrigin) await git(projectPath, ["fetch", "--prune", "--quiet", "origin"], [], 30_000);
+
+  const liveBranches = new Set(req.liveBranches);
+  const livePaths = new Set(req.livePaths.map(norm));
+  const archived = new Set(req.archivedBranches);
+
+  const byBranch = new Map<string, { worktreePath?: string; local: boolean; remote: boolean }>();
+  const entry = (b: string) => {
+    let e = byBranch.get(b);
+    if (!e) byBranch.set(b, (e = { local: false, remote: false }));
+    return e;
+  };
+  for (const ref of await refList(projectPath, "refs/heads/hive/")) entry(ref.slice("refs/heads/".length)).local = true;
+  if (hasOrigin) {
+    for (const ref of await refList(projectPath, "refs/remotes/origin/hive/")) {
+      entry(ref.slice("refs/remotes/origin/".length)).remote = true;
+    }
+  }
+  for (const wt of await listManagedWorktrees(projectPath)) {
+    if (!wt.branch?.startsWith(BRANCH_PREFIX)) continue;
+    const e = entry(wt.branch);
+    e.worktreePath = wt.worktreePath;
+    e.local = true;
+  }
+
+  const out: TidyWorktreeCandidate[] = [];
+  for (const [branch, e] of byBranch) {
+    if (!SAFE_BRANCH.test(branch)) continue;
+    if (liveBranches.has(branch) || (e.worktreePath && livePaths.has(norm(e.worktreePath)))) continue;
+    // Count commits on every existing ref; a failed check counts as unmerged so "delete clean" never picks it.
+    let unmerged = 0;
+    for (const ref of [e.local ? branch : "", e.remote ? `origin/${branch}` : ""].filter(Boolean)) {
+      const c = await git(projectPath, ["rev-list", "--count", `HEAD..${ref}`]);
+      unmerged = Math.max(unmerged, c.ok ? Number.parseInt(c.stdout.trim(), 10) || 0 : 1);
+    }
+    let dirty = 0;
+    if (e.worktreePath && existsSync(e.worktreePath)) {
+      const st = await git(e.worktreePath, ["status", "--porcelain"]);
+      dirty = st.ok ? await countDirty(e.worktreePath) : 1; // unreadable worktree: treat as dirty
+    }
+    out.push({
+      branch,
+      worktreePath: e.worktreePath,
+      hasLocalBranch: e.local,
+      hasRemoteBranch: e.remote,
+      unmerged,
+      dirty,
+      reason: !e.local && e.remote ? "remote-only" : archived.has(branch) ? "archived-session" : "no-session",
+    });
+  }
+  return out.sort((a, b) => a.branch.localeCompare(b.branch));
+}
+
+/** Delete what the user picked in the tidy dialog. Every action is re-validated; one failure never stops the rest. */
+export async function applyTidyWorktrees(projectPath: string, actions: TidyWorktreeAction[]): Promise<TidyWorktreeApplyResult[]> {
+  const results: TidyWorktreeApplyResult[] = [];
+  for (const a of actions) {
+    const branch = String(a?.branch);
+    const fail = (error: string) => results.push({ branch, ok: false, error });
+    try {
+      if (typeof a?.branch !== "string" || !SAFE_BRANCH.test(a.branch) || a.branch.includes("..")) {
+        fail("Not a Hive branch");
+        continue;
+      }
+      if (a.deleteLocal) {
+        // Never trust the supplied folder: use the one git registers for this branch.
+        const worktreePath = (await listManagedWorktrees(projectPath)).find((w) => w.branch === branch)?.worktreePath;
+        if (worktreePath) {
+          const wt: SessionWorktree = { worktreePath, branch, baseBranch: "HEAD", baseCommit: "", projectPath };
+          const r = await removeWorktree(wt, { force: true, deleteBranch: true });
+          if (!r.ok) {
+            fail(r.error);
+            continue;
+          }
+        } else if (await branchExists(projectPath, branch)) {
+          const r = await git(projectPath, ["branch", "-D", branch]);
+          if (!r.ok) {
+            fail(r.stderr.trim() || "git branch -D failed");
+            continue;
+          }
+        }
+      }
+      if (a.deleteRemote) {
+        const r = await git(projectPath, ["push", "origin", "--delete", branch], [], 60_000);
+        if (!r.ok) {
+          fail(r.stderr.trim().split(/\r?\n/).pop() || "git push --delete failed");
+          continue;
+        }
+      }
+      results.push({ branch, ok: true });
+    } catch (err) {
+      fail(err instanceof Error ? err.message : String(err));
+    }
+  }
+  return results;
 }
 
 /**

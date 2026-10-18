@@ -9,12 +9,22 @@ import {
   type StartSessionRequest,
   type StudioRpcCommand,
   type WorktreeRemoveOptions,
+  type TidyWorktreeAction,
+  type TidyWorktreeScanRequest,
 } from "@hive/protocol";
 import { existsSync } from "node:fs";
 import type { AppContext } from "../context.ts";
 import { generateSessionTitle } from "../services/session-title.ts";
 import { pickStaleSessions } from "../services/stale-sessions.ts";
-import { isManagedWorktree, mergeWorktree, removeWorktree, renameWorktreeBranch, worktreeStatus } from "../services/worktrees.ts";
+import {
+  applyTidyWorktrees,
+  isManagedWorktree,
+  mergeWorktree,
+  removeWorktree,
+  renameWorktreeBranch,
+  scanTidyWorktrees,
+  worktreeStatus,
+} from "../services/worktrees.ts";
 import { handle } from "./util.ts";
 
 const NO_PI = { ok: false as const, error: "Pi CLI not available" };
@@ -82,6 +92,19 @@ export function registerSessionIpc(ctx: AppContext): void {
   handle(IPC.worktreeRemove, ({ worktree, options }: { worktree: SessionWorktree; options?: WorktreeRemoveOptions }) =>
     removeWorktree(requireWorktree(worktree), { force: options?.force === true, deleteBranch: options?.deleteBranch !== false }),
   );
+  handle(IPC.worktreeTidyScan, ({ request }: { request: TidyWorktreeScanRequest }) => {
+    requireKnownProject(ctx, request?.projectPath);
+    return scanTidyWorktrees({
+      projectPath: request.projectPath,
+      liveBranches: strList(request.liveBranches),
+      livePaths: strList(request.livePaths),
+      archivedBranches: strList(request.archivedBranches),
+    });
+  });
+  handle(IPC.worktreeTidyApply, ({ projectPath, actions }: { projectPath: string; actions: TidyWorktreeAction[] }) => {
+    requireKnownProject(ctx, projectPath);
+    return applyTidyWorktrees(projectPath, Array.isArray(actions) ? actions : []);
+  });
   handle(IPC.worktreeMerge, ({ worktree }: { worktree: SessionWorktree }) => mergeWorktree(requireWorktree(worktree)));
   handle(IPC.worktreeRenameBranch, ({ worktree, newTitle }: { worktree: SessionWorktree; newTitle: string }) =>
     renameWorktreeBranch(requireWorktree(worktree), newTitle),
@@ -119,6 +142,16 @@ function sanitizeWorktree(value: unknown): SessionWorktree | undefined {
     projectPath: v.projectPath as string,
   };
   return isManagedWorktree(wt) ? wt : undefined;
+}
+
+function strList(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
+function requireKnownProject(ctx: AppContext, projectPath: unknown): asserts projectPath is string {
+  const trim = (s: string) => s.replace(/[\\/]+$/, "").replace(/\\/g, "/").toLowerCase();
+  const p = typeof projectPath === "string" ? trim(projectPath) : "";
+  if (!p || !ctx.guiStore.getProjects().some((x) => trim(x.path) === p)) throw new Error("Unknown project");
 }
 
 function requireWorktree(value: unknown): SessionWorktree {
