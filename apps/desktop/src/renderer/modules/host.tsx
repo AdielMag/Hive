@@ -216,6 +216,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
         const id = projectId ?? useSessionStore.getState().activeProject?.id;
         if (id) await useSessionStore.getState().newSessionTab(id);
       },
+      sendPrompt: () => useSessionStore.getState().sendPrompt(),
     scrollToToolCall: (id) => scrollToToolCall(id),
     },
     ipc: {

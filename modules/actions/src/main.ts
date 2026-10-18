@@ -24,6 +24,7 @@ export default defineMainModule({
     });
     h(M.runs, (repo: RepoRef, query: RunsQuery) => github.runs(repo, query ?? {}));
     h(M.jobs, (repo: RepoRef, runId: number) => github.jobs(repo, runId));
+    h(M.failureContext, (repo: RepoRef, runId: number) => github.failureContext(repo, runId));
     h(M.workflows, (repo: RepoRef) => github.workflows(repo));
     h(M.workflowInputs, (repo: RepoRef, path: string, ref: string) => github.workflowInputs(repo, path, ref));
     h(M.dispatch, (repo: RepoRef, workflowId: number, ref: string, inputs: Record<string, string>) =>

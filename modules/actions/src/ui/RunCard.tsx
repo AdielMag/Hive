@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, ExternalLink, GitBranch, RotateCcw, Square, Zap } from "lucide-react";
+import { ChevronDown, ExternalLink, GitBranch, RotateCcw, Square, Wrench, Zap } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import type { ActionsRun } from "../shared.ts";
 import { isActiveState, useActionsStore } from "./actions-store.ts";
@@ -19,6 +19,7 @@ export const RunCard: React.FC<{ run: ActionsRun; host: ModuleHost; now: number 
   const toggleRun = useActionsStore((s) => s.toggleRun);
   const rerunRun = useActionsStore((s) => s.rerunRun);
   const cancelRun = useActionsStore((s) => s.cancelRun);
+  const fixRun = useActionsStore((s) => s.fixRun);
   const duration = runDuration(run, now);
   const active = isActiveState(run.state);
   const toggle = () => toggleRun(run.id);
@@ -79,6 +80,11 @@ export const RunCard: React.FC<{ run: ActionsRun; host: ModuleHost; now: number 
         ) : (
           <button type="button" className="ga-ib" title="Re-run all jobs" aria-label="Re-run all jobs" onClick={() => void rerunRun(run, false)}>
             <RotateCcw size={12} />
+          </button>
+        )}
+        {run.state === "failure" && (
+          <button type="button" className="ga-ib" title="Fix it: open a new session with the failure details" aria-label="Fix failed run in a new session" onClick={() => void fixRun(run)}>
+            <Wrench size={12} />
           </button>
         )}
         <button type="button" className="ga-ib" title="Open on GitHub" aria-label="Open run on GitHub" onClick={() => void host.openExternal(run.url)}>

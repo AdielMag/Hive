@@ -11,6 +11,7 @@ import type {
   ActionsResult,
   ActionsRun,
   ActionsWorkflow,
+  FailureContext,
   RunStatusFilter,
 } from "../shared.ts";
 import { actionsApi } from "./actions-host.ts";
@@ -62,12 +63,38 @@ export interface ActionsState {
   dispatchWorkflow: (workflow: ActionsWorkflow, ref: string, inputs: Record<string, string>) => Promise<boolean>;
   rerunRun: (run: ActionsRun, failedOnly: boolean) => Promise<boolean>;
   cancelRun: (run: ActionsRun) => Promise<boolean>;
+  /** Opens a new session tab seeded with the failure details and sends it so the agent starts fixing. */
+  fixRun: (run: ActionsRun) => Promise<boolean>;
 }
 
 const initialFilters: ActionsFilters = { status: "all", branch: "all", workflowId: null };
 
 let hostRef: ModuleHost | null = null;
 let generation = 0;
+
+export function buildFixPrompt(repo: { owner: string; repo: string }, run: ActionsRun, ctx: FailureContext): string {
+  const fence = "```";
+  const jobs = ctx.jobs.length
+    ? ctx.jobs
+        .map((j) =>
+          [`### Job: ${j.name}`, j.url, `Failed steps: ${j.failedSteps.join(", ") || "(unknown)"}`, "", "Last log lines:", fence, j.logTail, fence].join("\n"),
+        )
+        .join("\n\n")
+    : "No failed job details were available; open the run URL or use `gh run view --log-failed`.";
+  return [
+    "A GitHub Actions workflow failed. Find the root cause and fix it in this repo.",
+    "",
+    `- Repo: ${repo.owner}/${repo.repo}`,
+    `- Workflow: ${run.workflowName} (run #${run.runNumber}, attempt ${run.attempt})`,
+    `- Run URL: ${run.url}`,
+    `- Branch: ${run.branch || "(unknown)"}  Commit: ${run.sha.slice(0, 7)}  Event: ${run.event}`,
+    `- Title: ${run.title}`,
+    "",
+    jobs,
+    "",
+    `Workflow files are under .github/workflows/. Reproduce locally where possible, make the minimal fix, and verify it. If you need more log, run \`gh run view ${run.id} --log-failed\`. Don't push or re-run the workflow unless asked.`,
+  ].join("\n");
+}
 
 export function isActiveState(s: ActionsRun["state"]): boolean {
   return s === "running" || s === "queued";
@@ -133,6 +160,21 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
     if (!repo) return false;
     const res = await actionsApi().rerun(repo, run.id, failedOnly);
     return finishWrite(res, failedOnly ? "Re-running failed jobs." : "Re-running all jobs.");
+  },
+
+  fixRun: async (run) => {
+    const { repo } = get();
+    const host = hostRef;
+    if (!repo || !host) return false;
+    const res = await actionsApi().failureContext(repo, run.id);
+    if (!res.ok) {
+      set({ notice: { kind: "error", message: res.message } });
+      return false;
+    }
+    await host.sessions.newSession();
+    host.sessions.setPrompt(buildFixPrompt(repo, run, res.data));
+    await host.sessions.sendPrompt();
+    return true;
   },
 
   cancelRun: async (run) => {

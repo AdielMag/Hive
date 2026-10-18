@@ -7,6 +7,7 @@ import type {
   ActionsState,
   ActionsStep,
   ActionsWorkflow,
+  FailureContext,
   RepoRef,
   RunsPage,
   RunsQuery,
@@ -113,6 +114,15 @@ export function parseWorkflowInputs(yamlText: string): WorkflowInputs {
     }
   }
   return { dispatchable: true, inputs };
+}
+
+/** Last ~250 lines (max ~12KB) of a job log, with GitHub's timestamps and ANSI colour codes removed. */
+export function tailLog(text: string, maxLines = 250, maxChars = 12_000): string {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^\uFEFF?\d{4}-\d\d-\d\dT[\d:.]+Z ?/, "").replace(/\u001b\[[0-9;]*m/g, ""));
+  const out = lines.slice(-maxLines).join("\n");
+  return out.length > maxChars ? out.slice(-maxChars) : out;
 }
 
 class ApiError extends Error {
@@ -280,6 +290,7 @@ export function createGithubClient({ getToken, fetchImpl, execGh = defaultExecGh
     }
     if (res.status === 304 && cached) return cached.body;
     if (res.ok) {
+      if (path.endsWith("/logs")) return await res.text(); // job logs are plain text, not JSON
       if (write) return res.status === 204 ? null : await res.json().catch(() => null);
       const json = await res.json();
       const etag = res.headers.get("etag");
@@ -339,6 +350,24 @@ export function createGithubClient({ getToken, fetchImpl, execGh = defaultExecGh
       wrap(async () => {
         const body = await get(`${base(repo)}/runs/${runId}/jobs`, { per_page: 100, filter: "latest" });
         return (body.jobs ?? []).map(normalizeJob);
+      }),
+    failureContext: (repo: RepoRef, runId: number): Promise<ActionsResult<FailureContext>> =>
+      wrap(async () => {
+        const body = await get(`${base(repo)}/runs/${runId}/jobs`, { per_page: 100, filter: "latest" });
+        const failed = (body.jobs ?? []).map(normalizeJob).filter((j: ActionsJob) => j.state === "failure").slice(0, 5);
+        const jobs = await Promise.all(
+          failed.map(async (j: ActionsJob) => {
+            let logTail = "(logs unavailable)";
+            try {
+              const text = await get(`${base(repo)}/jobs/${j.id}/logs`);
+              if (typeof text === "string") logTail = tailLog(text);
+            } catch {
+              /* logs expire or need extra scope; the step names still help */
+            }
+            return { name: j.name, url: j.url, failedSteps: j.steps.filter((s) => s.state === "failure").map((s) => s.name), logTail };
+          }),
+        );
+        return { jobs };
       }),
     workflows: (repo: RepoRef): Promise<ActionsResult<ActionsWorkflow[]>> =>
       wrap(async () => {

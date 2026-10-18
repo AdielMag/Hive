@@ -238,6 +238,8 @@ export interface ModuleHost {
     setPrompt(text: string): void;
     /** Start a new session tab in `projectId` (defaults to the active project) and focus it. */
     newSession(projectId?: string): Promise<void>;
+    /** Send the staged composer prompt (see `setPrompt`) in the active session tab. */
+    sendPrompt(): Promise<void>;
     /** Scroll the transcript view to a tool call or message block by id. */
     scrollToToolCall(id: string): void;
   };

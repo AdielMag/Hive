@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronRight, ExternalLink, RotateCcw, Square } from "lucide-react";
+import { ChevronRight, ExternalLink, RotateCcw, Square, Wrench } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import type { ActionsJob, ActionsRun } from "../shared.ts";
 import { isActiveState, useActionsStore } from "./actions-store.ts";
@@ -65,6 +65,7 @@ export const RunDetail: React.FC<{ run: ActionsRun; host: ModuleHost; now: numbe
   const jobs = useActionsStore((s) => s.jobs[run.id]);
   const rerunRun = useActionsStore((s) => s.rerunRun);
   const cancelRun = useActionsStore((s) => s.cancelRun);
+  const fixRun = useActionsStore((s) => s.fixRun);
   const [busy, setBusy] = useState(false);
   const act = (fn: () => Promise<boolean>) => {
     setBusy(true);
@@ -86,9 +87,14 @@ export const RunDetail: React.FC<{ run: ActionsRun; host: ModuleHost; now: numbe
               <RotateCcw size={11} /> Re-run all
             </button>
             {run.state === "failure" && (
-              <button type="button" className="ga-btn" disabled={busy} onClick={() => act(() => rerunRun(run, true))}>
-                <RotateCcw size={11} /> Re-run failed
-              </button>
+              <>
+                <button type="button" className="ga-btn" disabled={busy} onClick={() => act(() => fixRun(run))}>
+                  <Wrench size={11} /> Fix it
+                </button>
+                <button type="button" className="ga-btn" disabled={busy} onClick={() => act(() => rerunRun(run, true))}>
+                  <RotateCcw size={11} /> Re-run failed
+                </button>
+              </>
             )}
           </>
         )}

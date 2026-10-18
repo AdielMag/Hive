@@ -75,6 +75,11 @@ export interface WorkflowInputs {
   inputs: WorkflowInput[];
 }
 
+/** Everything an agent needs to diagnose a failed run: failed jobs/steps plus the tail of their logs. */
+export interface FailureContext {
+  jobs: { name: string; url: string; failedSteps: string[]; logTail: string }[];
+}
+
 export type RunStatusFilter = "all" | "queued" | "in_progress" | "success" | "failure" | "cancelled";
 
 export interface RunsQuery {
@@ -101,6 +106,7 @@ export const ActionsMethods = {
   workflows: "workflows",
   workflowInputs: "workflowInputs",
   dispatch: "dispatch",
+  failureContext: "failureContext",
   rerun: "rerun",
   cancel: "cancel",
   setToken: "setToken",
@@ -116,6 +122,7 @@ export interface ActionsApi {
   workflows(repo: RepoRef): Promise<ActionsResult<ActionsWorkflow[]>>;
   workflowInputs(repo: RepoRef, path: string, ref: string): Promise<ActionsResult<WorkflowInputs>>;
   dispatch(repo: RepoRef, workflowId: number, ref: string, inputs: Record<string, string>): Promise<ActionsResult<null>>;
+  failureContext(repo: RepoRef, runId: number): Promise<ActionsResult<FailureContext>>;
   rerun(repo: RepoRef, runId: number, failedOnly: boolean): Promise<ActionsResult<null>>;
   cancel(repo: RepoRef, runId: number): Promise<ActionsResult<null>>;
   setToken(token: string): Promise<void>;
@@ -134,6 +141,7 @@ export function createActionsApi(invoke: Invoke): ActionsApi {
     workflows: (repo) => invoke(M.workflows, repo),
     workflowInputs: (repo, path, ref) => invoke(M.workflowInputs, repo, path, ref),
     dispatch: (repo, workflowId, ref, inputs) => invoke(M.dispatch, repo, workflowId, ref, inputs),
+    failureContext: (repo, runId) => invoke(M.failureContext, repo, runId),
     rerun: (repo, runId, failedOnly) => invoke(M.rerun, repo, runId, failedOnly),
     cancel: (repo, runId) => invoke(M.cancel, repo, runId),
     setToken: (token) => invoke(M.setToken, token),
