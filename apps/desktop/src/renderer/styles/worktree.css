@@ -270,3 +270,34 @@
 .tidy-wt__meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--text-secondary); }
 .tidy-wt__warn { color: var(--warning); }
 .tidy-wt__select { flex: none; font-size: 12px; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-prominent); border-radius: 6px; padding: 3px 6px; }
+
+/* Merged: the whole bar becomes a "finished" call to action. */
+.wt-bar--merged {
+  height: auto;
+  min-height: 48px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--success) 10%, var(--bg-surface));
+  border-bottom-color: color-mix(in srgb, var(--success) 35%, transparent);
+}
+
+.wt-bar__merged-icon {
+  flex-shrink: 0;
+  color: var(--success);
+}
+
+.wt-bar__merged-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.wt-bar__merged-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.wt-bar__merged-text span {
+  color: var(--text-secondary);
+}
