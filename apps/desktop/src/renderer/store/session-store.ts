@@ -400,6 +400,8 @@ export interface SessionStoreState {
    * `edit` puts its text (and images) back in the composer; `resend` runs it again immediately.
    */
   rewindToUserMessage: (entryId: string, mode: "edit" | "resend") => Promise<void>;
+  /** Clear the error and retry the last user message or prompt. */
+  retryLastMessage: () => Promise<void>;
   setModel: (provider: string, modelId: string) => Promise<void>;
   setThinkingLevel: (level: string) => Promise<void>;
   setMode: (mode: AgentMode) => void;
@@ -2112,6 +2114,21 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       } catch (err) {
         fail(`Couldn't resend the message: ${err instanceof Error ? err.message : String(err)}`);
       }
+    }
+  },
+
+  retryLastMessage: async () => {
+    get().clearError();
+    const { transcript, promptText } = get();
+    const entries = Object.values(transcript.byId);
+    const lastUserEntry = [...entries]
+      .reverse()
+      .find((e) => e.type === "message" && (e.message as { role?: string } | undefined)?.role === "user");
+
+    if (lastUserEntry) {
+      await get().rewindToUserMessage(lastUserEntry.id, "resend");
+    } else if (promptText.trim()) {
+      await get().sendPrompt();
     }
   },
 

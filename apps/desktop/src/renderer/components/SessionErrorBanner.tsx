@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { AlertCircle, Copy, Check, X, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertCircle, Copy, Check, X, ChevronDown, ChevronUp, RotateCw } from "lucide-react";
 import { copyText } from "../lib/clipboard.ts";
 import { useSessionStore } from "../store/session-store.ts";
 import { detectAuthError } from "../lib/auth-errors.ts";
@@ -15,9 +15,23 @@ export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
 
   const activeKey = useSessionStore((s) => s.activeKey);
   const compactSession = useSessionStore((s) => s.compactSession);
+  const retryLastMessage = useSessionStore((s) => s.retryLastMessage);
   const { headline, action } = summarizeError(error);
   const [compacting, setCompacting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const canCompact = action === "compact" && !auth && !!activeKey;
+  const canRetry = action === "retry" && !auth;
+
+  const handleRetry = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await retryLastMessage();
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const handleCompact = async () => {
     if (!activeKey || compacting) return;
     setCompacting(true);
@@ -66,6 +80,29 @@ export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           {auth && <AuthErrorActions auth={auth} tone="banner" />}
+          {canRetry && (
+            <button
+              type="button"
+              onClick={() => void handleRetry()}
+              disabled={retrying}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                background: "rgba(229, 83, 75, 0.25)",
+                border: "1px solid rgba(229, 83, 75, 0.5)",
+                borderRadius: 4,
+                color: "var(--danger)",
+                padding: "2px 8px",
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: retrying ? "default" : "pointer",
+              }}
+            >
+              <RotateCw size={11} className={retrying ? "spin" : undefined} />
+              <span>{retrying ? "Retrying…" : "Retry"}</span>
+            </button>
+          )}
           {canCompact && (
             <button
               type="button"

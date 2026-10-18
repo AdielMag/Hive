@@ -38,9 +38,15 @@ export function useKeybindings(): void {
       const cmd = COMMANDS_BY_ID.get(matchedId);
       if (!cmd) return;
 
-      // 4. Terminal safety: if focus is inside an xterm element, only allow commands with Shift/Alt
+      // 4. Terminal safety & text inputs: if focus is inside an xterm element, only allow commands with Shift/Alt
       // or those explicitly flagged `allowInTerminal`.
+      // Also prevent single-key / punctuation shortcuts (like '?') from firing while typing in inputs.
       const target = e.target as HTMLElement | null;
+      const isEditable = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (isEditable && matchedId === "app.shortcuts") {
+        return;
+      }
+
       const inTerminal = target && (target.closest(".xterm") !== null || target.classList.contains("xterm-helper-textarea"));
       if (inTerminal && (TERMINAL_OWNED.has(chord) || (!cmd.allowInTerminal && !chordHasShiftOrAlt(chord)))) {
         return;

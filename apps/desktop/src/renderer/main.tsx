@@ -5,6 +5,7 @@ import "@fontsource-variable/jetbrains-mono";
 import "./styles/theme.css";
 import "./styles/ui.css";
 import "./styles/tooltip.css";
+import "./styles/shortcuts-cheatsheet.css";
 import "./styles/shell.css";
 import "./styles/settings.css";
 import "./styles/sound-settings.css";

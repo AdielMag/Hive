@@ -35,6 +35,15 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
     [quota, model?.provider, model?.id],
   );
 
+  const exhausted = useMemo(
+    () =>
+      meters
+        .map((m) => ({ label: m.label, pct: Math.max(m.w5?.usedPercent ?? 0, m.wk?.usedPercent ?? 0), active: m.active }))
+        .filter((m) => m.pct >= 95 && m.active !== false)
+        .sort((a, b) => b.pct - a.pct)[0],
+    [meters],
+  );
+
   const subscriptions = useMemo(() => (quota?.providers ?? []).filter((p) => p.status !== "unsupported"), [quota]);
 
   return (
@@ -119,6 +128,23 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
                 )}
               </div>
             </div>
+
+            {exhausted && (
+              <div className="quota-popover__exhausted" role="alert">
+                <span>
+                  {exhausted.label} quota is {Math.round(exhausted.pct) >= 100 ? "exhausted" : `at ${Math.round(exhausted.pct)}%`} — switch model to keep working.
+                </span>
+                <button
+                  className="ui-btn ui-btn--sm"
+                  onClick={() => {
+                    quotaPop.close();
+                    host.settings.open("models");
+                  }}
+                >
+                  Change model…
+                </button>
+              </div>
+            )}
 
             <div className="quota-popover__body ui-scroll">
               {subscriptions.length === 0 ? (

@@ -9,9 +9,9 @@ const RULES: Array<[RegExp, ErrorSummary]> = [
     /context[\s_-]*(length|window)|too many tokens|prompt is too long|prompt too long|maximum context|exceeds? the (context|maximum)/i,
     { headline: "This conversation is too long for the model", action: "compact" },
   ],
-  [/(^|\D)529(\D|$)|overloaded/i, { headline: "The provider is overloaded — try again shortly" }],
-  [/(^|\D)429(\D|$)|rate[\s_-]*limit|too many requests/i, { headline: "Rate limit reached — wait a moment and try again" }],
-  [/ECONNREFUSED|ENOTFOUND|fetch failed|network (error|request)|\bnetwork\b|ECONNRESET|ETIMEDOUT/i, { headline: "Can't reach the provider — check your connection" }],
+  [/(^|\D)529(\D|$)|overloaded/i, { headline: "The provider is overloaded — try again shortly", action: "retry" }],
+  [/(^|\D)429(\D|$)|rate[\s_-]*limit|too many requests/i, { headline: "Rate limit reached — wait a moment and try again", action: "retry" }],
+  [/ECONNREFUSED|ENOTFOUND|fetch failed|network (error|request)|\bnetwork\b|ECONNRESET|ETIMEDOUT/i, { headline: "Can't reach the provider — check your connection", action: "retry" }],
   [
     /(^|\D)40[13](\D|$)|invalid[\s_-]*(x-)?api[\s_-]*key|unauthorized|forbidden/i,
     { headline: "Authentication failed — sign in again in Settings › AI Providers" },

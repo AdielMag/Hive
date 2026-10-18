@@ -131,7 +131,7 @@ export const TranscriptEmptyState: React.FC<{ projectId?: string; currentSession
         <Sparkles size={20} />
       </div>
       <div className="transcript__empty-title">What are we building?</div>
-      <div className="transcript__empty-sub">Ask Pi a question or hand it a task in this project.</div>
+      <div className="transcript__empty-sub">Ask Pi a question or hand it a task in this project. Press <kbd style={{ padding: "1px 4px", fontSize: 11, borderRadius: 3, border: "1px solid var(--border-prominent)", background: "var(--bg-elevated)", color: "var(--text-secondary)" }}>?</kbd> for shortcuts.</div>
       {recent.length > 0 && projectId && (
         <div className="transcript__empty-section">
           <div className="transcript__empty-label">Recent</div>

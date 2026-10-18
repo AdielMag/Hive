@@ -28,6 +28,7 @@ import { OnboardingPicker } from "../features/modules/OnboardingPicker.tsx";
 import { useKeybindings } from "../features/commands/useKeybindings.ts";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import { CommandPalette } from "../features/commands/CommandPalette.tsx";
+import { ShortcutsCheatsheet } from "./ShortcutsCheatsheet.tsx";
 import { WorkbenchSplitTree } from "./WorkbenchSplitTree.tsx";
 import { usePaneLayoutStore, findLeaf } from "../store/pane-layout-store.ts";
 import hiveIcon from "../assets/hive-icon.png";
@@ -287,6 +288,7 @@ export const WorkbenchLayout: React.FC = () => {
       <ChoiceDialogHost />
       <SubagentDetailModal />
       <CommandPalette />
+      <ShortcutsCheatsheet />
       <ToastHost />
       {needsOnboarding && <OnboardingPicker />}
       {ui.settingsOpen && (

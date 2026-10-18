@@ -39,6 +39,9 @@ interface UiState extends Persisted {
   showRight(p: RightPanel | null): void;
   showBottom(p: string | null): void;
   setSize(patch: Partial<Pick<Persisted, "leftWidth" | "rightWidth" | "composerHeight" | "bottomHeight">>): void;
+  shortcutsOpen: boolean;
+  toggleShortcuts(): void;
+  closeShortcuts(): void;
   openSettings(tab?: SettingsTabId, focus?: SettingsFocus): void;
   /** Opens Settings → AI Providers on a provider that needs (re)connecting. */
   openAccountSettings(providerId: string, reason?: string): void;
@@ -69,8 +72,11 @@ function save(s: Persisted) {
 export const useUi = create<UiState>((set, get) => ({
   ...load(),
   settingsOpen: false,
+  shortcutsOpen: false,
   settingsTab: "appearance",
   settingsFocus: null,
+  toggleShortcuts: () => set((s) => ({ shortcutsOpen: !s.shortcutsOpen })),
+  closeShortcuts: () => set({ shortcutsOpen: false }),
   toggleLeft: (p) => set({ left: get().left === p ? null : p }),
   toggleRight: (p) => set({ right: get().right === p ? null : p }),
   showLeft: (p) => set({ left: p }),

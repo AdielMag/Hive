@@ -253,3 +253,17 @@
 .quota-popover .quota-meter__sub {
   color: var(--text-secondary);
 }
+
+.quota-popover__exhausted {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 10px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--text-primary);
+  font-size: 12px;
+}

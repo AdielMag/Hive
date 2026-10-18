@@ -199,6 +199,7 @@ const CORE_COMMANDS: readonly Command[] = [
   { id: "zoom.reset", title: "Reset Zoom", category: "Window", defaultKeys: ["Mod+0"], allowInTerminal: true, run: () => void window.studio.zoom("reset") },
 
   // Settings & app
+  { id: "app.shortcuts", title: "Keyboard Shortcuts Cheatsheet", category: "App", keywords: "help cheatsheet keys hotkeys", defaultKeys: ["Shift+/", "F1"], allowInTerminal: false, run: () => useUi.getState().toggleShortcuts() },
   { id: "settings.open", title: "Open Settings", category: "App", keywords: "preferences options", defaultKeys: ["Mod+,"], allowInTerminal: true, run: () => useUi.getState().openSettings() },
   { id: "settings.keyboard", title: "Keyboard Shortcuts", category: "App", keywords: "keybindings hotkeys rebind", run: () => useUi.getState().openSettings() },
   { id: "settings.models", title: "Settings: Models", category: "App", keywords: "providers", run: () => useUi.getState().openSettings("models") },

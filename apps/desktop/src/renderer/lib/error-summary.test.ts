@@ -3,8 +3,9 @@ import { summarizeError } from "./error-summary.ts";
 
 describe("summarizeError", () => {
   it("rate limit", () => {
-    expect(summarizeError("HTTP 429 Too Many Requests").headline).toBe("Rate limit reached — wait a moment and try again");
-    expect(summarizeError("rate_limit_error").action).toBeUndefined();
+    const res = summarizeError("HTTP 429 Too Many Requests");
+    expect(res.headline).toBe("Rate limit reached — wait a moment and try again");
+    expect(res.action).toBe("retry");
   });
   it("context too long suggests compact", () => {
     for (const m of ["context length exceeded", "prompt is too long: 250000 tokens", "too many tokens"]) {
@@ -13,11 +14,15 @@ describe("summarizeError", () => {
   });
   it("network", () => {
     for (const m of ["connect ECONNREFUSED 127.0.0.1", "getaddrinfo ENOTFOUND api.x.com", "TypeError: fetch failed"]) {
-      expect(summarizeError(m).headline).toBe("Can't reach the provider — check your connection");
+      const res = summarizeError(m);
+      expect(res.headline).toBe("Can't reach the provider — check your connection");
+      expect(res.action).toBe("retry");
     }
   });
   it("overloaded", () => {
-    expect(summarizeError("529 overloaded_error").headline).toBe("The provider is overloaded — try again shortly");
+    const res = summarizeError("529 overloaded_error");
+    expect(res.headline).toBe("The provider is overloaded — try again shortly");
+    expect(res.action).toBe("retry");
   });
   it("auth", () => {
     for (const m of ["401 Unauthorized", "403 forbidden", "invalid api key"]) {
