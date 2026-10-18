@@ -186,7 +186,10 @@ describe("worktrees", { timeout: 60_000 }, () => {
     const found = await scanTidyWorktrees(req);
     expect(found.map((c) => c.branch).sort()).toEqual([gone.branch, old.branch].sort());
     expect(found.find((c) => c.branch === gone.branch)).toMatchObject({ reason: "remote-only", hasRemoteBranch: true, hasLocalBranch: false });
-    expect(found.find((c) => c.branch === old.branch)).toMatchObject({ worktreePath: old.worktreePath, hasLocalBranch: true, hasRemoteBranch: true });
+    const oldFound = found.find((c) => c.branch === old.branch);
+    expect(oldFound).toMatchObject({ hasLocalBranch: true, hasRemoteBranch: true });
+    // Windows CI may report 8.3 short vs long temp paths for the same dir.
+    expect(realpathSync.native(oldFound!.worktreePath!)).toBe(realpathSync.native(old.worktreePath));
 
     const res = await applyTidyWorktrees(repo, [
       { branch: old.branch, worktreePath: old.worktreePath, deleteLocal: true, deleteRemote: false },
