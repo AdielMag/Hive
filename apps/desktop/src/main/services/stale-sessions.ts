@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import type { PiInstallInfo } from "@hive/protocol";
 
 const TIMEOUT_MS = 60_000;
-const MAX_SESSIONS = 200;
+const MAX_SESSIONS = 300;
 
 interface Candidate {
   path: string;
@@ -44,7 +44,10 @@ export function pickStaleSessions(
   const lines = list
     .map((s, i) => `${i}\t${s.modified}\t${s.messageCount} msgs\t${s.title.replace(/\s+/g, " ").slice(0, 100)}`)
     .join("\n");
-  const instruction = `You tidy a list of coding chat sessions. Decide which are OLD and safe to archive: stale, abandoned, finished, trivial or one-off. Keep recent sessions and ones that look like ongoing work.
+  const instruction = `You tidy a list of coding chat sessions by archiving the ones that are no longer needed. Archiving is reversible, so be decisive: the user has far too many open sessions and wants a thorough cleanup.
+ARCHIVE a session when any of these hold: it was last modified more than ~3 days ago; it is short (few messages) or looks like a quick question, one-off task, experiment, or a "New session"/untitled stub; its title suggests the work is finished (fixed, done, merged, released); or it is a duplicate/near-duplicate of another listed session.
+KEEP a session only if it looks like clearly ongoing, substantial work touched within the last ~3 days.
+When in doubt, archive.
 Current time: ${now}
 Sessions (id, last modified, size, title):
 ${lines}

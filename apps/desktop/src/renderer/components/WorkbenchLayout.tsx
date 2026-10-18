@@ -14,7 +14,6 @@ import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
 import { QuestionFormModal } from "./QuestionFormModal.tsx";
 import { ImagePreviewModal } from "./ImagePreviewModal.tsx";
 import { ChoiceDialogHost } from "./ChoiceDialog.tsx";
-import { TidyWorktreesDialogHost } from "./TidyWorktreesDialog.tsx";
 import { SubagentDetailModal } from "./SubagentDetailModal.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import { SessionErrorBanner } from "./SessionErrorBanner.tsx";
@@ -287,7 +286,6 @@ export const WorkbenchLayout: React.FC = () => {
       <QuestionFormModal />
       <ImagePreviewModal />
       <ChoiceDialogHost />
-      <TidyWorktreesDialogHost />
       <SubagentDetailModal />
       <CommandPalette />
       <ShortcutsCheatsheet />

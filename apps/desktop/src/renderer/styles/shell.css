@@ -960,7 +960,6 @@
   cursor: not-allowed; opacity: 0.5; background: transparent;
   border-color: var(--border-subtle); color: var(--text-muted);
 }
-.sessions-panel__tidy-note { font-size: 11px; opacity: 0.7; margin-bottom: 6px; }
 .sessions-panel__toggle-label {
   display: flex;
   align-items: center;
