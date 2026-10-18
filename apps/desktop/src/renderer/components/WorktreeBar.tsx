@@ -1,7 +1,7 @@
 /** Thin header above the transcript for sessions running in their own git worktree. */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, GitBranch, GitMerge, Loader2, Sparkles, Trash2 } from "lucide-react";
-import type { WorktreeStatus } from "@hive/protocol";
+import type { MergeConflictFile, WorktreeStatus } from "@hive/protocol";
 import { useSessionStore, useSessionWorktree } from "../store/session-store.ts";
 import { resolveFeatureModel, useFeatureModelStore } from "../store/feature-models-store.ts";
 import { removeSessionWorktree } from "../store/worktree-actions.ts";
@@ -14,6 +14,7 @@ import {
   worktreeTooltipLines,
 } from "../lib/worktree.ts";
 import { askChoice } from "./ChoiceDialog.tsx";
+import { MergeConflictDialog } from "./MergeConflictDialog.tsx";
 import "../styles/worktree.css";
 
 const POLL_MS = 15_000;
@@ -30,6 +31,7 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const [stagedCount, setStagedCount] = useState<number>(0);
   const [busy, setBusy] = useState<"merge" | "discard" | "autocommit" | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [conflicts, setConflicts] = useState<MergeConflictFile[] | null>(null);
 
   const pref = useFeatureModelStore((s) => s.config.gitCommit);
   const selectedModel = useSessionStore((s) => s.selectedModel);
@@ -69,6 +71,7 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
     setStatus(null);
     setStagedCount(0);
     setNotice(null);
+    setConflicts(null);
     if (!path) return;
     const run = () => void refresh();
     run();
@@ -124,6 +127,23 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
     }
   };
 
+  const openConflicts = async () => {
+    const started = await window.studio.worktreeConflictsStart(wt);
+    if (started.ok) setConflicts(started.files);
+    else setNotice({ kind: "error", text: started.error });
+  };
+
+  const onConflictsClosed = (outcome: "merged" | "aborted") => {
+    setConflicts(null);
+    if (outcome === "merged") {
+      setNotice({ kind: "ok", text: `Conflicts resolved and merged into ${wt.baseBranch}. Discard the worktree when you're done.` });
+      toast({ kind: "success", message: `Merged ${wt.branch} into ${wt.baseBranch}` });
+    } else {
+      setNotice({ kind: "error", text: "Merge aborted. Nothing was changed." });
+    }
+    void refresh();
+  };
+
   const onMerge = async () => {
     const dirty = status?.dirty ?? 0;
     const choice = await askChoice({
@@ -142,6 +162,22 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
     setNotice(null);
     try {
       const res = await window.studio.worktreeMerge(wt);
+      if (!res.ok && res.reason === "conflict") {
+        setNotice({ kind: "error", text: mergeFailureMessage(res) });
+        const pick = await askChoice({
+          title: "Merge conflicts",
+          body: [
+            `${res.conflicts?.length ?? "Some"} file(s) conflict between ${wt.branch} and ${wt.baseBranch}. Nothing has been changed yet.`,
+            "Review each conflict side by side and fix them yourself or let the AI merge them.",
+          ],
+          choices: [
+            { id: "later", label: "Not now" },
+            { id: "resolve", label: "Resolve conflicts", tone: "primary" },
+          ],
+        });
+        if (pick === "resolve") await openConflicts();
+        return;
+      }
       // Keep the session open and show the result here; the user can Discard the worktree when done.
       setNotice(
         res.ok
@@ -272,6 +308,15 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
           </button>
         )}
       </div>
+      {conflicts && (
+        <MergeConflictDialog
+          worktree={wt}
+          files={conflicts}
+          model={resolvedCommitModel.id || undefined}
+          modelName={resolvedCommitModel.name}
+          onClose={onConflictsClosed}
+        />
+      )}
     </div>
   );
 };

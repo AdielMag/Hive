@@ -172,6 +172,18 @@ const api: StudioApi = {
     return ipcRenderer.invoke(IPC.worktreeMerge, { worktree });
   },
 
+  worktreeConflictsStart(worktree: SessionWorktree) {
+    return ipcRenderer.invoke(IPC.worktreeConflictsStart, { worktree });
+  },
+  worktreeConflictsResolve(worktree: SessionWorktree, resolutions: unknown) {
+    return ipcRenderer.invoke(IPC.worktreeConflictsResolve, { worktree, resolutions });
+  },
+  worktreeConflictsAbort(worktree: SessionWorktree) {
+    return ipcRenderer.invoke(IPC.worktreeConflictsAbort, { worktree });
+  },
+  worktreeConflictsAi(worktree: SessionWorktree, request: unknown) {
+    return ipcRenderer.invoke(IPC.worktreeConflictsAi, { worktree, request });
+  },
   worktreeRenameBranch(worktree: SessionWorktree, newTitle: string) {
     return ipcRenderer.invoke(IPC.worktreeRenameBranch, { worktree, newTitle });
   },
