@@ -13,6 +13,7 @@ import {
 import { existsSync } from "node:fs";
 import type { AppContext } from "../context.ts";
 import { generateSessionTitle } from "../services/session-title.ts";
+import { pickStaleSessions } from "../services/stale-sessions.ts";
 import { isManagedWorktree, mergeWorktree, removeWorktree, renameWorktreeBranch, worktreeStatus } from "../services/worktrees.ts";
 import { handle } from "./util.ts";
 
@@ -63,6 +64,14 @@ export function registerSessionIpc(ctx: AppContext): void {
       const wt = sessionPath ? ctx.guiStore.getSessionMeta(sessionPath).worktree : undefined;
       const effective = wt && existsSync(wt.worktreePath) ? wt.worktreePath : cwd;
       return generateSessionTitle(ctx.pi.info, effective, prompt, model);
+    },
+  );
+
+  handle(
+    IPC.sessionsPickStale,
+    async ({ cwd, sessions, model }: { cwd: string; sessions: unknown; model?: string }) => {
+      if (!ctx.pi.ok || !Array.isArray(sessions)) return null;
+      return pickStaleSessions(ctx.pi.info, cwd, sessions, model);
     },
   );
 
