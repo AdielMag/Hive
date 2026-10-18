@@ -23,6 +23,7 @@ import { ModePicker } from "./ModePicker.tsx";
 import { QueuedMessagesBar } from "./transcript/QueuedMessages.tsx";
 import { ModelSwitchCacheBar } from "./ModelSwitchCacheBar.tsx";
 import { AttachmentTray } from "./AttachmentTray.tsx";
+import { MentionTextarea } from "./MentionTextarea.tsx";
 import { ReloadButton, ReloadStatusBar } from "./ReloadControls.tsx";
 import { RunTimeBar } from "./RunTimeBar.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
@@ -455,10 +456,10 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
         <AttachmentTray attachments={attachments} onRemove={removeAttachment} />
 
         {/* Textarea */}
-        <textarea
-          ref={textareaRef}
+        <MentionTextarea
+          textareaRef={textareaRef}
           value={promptText}
-          onChange={(e) => setPromptText(e.target.value)}
+          onValueChange={setPromptText}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           readOnly={isReloading}
@@ -473,16 +474,9 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               : "Ask Pi or issue a task... (Drag & drop or paste files/images/videos)"
           }
           style={{
-            flex: 1,
-            width: "100%",
-            border: "none",
-            background: "transparent",
             outline: "none",
             resize: "none",
-            fontSize: 13.5,
-            lineHeight: 1.5,
             color: "var(--text-primary)",
-            minHeight: 44,
           }}
         />
 
