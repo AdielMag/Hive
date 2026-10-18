@@ -11,6 +11,7 @@ export interface FeatureModelPreference {
 export interface FeatureModelsConfig {
   gitCommit: FeatureModelPreference;
   usageAnalysis: FeatureModelPreference;
+  sessionTidy: FeatureModelPreference;
 }
 
 export interface ResolvedFeatureModel {
@@ -34,6 +35,7 @@ const STORAGE_KEY = "hive.feature-models.v1";
 export const DEFAULT_FEATURE_MODELS: FeatureModelsConfig = {
   gitCommit: { source: "session" },
   usageAnalysis: { source: "session" },
+  sessionTidy: { source: "session" },
 };
 
 /**
@@ -241,7 +243,12 @@ function loadConfig(): FeatureModelsConfig {
       usageSource = "session";
     }
 
+    let tidySource = validCommitSources.includes(parsed?.sessionTidy?.source) ? parsed.sessionTidy.source : "session";
+    const tidyModelId = typeof parsed?.sessionTidy?.modelId === "string" ? parsed.sessionTidy.modelId : undefined;
+    if (tidySource === "custom" && !tidyModelId) tidySource = "session";
+
     return {
+      sessionTidy: { source: tidySource, modelId: tidyModelId },
       gitCommit: {
         source: gitCommitSource,
         modelId: gitCommitModelId,
@@ -260,6 +267,7 @@ interface FeatureModelsState {
   config: FeatureModelsConfig;
   setGitCommitConfig(pref: Partial<FeatureModelPreference>): void;
   setUsageAnalysisConfig(pref: Partial<FeatureModelPreference>): void;
+  setSessionTidyConfig(pref: Partial<FeatureModelPreference>): void;
   reset(): void;
 }
 
@@ -279,6 +287,15 @@ export const useFeatureModelStore = create<FeatureModelsState>((set) => ({
       const next: FeatureModelsConfig = {
         ...state.config,
         usageAnalysis: { ...state.config.usageAnalysis, ...pref },
+      };
+      setStoredItem(STORAGE_KEY, JSON.stringify(next));
+      return { config: next };
+    }),
+  setSessionTidyConfig: (pref) =>
+    set((state) => {
+      const next: FeatureModelsConfig = {
+        ...state.config,
+        sessionTidy: { ...state.config.sessionTidy, ...pref },
       };
       setStoredItem(STORAGE_KEY, JSON.stringify(next));
       return { config: next };

@@ -14,8 +14,9 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import type { SessionCatalogItem } from "@hive/protocol";
 import { transcriptAwaitsUser, useSessionStore } from "../store/session-store.ts";
-import { pickTitleModel, sessionDisplayTitle } from "../lib/session-title.ts";
-import { getStoredItem, setStoredItem } from "../lib/storage.ts";
+import { sessionDisplayTitle } from "../lib/session-title.ts";
+import { AiModelChip } from "./AiModelChip.tsx";
+import { resolveFeatureModel, useFeatureModelStore } from "../store/feature-models-store.ts";
 import { formatAgo, formatAgoShort } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
 import { worktreeChipLabel, worktreeShortLabel, worktreeTooltipLines } from "../lib/worktree.ts";
@@ -33,7 +34,6 @@ const BADGE_LABEL: Record<SessionBadge, string> = {
   error: "failed, not viewed yet",
 };
 
-const TIDY_MODEL_KEY = "hive.sessions.tidyModel";
 const ORPHANS_KEY = "__orphans__";
 /** A child counts as running only while its parent is running and it was touched this recently. */
 const CHILD_RUNNING_WINDOW_MS = 120_000;
@@ -85,7 +85,12 @@ export const SessionsPanel: React.FC = () => {
   const [editingSessionPath, setEditingSessionPath] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [tidyModel, setTidyModel] = useState(() => getStoredItem(TIDY_MODEL_KEY) ?? "");
+  const tidyPref = useFeatureModelStore((s) => s.config.sessionTidy);
+  const defaultModel = useSessionStore((s) => s.defaultModel);
+  const resolvedTidyModel = useMemo(
+    () => resolveFeatureModel(tidyPref, selectedModel, defaultModel, models),
+    [tidyPref, selectedModel, defaultModel, models],
+  );
   const [tidying, setTidying] = useState(false);
   const [tidyNote, setTidyNote] = useState("");
 
@@ -118,9 +123,6 @@ export const SessionsPanel: React.FC = () => {
       .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
   }, [allSessions, activeProject]);
 
-  const fullModelId = (m: { id: string; provider?: string }) =>
-    m.provider && !m.id.includes("/") ? `${m.provider}/${m.id}` : m.id;
-
   const archiveOldWithLlm = async () => {
     if (!activeProject || tidying) return;
     const open = new Set(tabs.filter((t) => t.sessionPath).map((t) => normPath(t.sessionPath!)));
@@ -133,8 +135,7 @@ export const SessionsPanel: React.FC = () => {
     let archivedCount = 0;
     try {
       if (candidates.length) {
-        const chosen = models.some((m) => fullModelId(m) === tidyModel) ? tidyModel : "";
-        const model = chosen || pickTitleModel(models, selectedModel);
+        const model = resolvedTidyModel.id;
         const paths = await window.studio.pickStaleSessions(
           activeProject.path,
           candidates.map((s) => ({
@@ -469,31 +470,26 @@ export const SessionsPanel: React.FC = () => {
 
       <div className="sessions-panel__footer">
         <div className="sessions-panel__tidy">
-          <select
-            className="sessions-panel__tidy-model"
-            aria-label="Model used to pick sessions to archive"
-            value={models.some((m) => fullModelId(m) === tidyModel) ? tidyModel : ""}
-            onChange={(e) => {
-              setTidyModel(e.target.value);
-              setStoredItem(TIDY_MODEL_KEY, e.target.value);
-            }}
-          >
-            <option value="">Auto (cheap model)</option>
-            {models.map((m) => (
-              <option key={fullModelId(m)} value={fullModelId(m)}>
-                {m.name || m.id}
-              </option>
-            ))}
-          </select>
           <button
             type="button"
             className="sessions-panel__tidy-btn"
             disabled={tidying}
             onClick={() => void archiveOldWithLlm()}
-            title="Let the model pick old sessions and archive them"
+            title={`Let the model pick old sessions and archive them · ${resolvedTidyModel.name || resolvedTidyModel.id} (${resolvedTidyModel.sourceLabel})
+Right-click to change the model`}
           >
-            {tidying ? <Loader2 size={12} className="spin" /> : <Sparkles size={12} />}
-            <span>Archive old</span>
+            {tidying ? (
+              <>
+                <Loader2 size={12} className="spin" />
+                <span>Archiving…</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={12} />
+                <span>Archive old</span>
+                <AiModelChip model={resolvedTidyModel} clickable={false} feature="sessionTidy" />
+              </>
+            )}
           </button>
         </div>
         {tidyNote && <div className="sessions-panel__tidy-note" role="status">{tidyNote}</div>}
