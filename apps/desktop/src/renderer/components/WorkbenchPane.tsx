@@ -1,5 +1,6 @@
 import React, { lazy, Suspense } from "react";
 import { isCoreTabKind } from "@hive/protocol";
+import { TidyTab } from "./TidyTab.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { usePaneLayoutStore, findLeaf, type PaneLeaf } from "../store/pane-layout-store.ts";
 import { TabStrip } from "./TabStrip.tsx";
@@ -79,6 +80,8 @@ export const WorkbenchPane: React.FC<WorkbenchPaneProps> = ({
           <Suspense fallback={<Loading />}>
             {activeTab?.kind === "subagent" ? (
               <SubagentTab tab={activeTab} />
+            ) : activeTab?.kind === "tidy" ? (
+              <TidyTab />
             ) : activeTab && !isCoreTabKind(activeTab.kind) ? (
               <ModuleTabView
                 tab={activeTab}

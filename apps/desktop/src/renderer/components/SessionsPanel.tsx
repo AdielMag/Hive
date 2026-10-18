@@ -21,9 +21,8 @@ import { formatAgo, formatAgoShort } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
 import { worktreeChipLabel, worktreeShortLabel, worktreeTooltipLines } from "../lib/worktree.ts";
 import { groupSessions, isSubagentSession, normPath, subagentId, subagentType } from "../lib/subagent-sessions.ts";
-import { archiveSession, stopSessionTabs } from "../store/worktree-actions.ts";
-import { askTidyWorktrees } from "./TidyWorktreesDialog.tsx";
-import { toast } from "../modules/toast-store.ts";
+import { archiveSession } from "../store/worktree-actions.ts";
+import { startTidy, useTidyStore } from "../store/tidy-store.ts";
 
 type SessionBadge = "running" | "input" | "done" | "error";
 
@@ -91,8 +90,7 @@ export const SessionsPanel: React.FC = () => {
     () => resolveFeatureModel(tidyPref, selectedModel, defaultModel, models),
     [tidyPref, selectedModel, defaultModel, models],
   );
-  const [tidying, setTidying] = useState(false);
-  const [tidyNote, setTidyNote] = useState("");
+  const tidying = useTidyStore((s) => s.phase === "scanning" || s.phase === "asking" || s.phase === "archiving" || s.phase === "worktrees");
 
   const sessionState = useMemo(() => {
     const out: Record<string, SessionBadge> = {};
@@ -123,89 +121,9 @@ export const SessionsPanel: React.FC = () => {
       .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
   }, [allSessions, activeProject]);
 
-  const archiveOldWithLlm = async () => {
-    if (!activeProject || tidying) return;
-    const open = new Set(tabs.filter((t) => t.sessionPath).map((t) => normPath(t.sessionPath!)));
-    // Oldest first so the model's size cap drops the newest, not the oldest.
-    const candidates = projectSessions
-      .filter((s) => !s.archived && !s.pending && !s.worktree && !isSubagentSession(s) && !open.has(normPath(s.path)))
-      .reverse();
-    setTidying(true);
-    setTidyNote("");
-    let archivedCount = 0;
-    try {
-      if (candidates.length) {
-        const model = resolvedTidyModel.id;
-        const paths = await window.studio.pickStaleSessions(
-          activeProject.path,
-          candidates.map((s) => ({
-            path: s.path,
-            title: sessionDisplayTitle(s) || "Untitled",
-            modified: s.modified,
-            messageCount: s.messageCount,
-          })),
-          model,
-        );
-        if (!paths) {
-          setTidyNote("Model call failed");
-        } else {
-          for (const p of paths) await setSessionArchived(p, true);
-          archivedCount = paths.length;
-        }
-      }
-      let removed = 0;
-      try {
-        removed = await tidyWorktrees();
-      } catch {
-        setTidyNote((prev) => prev || "Worktree cleanup failed");
-      }
-      const parts = [archivedCount ? `Archived ${archivedCount}` : "", removed ? `Cleaned ${removed}` : ""].filter(Boolean);
-      setTidyNote((prev) => prev || parts.join(", ") || "Nothing to tidy");
-    } catch {
-      setTidyNote("Failed");
-    } finally {
-      setTidying(false);
-    }
-  };
-
-  /** Offer every unused Hive worktree/branch (local + origin) for deletion, one choice per item. Returns how many were deleted. */
-  const tidyWorktrees = async (): Promise<number> => {
-    if (!activeProject) return 0;
-    const sessions = useSessionStore.getState().allSessions.filter((s) => s.projectId === activeProject.id && s.worktree);
-    const live = sessions.filter((s) => !s.archived);
-    // Open tabs count as live too: a brand-new session's worktree may not be in the catalog yet.
-    const tabWts = useSessionStore.getState().tabs.flatMap((t) => (t.worktree ? [t.worktree] : []));
-    const candidates = await window.studio.worktreeTidyScan({
-      projectPath: activeProject.path,
-      liveBranches: [...live.map((s) => s.worktree!.branch), ...tabWts.map((w) => w.branch)],
-      livePaths: [...live.map((s) => s.worktree!.worktreePath), ...tabWts.map((w) => w.worktreePath)],
-      archivedBranches: sessions.filter((s) => s.archived).map((s) => s.worktree!.branch),
-    });
-    if (!candidates.length) return 0;
-    const choices = await askTidyWorktrees(candidates);
-    if (!choices) return 0;
-    const actions = candidates.flatMap((c) => {
-      const choice = choices[c.branch];
-      if (!choice || choice === "keep") return [];
-      return [
-        {
-          branch: c.branch,
-          worktreePath: c.worktreePath,
-          deleteLocal: choice !== "all" || c.hasLocalBranch || !!c.worktreePath,
-          deleteRemote: choice === "all",
-        },
-      ];
-    });
-    if (!actions.length) return 0;
-    // A live Pi process (archived session still open) holds its worktree folder; close those first.
-    for (const a of actions) {
-      const owner = sessions.find((s) => s.worktree?.branch === a.branch);
-      if (owner && a.deleteLocal) await stopSessionTabs(owner.path);
-    }
-    const results = await window.studio.worktreeTidyApply(activeProject.path, actions);
-    const failed = results.filter((r) => !r.ok);
-    for (const f of failed) toast({ kind: "error", message: `Couldn't clean ${f.branch}: ${f.error ?? "failed"}` });
-    return results.length - failed.length;
+  const archiveOldWithLlm = () => {
+    if (!activeProject) return;
+    void startTidy({ id: resolvedTidyModel.id, label: resolvedTidyModel.name || resolvedTidyModel.id });
   };
 
   const query = search.trim().toLowerCase();
@@ -473,15 +391,14 @@ export const SessionsPanel: React.FC = () => {
           <button
             type="button"
             className="sessions-panel__tidy-btn"
-            disabled={tidying}
-            onClick={() => void archiveOldWithLlm()}
+            onClick={archiveOldWithLlm}
             title={`Let the model pick old sessions and archive them · ${resolvedTidyModel.name || resolvedTidyModel.id} (${resolvedTidyModel.sourceLabel})
 Right-click to change the model`}
           >
             {tidying ? (
               <>
                 <Loader2 size={12} className="spin" />
-                <span>Archiving…</span>
+                <span>Archiving… view progress</span>
               </>
             ) : (
               <>
@@ -492,7 +409,6 @@ Right-click to change the model`}
             )}
           </button>
         </div>
-        {tidyNote && <div className="sessions-panel__tidy-note" role="status">{tidyNote}</div>}
         <label className="sessions-panel__toggle-label">
           <input
             type="checkbox"

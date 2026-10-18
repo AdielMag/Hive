@@ -11,6 +11,7 @@ import {
   PenLine,
   Plus,
   Rows2,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
@@ -489,6 +490,8 @@ const TabIcon: React.FC<{ tab: TabItem }> = ({ tab }) => {
   switch (tab.kind) {
     case "subagent":
       return <Bot size={13} />;
+    case "tidy":
+      return <Sparkles size={13} />;
 
     default:
       return isCoreTabKind(tab.kind) ? <MessageSquare size={13} /> : <ModuleTabIcon tab={tab} />;

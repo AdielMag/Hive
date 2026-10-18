@@ -1789,7 +1789,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       return;
     }
     // Subagent tabs are views; they must not tear down the live session's transcript.
-    if (tab.kind === "subagent") {
+    if (tab.kind === "subagent" || tab.kind === "tidy") {
       set({ activeTabId: tabId, activeProject: get().projects.find((p) => p.id === tab.projectId) ?? get().activeProject });
       return;
     }
