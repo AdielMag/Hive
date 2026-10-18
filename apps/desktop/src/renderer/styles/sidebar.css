@@ -31,9 +31,11 @@
   flex-shrink: 0;
   transition: background 0.12s ease, color 0.12s ease;
 }
-.sb-icon-btn:hover {
-  background: var(--frame-hover, rgba(var(--fg-rgb), 0.08));
-  color: var(--text-primary);
+@media (hover: hover) {
+  .sb-icon-btn:hover {
+    background: var(--frame-hover, rgba(var(--fg-rgb), 0.08));
+    color: var(--text-primary);
+  }
 }
 
 .sb-empty {
@@ -71,8 +73,10 @@
   cursor: pointer;
   transition: background 0.12s ease;
 }
-.sb-project__row:hover {
-  background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
+@media (hover: hover) {
+  .sb-project__row:hover {
+    background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
+  }
 }
 .sb-project__chevron {
   display: flex;
@@ -109,9 +113,13 @@
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.sb-project__row:hover .sb-project__actions,
 .sb-project__row:focus-within .sb-project__actions {
   opacity: 1;
+}
+@media (hover: hover) {
+  .sb-project__row:hover .sb-project__actions {
+    opacity: 1;
+  }
 }
 
 /* "🔗 2" indicator shown on projects that have linked folders */
@@ -130,8 +138,10 @@
   cursor: pointer;
   flex-shrink: 0;
 }
-.sb-link-chip:hover {
-  background: color-mix(in srgb, var(--prj-color) 36%, transparent);
+@media (hover: hover) {
+  .sb-link-chip:hover {
+    background: color-mix(in srgb, var(--prj-color) 36%, transparent);
+  }
 }
 
 /* Session list */
@@ -157,10 +167,15 @@
   outline: none;
   transition: background 0.12s ease, color 0.12s ease;
 }
-.sb-session:hover,
 .sb-session:focus-visible {
   background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
   color: var(--text-primary);
+}
+@media (hover: hover) {
+  .sb-session:hover {
+    background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
+    color: var(--text-primary);
+  }
 }
 .sb-session:focus-visible {
   box-shadow: 0 0 0 2px var(--accent-base);
@@ -215,7 +230,7 @@
   inset: 0;
   border-radius: 50%;
   background: var(--dot-color);
-  animation: tab-ping 1.4s cubic-bezier(0, 0, 0.2, 1) 3;
+  animation: tab-ping 1.4s var(--ease-out) 3;
 }
 .sb-session__dot--done { --dot-color: var(--success); }
 .sb-session__dot--error { --dot-color: var(--danger); }
@@ -292,12 +307,18 @@
   height: 20px;
   display: none;
 }
-.sb-session:hover .sb-session__action,
 .sb-session:focus-within .sb-session__action {
   display: inline-flex;
 }
-.sb-session:hover .sb-session__count {
-  display: none;
+@media (hover: hover) {
+  .sb-session:hover .sb-session__action {
+    display: inline-flex;
+  }
+}
+@media (hover: hover) {
+  .sb-session:hover .sb-session__count {
+    display: none;
+  }
 }
 
 .sb-rename {
@@ -338,14 +359,18 @@
   font-weight: 500;
   cursor: pointer;
 }
-.sb-text-btn:hover {
-  background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
+@media (hover: hover) {
+  .sb-text-btn:hover {
+    background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
+  }
 }
 .sb-text-btn--muted {
   color: var(--text-muted);
 }
-.sb-text-btn--muted:hover {
-  color: var(--text-primary);
+@media (hover: hover) {
+  .sb-text-btn--muted:hover {
+    color: var(--text-primary);
+  }
 }
 
 /* Other Pi sessions (not attached to a project) */
@@ -364,8 +389,10 @@
   color: var(--text-muted);
   cursor: pointer;
 }
-.sb-other__head:hover {
-  background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
+@media (hover: hover) {
+  .sb-other__head:hover {
+    background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
+  }
 }
 .sb-other__row {
   display: flex;
@@ -377,9 +404,11 @@
   font-size: 11px;
   color: var(--text-muted);
 }
-.sb-other__row:hover {
-  background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
-  color: var(--text-secondary);
+@media (hover: hover) {
+  .sb-other__row:hover {
+    background: var(--frame-hover, rgba(var(--fg-rgb), 0.05));
+    color: var(--text-secondary);
+  }
 }
 .sb-other__name {
   flex: 1;
@@ -423,8 +452,10 @@
 .ctx-menu__item.is-danger .ctx-menu__icon {
   color: var(--danger);
 }
-.ctx-menu__item.is-danger:hover:not(:disabled) {
-  background: rgba(229, 83, 75, 0.14);
+@media (hover: hover) {
+  .ctx-menu__item.is-danger:hover:not(:disabled) {
+    background: rgba(229, 83, 75, 0.14);
+  }
 }
 
 /* ---- Project settings modal ---- */
@@ -528,8 +559,10 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
   transition: transform 0.1s ease;
 }
-.prj-swatch:hover {
-  transform: scale(1.1);
+@media (hover: hover) {
+  .prj-swatch:hover {
+    transform: scale(1.1);
+  }
 }
 .prj-swatch.is-selected {
   box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 4px var(--text-primary);
@@ -608,9 +641,11 @@
 .prj-settings__danger-btn {
   color: var(--danger);
 }
-.prj-settings__danger-btn:hover:not(:disabled) {
-  background: rgba(229, 83, 75, 0.12);
-  border-color: rgba(229, 83, 75, 0.4);
+@media (hover: hover) {
+  .prj-settings__danger-btn:hover:not(:disabled) {
+    background: rgba(229, 83, 75, 0.12);
+    border-color: rgba(229, 83, 75, 0.4);
+  }
 }
 .prj-settings__input {
   height: 32px;
@@ -719,15 +754,17 @@
   margin-top: 6px;
   padding-left: 10px;
 }
-.sessions-panel__agents:hover {
-  color: var(--text-secondary);
+@media (hover: hover) {
+  .sessions-panel__agents:hover {
+    color: var(--text-secondary);
+  }
 }
 .sessions-panel__agents:focus-visible {
   box-shadow: 0 0 0 2px var(--accent-base);
 }
 .sessions-panel__agents-chevron {
   flex-shrink: 0;
-  transition: transform 150ms ease-out;
+  transition: transform 150ms var(--ease-out);
 }
 .sessions-panel__agents[aria-expanded="true"] .sessions-panel__agents-chevron {
   transform: rotate(90deg);
@@ -743,9 +780,13 @@
   outline: none;
   min-width: 0;
 }
-.sessions-panel__child:hover,
 .sessions-panel__child.is-active {
   background: var(--bg-hover);
+}
+@media (hover: hover) {
+  .sessions-panel__child:hover {
+    background: var(--bg-hover);
+  }
 }
 .sessions-panel__child:focus-visible {
   box-shadow: 0 0 0 2px var(--accent-base);

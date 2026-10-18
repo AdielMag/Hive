@@ -28,6 +28,8 @@
 .rail__sync-badge--both {
   color: var(--accent-base);
 }
-.rail__btn:hover .rail__sync-badge {
-  transform: scale(1.08);
+@media (hover: hover) {
+  .rail__btn:hover .rail__sync-badge {
+    transform: scale(1.08);
+  }
 }

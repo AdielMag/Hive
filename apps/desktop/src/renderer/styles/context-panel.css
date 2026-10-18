@@ -10,7 +10,7 @@
   height: 100%;
   min-height: 0;
   min-width: 0;
-  animation: ctx-panel-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: ctx-panel-in 0.28s var(--ease-out);
 }
 @keyframes ctx-panel-in {
   from {
@@ -47,7 +47,7 @@
   border-radius: 14px;
   background: var(--ctx-surface);
   box-shadow: inset 0 0 0 1px var(--ctx-line);
-  animation: ctx-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ctx-rise 0.4s var(--ease-out) both;
 }
 .ctx-hero__top {
   display: flex;
@@ -95,7 +95,7 @@
   box-shadow: 0 0 0 0 currentColor;
 }
 .ctx-hero__status.is-hot .ctx-hero__status-dot {
-  animation: ctx-ping 1.6s ease-out infinite;
+  animation: ctx-ping 1.6s var(--ease-out) infinite;
 }
 @keyframes ctx-ping {
   0% {
@@ -123,7 +123,7 @@
 }
 .ctx-donut__seg {
   fill: none;
-  transition: stroke-dasharray 0.7s cubic-bezier(0.22, 1, 0.36, 1), stroke-dashoffset 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+  transition: stroke-dasharray 0.7s var(--ease-out), stroke-dashoffset 0.7s var(--ease-out),
     opacity 0.18s ease, stroke-width 0.18s ease;
   cursor: pointer;
 }
@@ -212,9 +212,11 @@
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease, color 0.15s ease;
 }
-.ctx-compact:hover:not(:disabled) {
-  background: var(--ctx-surface-hover);
-  border-color: color-mix(in srgb, var(--accent-base) 50%, transparent);
+@media (hover: hover) {
+  .ctx-compact:hover:not(:disabled) {
+    background: var(--ctx-surface-hover);
+    border-color: color-mix(in srgb, var(--accent-base) 50%, transparent);
+  }
 }
 .ctx-compact:active:not(:disabled) {
   transform: scale(0.98);
@@ -238,7 +240,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  animation: ctx-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ctx-rise 0.4s var(--ease-out) both;
   animation-delay: 0.06s;
 }
 .ctx-section__head {
@@ -265,8 +267,10 @@ button.ctx-section__head {
   border-radius: 6px;
   font-family: inherit;
 }
-button.ctx-section__head:hover {
-  color: var(--text-secondary);
+@media (hover: hover) {
+  button.ctx-section__head:hover {
+    color: var(--text-secondary);
+  }
 }
 .ctx-chevron {
   transition: transform 0.2s ease;
@@ -285,12 +289,16 @@ button.ctx-section__head:hover {
   padding: 8px 10px;
   border-radius: 9px;
   transition: background 0.15s ease;
-  animation: ctx-rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ctx-rise 0.35s var(--ease-out) both;
   animation-delay: calc(0.08s + var(--i, 0) * 35ms);
 }
-.ctx-row:hover,
 .ctx-row.is-active {
   background: var(--ctx-surface-hover);
+}
+@media (hover: hover) {
+  .ctx-row:hover {
+    background: var(--ctx-surface-hover);
+  }
 }
 .ctx-row__dot {
   width: 10px;
@@ -349,8 +357,8 @@ button.ctx-section__head:hover {
   border-radius: 2px;
   background: var(--c);
   transform-origin: left;
-  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-  animation: ctx-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: width 0.6s var(--ease-out);
+  animation: ctx-grow 0.7s var(--ease-out) both;
   animation-delay: calc(0.12s + var(--i, 0) * 35ms);
 }
 
@@ -381,8 +389,10 @@ button.ctx-section__head:hover {
   border-radius: 7px;
   transition: background 0.15s ease;
 }
-.ctx-subrow:hover {
-  background: var(--ctx-surface-hover);
+@media (hover: hover) {
+  .ctx-subrow:hover {
+    background: var(--ctx-surface-hover);
+  }
 }
 .ctx-subrow.is-expandable {
   cursor: pointer;
@@ -422,7 +432,7 @@ button.ctx-section__head:hover {
   height: 100%;
   border-radius: 2px;
   background: color-mix(in srgb, var(--c) 70%, transparent);
-  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 0.4s var(--ease-out);
 }
 
 /* Largest items */
@@ -438,11 +448,13 @@ button.ctx-section__head:hover {
   padding: 6px 10px;
   border-radius: 8px;
   font-size: 11.5px;
-  animation: ctx-rise 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ctx-rise 0.3s var(--ease-out) both;
   animation-delay: calc(var(--i, 0) * 25ms);
 }
-.ctx-item:hover {
-  background: var(--ctx-surface-hover);
+@media (hover: hover) {
+  .ctx-item:hover {
+    background: var(--ctx-surface-hover);
+  }
 }
 .ctx-item__dot {
   width: 6px;

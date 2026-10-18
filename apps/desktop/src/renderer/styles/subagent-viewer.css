@@ -33,7 +33,7 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
   overflow: hidden;
   position: relative;
-  animation: subagentModalEnter 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: subagentModalEnter 0.18s var(--ease-out);
 }
 
 @keyframes subagentModalEnter {
@@ -247,8 +247,10 @@
   top: 1px;
 }
 
-.subagent-viewer__tab-btn:hover {
-  color: var(--text-base);
+@media (hover: hover) {
+  .subagent-viewer__tab-btn:hover {
+    color: var(--text-base);
+  }
 }
 
 .subagent-viewer__tab-btn.is-active {
@@ -322,7 +324,9 @@
   transition: transform 0.15s ease, background-color 0.15s ease;
 }
 
-.subagent-viewer__jump:hover {
-  transform: scale(1.08);
-  background: var(--accent-hover, #68a5f7);
+@media (hover: hover) {
+  .subagent-viewer__jump:hover {
+    transform: scale(1.08);
+    background: var(--accent-hover, #68a5f7);
+  }
 }

@@ -143,10 +143,15 @@
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
-.codeblock__btn:hover,
 .codeblock__btn[aria-pressed="true"] {
   background: rgba(var(--fg-rgb), 0.08);
   color: var(--code-fg);
+}
+@media (hover: hover) {
+  .codeblock__btn:hover {
+    background: rgba(var(--fg-rgb), 0.08);
+    color: var(--code-fg);
+  }
 }
 .codeblock__btn.is-done {
   color: var(--success);
@@ -175,8 +180,10 @@
   font-size: 11px;
   cursor: pointer;
 }
-.codeblock__expand:hover {
-  color: var(--code-fg);
+@media (hover: hover) {
+  .codeblock__expand:hover {
+    color: var(--code-fg);
+  }
 }
 .codeblock--bare {
   border-radius: 0;
@@ -205,8 +212,10 @@
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.codeblock:hover .codeblock__float-copy {
-  opacity: 1;
+@media (hover: hover) {
+  .codeblock:hover .codeblock__float-copy {
+    opacity: 1;
+  }
 }
 .codeblock__float-copy.is-done {
   color: var(--success);
@@ -273,8 +282,10 @@
   color: var(--accent-base);
   text-decoration: none;
 }
-.md a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .md a:hover {
+    text-decoration: underline;
+  }
 }
 .md blockquote {
   margin: 0 0 10px;
@@ -309,11 +320,13 @@
   background: rgba(var(--accent-rgb), 0.08);
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.md :not(pre) > code.md-code-file:hover,
-.md-code-file:hover {
-  background: rgba(var(--accent-rgb), 0.16);
-  border-color: var(--accent-base);
-  text-decoration: underline;
+@media (hover: hover) {
+  .md :not(pre) > code.md-code-file:hover,
+  .md-code-file:hover {
+    background: rgba(var(--accent-rgb), 0.16);
+    border-color: var(--accent-base);
+    text-decoration: underline;
+  }
 }
 .md a.md-file-link {
   color: var(--accent-base);
@@ -321,9 +334,11 @@
   border-bottom: 1px dashed rgba(var(--accent-rgb), 0.4);
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.md a.md-file-link:hover {
-  border-bottom-style: solid;
-  border-bottom-color: var(--accent-base);
+@media (hover: hover) {
+  .md a.md-file-link:hover {
+    border-bottom-style: solid;
+    border-bottom-color: var(--accent-base);
+  }
 }
 .md .codeblock {
   margin: 4px 0 12px;

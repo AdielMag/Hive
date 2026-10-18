@@ -80,8 +80,10 @@
   color: var(--text-secondary);
   transition: background 0.12s ease, border-color 0.12s ease;
 }
-.appearance__preset:hover {
-  background: rgba(var(--fg-rgb), 0.05);
+@media (hover: hover) {
+  .appearance__preset:hover {
+    background: rgba(var(--fg-rgb), 0.05);
+  }
 }
 .appearance__preset.is-selected {
   border-color: var(--accent-base);

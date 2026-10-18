@@ -32,9 +32,11 @@
   font-weight: 600;
   transition: background 0.12s ease, color 0.12s ease;
 }
-.gp-ib:hover:not(:disabled) {
-  background: rgba(var(--fg-rgb), 0.08);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .gp-ib:hover:not(:disabled) {
+    background: rgba(var(--fg-rgb), 0.08);
+    color: var(--text-primary);
+  }
 }
 .gp-ib:disabled {
   opacity: 0.45;
@@ -44,17 +46,23 @@
   background: rgba(var(--fg-rgb), 0.08);
   color: var(--text-primary);
 }
-.gp-ib--accent:hover:not(:disabled) {
-  background: var(--accent-subtle);
-  color: var(--accent-base);
+@media (hover: hover) {
+  .gp-ib--accent:hover:not(:disabled) {
+    background: var(--accent-subtle);
+    color: var(--accent-base);
+  }
 }
-.gp-ib--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 16%, transparent);
-  color: var(--danger);
+@media (hover: hover) {
+  .gp-ib--danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 16%, transparent);
+    color: var(--danger);
+  }
 }
-.gp-ib--success:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--success) 16%, transparent);
-  color: var(--success);
+@media (hover: hover) {
+  .gp-ib--success:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--success) 16%, transparent);
+    color: var(--success);
+  }
 }
 
 /* header */
@@ -83,10 +91,15 @@
   font-weight: 600;
   transition: border-color 0.12s ease, background 0.12s ease;
 }
-.gp-branch:hover,
 .gp-branch--open {
   background: var(--bg-card-hover);
   border-color: var(--border-prominent);
+}
+@media (hover: hover) {
+  .gp-branch:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-prominent);
+  }
 }
 .gp-branch__icon {
   color: var(--accent-base);
@@ -126,9 +139,11 @@
   flex-shrink: 0;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
-.gp-sync:hover:not(:disabled) {
-  background: rgba(var(--accent-rgb), 0.26);
-  border-color: rgba(var(--accent-rgb), 0.55);
+@media (hover: hover) {
+  .gp-sync:hover:not(:disabled) {
+    background: rgba(var(--accent-rgb), 0.26);
+    border-color: rgba(var(--accent-rgb), 0.55);
+  }
 }
 .gp-sync:disabled {
   opacity: 0.6;
@@ -139,9 +154,11 @@
   background: color-mix(in srgb, var(--warning) 14%, transparent);
   color: var(--warning);
 }
-.gp-sync--behind:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--warning) 24%, transparent);
-  border-color: color-mix(in srgb, var(--warning) 60%, transparent);
+@media (hover: hover) {
+  .gp-sync--behind:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--warning) 24%, transparent);
+    border-color: color-mix(in srgb, var(--warning) 60%, transparent);
+  }
 }
 .gp-head__tools {
   position: relative;
@@ -160,7 +177,7 @@
   border-radius: 9px;
   box-shadow: var(--shadow-pop);
   overflow: hidden;
-  animation: gp-pop-in 0.12s ease-out;
+  animation: gp-pop-in 0.12s var(--ease-out);
 }
 @keyframes gp-pop-in {
   from {
@@ -231,8 +248,10 @@
   text-align: left;
   cursor: pointer;
 }
-.gp-item:hover:not(:disabled) {
-  background: rgba(var(--fg-rgb), 0.07);
+@media (hover: hover) {
+  .gp-item:hover:not(:disabled) {
+    background: rgba(var(--fg-rgb), 0.07);
+  }
 }
 .gp-item:disabled {
   opacity: 0.45;
@@ -350,8 +369,10 @@
   text-transform: uppercase;
   text-align: left;
 }
-.gp-sec-toggle:hover {
-  color: var(--text-primary);
+@media (hover: hover) {
+  .gp-sec-toggle:hover {
+    color: var(--text-primary);
+  }
 }
 .gp-sec-chev {
   flex-shrink: 0;
@@ -387,9 +408,13 @@
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.gp-sec-head:hover .gp-sec-actions,
 .gp-sec-head:focus-within .gp-sec-actions {
   opacity: 1;
+}
+@media (hover: hover) {
+  .gp-sec-head:hover .gp-sec-actions {
+    opacity: 1;
+  }
 }
 
 .gp-stat {
@@ -456,9 +481,13 @@
   cursor: pointer;
   transition: background 0.1s ease;
 }
-.gp-row:hover,
 .gp-row:focus-within {
   background: rgba(var(--fg-rgb), 0.06);
+}
+@media (hover: hover) {
+  .gp-row:hover {
+    background: rgba(var(--fg-rgb), 0.06);
+  }
 }
 .gp-badge {
   display: inline-flex;
@@ -469,7 +498,7 @@
   flex-shrink: 0;
   border-radius: 4px;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 800;
   color: var(--text-muted);
   background: rgba(var(--fg-rgb), 0.07);
@@ -542,13 +571,21 @@
   border-radius: 6px;
   background: linear-gradient(to right, transparent, var(--bg-sidebar, var(--bg-app)) 16px);
 }
-.gp-row:hover .gp-row__actions,
 .gp-row:focus-within .gp-row__actions {
   display: flex;
 }
-.gp-row:hover .gp-row__stat,
+@media (hover: hover) {
+  .gp-row:hover .gp-row__actions {
+    display: flex;
+  }
+}
 .gp-row:focus-within .gp-row__stat {
   visibility: hidden;
+}
+@media (hover: hover) {
+  .gp-row:hover .gp-row__stat {
+    visibility: hidden;
+  }
 }
 
 /* commit box */
@@ -613,8 +650,10 @@
   min-width: 0;
   transition: background 0.12s ease;
 }
-.gp-ai:hover:not(:disabled) {
-  background: rgba(var(--accent-rgb), 0.26);
+@media (hover: hover) {
+  .gp-ai:hover:not(:disabled) {
+    background: rgba(var(--accent-rgb), 0.26);
+  }
 }
 .gp-ai:disabled {
   cursor: not-allowed;
@@ -654,8 +693,10 @@
   cursor: pointer;
   transition: background 0.12s ease;
 }
-.gp-commit-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
+@media (hover: hover) {
+  .gp-commit-btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
 }
 .gp-commit-btn:disabled {
   background: var(--bg-card);
@@ -687,8 +728,10 @@
   cursor: pointer;
   transition: background 0.12s ease;
 }
-.gp-commit-caret:hover:not(:disabled) {
-  background: var(--accent-hover);
+@media (hover: hover) {
+  .gp-commit-caret:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
 }
 .gp-commit-caret:disabled {
   background: var(--bg-card);

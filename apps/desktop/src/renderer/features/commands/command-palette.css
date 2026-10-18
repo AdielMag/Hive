@@ -9,16 +9,6 @@
   padding-top: min(15vh, 120px);
   background: var(--scrim);
   backdrop-filter: blur(8px);
-  animation: palFade 0.12s ease-out;
-}
-
-@keyframes palFade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 
 .pal {
@@ -31,19 +21,9 @@
   border-radius: 12px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4), var(--shadow-pop);
   overflow: hidden;
-  animation: palSlide 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes palSlide {
-  from {
-    transform: scale(0.97) translateY(-6px);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1) translateY(0);
-    opacity: 1;
-  }
-}
+/* No open animation: the palette is keyboard-triggered and used hundreds of times a day. */
 
 .pal__input-wrap {
   display: flex;
@@ -99,9 +79,11 @@
   transition-timing-function: ease;
 }
 
-.pal__filter-chip:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .pal__filter-chip:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+  }
 }
 
 .pal__filter-chip.is-active {
@@ -145,8 +127,10 @@
   user-select: none;
 }
 
-.pal__item:hover {
-  background: var(--bg-card-hover);
+@media (hover: hover) {
+  .pal__item:hover {
+    background: var(--bg-card-hover);
+  }
 }
 
 .pal__item.is-selected {

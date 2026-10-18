@@ -154,8 +154,10 @@
   padding: 2px;
   border-radius: 4px;
 }
-.lib-sidebar__clear-btn:hover {
-  color: var(--text-primary);
+@media (hover: hover) {
+  .lib-sidebar__clear-btn:hover {
+    color: var(--text-primary);
+  }
 }
 
 .lib-sidebar__filters {
@@ -221,8 +223,10 @@
   transition: background 0.1s ease, border-color 0.1s ease;
   user-select: none;
 }
-.lib-item:hover {
-  background: rgba(var(--fg-rgb), 0.04);
+@media (hover: hover) {
+  .lib-item:hover {
+    background: rgba(var(--fg-rgb), 0.04);
+  }
 }
 .lib-item.is-selected {
   background: rgba(var(--fg-rgb), 0.08);
@@ -274,7 +278,7 @@
 }
 
 .lib-item__scope {
-  font-size: 9.5px;
+  font-size: 10px;
   padding: 1px 5px;
   border-radius: 4px;
   text-transform: uppercase;
@@ -332,9 +336,11 @@
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
-.lib-chip--clickable:hover {
-  background: rgba(var(--fg-rgb), 0.12);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .lib-chip--clickable:hover {
+    background: rgba(var(--fg-rgb), 0.12);
+    color: var(--text-primary);
+  }
 }
 
 /* ---------- Main detail area ---------- */
@@ -482,10 +488,12 @@
   border-color: rgba(var(--danger-rgb, 229, 83, 75), 0.3);
   background: transparent;
 }
-.lib-btn--danger:hover:not(:disabled) {
-  background: rgba(var(--danger-rgb, 229, 83, 75), 0.12);
-  border-color: var(--danger, #e5534b);
-  color: var(--danger, #e5534b);
+@media (hover: hover) {
+  .lib-btn--danger:hover:not(:disabled) {
+    background: rgba(var(--danger-rgb, 229, 83, 75), 0.12);
+    border-color: var(--danger, #e5534b);
+    color: var(--danger, #e5534b);
+  }
 }
 
 .lib-detail__desc {
@@ -691,7 +699,7 @@
 }
 
 .lib-model-picker__fuzzy-badge {
-  font-size: 9.5px;
+  font-size: 10px;
   padding: 1px 4px;
   border-radius: 4px;
   background: rgba(245, 158, 11, 0.15);
@@ -770,9 +778,11 @@
   text-align: left;
   transition: background 0.1s ease;
 }
-.lib-model-picker__item:hover,
-.lib-thinking-select__item:hover {
-  background: rgba(var(--fg-rgb), 0.06);
+@media (hover: hover) {
+  .lib-model-picker__item:hover,
+  .lib-thinking-select__item:hover {
+    background: rgba(var(--fg-rgb), 0.06);
+  }
 }
 .lib-model-picker__item.is-selected,
 .lib-thinking-select__item.is-selected {
@@ -812,7 +822,7 @@
 }
 
 .lib-model-picker__token-badge {
-  font-size: 9.5px;
+  font-size: 10px;
   padding: 1px 4px;
   border-radius: 3px;
   background: rgba(var(--fg-rgb), 0.06);
@@ -820,7 +830,7 @@
 }
 
 .lib-model-picker__reasoning-badge {
-  font-size: 9.5px;
+  font-size: 10px;
   padding: 1px 4px;
   border-radius: 3px;
   background: rgba(168, 85, 247, 0.15);
@@ -888,8 +898,10 @@
   background: var(--bg-card);
   transition: border-color 0.12s ease;
 }
-.lib-section-card:hover {
-  border-color: var(--border-prominent);
+@media (hover: hover) {
+  .lib-section-card:hover {
+    border-color: var(--border-prominent);
+  }
 }
 
 .lib-section-card__header {
@@ -901,8 +913,10 @@
   cursor: pointer;
   user-select: none;
 }
-.lib-section-card__header:hover {
-  background: rgba(var(--fg-rgb), 0.04);
+@media (hover: hover) {
+  .lib-section-card__header:hover {
+    background: rgba(var(--fg-rgb), 0.04);
+  }
 }
 
 .lib-section-card__chevron {
@@ -995,9 +1009,11 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.lib-scope-tabs > button:hover {
-  color: var(--text-primary);
-  background: rgba(var(--fg-rgb), 0.05);
+@media (hover: hover) {
+  .lib-scope-tabs > button:hover {
+    color: var(--text-primary);
+    background: rgba(var(--fg-rgb), 0.05);
+  }
 }
 .lib-scope-tabs > button.is-active {
   color: var(--text-primary);
@@ -1019,8 +1035,10 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.lib-overridden-toggle:hover {
-  color: var(--text-secondary);
+@media (hover: hover) {
+  .lib-overridden-toggle:hover {
+    color: var(--text-secondary);
+  }
 }
 .lib-overridden-toggle input {
   accent-color: var(--accent-base);
@@ -1110,7 +1128,7 @@
 .lib-item__scope {
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 9px;
+  font-size: 10px;
   padding: 1px 5px;
 }
 .lib-item__scope + .lib-item__scope {
@@ -1139,15 +1157,21 @@
   flex-shrink: 0;
   margin-left: 2px;
 }
-.lib-item:hover .lib-item__delete-btn,
 .lib-item.is-selected .lib-item__delete-btn,
 .lib-item__delete-btn:focus-visible {
   opacity: 0.7;
 }
-.lib-item__delete-btn:hover {
-  opacity: 1;
-  background: rgba(var(--danger-rgb, 229, 83, 75), 0.15);
-  color: var(--danger, #e5534b);
+@media (hover: hover) {
+  .lib-item:hover .lib-item__delete-btn {
+    opacity: 0.7;
+  }
+}
+@media (hover: hover) {
+  .lib-item__delete-btn:hover {
+    opacity: 1;
+    background: rgba(var(--danger-rgb, 229, 83, 75), 0.15);
+    color: var(--danger, #e5534b);
+  }
 }
 .lib-item__desc {
   font-size: 11px;
@@ -1202,7 +1226,7 @@
 }
 .lib-badge {
   flex-shrink: 0;
-  font-size: 9.5px;
+  font-size: 10px;
   padding: 2px 6px;
 }
 .lib-detail__actions {
@@ -1319,8 +1343,10 @@ button.lib-chip {
   font-size: 11.5px;
   cursor: pointer;
 }
-.lib-detail__more:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .lib-detail__more:hover {
+    text-decoration: underline;
+  }
 }
 
 /* Visible keyboard focus where the base rule drops the outline */

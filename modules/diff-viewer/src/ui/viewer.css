@@ -80,7 +80,7 @@
   object-fit: contain;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
   border-radius: 4px;
-  transition: transform 0.15s ease-out;
+  transition: transform 0.15s var(--ease-out);
 }
 .viewer__image-error,
 .viewer__image-loading {

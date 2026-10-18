@@ -96,8 +96,10 @@
   border-bottom: none;
 }
 
-.kb-row:hover {
-  background: var(--bg-card-hover);
+@media (hover: hover) {
+  .kb-row:hover {
+    background: var(--bg-card-hover);
+  }
 }
 
 .kb-row.is-recording {

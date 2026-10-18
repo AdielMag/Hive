@@ -180,8 +180,10 @@ g.is-hover .usage-chart__hit {
 .usage-chart__dot {
   transition: r 0.12s ease, opacity 0.12s ease;
 }
-.usage-chart__svg:hover g:not(.is-hover) .usage-chart__bar {
-  opacity: 0.55;
+@media (hover: hover) {
+  .usage-chart__svg:hover g:not(.is-hover) .usage-chart__bar {
+    opacity: 0.55;
+  }
 }
 .usage-chart__yaxis {
   position: absolute;
@@ -356,8 +358,10 @@ g.is-hover .usage-chart__hit {
 .usage-table tr:last-child td {
   border-bottom: none;
 }
-.usage-table tr:hover td {
-  background: rgba(var(--fg-rgb), 0.025);
+@media (hover: hover) {
+  .usage-table tr:hover td {
+    background: rgba(var(--fg-rgb), 0.025);
+  }
 }
 .usage-table .num {
   text-align: right;
@@ -452,14 +456,18 @@ g.is-hover .usage-chart__hit {
   color: inherit;
   cursor: pointer;
 }
-.usage__focus button:hover {
-  background: rgba(var(--accent-rgb), 0.25);
+@media (hover: hover) {
+  .usage__focus button:hover {
+    background: rgba(var(--accent-rgb), 0.25);
+  }
 }
 .usage-table tr.is-clickable {
   cursor: pointer;
 }
-.usage-table tr.is-clickable:hover td {
-  background: rgba(255, 255, 255, 0.04);
+@media (hover: hover) {
+  .usage-table tr.is-clickable:hover td {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 .usage-table__sub {
   margin-left: 8px;
