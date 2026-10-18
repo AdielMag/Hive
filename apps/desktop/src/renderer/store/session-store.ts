@@ -536,6 +536,9 @@ const runningSubagents = new Map<string, Set<string>>();
 /** Subagent running count reported by the studio bridge for a tab. */
 const bridgeSubagentsRunning = new Map<string, number>();
 
+/** Subagent ids reported running by the studio bridge for a tab (for Stop). */
+const bridgeSubagentIds = new Map<string, string[]>();
+
 function hasRunningWork(tabId: string): boolean {
   if (mainThreadRunning.get(tabId)) return true;
   const subagents = runningSubagents.get(tabId);
@@ -1279,6 +1282,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         } else if (isStudioSubagentActivity(message.data)) {
           const { runningCount, hasRunning } = message.data;
           bridgeSubagentsRunning.set(tabId, runningCount);
+          bridgeSubagentIds.set(tabId, (message.data.agents ?? []).map((a) => a.id));
           if (hasRunning) {
             setActivity(tabId, "running");
           } else if (!hasRunningWork(tabId)) {
@@ -2243,6 +2247,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       if (restored) set({ promptText: restored });
     }
     await window.studio.rpc(activeKey, { type: "abort" });
+    // Also stop background subagents so nothing keeps running.
+    const tabId = get().activeTabId;
+    if (tabId) {
+      const ids = new Set<string>([...(runningSubagents.get(tabId) ?? []), ...(bridgeSubagentIds.get(tabId) ?? [])]);
+      await Promise.all([...ids].map((agentId) => get().stopSubagent({ agentId })));
+    }
   },
 
   setModel: async (provider: string, modelId: string) => {
