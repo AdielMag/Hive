@@ -145,6 +145,11 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     report.mcp.reduce((n, m) => n + m.totalCount, 0) +
     report.extensions.reduce((n, e) => n + e.totalCount, 0);
 
+  const totalErrors =
+    report.builtin.reduce((n, b) => n + b.errors, 0) +
+    report.mcp.reduce((n, m) => n + Object.values(m.tools).reduce((x, t) => x + t.errors, 0), 0) +
+    report.extensions.reduce((n, e) => n + Object.values(e.tools).reduce((x, t) => x + t.errors, 0), 0);
+
   const statusCounts = useMemo(() => {
     const c = { running: 0, completed: 0, failed: 0 };
     for (const a of report.subagents.agents) {
@@ -205,19 +210,10 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         </div>
         {(totalCalls > 0 || report.subagents.totalCount > 0) && !q && (
           <div className="tools-panel__summary">
-            <span>
-              <strong>{totalCalls}</strong> tool calls
-            </span>
-            {report.subagents.totalCount > 0 && (
-              <span>
-                <strong>{report.subagents.totalCount}</strong> subagents
-              </span>
-            )}
-            {report.skills.length > 0 && (
-              <span>
-                <strong>{report.skills.length}</strong> skills
-              </span>
-            )}
+            <Stat label="Tool calls" value={totalCalls} />
+            <Stat label="Subagents" value={report.subagents.totalCount} />
+            <Stat label="Skills" value={report.skills.length} />
+            <Stat label="Errors" value={totalErrors} tone={totalErrors > 0 ? "danger" : undefined} />
           </div>
         )}
       </div>
@@ -340,16 +336,9 @@ export const ToolsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
             onToggle={toggleSection}
             meta={<span className="tools-section__hint">{builtin.reduce((n, b) => n + b.count, 0)} calls</span>}
           >
-            <div className="tools-chips">
-              {[...builtin]
-                .sort((a, b) => b.count - a.count)
-                .map((b) => (
-                  <button key={b.id} className="tools-chip" onClick={() => jump(b.firstRef)} title="Jump to first use">
-                    <span className="tools-chip__name">{b.label}</span>
-                    <span className="tools-chip__count">{b.count}</span>
-                  </button>
-                ))}
-            </div>
+            <ToolBars
+              items={builtin.map((b) => ({ name: b.label, count: b.count, errors: b.errors, firstRef: b.firstRef }))}
+            />
           </Section>
         )}
 
@@ -465,26 +454,51 @@ const ToolGroup: React.FC<{
     <div className="tools-group__head">
       <span className="tools-group__icon">{icon}</span>
       <span className="tools-row__name">{name}</span>
-      <span className="tools-count">{total} calls</span>
+      <span className="tools-count">{total} call{total === 1 ? "" : "s"}</span>
     </div>
-    <div className="tools-chips">
-      {Object.entries(tools)
-        .sort(([, a], [, b]) => b.count - a.count)
-        .map(([toolName, info]) => (
-          <button
-            key={toolName}
-            className={`tools-chip${info.errors > 0 ? " has-errors" : ""}`}
-            onClick={() => jump(info.firstRef)}
-            disabled={!info.firstRef}
-            title={info.errors > 0 ? `${info.errors} failed call(s) — jump to first use` : "Jump to first use"}
-          >
-            <span className="tools-chip__name">{toolName}</span>
-            <span className="tools-chip__count">{info.count}</span>
-          </button>
-        ))}
-    </div>
+    <ToolBars items={Object.entries(tools).map(([name, t]) => ({ name, ...t }))} />
   </div>
 );
+
+const Stat: React.FC<{ label: string; value: number; tone?: "danger" }> = ({ label, value, tone }) => (
+  <div className={`tools-stat${tone ? ` is-${tone}` : ""}${value === 0 ? " is-zero" : ""}`}>
+    <span className="tools-stat__value">{value}</span>
+    <span className="tools-stat__label">{label}</span>
+  </div>
+);
+
+/** Ranked usage list: name, proportional bar (relative to the busiest tool), share of calls, error badge, count. */
+const ToolBars: React.FC<{ items: Array<{ name: string; count: number; errors: number; firstRef?: ToolUsageRef }> }> = ({ items }) => {
+  const sorted = [...items].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const max = sorted[0]?.count || 1;
+  const total = sorted.reduce((n, i) => n + i.count, 0) || 1;
+  return (
+    <div className="tools-bars">
+      {sorted.map((i) => {
+        const pct = Math.round((i.count / total) * 100);
+        return (
+          <button
+            key={i.name}
+            className={`tools-bar${i.errors > 0 ? " has-errors" : ""}`}
+            onClick={() => jump(i.firstRef)}
+            disabled={!i.firstRef}
+            title={`${i.name}: ${i.count} call${i.count === 1 ? "" : "s"} (${pct}%)${i.errors ? `, ${i.errors} failed` : ""} — jump to first use`}
+          >
+            <span className="tools-bar__fill" style={{ width: `${Math.max(4, (i.count / max) * 100)}%` }} />
+            <span className="tools-bar__name">{i.name}</span>
+            {i.errors > 0 && (
+              <span className="tools-bar__err">
+                <XCircle size={10} /> {i.errors}
+              </span>
+            )}
+            <span className="tools-bar__pct">{pct}%</span>
+            <span className="tools-bar__count">{i.count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 const AvailableGroup: React.FC<{ name: string; tools: Array<{ name: string; description?: string }> }> = ({ name, tools }) => (
   <div className="tools-group tools-group--available">
