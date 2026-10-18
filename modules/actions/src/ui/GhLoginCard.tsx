@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertCircle, ExternalLink, Github, Loader2 } from "lucide-react";
+import { AlertCircle, ExternalLink, LogIn, Loader2 } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import { useActionsStore } from "./actions-store.ts";
 
@@ -41,7 +41,7 @@ export const GhLoginCard: React.FC<{ host: ModuleHost }> = ({ host }) => {
       ) : (
         <div className="ga-token__row">
           <button type="button" className="ga-btn ga-btn--primary" onClick={() => void startLogin()}>
-            <Github size={13} /> Log in with GitHub
+            <LogIn size={13} /> Log in with GitHub
           </button>
         </div>
       )}
