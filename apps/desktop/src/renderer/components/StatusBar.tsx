@@ -82,6 +82,16 @@ export const StatusBar: React.FC = () => {
   const isRunning = running || isSessionActive;
   const cost = stats?.cost ?? 0;
   const activeSessionPath = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId)?.sessionPath);
+  const activeTab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const modelName: string | undefined = activeTab?.model?.name || activeTab?.model?.id;
+  const segments = [
+    { label: "Input", cls: "in", value: stats?.tokens.input ?? 0 },
+    { label: "Output", cls: "out", value: stats?.tokens.output ?? 0 },
+    { label: "Cache read", cls: "cr", value: stats?.tokens.cacheRead ?? 0 },
+    { label: "Cache write", cls: "cw", value: stats?.tokens.cacheWrite ?? 0 },
+  ];
+  const tokenTotal = segments.reduce((n, x) => n + x.value, 0);
+  const promptTokens = (stats?.tokens.input ?? 0) + (stats?.tokens.cacheRead ?? 0) + (stats?.tokens.cacheWrite ?? 0);
   const piVersion = bootstrap?.pi.ok ? bootstrap.pi.info.version : "not found";
 
   const costPop = useHoverPopover();
@@ -150,7 +160,6 @@ export const StatusBar: React.FC = () => {
         createPortal(
           <div
             className="quota-popover quota-popover--cost"
-            style={{ bottom: costPop.pos.bottom, right: costPop.pos.right }}
             onMouseEnter={costPop.onEnter}
             onMouseLeave={costPop.onLeave}
             role="dialog"
@@ -173,22 +182,66 @@ export const StatusBar: React.FC = () => {
             </div>
 
             <div className="quota-popover__body ui-scroll">
-              <div className="sb-cost__total mono">{formatCost(stats.cost)}</div>
-              <dl className="sb-cost__rows">
-                <CostRow label="Input tokens" value={formatTokens(stats.tokens.input)} />
-                <CostRow label="Output tokens" value={formatTokens(stats.tokens.output)} />
-                <CostRow label="Cache read" value={formatTokens(stats.tokens.cacheRead)} />
-                <CostRow label="Cache write" value={formatTokens(stats.tokens.cacheWrite)} />
-                <CostRow label="Total tokens" value={formatTokens(stats.tokens.total)} strong />
-                <CostRow label="Assistant turns" value={String(stats.assistantMessages)} />
-                <CostRow label="Tool calls" value={String(stats.toolCalls)} />
-                {stats.contextUsage?.percent != null && (
-                  <CostRow
-                    label="Context used"
-                    value={`${Math.round(stats.contextUsage.percent)}% · ${formatTokens(stats.contextUsage.tokens ?? 0)} / ${formatTokens(stats.contextUsage.contextWindow)}`}
-                  />
-                )}
-              </dl>
+              <div className="sb-cost__hero">
+                <div className="sb-cost__session" title={activeTab?.title}>{activeTab?.title || "Current session"}</div>
+                <div className="sb-cost__total mono">{formatCost(stats.cost)}</div>
+                <div className="sb-cost__chips">
+                  {modelName && <span className="sb-cost__chip">{modelName}</span>}
+                  {activeTab?.thinkingLevel && activeTab.thinkingLevel !== "off" && (
+                    <span className="sb-cost__chip">thinking: {activeTab.thinkingLevel}</span>
+                  )}
+                  {activeTab?.worktree && <span className="sb-cost__chip">worktree</span>}
+                </div>
+              </div>
+
+              <div className="sb-cost__section">
+                <div className="sb-cost__section-title">Token mix</div>
+                <div className="sb-cost__bar" role="img" aria-label="Token mix">
+                  {segments.map((seg) => (
+                    <span key={seg.label} className={`sb-cost__seg sb-cost__seg--${seg.cls}`} style={{ flexGrow: seg.value }} />
+                  ))}
+                </div>
+                <dl className="sb-cost__rows">
+                  {segments.map((seg) => (
+                    <div key={seg.label} className="sb-cost__row">
+                      <dt><span className={`sb-cost__dot sb-cost__seg--${seg.cls}`} />{seg.label}</dt>
+                      <dd className="mono">
+                        {formatTokens(seg.value)}
+                        <span className="sb-cost__pct">{tokenTotal > 0 ? `${Math.round((seg.value / tokenTotal) * 100)}%` : "–"}</span>
+                      </dd>
+                    </div>
+                  ))}
+                  <CostRow label="Total tokens" value={formatTokens(stats.tokens.total)} strong />
+                </dl>
+              </div>
+
+              {stats.contextUsage?.percent != null && (
+                <div className="sb-cost__section">
+                  <div className="sb-cost__section-title">
+                    Context window <span className="mono">{Math.round(stats.contextUsage.percent)}%</span>
+                  </div>
+                  <div className="sb-cost__meter">
+                    <span style={{ width: `${Math.min(100, Math.max(0, stats.contextUsage.percent))}%` }} />
+                  </div>
+                  <div className="sb-cost__hint mono">
+                    {formatTokens(stats.contextUsage.tokens ?? 0)} / {formatTokens(stats.contextUsage.contextWindow)}
+                  </div>
+                </div>
+              )}
+
+              <div className="sb-cost__section">
+                <div className="sb-cost__section-title">Activity</div>
+                <dl className="sb-cost__rows">
+                  <CostRow label="Assistant turns" value={String(stats.assistantMessages)} />
+                  <CostRow label="Tool calls" value={String(stats.toolCalls)} />
+                  {stats.assistantMessages > 0 && (
+                    <CostRow label="Avg cost / turn" value={formatCost(stats.cost / stats.assistantMessages)} />
+                  )}
+                  {promptTokens > 0 && (
+                    <CostRow label="Cache hit rate" value={`${Math.round((stats.tokens.cacheRead / promptTokens) * 100)}%`} />
+                  )}
+                </dl>
+              </div>
             </div>
 
             {COMMANDS_BY_ID.has("view.usage") && (
