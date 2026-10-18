@@ -90,10 +90,10 @@ export function arcFrameColor(color: ArcColor, dark: boolean, intensity: number)
   const s = clamp01(color.sat);
   if (dark) {
     // near-neutral dark frame (L .20 -> .16); i^2 keeps quiet low/mid intensities but full richness at i=1
-    return hex(0.2 - i * 0.04, s * (0.01 + 0.11 * i * i), color.hue);
+    return hex(0.22 - i * 0.06, s * (0.015 + 0.2 * i), color.hue);
   }
   // pastel wash (L .955) -> saturated light colour (L .855)
-  return hex(0.955 - i * 0.1, s * (0.006 + 0.08 * i * i), color.hue);
+  return hex(0.96 - i * 0.14, s * (0.01 + 0.17 * i), color.hue);
 }
 
 export function arcFrameGradient(theme: ArcTheme, dark: boolean): string {
@@ -143,7 +143,7 @@ export function buildArcTokens(theme: ArcTheme, systemPrefersDark = true): ArcTo
   const primary = theme.colors[0] ?? DEFAULT_ARC_THEME.colors[0]!;
   const h = primary.hue;
   const s = clamp01(primary.sat);
-  const tint = s * (0.002 + theme.intensity * 0.006); // content surfaces stay calm
+  const tint = s * (0.003 + theme.intensity * 0.032); // intensity drives how much colour bleeds into the view
 
   const surf = dark
     ? { app: 0.215, sunken: 0.195, card: 0.235, hover: 0.26, elevated: 0.275, sidebar: 0.19 }
