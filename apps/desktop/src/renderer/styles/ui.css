@@ -29,11 +29,13 @@
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
+  transition: transform 120ms var(--ease-out), background-color 150ms var(--ease-out), border-color 150ms var(--ease-out), color 150ms var(--ease-out);
 }
-.ui-btn:hover:not(:disabled) {
-  background: rgba(var(--fg-rgb), 0.08);
-  border-color: var(--border-prominent);
+@media (hover: hover) {
+  .ui-btn:hover:not(:disabled) {
+    background: rgba(var(--fg-rgb), 0.08);
+    border-color: var(--border-prominent);
+  }
 }
 .ui-btn:active:not(:disabled),
 button.ui-chip:active:not(:disabled) {
@@ -54,19 +56,23 @@ button.ui-chip:active:not(:disabled) {
   border-color: transparent;
   color: var(--accent-contrast);
 }
-.ui-btn--primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: transparent;
+@media (hover: hover) {
+  .ui-btn--primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+    border-color: transparent;
+  }
 }
 .ui-btn--ghost {
   background: transparent;
   border-color: transparent;
   color: var(--text-secondary);
 }
-.ui-btn--ghost:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: rgba(var(--fg-rgb), 0.06);
-  border-color: transparent;
+@media (hover: hover) {
+  .ui-btn--ghost:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: rgba(var(--fg-rgb), 0.06);
+    border-color: transparent;
+  }
 }
 .ui-btn--sm {
   height: 24px;
@@ -105,8 +111,10 @@ button.ui-chip:active:not(:disabled) {
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
-.ui-seg > button:hover {
-  color: var(--text-primary);
+@media (hover: hover) {
+  .ui-seg > button:hover {
+    color: var(--text-primary);
+  }
 }
 .ui-seg > button[aria-pressed="true"] {
   background: var(--bg-elevated);
@@ -186,7 +194,7 @@ button.ui-chip:active:not(:disabled) {
   background: rgba(var(--fg-rgb), 0.07);
   color: var(--text-secondary);
   white-space: nowrap;
-  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
+  transition: transform 120ms var(--ease-out), background-color 150ms var(--ease-out), border-color 150ms var(--ease-out), color 150ms var(--ease-out);
 }
 .ui-chip--accent {
   background: var(--accent-subtle);

@@ -54,8 +54,10 @@
   font-weight: 600;
   cursor: pointer;
 }
-.jev-bar__btn:hover {
-  background: rgba(var(--jev-rgb), 0.26);
+@media (hover: hover) {
+  .jev-bar__btn:hover {
+    background: rgba(var(--jev-rgb), 0.26);
+  }
 }
 .jev-bar__btn--ghost {
   padding: 3px 5px;
@@ -63,9 +65,11 @@
   background: transparent;
   color: var(--text-muted);
 }
-.jev-bar__btn--ghost:hover {
-  background: rgba(var(--fg-rgb), 0.06);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .jev-bar__btn--ghost:hover {
+    background: rgba(var(--fg-rgb), 0.06);
+    color: var(--text-primary);
+  }
 }
 .jev-spin {
   animation: jev-rotate 0.9s linear infinite;
@@ -101,8 +105,10 @@
   margin-left: 4px;
   color: var(--text-secondary);
 }
-.jev-expand-btn:hover {
-  color: var(--text-primary);
+@media (hover: hover) {
+  .jev-expand-btn:hover {
+    color: var(--text-primary);
+  }
 }
 .jev-account-body {
   display: flex;
@@ -110,7 +116,7 @@
   gap: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border-subtle);
-  animation: jev-fade-in 0.18s ease-out;
+  animation: jev-fade-in 0.18s var(--ease-out);
 }
 @keyframes jev-fade-in {
   from {
@@ -242,8 +248,10 @@
   align-items: center;
   gap: 6px;
 }
-.jev-btn:hover:not(:disabled) {
-  background: rgba(var(--accent-rgb), 0.26);
+@media (hover: hover) {
+  .jev-btn:hover:not(:disabled) {
+    background: rgba(var(--accent-rgb), 0.26);
+  }
 }
 .jev-btn:disabled {
   opacity: 0.45;
@@ -418,8 +426,10 @@
   text-align: left;
   min-width: 0;
 }
-.jev-tool__head:hover {
-  background: rgba(var(--jev-rgb), 0.05);
+@media (hover: hover) {
+  .jev-tool__head:hover {
+    background: rgba(var(--jev-rgb), 0.05);
+  }
 }
 .jev-tool__chevron {
   flex-shrink: 0;
@@ -517,8 +527,10 @@
   font-weight: 600;
   cursor: pointer;
 }
-.jev-tab:hover {
-  color: var(--text-primary);
+@media (hover: hover) {
+  .jev-tab:hover {
+    color: var(--text-primary);
+  }
 }
 .jev-tab.is-active {
   color: var(--text-primary);
@@ -929,8 +941,10 @@ div.jev-src {
 .jev-chart__bar {
   fill: rgba(var(--jev-rgb), 0.7);
 }
-.jev-chart__bar:hover {
-  fill: rgb(var(--jev-rgb));
+@media (hover: hover) {
+  .jev-chart__bar:hover {
+    fill: rgb(var(--jev-rgb));
+  }
 }
 .jev-chart__cost {
   stroke: var(--warning);
@@ -1003,8 +1017,10 @@ div.jev-src {
 .jev-table tbody tr:last-child td {
   border-bottom: 0;
 }
-.jev-table tbody tr:hover td {
-  background: rgba(var(--jev-rgb), 0.05);
+@media (hover: hover) {
+  .jev-table tbody tr:hover td {
+    background: rgba(var(--jev-rgb), 0.05);
+  }
 }
 .jev-table td:first-child {
   color: var(--text-primary);
@@ -1047,10 +1063,12 @@ div.jev-src {
   color: var(--text-muted);
   cursor: pointer;
 }
-.jev-copy:hover {
-  color: var(--text-primary);
-  border-color: var(--border-subtle);
-  background: rgba(var(--jev-rgb), 0.12);
+@media (hover: hover) {
+  .jev-copy:hover {
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+    background: rgba(var(--jev-rgb), 0.12);
+  }
 }
 
 /* funnel, meters, key/values */

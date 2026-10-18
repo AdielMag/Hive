@@ -121,7 +121,7 @@
 .quota-meter__fill {
   height: 100%;
   border-radius: inherit;
-  transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: width 0.5s var(--ease-out);
 }
 .quota-meter__fill.is-ok {
   background: var(--success);
@@ -182,9 +182,13 @@
   cursor: pointer;
   border-radius: 5px;
 }
-.sb-quota:hover,
 .sb-quota.is-active {
   background: var(--frame-hover);
+}
+@media (hover: hover) {
+  .sb-quota:hover {
+    background: var(--frame-hover);
+  }
 }
 /* One compact cell per subscription (icon · [pool] · stacked 5h/7d bars · worst %), hairline-separated. */
 .sb-quota__item {

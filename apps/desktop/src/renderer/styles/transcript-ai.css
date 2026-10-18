@@ -9,8 +9,10 @@
   gap: 6px;
   transition: border-color 0.15s ease;
 }
-.msg-skill-card:hover {
-  border-color: rgba(var(--accent-rgb), 0.35);
+@media (hover: hover) {
+  .msg-skill-card:hover {
+    border-color: rgba(var(--accent-rgb), 0.35);
+  }
 }
 .msg-skill-card__header {
   display: flex;
@@ -154,9 +156,11 @@
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   max-width: 100%;
 }
-.msg-agent-card__activity:hover {
-  background: rgba(83, 155, 245, 0.16);
-  border-color: rgba(83, 155, 245, 0.4);
+@media (hover: hover) {
+  .msg-agent-card__activity:hover {
+    background: rgba(83, 155, 245, 0.16);
+    border-color: rgba(83, 155, 245, 0.4);
+  }
 }
 .msg-agent-card__activity-text {
   flex: 1;
@@ -176,17 +180,21 @@
   flex-shrink: 0;
   opacity: 0.85;
 }
-.msg-agent-card__activity:hover .msg-agent-card__activity-action {
-  opacity: 1;
+@media (hover: hover) {
+  .msg-agent-card__activity:hover .msg-agent-card__activity-action {
+    opacity: 1;
+  }
 }
 .msg-agent-card__activity--done {
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.03);
   border-color: var(--border-subtle);
 }
-.msg-agent-card__activity--done:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text-base);
+@media (hover: hover) {
+  .msg-agent-card__activity--done:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--text-base);
+  }
 }
 .msg-agent-card__activity--done .msg-agent-card__activity-action {
   background: var(--bg-hover, rgba(255, 255, 255, 0.15));
@@ -198,8 +206,10 @@
   gap: 8px;
   flex-shrink: 0;
 }
-.msg-agent-card__stop:hover:not(:disabled) {
-  color: var(--danger, #e5484d);
+@media (hover: hover) {
+  .msg-agent-card__stop:hover:not(:disabled) {
+    color: var(--danger, #e5484d);
+  }
 }
 .msg-agent-card__stop:disabled {
   opacity: 0.7;
@@ -278,8 +288,10 @@
   cursor: pointer;
   padding: 2px 0;
 }
-.msg-agent-card__section-toggle:hover {
-  color: var(--text-primary);
+@media (hover: hover) {
+  .msg-agent-card__section-toggle:hover {
+    color: var(--text-primary);
+  }
 }
 .msg-agent-card__prompt-text {
   padding: 8px 12px;
@@ -388,7 +400,7 @@
 
 /* Highlight flash animation for jump-to-tool-call */
 .is-flash {
-  animation: flashOutline 1.5s ease-out;
+  animation: flashOutline 1.5s var(--ease-out);
 }
 @keyframes flashOutline {
   0% {

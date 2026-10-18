@@ -186,7 +186,7 @@
   border-radius: inherit;
   background: var(--success);
   transform-origin: left center;
-  animation: csb-grow 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: csb-grow 0.5s var(--ease-out) both;
 }
 
 @keyframes csb-grow {
@@ -217,8 +217,10 @@
   transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
 }
 
-.cache-switch-bar__btn:hover:not(:disabled) {
-  background: var(--accent-hover);
+@media (hover: hover) {
+  .cache-switch-bar__btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
 }
 
 .cache-switch-bar__btn:active:not(:disabled) {
@@ -245,9 +247,11 @@
   color: var(--text-muted);
 }
 
-.cache-switch-bar__btn--ghost:hover:not(:disabled) {
-  background: rgba(var(--fg-rgb), 0.08);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .cache-switch-bar__btn--ghost:hover:not(:disabled) {
+    background: rgba(var(--fg-rgb), 0.08);
+    color: var(--text-primary);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

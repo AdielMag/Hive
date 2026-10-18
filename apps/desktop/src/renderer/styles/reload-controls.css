@@ -13,9 +13,11 @@
   color: var(--text-secondary);
   cursor: pointer;
 }
-.reload-btn:hover:not(:disabled) {
-  color: var(--text-primary);
-  border-color: var(--border-prominent);
+@media (hover: hover) {
+  .reload-btn:hover:not(:disabled) {
+    color: var(--text-primary);
+    border-color: var(--border-prominent);
+  }
 }
 .reload-btn:disabled {
   opacity: 0.45;
@@ -106,10 +108,12 @@
   color: var(--rb);
   font-weight: 600;
 }
-.reload-bar__action:hover,
-.reload-bar__close:hover {
-  background: rgba(var(--fg-rgb), 0.08);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .reload-bar__action:hover,
+  .reload-bar__close:hover {
+    background: rgba(var(--fg-rgb), 0.08);
+    color: var(--text-primary);
+  }
 }
 
 /* Composer locked while its session reloads. */

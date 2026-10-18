@@ -209,8 +209,10 @@
   cursor: pointer;
   transition: border-color 0.12s ease;
 }
-.bset-select select:hover {
-  border-color: var(--border-prominent);
+@media (hover: hover) {
+  .bset-select select:hover {
+    border-color: var(--border-prominent);
+  }
 }
 .bset-select select:focus-visible {
   outline: none;

@@ -48,9 +48,11 @@
   padding: 0;
 }
 
-.browser-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .browser-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
 }
 
 .browser-btn:active:not(:disabled) {
@@ -66,9 +68,11 @@
   color: var(--text-muted);
 }
 
-.browser-btn--sleep:hover {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.1);
+@media (hover: hover) {
+  .browser-btn--sleep:hover {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+  }
 }
 
 .browser-omnibox {

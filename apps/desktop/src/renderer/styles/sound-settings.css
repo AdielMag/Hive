@@ -77,8 +77,10 @@
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease;
 }
-.sound-theme:hover:not(:disabled) {
-  border-color: var(--border-prominent);
+@media (hover: hover) {
+  .sound-theme:hover:not(:disabled) {
+    border-color: var(--border-prominent);
+  }
 }
 .sound-theme:disabled {
   cursor: default;

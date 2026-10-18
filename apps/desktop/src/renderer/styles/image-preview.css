@@ -15,10 +15,12 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
 }
 
-.image-thumb:hover {
-  border-color: rgba(var(--accent-rgb), 0.55);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .image-thumb:hover {
+    border-color: rgba(var(--accent-rgb), 0.55);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    transform: translateY(-1px);
+  }
 }
 
 .image-thumb:focus-visible {
@@ -60,9 +62,11 @@
   pointer-events: none;
 }
 
-.image-thumb:hover .image-thumb__badge {
-  opacity: 1;
-  transform: scale(1);
+@media (hover: hover) {
+  .image-thumb:hover .image-thumb__badge {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .image-thumb--error {
@@ -124,7 +128,7 @@
   flex-direction: column;
   background: rgba(10, 12, 20, 0.82);
   backdrop-filter: blur(10px);
-  animation: imgFadeIn 0.15s ease-out;
+  animation: imgFadeIn 0.15s var(--ease-out);
 }
 
 @keyframes imgFadeIn {
@@ -205,8 +209,10 @@
   background: rgba(255, 255, 255, 0.22);
   border-radius: 5px;
 }
-.image-modal__viewport.is-scrollable::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
+@media (hover: hover) {
+  .image-modal__viewport.is-scrollable::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
+  }
 }
 
 .image-modal__canvas-fit {

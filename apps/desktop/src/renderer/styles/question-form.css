@@ -92,8 +92,10 @@
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease;
 }
-.qform__opt:hover {
-  border-color: var(--border-prominent);
+@media (hover: hover) {
+  .qform__opt:hover {
+    border-color: var(--border-prominent);
+  }
 }
 .qform__opt:focus-visible {
   outline: 2px solid var(--accent-base);

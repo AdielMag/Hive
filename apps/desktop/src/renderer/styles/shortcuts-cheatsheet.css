@@ -8,7 +8,7 @@
   justify-content: center;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
-  animation: modal-fade-in 150ms ease-out;
+  animation: modal-fade-in 150ms var(--ease-out);
 }
 
 .shortcuts-modal__dialog {
@@ -22,7 +22,7 @@
   background: var(--bg-card);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
   overflow: hidden;
-  animation: modal-slide-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: modal-slide-in 150ms var(--ease-out);
 }
 
 .shortcuts-modal__header {
@@ -56,9 +56,11 @@
   cursor: pointer;
 }
 
-.shortcuts-modal__close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .shortcuts-modal__close:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
 }
 
 .shortcuts-modal__grid {
@@ -94,8 +96,10 @@
   font-size: 12px;
 }
 
-.shortcuts-modal__row:hover {
-  background: var(--bg-hover);
+@media (hover: hover) {
+  .shortcuts-modal__row:hover {
+    background: var(--bg-hover);
+  }
 }
 
 .shortcuts-modal__desc {

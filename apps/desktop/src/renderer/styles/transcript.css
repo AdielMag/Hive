@@ -76,8 +76,10 @@
   cursor: pointer;
   text-align: left;
 }
-.transcript__empty-recent:hover {
+@media (hover: hover){
+  .transcript__empty-recent:hover {
   background: var(--bg-hover);
+}
 }
 .transcript__empty-recent-title {
   min-width: 0;
@@ -109,9 +111,11 @@
   font-size: 12px;
   cursor: pointer;
 }
-.transcript__empty-chip:hover {
+@media (hover: hover){
+  .transcript__empty-chip:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
 }
 .transcript__empty-recent:focus-visible,
 .transcript__empty-chip:focus-visible {
@@ -204,13 +208,17 @@
   opacity: 0;
   transition: opacity 0.12s ease, background 0.12s ease;
 }
-.msg-user:hover .msg-action,
+@media (hover: hover){
+  .msg-user:hover .msg-action,
 .msg-assistant:hover .msg-action {
   opacity: 1;
 }
-.msg-action:hover {
+}
+@media (hover: hover){
+  .msg-action:hover {
   background: rgba(var(--fg-rgb), 0.07);
   color: var(--text-primary);
+}
 }
 .msg-action--inline {
   width: 20px;
@@ -271,8 +279,10 @@
   cursor: pointer;
   text-align: left;
 }
-.msg-thinking__head:hover {
+@media (hover: hover){
+  .msg-thinking__head:hover {
   color: var(--text-secondary);
+}
 }
 .msg-thinking__len {
   margin-left: auto;
@@ -313,8 +323,10 @@
 div.msg-tool__head {
   cursor: default;
 }
-.msg-tool__head:hover {
+@media (hover: hover){
+  .msg-tool__head:hover {
   background: rgba(var(--fg-rgb), 0.03);
+}
 }
 .msg-tool__icon {
   display: inline-flex;
@@ -337,9 +349,11 @@ div.msg-tool__head {
   cursor: pointer;
   transition: color 0.15s ease;
 }
-.msg-tool__arg.is-clickable:hover {
+@media (hover: hover){
+  .msg-tool__arg.is-clickable:hover {
   color: var(--accent-base);
   text-decoration: underline;
+}
 }
 .msg-tool__status {
   flex-shrink: 0;
@@ -452,10 +466,12 @@ div.msg-tool__head {
   user-select: none;
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
-.msg-summary__toggle:hover {
+@media (hover: hover){
+  .msg-summary__toggle:hover {
   background: var(--bg-hover, rgba(var(--fg-rgb), 0.08));
   color: var(--text-primary);
   border-color: var(--border-prominent);
+}
 }
 
 @keyframes fade-up {
@@ -513,9 +529,11 @@ div.msg-tool__head {
   transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
-.transcript__queue-clear-btn:hover {
+@media (hover: hover){
+  .transcript__queue-clear-btn:hover {
   background: rgba(229, 83, 75, 0.12);
   color: var(--danger);
+}
 }
 
 .transcript__queue-items {
@@ -598,10 +616,12 @@ div.msg-tool__head {
   transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
-.msg-queued__btn:hover {
+@media (hover: hover){
+  .msg-queued__btn:hover {
   background: rgba(var(--fg-rgb), 0.09);
   color: var(--text-primary);
   border-color: var(--border-prominent);
+}
 }
 
 .msg-queued__btn:disabled {
@@ -617,16 +637,20 @@ div.msg-tool__head {
   font-weight: 500;
 }
 
-.msg-queued__btn--primary:hover {
+@media (hover: hover){
+  .msg-queued__btn--primary:hover {
   background: var(--accent-base);
   color: var(--accent-contrast);
   border-color: transparent;
 }
+}
 
-.msg-queued__btn--danger:hover {
+@media (hover: hover){
+  .msg-queued__btn--danger:hover {
   background: rgba(229, 83, 75, 0.16);
   color: var(--danger);
   border-color: rgba(229, 83, 75, 0.35);
+}
 }
 
 .msg-queued__text {
@@ -715,10 +739,12 @@ div.msg-tool__head {
   transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
-.composer-queue-bar__btn:hover {
+@media (hover: hover){
+  .composer-queue-bar__btn:hover {
   background: var(--accent-base);
   color: var(--accent-contrast);
   border-color: transparent;
+}
 }
 
 .composer-queue-bar__btn--ghost {
@@ -727,9 +753,11 @@ div.msg-tool__head {
   color: var(--text-muted);
 }
 
-.composer-queue-bar__btn--ghost:hover {
+@media (hover: hover){
+  .composer-queue-bar__btn--ghost:hover {
   background: rgba(var(--fg-rgb), 0.08);
   color: var(--text-primary);
+}
 }
 
 /* ---- Composer attachment tray: compact preview tiles ---- */
@@ -754,8 +782,10 @@ div.msg-tool__head {
   transition: box-shadow 0.15s ease, transform 0.12s ease;
 }
 
-.attach-tile:hover {
+@media (hover: hover){
+  .attach-tile:hover {
   box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.45), 0 4px 12px rgba(0, 0, 0, 0.22);
+}
 }
 
 .attach-tile video {
@@ -800,7 +830,7 @@ div.msg-tool__head {
 }
 
 .attach-tile__ext {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -828,16 +858,24 @@ div.msg-tool__head {
   transition: opacity 0.12s ease, transform 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
 
-.attach-tile:hover .attach-tile__remove,
 .attach-tile__remove:focus-visible {
   opacity: 1;
   transform: scale(1);
 }
 
-.attach-tile__remove:hover {
+@media (hover: hover){
+  .attach-tile:hover .attach-tile__remove {
+  opacity: 1;
+  transform: scale(1);
+}
+}
+
+@media (hover: hover){
+  .attach-tile__remove:hover {
   background: var(--text-primary);
   color: var(--bg-card);
   border-color: transparent;
+}
 }
 
 /* hover action row beside a user message (edit / retry / copy) */
@@ -865,8 +903,10 @@ div.msg-tool__head {
   white-space: nowrap;
   transition: filter 0.15s ease;
 }
-.auth-error-action:hover {
+@media (hover: hover){
+  .auth-error-action:hover {
   filter: brightness(1.1);
+}
 }
 .auth-error-action--banner {
   margin-left: 0;

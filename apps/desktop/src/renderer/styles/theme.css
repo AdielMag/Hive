@@ -37,6 +37,11 @@
   --danger: #e5534b;
   --info: #39c5cf;
   --project-color: var(--accent-base);
+
+  /* Motion tokens (emil): strong curves; built-in CSS easings are too weak. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   color-scheme: dark;
 }
 
@@ -95,6 +100,32 @@ button:focus:not(:focus-visible) {
   outline: none;
 }
 
+/* Press feedback for every button. Uses `scale` (not transform) so it never fights
+   component transforms. Wide rows/tabs/menu items are excluded; they'd look wrong shrinking. */
+button:active:not(:disabled):not([role="tab"]):not([role="menuitem"]):not([role="option"]):not([class*="row"]):not([class*="tab"]):not([class*="item"]):not(.ui-btn):not(.ui-chip) {
+  scale: 0.98;
+}
+
+/* Balanced wrapping for headings and short empty-state copy. */
+h1,
+h2,
+h3,
+[class*="empty"] [class*="title"],
+[class*="empty__title"] {
+  text-wrap: balance;
+}
+
+/* Counters, costs and timers must not jitter. */
+[class*="count"],
+[class*="badge"],
+[class*="timer"],
+[class*="elapsed"],
+[class*="cost"],
+[class*="tokens"],
+[class*="duration"] {
+  font-variant-numeric: tabular-nums;
+}
+
 code,
 pre,
 kbd {
@@ -129,19 +160,25 @@ kbd {
   border: 3px solid transparent;
   background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(var(--fg-rgb), 0.24);
+@media (hover: hover) {
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(var(--fg-rgb), 0.24);
+  }
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-.project-row:hover {
-  background: rgba(var(--fg-rgb), 0.05);
+@media (hover: hover) {
+  .project-row:hover {
+    background: rgba(var(--fg-rgb), 0.05);
+  }
 }
-.session-row:hover {
-  background: rgba(var(--fg-rgb), 0.05);
-  color: var(--text-primary) !important;
+@media (hover: hover) {
+  .session-row:hover {
+    background: rgba(var(--fg-rgb), 0.05);
+    color: var(--text-primary) !important;
+  }
 }
 
 @keyframes spin {
@@ -164,5 +201,8 @@ kbd {
   *::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
+  }
+  button:active:not(:disabled) {
+    scale: none;
   }
 }

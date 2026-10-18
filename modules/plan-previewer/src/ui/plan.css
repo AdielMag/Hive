@@ -90,8 +90,10 @@
   cursor: pointer;
   font-family: inherit;
 }
-.plan-update-chip:hover {
-  background: rgba(var(--fg-rgb), 0.12);
+@media (hover: hover) {
+  .plan-update-chip:hover {
+    background: rgba(var(--fg-rgb), 0.12);
+  }
 }
 .plan-diff-add { color: var(--success); }
 .plan-diff-del { color: var(--danger); }
@@ -136,8 +138,10 @@
   text-align: left;
   cursor: pointer;
 }
-.plan-menu__item:hover {
-  background: rgba(var(--fg-rgb), 0.07);
+@media (hover: hover) {
+  .plan-menu__item:hover {
+    background: rgba(var(--fg-rgb), 0.07);
+  }
 }
 .plan-menu__item:focus-visible {
   background: rgba(var(--fg-rgb), 0.07);
@@ -240,9 +244,11 @@
   padding-left: 20px;
   color: var(--text-muted);
 }
-.plan-outline__item:hover {
-  color: var(--text-primary);
-  background: rgba(var(--fg-rgb), 0.05);
+@media (hover: hover) {
+  .plan-outline__item:hover {
+    color: var(--text-primary);
+    background: rgba(var(--fg-rgb), 0.05);
+  }
 }
 .plan-outline__item.is-active {
   color: var(--text-primary);
@@ -291,7 +297,9 @@
   text-align: left;
   cursor: pointer;
 }
-.plan-option:hover { background: rgba(var(--fg-rgb), 0.05); }
+@media (hover: hover) {
+  .plan-option:hover { background: rgba(var(--fg-rgb), 0.05); }
+}
 .plan-option:focus-visible {
   outline: none;
   border-color: var(--accent-base);
@@ -547,7 +555,9 @@
   font-family: inherit;
   cursor: pointer;
 }
-.plan-bar__chip:hover:not(:disabled) { background: rgba(var(--fg-rgb), 0.12); }
+@media (hover: hover) {
+  .plan-bar__chip:hover:not(:disabled) { background: rgba(var(--fg-rgb), 0.12); }
+}
 .plan-bar__chip:disabled { cursor: default; }
 .plan-bar__spacer { flex: 1; }
 .plan-bar__msg {
@@ -580,8 +590,10 @@
   border-bottom-left-radius: 0;
   border-left: 1px solid color-mix(in srgb, var(--accent-contrast) 25%, transparent);
 }
-.plan-split__more.ui-btn--primary:hover:not(:disabled) {
-  border-left: 1px solid color-mix(in srgb, var(--accent-contrast) 25%, transparent);
+@media (hover: hover) {
+  .plan-split__more.ui-btn--primary:hover:not(:disabled) {
+    border-left: 1px solid color-mix(in srgb, var(--accent-contrast) 25%, transparent);
+  }
 }
 
 .plan-notes {
@@ -611,7 +623,9 @@
   text-align: left;
   cursor: pointer;
 }
-.plan-notes__jump:hover { background: rgba(var(--fg-rgb), 0.06); }
+@media (hover: hover) {
+  .plan-notes__jump:hover { background: rgba(var(--fg-rgb), 0.06); }
+}
 .plan-notes__quote {
   color: var(--text-muted);
   font-size: 11px;
@@ -715,7 +729,9 @@
   font-weight: 600;
   cursor: pointer;
 }
-.plan-card__more:hover { background: rgba(var(--fg-rgb), 0.05); }
+@media (hover: hover) {
+  .plan-card__more:hover { background: rgba(var(--fg-rgb), 0.05); }
+}
 .plan-card__more:focus-visible { outline: 2px solid var(--accent-base); outline-offset: -2px; }
 .plan-card .plan-bar {
   flex-wrap: wrap;
