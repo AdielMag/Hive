@@ -109,6 +109,7 @@ const Dialog: React.FC<{ pending: Pending }> = ({ pending }) => {
                     {c.hasRemoteBranch && <span>remote</span>}
                     {c.unmerged > 0 && <span className="tidy-wt__warn">{c.unmerged} unmerged</span>}
                     {c.dirty > 0 && <span className="tidy-wt__warn">{c.dirty} uncommitted</span>}
+                    {c.merged && <span>merged</span>}
                     {!risky && <span>clean</span>}
                   </div>
                 </div>

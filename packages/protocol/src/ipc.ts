@@ -191,8 +191,10 @@ export interface TidyWorktreeCandidate {
   hasLocalBranch: boolean;
   /** `origin/<branch>` exists. */
   hasRemoteBranch: boolean;
-  /** Commits on the branch not reachable from the main tree's HEAD (lost if deleted). */
+  /** Commits not yet merged into the main tree's HEAD or origin's default branch (lost if deleted). 0 when merged. */
   unmerged: number;
+  /** Fully merged (fast-forward, rebase or squash) into HEAD or origin's default branch. */
+  merged: boolean;
   /** Uncommitted files in the worktree folder. */
   dirty: number;
   reason: "archived-session" | "no-session" | "remote-only";
