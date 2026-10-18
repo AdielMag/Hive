@@ -157,7 +157,7 @@ export const ActionsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           <span>{error.message}</span>
         </div>
       )}
-      {repo?.tokenSource === "none" && <GhLoginCard host={host} />}
+      {(repo?.tokenSource === "none" || repo?.tokenSource === "git") && <GhLoginCard host={host} />}
       {needsToken && <TokenCard host={host} hint={tokenHint} />}
 
       <div className={`ga-list${loading && runs.length > 0 ? " is-busy" : ""}`}>
