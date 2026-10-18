@@ -3,6 +3,8 @@ import {
   IPC,
   type BridgeActionRequest,
   type LinkedProject,
+  type MergeConflictAiRequest,
+  type MergeConflictResolution,
   type RpcExtensionUIResponse,
   type SessionMetaEntry,
   type SessionWorktree,
@@ -14,6 +16,7 @@ import {
 } from "@hive/protocol";
 import { existsSync } from "node:fs";
 import type { AppContext } from "../context.ts";
+import { abortConflicts, aiResolveHunk, resolveConflicts, startConflictMerge } from "../services/merge-conflicts.ts";
 import { generateSessionTitle } from "../services/session-title.ts";
 import { pickStaleSessions } from "../services/stale-sessions.ts";
 import {
@@ -106,6 +109,37 @@ export function registerSessionIpc(ctx: AppContext): void {
     return applyTidyWorktrees(projectPath, Array.isArray(actions) ? actions : []);
   });
   handle(IPC.worktreeMerge, ({ worktree }: { worktree: SessionWorktree }) => mergeWorktree(requireWorktree(worktree)));
+  handle(IPC.worktreeConflictsStart, ({ worktree }: { worktree: SessionWorktree }) =>
+    startConflictMerge(requireWorktree(worktree)),
+  );
+  handle(
+    IPC.worktreeConflictsResolve,
+    ({ worktree, resolutions }: { worktree: SessionWorktree; resolutions: MergeConflictResolution[] }) =>
+      resolveConflicts(requireWorktree(worktree), Array.isArray(resolutions) ? resolutions : []),
+  );
+  handle(IPC.worktreeConflictsAbort, ({ worktree }: { worktree: SessionWorktree }) =>
+    abortConflicts(requireWorktree(worktree)),
+  );
+  handle(
+    IPC.worktreeConflictsAi,
+    async ({ worktree, request }: { worktree: SessionWorktree; request: MergeConflictAiRequest }) => {
+      const wt = requireWorktree(worktree);
+      if (!ctx.pi.ok) return { ok: false as const, error: NO_PI.error };
+      const str = (v: unknown) => (typeof v === "string" ? v : "");
+      const cwd = existsSync(wt.worktreePath) ? wt.worktreePath : wt.projectPath;
+      return aiResolveHunk(ctx.pi.info, cwd, {
+        path: str(request?.path).slice(0, 500),
+        before: str(request?.before),
+        after: str(request?.after),
+        ours: str(request?.ours),
+        theirs: str(request?.theirs),
+        oursLabel: str(request?.oursLabel).slice(0, 200) || undefined,
+        theirsLabel: str(request?.theirsLabel).slice(0, 200) || undefined,
+        hint: str(request?.hint).slice(0, 500) || undefined,
+        model: str(request?.model).slice(0, 200) || undefined,
+      });
+    },
+  );
   handle(IPC.worktreeRenameBranch, ({ worktree, newTitle }: { worktree: SessionWorktree; newTitle: string }) =>
     renameWorktreeBranch(requireWorktree(worktree), newTitle),
   );

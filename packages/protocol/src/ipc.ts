@@ -234,6 +234,43 @@ export type WorktreeMergeResult =
       conflicts?: string[];
     };
 
+/** A file left conflicted by an in-progress merge in the main tree. */
+export interface MergeConflictFile {
+  path: string;
+  /** "text": working-tree content with conflict markers. "other": binary / delete-modify; choose a side. */
+  kind: "text" | "other";
+  /** Working-tree content with conflict markers (kind "text"). */
+  content: string;
+}
+
+export type MergeConflictStartResult =
+  | { ok: true; files: MergeConflictFile[] }
+  | { ok: false; reason: "dirty-main" | "base-not-checked-out" | "error"; error: string };
+
+/** One resolved file: final content, or take one whole side ("ours" = base branch, "theirs" = session branch). */
+export type MergeConflictResolution =
+  | { path: string; action: "content"; content: string }
+  | { path: string; action: "ours" | "theirs" };
+
+export interface MergeConflictAiRequest {
+  path: string;
+  /** Lines just before / after the conflict, for context. */
+  before: string;
+  after: string;
+  /** Base branch side. */
+  ours: string;
+  /** Session branch side. */
+  theirs: string;
+  oursLabel?: string;
+  theirsLabel?: string;
+  /** Optional extra instruction from the user. */
+  hint?: string;
+  model?: string;
+}
+
+export type MergeConflictAiResult = { ok: true; text: string } | { ok: false; error: string };
+export type MergeConflictResolveResult = { ok: true } | { ok: false; error: string };
+
 export type RpcResult = { ok: true; data?: unknown } | { ok: false; error: string };
 
 export type BridgeActionRequest = DistributiveOmit<BridgeAction, "id">;
@@ -275,6 +312,10 @@ export const IPC = {
   worktreeStatus: "worktree:status",
   worktreeRemove: "worktree:remove",
   worktreeMerge: "worktree:merge",
+  worktreeConflictsStart: "worktree:conflictsStart",
+  worktreeConflictsResolve: "worktree:conflictsResolve",
+  worktreeConflictsAbort: "worktree:conflictsAbort",
+  worktreeConflictsAi: "worktree:conflictsAi",
   worktreeRenameBranch: "worktree:renameBranch",
   worktreeTidyScan: "worktree:tidyScan",
   worktreeTidyApply: "worktree:tidyApply",
@@ -524,6 +565,13 @@ export interface StudioApi {
   worktreeRemove(worktree: SessionWorktree, options?: WorktreeRemoveOptions): Promise<WorktreeRemoveResult>;
   /** Merge the session branch into its base branch in the main tree. Aborts cleanly on conflicts / a dirty main tree. */
   worktreeMerge(worktree: SessionWorktree): Promise<WorktreeMergeResult>;
+  /** Re-run the merge and leave it in progress so conflicts can be resolved. Pair with Resolve or Abort. */
+  worktreeConflictsStart(worktree: SessionWorktree): Promise<MergeConflictStartResult>;
+  /** Apply resolutions, stage them and commit the merge. */
+  worktreeConflictsResolve(worktree: SessionWorktree, resolutions: MergeConflictResolution[]): Promise<MergeConflictResolveResult>;
+  worktreeConflictsAbort(worktree: SessionWorktree): Promise<void>;
+  /** Ask the AI to merge one conflict hunk. */
+  worktreeConflictsAi(worktree: SessionWorktree, request: MergeConflictAiRequest): Promise<MergeConflictAiResult>;
   /** Rename the session worktree's branch (e.g. to a descriptive name based on the user's initial request). */
   worktreeRenameBranch(worktree: SessionWorktree, newTitle: string): Promise<WorktreeRenameResult>;
   /** Hive worktrees/branches (local + origin) not used by any live session. Fetches/prunes origin best-effort. */

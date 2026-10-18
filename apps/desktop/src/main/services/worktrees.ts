@@ -38,7 +38,7 @@ interface GitResult {
   stderr: string;
 }
 
-async function git(cwd: string, args: string[], extra: string[] = [], timeout?: number): Promise<GitResult> {
+export async function git(cwd: string, args: string[], extra: string[] = [], timeout?: number): Promise<GitResult> {
   try {
     const { stdout, stderr } = await execFileAsync(
       "git",
@@ -461,36 +461,49 @@ export async function applyTidyWorktrees(projectPath: string, actions: TidyWorkt
  * Merge the session branch into its base branch inside the main tree. Needs the main tree to be on the
  * base branch with no tracked changes. On conflicts the merge is aborted and the main tree left untouched.
  */
-export async function mergeWorktree(wt: SessionWorktree): Promise<WorktreeMergeResult> {
-  try {
-    if (!isManagedWorktree(wt)) return { ok: false, reason: "error", error: "Not a Hive session worktree" };
-    const main = wt.projectPath;
-    if (!(await branchExists(main, wt.branch))) {
-      return { ok: false, reason: "error", error: `Branch ${wt.branch} no longer exists` };
-    }
+export type MergePreflight =
+  | { ok: true; main: string; ident: string[] }
+  | { ok: false; reason: "dirty-main" | "base-not-checked-out" | "error"; error: string };
 
-    const cur = await git(main, ["symbolic-ref", "--short", "-q", "HEAD"]);
-    const current = cur.ok ? cur.stdout.trim() : "";
-    if (wt.baseBranch === "HEAD" || !current || current !== wt.baseBranch) {
-      return {
-        ok: false,
-        reason: "base-not-checked-out",
-        error: `The main tree is on ${current || "a detached HEAD"}; check out ${wt.baseBranch === "HEAD" ? "a branch" : wt.baseBranch} first`,
-      };
-    }
+/** Shared checks before merging: managed worktree, branch exists, base checked out in main, main clean. */
+export async function preflightMerge(wt: SessionWorktree, opts: { allowMerging?: boolean } = {}): Promise<MergePreflight> {
+  if (!isManagedWorktree(wt)) return { ok: false, reason: "error", error: "Not a Hive session worktree" };
+  const main = wt.projectPath;
+  if (!(await branchExists(main, wt.branch))) {
+    return { ok: false, reason: "error", error: `Branch ${wt.branch} no longer exists` };
+  }
 
+  const cur = await git(main, ["symbolic-ref", "--short", "-q", "HEAD"]);
+  const current = cur.ok ? cur.stdout.trim() : "";
+  if (wt.baseBranch === "HEAD" || !current || current !== wt.baseBranch) {
+    return {
+      ok: false,
+      reason: "base-not-checked-out",
+      error: `The main tree is on ${current || "a detached HEAD"}; check out ${wt.baseBranch === "HEAD" ? "a branch" : wt.baseBranch} first`,
+    };
+  }
+
+  if (!opts.allowMerging) {
     const st = await git(main, ["status", "--porcelain", "--untracked-files=no"]);
     if (!st.ok) return { ok: false, reason: "error", error: st.stderr.trim() || "git status failed" };
     if (st.stdout.trim()) {
       return { ok: false, reason: "dirty-main", error: "The main tree has uncommitted changes; commit or stash them first" };
     }
+  }
 
+  // Merge commits need an identity; fall back to a Hive one only when none is configured.
+  const ident: string[] = [];
+  if (!(await git(main, ["config", "user.email"])).stdout.trim()) ident.push("-c", "user.email=hive@local");
+  if (!(await git(main, ["config", "user.name"])).stdout.trim()) ident.push("-c", "user.name=Hive");
+  return { ok: true, main, ident };
+}
+
+export async function mergeWorktree(wt: SessionWorktree): Promise<WorktreeMergeResult> {
+  try {
+    const pre = await preflightMerge(wt);
+    if (!pre.ok) return pre;
+    const { main, ident } = pre;
     const uncommitted = existsSync(wt.worktreePath) ? await countDirty(wt.worktreePath) : 0;
-
-    // Merge commits need an identity; fall back to a Hive one only when none is configured.
-    const ident: string[] = [];
-    if (!(await git(main, ["config", "user.email"])).stdout.trim()) ident.push("-c", "user.email=hive@local");
-    if (!(await git(main, ["config", "user.name"])).stdout.trim()) ident.push("-c", "user.name=Hive");
 
     const before = (await git(main, ["rev-parse", "HEAD"])).stdout.trim();
     const merge = await git(main, ["merge", "--no-edit", wt.branch], ident);
@@ -511,7 +524,7 @@ export async function mergeWorktree(wt: SessionWorktree): Promise<WorktreeMergeR
   }
 }
 
-async function resolveGitDir(cwd: string): Promise<string | null> {
+export async function resolveGitDir(cwd: string): Promise<string | null> {
   const r = await git(cwd, ["rev-parse", "--git-dir"]);
   const out = r.stdout.trim();
   return r.ok && out ? resolve(cwd, out) : null;
