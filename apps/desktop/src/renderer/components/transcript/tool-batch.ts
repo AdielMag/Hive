@@ -316,6 +316,9 @@ export function findClosingCalls(items: TimelineItem[], match: (block: ToolCallB
   const blocks: AssistantBlock[] = [];
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i]!;
+    // Turn timers, markers and hook-injected notices (e.g. the jev-enforce nudge) sit between the answer and the
+    // review run; they must not break the walk or the review stays expanded below the answer.
+    if (item.kind === "turn" || item.kind === "marker" || (item.kind === "custom" && item.customType === "jev-enforce")) continue;
     if (item.kind !== "assistant") break;
     if (item.errorMessage) return [];
     blocks.unshift(...item.blocks);

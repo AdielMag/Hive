@@ -15,4 +15,13 @@ describe("findClosingCalls", () => {
     expect(findClosingCalls([asst("a", [call("1", "ask_jev")])], isJev)).toEqual([]);
     expect(findClosingCalls([asst("a", [{ type: "text", text: "x" }, call("1", "ask_jev"), call("2", "bash")])], isJev)).toEqual([]);
   });
+  it("sees through turn timers and the jev-enforce hook notice", () => {
+    const items = [
+      asst("a", [{ type: "text", text: "Done." }]),
+      { kind: "turn", key: "t", ms: 1 },
+      { kind: "custom", key: "c", customType: "jev-enforce", text: "run jev", images: [] },
+      asst("b", [call("1", "ask_jev")]),
+    ] as TimelineItem[];
+    expect(findClosingCalls(items, isJev).map((b) => b.id)).toEqual(["1"]);
+  });
 });
