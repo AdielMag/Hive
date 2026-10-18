@@ -353,6 +353,39 @@ async function refList(projectPath: string, prefix: string): Promise<string[]> {
   return r.ok ? r.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : [];
 }
 
+/** Refs a branch counts as merged into: the main tree's HEAD and origin's default branch (when known). */
+async function mergeTargets(projectPath: string): Promise<string[]> {
+  const targets = ["HEAD"];
+  const r = await git(projectPath, ["symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"]);
+  const def = r.ok ? r.stdout.trim() : "";
+  if (def && (await git(projectPath, ["rev-parse", "--verify", "-q", def])).ok) targets.push(def);
+  return targets;
+}
+
+/** True when `ref`'s changes are already in `target`: ancestor, every commit patch-equivalent (rebase), or a merge would be a no-op (squash). */
+async function isMergedInto(projectPath: string, ref: string, target: string): Promise<boolean> {
+  const count = await git(projectPath, ["rev-list", "--count", `${target}..${ref}`]);
+  if (count.ok && Number.parseInt(count.stdout.trim(), 10) === 0) return true;
+  const cherry = await git(projectPath, ["cherry", target, ref]);
+  if (cherry.ok && !cherry.stdout.split(/\r?\n/).some((l) => l.startsWith("+"))) return true;
+  // Squash merge: merging would not change target's tree (needs git >= 2.38; failure/conflict = not merged).
+  const mt = await git(projectPath, ["merge-tree", "--write-tree", "--no-messages", target, ref]);
+  if (!mt.ok) return false;
+  const tree = await git(projectPath, ["rev-parse", `${target}^{tree}`]);
+  return tree.ok && mt.stdout.trim().split(/\r?\n/)[0] === tree.stdout.trim();
+}
+
+/** Commits on `ref` not yet merged into any target; 0 when merged (by any strategy). Failed checks count as 1. */
+async function unmergedCount(projectPath: string, ref: string, targets: string[]): Promise<number> {
+  let best = Number.POSITIVE_INFINITY;
+  for (const t of targets) {
+    if (await isMergedInto(projectPath, ref, t)) return 0;
+    const c = await git(projectPath, ["rev-list", "--count", `${t}..${ref}`]);
+    best = Math.min(best, c.ok ? Number.parseInt(c.stdout.trim(), 10) || 1 : 1);
+  }
+  return Number.isFinite(best) ? best : 1;
+}
+
 /**
  * Hive branches/worktrees (local and on origin) that no live session uses. Prunes stale remote-tracking refs
  * first (best effort; offline is fine).
@@ -385,15 +418,18 @@ export async function scanTidyWorktrees(req: TidyWorktreeScanRequest): Promise<T
     e.local = true;
   }
 
+  const targets = await mergeTargets(projectPath);
   const out: TidyWorktreeCandidate[] = [];
   for (const [branch, e] of byBranch) {
     if (!SAFE_BRANCH.test(branch)) continue;
     if (liveBranches.has(branch) || (e.worktreePath && livePaths.has(norm(e.worktreePath)))) continue;
-    // Count commits on every existing ref; a failed check counts as unmerged so "delete clean" never picks it.
+    // Count unmerged commits on every existing ref; a failed check counts as unmerged so "delete clean" never picks it.
     let unmerged = 0;
+    let merged = true;
     for (const ref of [e.local ? branch : "", e.remote ? `origin/${branch}` : ""].filter(Boolean)) {
-      const c = await git(projectPath, ["rev-list", "--count", `HEAD..${ref}`]);
-      unmerged = Math.max(unmerged, c.ok ? Number.parseInt(c.stdout.trim(), 10) || 0 : 1);
+      const n = await unmergedCount(projectPath, ref, targets);
+      unmerged = Math.max(unmerged, n);
+      if (n > 0) merged = false;
     }
     let dirty = 0;
     if (e.worktreePath && existsSync(e.worktreePath)) {
@@ -406,6 +442,7 @@ export async function scanTidyWorktrees(req: TidyWorktreeScanRequest): Promise<T
       hasLocalBranch: e.local,
       hasRemoteBranch: e.remote,
       unmerged,
+      merged,
       dirty,
       reason: !e.local && e.remote ? "remote-only" : archived.has(branch) ? "archived-session" : "no-session",
     });
