@@ -12,6 +12,7 @@ import type {
   ActionsRun,
   ActionsWorkflow,
   FailureContext,
+  LoginState,
   RunStatusFilter,
 } from "../shared.ts";
 import { actionsApi } from "./actions-host.ts";
@@ -56,6 +57,10 @@ export interface ActionsState {
   toggleRun: (runId: number) => void;
   saveToken: (token: string) => Promise<void>;
   clearToken: () => Promise<void>;
+  login: LoginState;
+  /** Starts `gh auth login --web`, then polls until it finishes and refreshes. */
+  startLogin: () => Promise<void>;
+  cancelLogin: () => Promise<void>;
   /** Result of the last write action (dispatch / re-run / cancel), shown as a banner. */
   notice: { kind: "ok" | "error"; message: string } | null;
   dismissNotice: () => void;
@@ -71,6 +76,7 @@ const initialFilters: ActionsFilters = { status: "all", branch: "all", workflowI
 
 let hostRef: ModuleHost | null = null;
 let generation = 0;
+let loginRun = 0;
 
 export function buildFixPrompt(repo: { owner: string; repo: string }, run: ActionsRun, ctx: FailureContext): string {
   const fence = "```";
@@ -144,6 +150,7 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
   expandedRunId: null,
   jobs: {},
   panelMounts: 0,
+  login: { phase: "idle" },
   notice: null,
 
   dismissNotice: () => set({ notice: null }),
@@ -277,6 +284,40 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
   clearToken: async () => {
     await actionsApi().clearToken();
     await get().refresh();
+  },
+
+  startLogin: async () => {
+    if (get().login.phase === "running") return;
+    const run = ++loginRun;
+    const live = () => run === loginRun;
+    const api = actionsApi();
+    set({ login: { phase: "running" } });
+    try {
+      const first = await api.login();
+      if (!live()) return;
+      set({ login: first });
+      while (get().login.phase === "running") {
+        await new Promise((r) => setTimeout(r, 1500));
+        if (!live()) return;
+        const next = await api.loginStatus();
+        if (!live()) return;
+        set({ login: next });
+      }
+    } catch (err) {
+      if (live()) set({ login: { phase: "failed", message: err instanceof Error ? err.message : "Login failed." } });
+      return;
+    }
+    if (live() && get().login.phase === "done") await get().refresh();
+  },
+
+  cancelLogin: async () => {
+    loginRun++;
+    set({ login: { phase: "idle" } });
+    try {
+      await actionsApi().loginCancel();
+    } catch {
+      // already cancelled / module gone
+    }
   },
 }));
 

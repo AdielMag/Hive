@@ -19,7 +19,7 @@ function isCandidate(v: unknown): v is Candidate {
 /** Pull the JSON array of ids out of raw model output (tolerates code fences / prose). */
 export function parseIdList(raw: string): number[] {
   // Last valid array wins: the model may echo the prompt's example before its real answer.
-  for (const m of [...raw.matchAll(/\[[^\[\]]*\]/g)].reverse()) {
+  for (const m of [...raw.matchAll(/\[[^[\]]*\]/g)].reverse()) {
     try {
       const arr = JSON.parse(m[0]) as unknown;
       if (Array.isArray(arr) && arr.every((n) => Number.isInteger(n))) return arr as number[];

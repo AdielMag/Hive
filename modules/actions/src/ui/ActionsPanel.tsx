@@ -8,6 +8,7 @@ import { DispatchForm } from "./DispatchForm.tsx";
 import { EmptyState, SkeletonList } from "./EmptyState.tsx";
 import { FilterBar } from "./FilterBar.tsx";
 import { countStates, groupRuns } from "./group-runs.ts";
+import { GhLoginCard } from "./GhLoginCard.tsx";
 import { HistoryStrip } from "./HistoryStrip.tsx";
 import { RunCard } from "./RunCard.tsx";
 import { TokenCard } from "./TokenCard.tsx";
@@ -156,6 +157,7 @@ export const ActionsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           <span>{error.message}</span>
         </div>
       )}
+      {repo?.tokenSource === "none" && <GhLoginCard host={host} />}
       {needsToken && <TokenCard host={host} hint={tokenHint} />}
 
       <div className={`ga-list${loading && runs.length > 0 ? " is-busy" : ""}`}>

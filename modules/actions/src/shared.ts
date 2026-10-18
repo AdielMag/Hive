@@ -95,6 +95,13 @@ export interface RunsPage {
   totalCount: number;
 }
 
+/** Progress of an in-app `gh auth login --web` flow. `code` is the one-time device code to enter on github.com. */
+export type LoginState =
+  | { phase: "idle" }
+  | { phase: "running"; code?: string }
+  | { phase: "done" }
+  | { phase: "failed"; message: string; notInstalled?: boolean };
+
 export type ActionsErrorCode = "not_github" | "no_remote" | "unauthorized" | "not_found" | "rate_limited" | "network" | "unknown";
 
 export type ActionsResult<T> = { ok: true; data: T } | { ok: false; code: ActionsErrorCode; message: string };
@@ -111,6 +118,9 @@ export const ActionsMethods = {
   cancel: "cancel",
   setToken: "setToken",
   clearToken: "clearToken",
+  login: "login",
+  loginStatus: "loginStatus",
+  loginCancel: "loginCancel",
 } as const;
 
 type Invoke = <T = unknown>(method: string, ...args: unknown[]) => Promise<T>;
@@ -127,6 +137,9 @@ export interface ActionsApi {
   cancel(repo: RepoRef, runId: number): Promise<ActionsResult<null>>;
   setToken(token: string): Promise<void>;
   clearToken(): Promise<void>;
+  login(): Promise<LoginState>;
+  loginStatus(): Promise<LoginState>;
+  loginCancel(): Promise<void>;
 }
 
 export type RepoRef = Pick<ActionsRepo, "owner" | "repo">;
@@ -146,5 +159,8 @@ export function createActionsApi(invoke: Invoke): ActionsApi {
     cancel: (repo, runId) => invoke(M.cancel, repo, runId),
     setToken: (token) => invoke(M.setToken, token),
     clearToken: () => invoke(M.clearToken),
+    login: () => invoke(M.login),
+    loginStatus: () => invoke(M.loginStatus),
+    loginCancel: () => invoke(M.loginCancel),
   };
 }

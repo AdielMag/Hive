@@ -1178,6 +1178,35 @@
   background: var(--danger);
 }
 
+.ga-badge--warn {
+  width: 8px;
+  min-width: 8px;
+  height: 8px;
+  padding: 0;
+  background: var(--warning);
+}
+
+/* ── gh login card ── */
+.ga-login__code {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-secondary, var(--text-muted));
+}
+.ga-login__code code {
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  color: var(--text-primary, inherit);
+  user-select: all;
+}
+.ga-login__error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--danger);
+}
+
 /* ── run-workflow sheet ── */
 .ga-rs {
   position: absolute;

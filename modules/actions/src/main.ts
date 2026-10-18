@@ -4,6 +4,7 @@
  */
 import { defineMainModule } from "@hive/module-sdk/main";
 import { createGithubClient } from "./service/github.ts";
+import { createGhLogin } from "./service/login.ts";
 import { resolveRemote } from "./service/remote.ts";
 import { createTokenProvider } from "./service/token.ts";
 import { ActionsMethods as M, MODULE_ID, type ActionsRepo, type ActionsResult, type RepoRef, type RunsQuery } from "./shared.ts";
@@ -12,6 +13,7 @@ export default defineMainModule({
   id: MODULE_ID,
   activate(ctx) {
     const tokens = createTokenProvider(() => ctx.paths.moduleData());
+    const login = createGhLogin(() => tokens.invalidate());
     const github = createGithubClient({ getToken: async () => (await tokens.resolve()).token });
     const h = ctx.ipc.handle;
 
@@ -37,5 +39,8 @@ export default defineMainModule({
       tokens.save(token);
     });
     h(M.clearToken, () => tokens.clear());
+    h(M.login, () => login.start());
+    h(M.loginStatus, () => login.status());
+    h(M.loginCancel, () => login.cancel());
   },
 });
