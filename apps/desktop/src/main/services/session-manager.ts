@@ -15,6 +15,7 @@ import {
   type SessionMetaEntry,
   type SessionEventBatch,
   type SessionStatusUpdate,
+  type SessionStartProgress,
   type SessionWorktree,
   type StartSessionRequest,
   type StartSessionResult,
@@ -65,6 +66,9 @@ export class MainSessionManager {
 
   async startSession(request: StartSessionRequest): Promise<StartSessionResult> {
     const key = `sess_${++this.nextSessionId}`;
+    const progress = (step: SessionStartProgress["step"]): void => {
+      if (request.startId) this.sendToWindow(IPC.evtStartProgress, { startId: request.startId, step } satisfies SessionStartProgress);
+    };
 
     // Resume: reuse the worktree recorded for the session (if its folder still exists).
     // New session: create one unless the caller opted out. Failures fall back to the main tree.
@@ -78,17 +82,20 @@ export class MainSessionManager {
         // tree: give the session a fresh worktree forked from the same base.
         const title = recorded.branch.replace(/^hive\//, "").replace(/-[0-9a-f]{6}$/, "").replace(/-/g, " ");
         const base = recorded.baseBranch === "HEAD" ? undefined : recorded.baseBranch;
+        progress("worktree");
         worktree =
           (await createWorktree({ projectPath: recorded.projectPath || request.projectPath, title: request.title ?? title, baseBranch: base })) ??
           (base ? ((await createWorktree({ projectPath: recorded.projectPath || request.projectPath, title: request.title ?? title })) ?? undefined) : undefined);
         createdWorktree = !!worktree;
       }
     } else if (request.useWorktree !== false) {
+      progress("worktree");
       worktree =
         (await createWorktree({ projectPath: request.projectPath, title: request.title, baseBranch: request.baseBranch })) ?? undefined;
       createdWorktree = !!worktree;
     }
     const cwd = worktree?.worktreePath ?? request.projectPath;
+    progress("spawn");
 
     let bridge: Awaited<ReturnType<typeof createBridgeServer>>;
     try {

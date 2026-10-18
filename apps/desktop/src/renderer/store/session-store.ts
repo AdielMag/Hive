@@ -327,6 +327,8 @@ export interface SessionStoreState {
   sessionActivity: Record<string, SessionActivity>;
   /** Tab ids with a running tool call that blocks on the user (e.g. a plan review). */
   sessionAwaitingUser: Record<string, true>;
+  /** First prompt of a cold tab, shown with its startup step until Pi starts the run (keyed by tab id). */
+  pendingStarts: Record<string, PendingStart>;
   /** Parked per-tab UI state for every session tab except the displayed one (keyed by tab id). */
   tabUi: Record<string, TabUiState>;
   extensionWidgets: Record<string, ExtensionWidgetState>;
@@ -434,6 +436,36 @@ export interface SessionStoreState {
 
 let initStarted = false;
 const startingSessions = new Map<string, Promise<string | null>>();
+
+/** Startup step of a cold tab's first prompt: host steps (worktree/spawn), then model hydration, then the prompt RPC. */
+export type PendingStartStep = "starting" | "worktree" | "spawn" | "model" | "sending";
+export interface PendingStart {
+  text: string;
+  attachmentNames: string[];
+  step: PendingStartStep;
+}
+
+const pendingStartTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** Safety net: Pi may never start a run for a prompt (e.g. an extension command), so drop the indicator eventually. */
+const PENDING_START_TIMEOUT_MS = 30_000;
+
+function setPendingStartStep(tabId: string, step: PendingStartStep): void {
+  useSessionStore.setState((s) => {
+    const cur = s.pendingStarts[tabId];
+    return cur && cur.step !== step ? { pendingStarts: { ...s.pendingStarts, [tabId]: { ...cur, step } } } : {};
+  });
+}
+
+function clearPendingStart(tabId: string): void {
+  const timer = pendingStartTimers.get(tabId);
+  if (timer) clearTimeout(timer);
+  pendingStartTimers.delete(tabId);
+  useSessionStore.setState((s) => {
+    if (!s.pendingStarts[tabId]) return {};
+    const { [tabId]: _, ...rest } = s.pendingStarts;
+    return { pendingStarts: rest };
+  });
+}
 
 /** Main process reports this when the Pi process behind a key has exited / crashed. */
 const isStaleSessionError = (error: unknown): boolean =>
@@ -593,6 +625,7 @@ function trackActivity(key: string, events: readonly { type: string; [k: string]
     // Only real agent runs count; idle custom messages also emit message_start but never settle.
     const assistantStart = ev.type === "message_start" && (ev.message as { role?: string } | undefined)?.role === "assistant";
     if (ev.type === "agent_start" || assistantStart) {
+      clearPendingStart(tabId);
       if (ev.type === "agent_start") runErrored.delete(tabId);
       const wasRunning = mainThreadRunning.get(tabId) ?? false;
       mainThreadRunning.set(tabId, true);
@@ -990,6 +1023,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   stats: null,
   sessionActivity: {},
   sessionAwaitingUser: {},
+  pendingStarts: {},
   tabUi: {},
   subagentModal: null,
   extensionWidgets: {},
@@ -1168,9 +1202,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         }
         // The Pi process is gone; main has already forgotten this key. Don't keep sending RPCs to it.
         if (status.phase === "exited" || status.phase === "crashed") {
+          const tabId = tabIdForKey(status.key);
+          if (tabId) clearPendingStart(tabId);
           dropSessionKey(status.key, status.phase === "crashed");
         }
       });
+
+      // Startup steps of an in-flight startSession (startId = tab id).
+      window.studio.onSessionStartProgress(({ startId, step }) => setPendingStartStep(startId, step));
 
       // Listen for extension UI requests
       // Extension UI requests: route to the owning tab even if it is in the background, so a session
@@ -1309,7 +1348,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
               useWorktree: !get().newSessionInMainTree,
               ...(titleToUse ? { title: titleToUse } : {}),
             };
-        const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath, ...newSessionOpts });
+        const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath, startId: tabId, ...newSessionOpts });
+        setPendingStartStep(tabId, "model");
         set((s) => ({
           // Only steal focus if the user is still on this tab.
           ...(isDisplayed(tabId) ? { activeKey: res.key } : {}),
@@ -1792,6 +1832,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   closeTab: async (tabId: string, nextActiveTabId?: string) => {
     const { tabs, activeTabId } = get();
     const tab = tabs.find((t) => t.id === tabId);
+    clearPendingStart(tabId);
     // Stop in the background: closing a tab should feel instant.
     if (tab?.activeKey) {
       void window.studio.stopSession(tab.activeKey).catch(() => {});
@@ -1838,14 +1879,44 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     const autoTitle = titleFromPrompt(promptText, 40) || attachments[0]?.name || "";
 
     // Promote cold tab to live process if needed
+    const coldStart = !activeKey;
     if (!activeKey) {
       if (autoTitle && activeTabId && isFirstPrompt) {
         set((s) => ({
           tabs: s.tabs.map((t) => (t.id === activeTabId && t.title === NEW_SESSION_TITLE ? { ...t, title: autoTitle } : t)),
         }));
       }
+      // Starting Pi takes a few seconds: take the prompt out of the composer now and show it with its startup step.
+      if (activeTabId) {
+        const tabId = activeTabId;
+        // A second send while Pi is still starting keeps the first prompt's bubble and step.
+        const first = !get().pendingStarts[tabId];
+        set((s) => ({
+          promptText: "",
+          attachments: [],
+          ...(first
+            ? {
+                pendingStarts: {
+                  ...s.pendingStarts,
+                  [tabId]: { text: promptText, attachmentNames: attachments.map((a) => a.name), step: "starting" as const },
+                },
+              }
+            : {}),
+        }));
+        if (first) pendingStartTimers.set(tabId, setTimeout(() => clearPendingStart(tabId), PENDING_START_TIMEOUT_MS));
+      }
       activeKey = await get().ensureActiveSession(activeTabId ?? undefined, { title: autoTitle || undefined });
-      if (!activeKey) return;
+      if (!activeKey) {
+        if (activeTabId) {
+          clearPendingStart(activeTabId);
+          // Give the prompt back so it isn't lost (unless the user already typed something new).
+          if (get().tabs.some((t) => t.id === activeTabId)) {
+            updateTabUi(activeTabId, (ui) => (ui.promptText || ui.attachments.length > 0 ? {} : { promptText, attachments }));
+          }
+        }
+        return;
+      }
+      if (activeTabId) setPendingStartStep(activeTabId, "sending");
       // The snapshot above predates the session start; don't act on a stale `running`.
       transcript = get().transcript;
     } else if (isFirstPrompt && autoTitle && activeTabId) {
@@ -1901,7 +1972,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       message = `[Mode: Ask - Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.]\n\n${message}`;
     }
 
-    set({ promptText: "", attachments: [] });
+    // A cold start already emptied the composer; don't wipe what the user typed while Pi was starting.
+    if (!coldStart) set({ promptText: "", attachments: [] });
 
     // Name a fresh tab after its first prompt so the header reflects the conversation right away.
     if (autoTitle && activeTabId) {
@@ -1964,6 +2036,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     // Compaction in progress: hold the message, show it as queued, send it when compaction ends.
     if (compactFirst || get().compactionStates[activeKey]?.phase === "compacting") {
+      // The held message is listed as queued; the startup indicator would duplicate it.
+      if (coldStart && activeTabId) clearPendingStart(activeTabId);
       const key = activeKey;
       const text = promptText.trim() || attachments[0]?.name || "";
       set((s) => ({
@@ -1990,12 +2064,19 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         ...(images.length > 0 ? { images } : {}),
       });
     } else {
-      await window.studio.rpc(activeKey, {
-        type: "prompt",
-        message,
-        ...(images.length > 0 ? { images } : {}),
-        ...(running ? { streamingBehavior: "steer" } : {}),
-      });
+      // Without a run (rejected prompt, or a slash command Pi handles itself) no agent_start will clear the indicator.
+      let started = false;
+      try {
+        const res = await window.studio.rpc(activeKey, {
+          type: "prompt",
+          message,
+          ...(images.length > 0 ? { images } : {}),
+          ...(running ? { streamingBehavior: "steer" } : {}),
+        });
+        started = !!res?.ok && !promptText.trim().startsWith("/");
+      } finally {
+        if (coldStart && activeTabId && !started) clearPendingStart(activeTabId);
+      }
     }
   },
 

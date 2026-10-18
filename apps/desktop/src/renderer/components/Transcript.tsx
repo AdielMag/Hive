@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { createTranscript } from "@hive/pi-adapter";
 import { buildTimeline, type AssistantBlock, type Timeline, type TimelineItem, type ToolResultView, type ToolRun } from "@hive/pi-adapter";
-import { useSessionStore } from "../store/session-store.ts";
+import { useSessionStore, type PendingStartStep } from "../store/session-store.ts";
 import { useActiveRegistry } from "../store/ai-registry-store.ts";
 import { indexSkills, parseSkillBlock, type SkillIndex } from "../lib/ai/skills.ts";
 import { indexSubagents, parseGetResultText, resolveSubagentView, type NotificationDetails, type SubagentIndex } from "../lib/ai/subagents.ts";
@@ -159,6 +159,14 @@ export const TranscriptEmptyState: React.FC<{ projectId?: string; currentSession
   );
 };
 
+const PENDING_START_LABELS: Record<PendingStartStep, string> = {
+  starting: "Starting session…",
+  worktree: "Creating worktree…",
+  spawn: "Starting Pi…",
+  model: "Loading model…",
+  sending: "Sending…",
+};
+
 export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const activeTabId = useSessionStore((s) => s.activeTabId);
   const displayedTabId = useSessionStore((s) => s.displayedTabId);
@@ -174,6 +182,7 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const isDisplayed = !targetTabId || targetTabId === displayedTabId;
   const tabTranscript = targetTabId ? transcriptsByTab[targetTabId] : undefined;
   const transcript = isDisplayed ? storeTranscript : tabTranscript ?? EMPTY_TRANSCRIPT;
+  const pendingStart = useSessionStore((s) => (targetTabId ? s.pendingStarts[targetTabId] : undefined));
 
   useEffect(() => {
     if (!isDisplayed && targetTabId && !tabTranscript && targetTab?.sessionPath) {
@@ -225,7 +234,7 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [timeline, transcript.queue]);
+  }, [timeline, transcript.queue, pendingStart]);
 
   const jump = () => {
     const el = scrollRef.current;
@@ -245,7 +254,9 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
     () => ({ annotations, renderNested, sessionRunning, cwd: sessionCwd }),
     [annotations, renderNested, sessionRunning, sessionCwd],
   );
-  const empty = timeline.items.length === 0 && !transcript.running;
+  // Once Pi starts the run, the real user message and "Working…" take over.
+  const showPendingStart = !!pendingStart && !transcript.running;
+  const empty = timeline.items.length === 0 && !transcript.running && !showPendingStart;
 
   return (
     <TranscriptContext.Provider value={ctxValue}>
@@ -268,6 +279,21 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
                 />
               );
             })}
+            {showPendingStart && pendingStart && (
+              <>
+                <div className="msg-user msg-user--pending" data-testid="pending-start-message">
+                  <div className="msg-user__bubble selectable">
+                    {pendingStart.text.trim() && <div className="msg-user__text">{pendingStart.text}</div>}
+                    {pendingStart.attachmentNames.length > 0 && (
+                      <div className="msg-user__pending-files">{pendingStart.attachmentNames.join(", ")}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="transcript__working" data-testid="pending-start-step" role="status" aria-live="polite">
+                  <Loader2 size={13} className="spin" /> {PENDING_START_LABELS[pendingStart.step]}
+                </div>
+              </>
+            )}
             {transcript.running && !transcript.streaming && (
               <div className="transcript__working">
                 <Loader2 size={13} className="spin" /> Working…

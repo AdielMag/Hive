@@ -146,6 +146,14 @@ export interface StartSessionRequest {
   baseBranch?: string;
   /** Session title; used to name the worktree branch/folder. */
   title?: string;
+  /** Caller-chosen id echoed in `session:start-progress` events while this start is in flight. */
+  startId?: string;
+}
+
+/** Startup step of an in-flight `startSession` call (keyed by the request's `startId`). */
+export interface SessionStartProgress {
+  startId: string;
+  step: "worktree" | "spawn";
 }
 
 export interface StartSessionResult {
@@ -208,6 +216,7 @@ export const IPC = {
   setLinkedProjects: "session:set-linked-projects",
   evtEvents: "session:events",
   evtStatus: "session:status",
+  evtStartProgress: "session:start-progress",
   evtUiRequest: "session:ui-request",
   evtBridge: "session:bridge",
   // Projects & Catalog
@@ -437,6 +446,7 @@ export interface StudioApi {
   getPathForFile(file: File): string;
   onSessionEvents(listener: (batch: SessionEventBatch) => void): () => void;
   onSessionStatus(listener: (update: SessionStatusUpdate) => void): () => void;
+  onSessionStartProgress(listener: (progress: SessionStartProgress) => void): () => void;
   onUiRequest(listener: (message: UiRequestMessage) => void): () => void;
   onBridgeMessage(listener: (message: BridgeMessage) => void): () => void;
 
