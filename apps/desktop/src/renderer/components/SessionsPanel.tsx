@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
   Archive,
+  Sparkles,
   ArchiveRestore,
   ChevronRight,
   CircleCheck,
@@ -13,7 +14,8 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import type { SessionCatalogItem } from "@hive/protocol";
 import { transcriptAwaitsUser, useSessionStore } from "../store/session-store.ts";
-import { sessionDisplayTitle } from "../lib/session-title.ts";
+import { pickTitleModel, sessionDisplayTitle } from "../lib/session-title.ts";
+import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import { formatAgo, formatAgoShort } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
 import { worktreeChipLabel, worktreeShortLabel, worktreeTooltipLines } from "../lib/worktree.ts";
@@ -29,6 +31,7 @@ const BADGE_LABEL: Record<SessionBadge, string> = {
   error: "failed, not viewed yet",
 };
 
+const TIDY_MODEL_KEY = "hive.sessions.tidyModel";
 const ORPHANS_KEY = "__orphans__";
 /** A child counts as running only while its parent is running and it was touched this recently. */
 const CHILD_RUNNING_WINDOW_MS = 120_000;
@@ -50,6 +53,8 @@ export const SessionsPanel: React.FC = () => {
     displayedTabId,
     displayedNeedsInput,
     sessionAwaitingUser,
+    models,
+    selectedModel,
   } = useSessionStore(
     useShallow((s) => ({
       activeProject: s.activeProject,
@@ -67,6 +72,8 @@ export const SessionsPanel: React.FC = () => {
       displayedTabId: s.displayedTabId,
       displayedNeedsInput: !!s.pendingUiDialog || !!s.pendingForm || transcriptAwaitsUser(s.transcript),
       sessionAwaitingUser: s.sessionAwaitingUser,
+      models: s.models,
+      selectedModel: s.selectedModel,
     })),
   );
 
@@ -76,6 +83,9 @@ export const SessionsPanel: React.FC = () => {
   const [editingSessionPath, setEditingSessionPath] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [tidyModel, setTidyModel] = useState(() => getStoredItem(TIDY_MODEL_KEY) ?? "");
+  const [tidying, setTidying] = useState(false);
+  const [tidyNote, setTidyNote] = useState("");
 
   const sessionState = useMemo(() => {
     const out: Record<string, SessionBadge> = {};
@@ -105,6 +115,48 @@ export const SessionsPanel: React.FC = () => {
       .filter((s) => s.projectId === activeProject.id)
       .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
   }, [allSessions, activeProject]);
+
+  const fullModelId = (m: { id: string; provider?: string }) =>
+    m.provider && !m.id.includes("/") ? `${m.provider}/${m.id}` : m.id;
+
+  const archiveOldWithLlm = async () => {
+    if (!activeProject || tidying) return;
+    const open = new Set(tabs.filter((t) => t.sessionPath).map((t) => normPath(t.sessionPath!)));
+    // Oldest first so the model's size cap drops the newest, not the oldest.
+    const candidates = projectSessions
+      .filter((s) => !s.archived && !s.pending && !s.worktree && !isSubagentSession(s) && !open.has(normPath(s.path)))
+      .reverse();
+    if (!candidates.length) {
+      setTidyNote("Nothing to archive");
+      return;
+    }
+    setTidying(true);
+    setTidyNote("");
+    try {
+      const chosen = models.some((m) => fullModelId(m) === tidyModel) ? tidyModel : "";
+      const model = chosen || pickTitleModel(models, selectedModel);
+      const paths = await window.studio.pickStaleSessions(
+        activeProject.path,
+        candidates.map((s) => ({
+          path: s.path,
+          title: sessionDisplayTitle(s) || "Untitled",
+          modified: s.modified,
+          messageCount: s.messageCount,
+        })),
+        model,
+      );
+      if (!paths) {
+        setTidyNote("Model call failed");
+        return;
+      }
+      for (const p of paths) await setSessionArchived(p, true);
+      setTidyNote(paths.length ? `Archived ${paths.length}` : "Nothing to archive");
+    } catch {
+      setTidyNote("Failed");
+    } finally {
+      setTidying(false);
+    }
+  };
 
   const query = search.trim().toLowerCase();
 
@@ -367,6 +419,35 @@ export const SessionsPanel: React.FC = () => {
       </div>
 
       <div className="sessions-panel__footer">
+        <div className="sessions-panel__tidy">
+          <select
+            className="sessions-panel__tidy-model"
+            aria-label="Model used to pick sessions to archive"
+            value={models.some((m) => fullModelId(m) === tidyModel) ? tidyModel : ""}
+            onChange={(e) => {
+              setTidyModel(e.target.value);
+              setStoredItem(TIDY_MODEL_KEY, e.target.value);
+            }}
+          >
+            <option value="">Auto (cheap model)</option>
+            {models.map((m) => (
+              <option key={fullModelId(m)} value={fullModelId(m)}>
+                {m.name || m.id}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="sessions-panel__tidy-btn"
+            disabled={tidying}
+            onClick={() => void archiveOldWithLlm()}
+            title="Let the model pick old sessions and archive them"
+          >
+            {tidying ? <Loader2 size={12} className="spin" /> : <Sparkles size={12} />}
+            <span>Archive old</span>
+          </button>
+        </div>
+        {tidyNote && <div className="sessions-panel__tidy-note" role="status">{tidyNote}</div>}
         <label className="sessions-panel__toggle-label">
           <input
             type="checkbox"

@@ -231,6 +231,7 @@ export const IPC = {
   sessionsDelete: "sessions:delete",
   sessionsUpdateMeta: "sessions:update-meta",
   sessionsGenerateTitle: "sessions:generate-title",
+  sessionsPickStale: "sessions:pick-stale",
   // Session worktrees
   worktreeStatus: "worktree:status",
   worktreeRemove: "worktree:remove",
@@ -474,6 +475,8 @@ export interface StudioApi {
   updateSessionMeta(sessionPath: string, updates: Partial<SessionMetaEntry>): Promise<SessionMetaEntry>;
   /** One-shot LLM call that names a session from its first prompt. Resolves "" on failure. */
   generateSessionTitle(cwd: string, prompt: string, model?: string, sessionPath?: string): Promise<string>;
+  /** Ask an LLM which of the given sessions are stale and safe to archive. Resolves the chosen paths, or null on failure. */
+  pickStaleSessions(cwd: string, sessions: StaleCandidate[], model?: string): Promise<string[] | null>;
   /** Ahead/behind (vs the base branch) and dirty count of a session worktree. */
   worktreeStatus(worktree: SessionWorktree): Promise<WorktreeStatus>;
   /** Remove a session worktree (and by default its branch). */
@@ -571,4 +574,12 @@ export interface ModulesApi {
   /** Calls a method the module registered with `ctx.ipc.handle`. Rejects while the module is disabled. */
   invoke<T = unknown>(moduleId: string, method: string, ...args: unknown[]): Promise<T>;
   on<T = unknown>(moduleId: string, event: string, listener: (payload: T) => void): () => void;
+}
+
+/** Compact session summary sent to the LLM when picking sessions to archive. */
+export interface StaleCandidate {
+  path: string;
+  title: string;
+  modified: string;
+  messageCount: number;
 }

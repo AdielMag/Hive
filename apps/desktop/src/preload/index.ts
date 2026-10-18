@@ -154,6 +154,10 @@ const api: StudioApi = {
     return ipcRenderer.invoke(IPC.sessionsGenerateTitle, { cwd, prompt, model, sessionPath });
   },
 
+  pickStaleSessions(cwd: string, sessions: unknown[], model?: string) {
+    return ipcRenderer.invoke(IPC.sessionsPickStale, { cwd, sessions, model });
+  },
+
   worktreeStatus(worktree: SessionWorktree) {
     return ipcRenderer.invoke(IPC.worktreeStatus, { worktree });
   },
