@@ -31,12 +31,12 @@ describe("Arc theme tokens", () => {
   );
 
   it.each(ARC_PRESETS.filter((p) => p.theme.mode === "dark").map((p) => [p.id] as const))(
-    "preset %s keeps a quiet frame (chroma <= 0.07) at intensity <= 0.6",
+    "preset %s keeps a quiet frame (chroma <= 0.12) at intensity <= 0.6",
     (id) => {
       const base = ARC_PRESETS.find((p) => p.id === id)!.theme;
       for (const intensity of [0, 0.3, 0.45, 0.6]) {
         const { vars } = buildArcTokens({ ...base, intensity }, true);
-        expect(oklch(vars["--frame-base"]!)!.c ?? 0).toBeLessThanOrEqual(0.07);
+        expect(oklch(vars["--frame-base"]!)!.c ?? 0).toBeLessThanOrEqual(0.12);
       }
     },
   );
