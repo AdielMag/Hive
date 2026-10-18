@@ -29,6 +29,7 @@ import { RunTimeBar } from "./RunTimeBar.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { Slot } from "../modules/ModuleViews.tsx";
 import type { AttachedItem } from "@hive/protocol";
+import { activePath } from "@hive/pi-adapter";
 import "../styles/composer.css";
 
 const VIDEO_RE = /\.(mp4|m4v|mov|webm|mkv|avi)$/i;
@@ -136,7 +137,66 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
   const aboveWidgets = Object.entries(extensionWidgets).filter(([, w]) => w.placement === "aboveEditor");
   const belowWidgets = Object.entries(extensionWidgets).filter(([, w]) => w.placement === "belowEditor");
 
+  // Shell-style history: Up/Down at the edge of the text walk through messages sent in this session.
+  const historyRef = useRef<{ idx: number; draft: string; shown: string } | null>(null);
+  useEffect(() => {
+    historyRef.current = null;
+  }, [activeKey]);
+
+  const sentMessages = (): string[] => {
+    const out: string[] = [];
+    for (const entry of activePath(useSessionStore.getState().transcript)) {
+      if (entry.type !== "message") continue;
+      const msg = entry.message as unknown as { role?: string; content?: unknown };
+      if (msg.role !== "user") continue;
+      const raw =
+        typeof msg.content === "string"
+          ? msg.content
+          : Array.isArray(msg.content)
+            ? (msg.content as Array<Record<string, unknown>>).filter((p) => p.type === "text").map((p) => String(p.text ?? "")).join("\n")
+            : "";
+      const text = raw
+        .replace(/^\[Mode: [^\]]*\]\n\n/, "")
+        .split("\n\n--- Attached File:")[0]!
+        .split("\n\nThe user attached video file(s)")[0]!;
+      if (text.trim()) out.push(text);
+    }
+    return out;
+  };
+
+  const navigateHistory = (dir: "up" | "down", ta: HTMLTextAreaElement) => {
+    const msgs = sentMessages();
+    let h = historyRef.current;
+    if (h && h.shown !== ta.value) h = historyRef.current = null; // user edited: stop browsing
+    let idx: number;
+    if (dir === "up") {
+      idx = h ? h.idx - 1 : msgs.length - 1;
+      if (idx < 0) return;
+    } else {
+      if (!h) return;
+      idx = h.idx + 1;
+    }
+    const draft = h ? h.draft : ta.value;
+    const next = idx >= msgs.length ? draft : msgs[idx]!;
+    historyRef.current = idx >= msgs.length ? null : { idx, draft, shown: next };
+    setPromptText(next);
+    requestAnimationFrame(() => {
+      const pos = dir === "up" ? 0 : next.length;
+      ta.setSelectionRange(pos, pos);
+    });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && !e.nativeEvent.isComposing) {
+      // Let the caret move first; if it was already stuck at the top/bottom edge, it's a history step.
+      const ta = e.currentTarget;
+      const { selectionStart, selectionEnd } = ta;
+      const dir = e.key === "ArrowUp" ? "up" : "down";
+      requestAnimationFrame(() => {
+        if (ta.selectionStart === selectionStart && ta.selectionEnd === selectionEnd) navigateHistory(dir, ta);
+      });
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (isRunning) {
