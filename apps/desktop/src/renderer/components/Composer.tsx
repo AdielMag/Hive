@@ -123,7 +123,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
   }, [visibleModels, modelFilter]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isRunning = running;
+  const subagentsRunning = useSessionStore((s) => !!s.activeTabId && s.sessionActivity[s.activeTabId] === "running");
+  const isRunning = running || subagentsRunning;
 
   // Auto-focus the prompt input when a session tab opens/activates so the user can type immediately.
   useEffect(() => {
