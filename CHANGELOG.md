@@ -2,6 +2,29 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.34.0 — 2026-10-18 · [diff](https://github.com/AdielMag/Hive/compare/v0.33.0...v0.34.0)
+
+### ✨ Features
+
+- **sessions:** add live Archive old tidy tab with progress view ([`773f737`](https://github.com/AdielMag/Hive/commit/773f73731dd2b9ec368d457957ddd10be92785f7))
+- **worktree:** show finished state after merging worktree ([`52c6f6b`](https://github.com/AdielMag/Hive/commit/52c6f6b94f183e3016b44ce0090545acebd25abd))
+- **composer:** add shell-style up/down message history recall ([`b6d27f3`](https://github.com/AdielMag/Hive/commit/b6d27f344124400a90bd37a0ce1cae86ac5ffda9))
+- **sessions:** use feature model config for archive-old tidy action ([`3b1ca62`](https://github.com/AdielMag/Hive/commit/3b1ca62cc2b7ac0e82fc6cfd1851edee8ec833f6))
+- **desktop:** stop subagents and reflect them in composer state ([`feb5def`](https://github.com/AdielMag/Hive/commit/feb5def58c900b96b63254aead658b712651c85b))
+
+### 🐛 Fixes
+
+- **transcript:** skip turn, marker and jev-enforce items when finding closing calls ([`22a6b3f`](https://github.com/AdielMag/Hive/commit/22a6b3ff550b67f371eee628940c4f394ff2dfe8))
+- **actions:** show GhLoginCard when token source is git ([`77a25c5`](https://github.com/AdielMag/Hive/commit/77a25c54c65a785306dc4bb2876d8118fc20c521))
+
+### 🧹 Other changes
+
+- Merge branch 'hive/the-archive-old-popup-is-very-ugly-i-86b175' ([`f55022a`](https://github.com/AdielMag/Hive/commit/f55022ab2059a4d3d3891a3d5cb75e829305c2e0))
+- Merge branch 'hive/after-merging-it-shows-a-small-merge-ca6c94' ([`b8656ad`](https://github.com/AdielMag/Hive/commit/b8656ad1d21851e686858c2d19cb208e7a1c2dad))
+- Merge branch 'hive/we-added-a-logic-that-auto-collapses-53a038' ([`a279440`](https://github.com/AdielMag/Hive/commit/a2794405766ccb68bbdd253058a2c39dc741a259))
+- Merge branch 'hive/the-archive-old-in-session-window-is-740ad0' ([`934f39e`](https://github.com/AdielMag/Hive/commit/934f39e55ecd350224bafef1825ad1bd46eb299a))
+- Merge branch 'hive/in-a-session-the-send-button-should-997c9d' ([`8f522c4`](https://github.com/AdielMag/Hive/commit/8f522c4712399f448ec89c419e9278dd159c3e47))
+
 ## v0.33.0 — 2026-10-18 · [diff](https://github.com/AdielMag/Hive/compare/v0.32.0...v0.33.0)
 
 ### ✨ Features
