@@ -2,6 +2,48 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.32.0 — 2026-10-18 · [diff](https://github.com/AdielMag/Hive/compare/v0.31.0...v0.32.0)
+
+### ✨ Features
+
+- **desktop:** add shortcuts cheatsheet, retry action, and design critiques ([`2a63343`](https://github.com/AdielMag/Hive/commit/2a63343bb5d3c7dcdfc0ac3a3edb3c0dd0ad6a8a))
+- **settings:** grouped nav, clearer labels, token quota colours, plain-language errors ([`0bae421`](https://github.com/AdielMag/Hive/commit/0bae4214d0861edf9f6140126a2130c08b1e05d5))
+- **sessions:** nest subagent runs under their parent, empty-state recents and starters ([`10de474`](https://github.com/AdielMag/Hive/commit/10de4749046d238ac1cf62d07b73284fec813789))
+- **shell:** styled rail tooltips, theme-accent tabs, no project dot in chrome ([`2271380`](https://github.com/AdielMag/Hive/commit/2271380135d7199d5a9b0194dfbef28160a15323))
+- **composer:** labelled context ring with thresholds, reload tooltip, Auto Edit hint ([`eb3868c`](https://github.com/AdielMag/Hive/commit/eb3868c4662e6e9fefdd56003868127341cde20f))
+- **ui:** subagent-session grouping helpers, Tooltip component; drop dead Sidebar.tsx ([`887874d`](https://github.com/AdielMag/Hive/commit/887874d948c1e1d0f76e40afd4ace7f5e33a4880))
+- **modules:** monotone spend chart, clear quota labels, branch picker width, focus rings ([`81a5e92`](https://github.com/AdielMag/Hive/commit/81a5e92601aba3fbf07c1b84530d511146e4a09d))
+- **composer:** neutral chips, loading state, motion and a11y polish ([`704ee33`](https://github.com/AdielMag/Hive/commit/704ee33eca57ab27bcb3ec2be804955496dbe984))
+- **modules:** drop side stripes, monotone spend chart, clear quota labels, focus rings ([`9e2109e`](https://github.com/AdielMag/Hive/commit/9e2109ec74edd53a47af48836d2ec516ba5e4816))
+- **sidebar:** two-line session rows, short branch labels, safer discard ([`25ec429`](https://github.com/AdielMag/Hive/commit/25ec429772970f9b09fb443b8c6a7358eea063ea))
+- **shell:** no onboarding flash, narrow-window layout, quiet update pill, a11y sweep ([`a377f35`](https://github.com/AdielMag/Hive/commit/a377f353238a2d9615d518933f7b9bb761fbf761))
+- **theme:** neutral frame and surface ladder, 4.5:1 muted text, press states ([`73b553c`](https://github.com/AdielMag/Hive/commit/73b553cdcdcff7cc5b5bbd3eee6afd3cefc465eb))
+- **session:** show startup progress for a new session's first prompt ([`3f1d6da`](https://github.com/AdielMag/Hive/commit/3f1d6da1b9963f71647eb03418a5a75e16222877))
+
+### 🐛 Fixes
+
+- **shell:** overlay never opens on resize; openers exempt from outside-click dismiss ([`688dd79`](https://github.com/AdielMag/Hive/commit/688dd799535467d4ddaf6706faf845b7a9fe9abb))
+- **shell:** right-panel overlay follows any opener, safer dismiss; quieter composer focus halo ([`41da4f1`](https://github.com/AdielMag/Hive/commit/41da4f1313e45cefae1f975972806554b7c7a5f7))
+- **auth:** release pending login prompts and stop re-prompt spin ([`db35c11`](https://github.com/AdielMag/Hive/commit/db35c11486486b7c6187c8ea4bb672ad551e65a6))
+
+### 🧹 Other changes
+
+- Merge main into hive/use-taste-skills-and-emil-diesi-ecb26b ([`265f1f8`](https://github.com/AdielMag/Hive/commit/265f1f8117b9e1821208408f382f1dfd8ed3a68a))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`e0d77da`](https://github.com/AdielMag/Hive/commit/e0d77dad6e19347cc8180d9e4d67abb3aa721b3f))
+- Merge branch 'pi-agent-c11c4d00-eb4c-4e0' into hive/use-taste-skills-and-emil-diesi-ecb26b ([`3708fc6`](https://github.com/AdielMag/Hive/commit/3708fc65ecdb8ff054e5607d62df7ae40d545fa5))
+- Merge branch 'pi-agent-b92e12b0-6f3e-495' into hive/use-taste-skills-and-emil-diesi-ecb26b ([`ba8bb9b`](https://github.com/AdielMag/Hive/commit/ba8bb9b0b17e2a4c35bc6371b4c43c7589572261))
+- Merge branch 'pi-agent-6592cd57-1610-4dd' into hive/use-taste-skills-and-emil-diesi-ecb26b ([`1322b94`](https://github.com/AdielMag/Hive/commit/1322b94d10d47a279cf75ec83fc9927f37f31e5f))
+- pi-agent: R2 WP-D settings quota errors ([`d5c6d1c`](https://github.com/AdielMag/Hive/commit/d5c6d1c031c83ae1d0ca1dbababf27824a7544c4))
+- pi-agent: R2 WP-A nested agent sessions ([`f118830`](https://github.com/AdielMag/Hive/commit/f1188304c105849a18bad1de86c41651c8533d1c))
+- pi-agent: R2 WP-C composer ring hint ([`e5ad29a`](https://github.com/AdielMag/Hive/commit/e5ad29aa5de73b049ab48715744b4b87e86d9daf))
+- restore tsbuildinfo ([`3d7dad5`](https://github.com/AdielMag/Hive/commit/3d7dad57112c26cf382f7f80a590ccd57cd820e7))
+- Merge branch 'pi-agent-b36f856c-2175-46f' into hive/use-taste-skills-and-emil-diesi-ecb26b ([`bf02bb3`](https://github.com/AdielMag/Hive/commit/bf02bb39d06eac39aba7570fd0ffb34ccc631c3f))
+- Merge branch 'pi-agent-24763ef7-0bcd-479' into hive/use-taste-skills-and-emil-diesi-ecb26b ([`767a2a7`](https://github.com/AdielMag/Hive/commit/767a2a7031737c53349593666b0f84147036b70b))
+- Merge branch 'pi-agent-25d45cea-c014-44c' into hive/use-taste-skills-and-emil-diesi-ecb26b ([`d408563`](https://github.com/AdielMag/Hive/commit/d4085630ddfe6260d95b52b3cb28ed86761eec30))
+- Merge branch 'pi-agent-acc9f14d-ff87-408' into hive/use-taste-skills-and-emil-diesi-ecb26b ([`6c105f0`](https://github.com/AdielMag/Hive/commit/6c105f01494383bb7d210eaf179e5b5a2ad14972))
+- Merge branch 'pi-agent-9e82f1fa-56e1-4ba' into hive/use-taste-skills-and-emil-diesi-ecb26b ([`196a3a4`](https://github.com/AdielMag/Hive/commit/196a3a4e58b3dc2232ebd3abed8c7626dcf44ef7))
+- pi-agent: WP-D composer and transcript ([`5b61e1e`](https://github.com/AdielMag/Hive/commit/5b61e1ed5e030a4f45d3fe6795534fe2c6223c5f))
+
 ## v0.31.0 — 2026-10-16 · [diff](https://github.com/AdielMag/Hive/compare/v0.30.0...v0.31.0)
 
 ### ✨ Features
