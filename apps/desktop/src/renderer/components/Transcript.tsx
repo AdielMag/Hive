@@ -55,6 +55,7 @@ import {
   groupTimelineItems,
   type ToolBatchItem,
   type ToolCallBlockT,
+  findClosingCalls,
 } from "./transcript/tool-batch.ts";
 
 export function scrollToToolCall(id: string): void {
@@ -87,6 +88,12 @@ function annotationsSig(a: TranscriptAnnotations): string {
   ].join("\n");
 }
 
+interface ClosingCall {
+  block: ToolCallBlockT;
+  result?: ToolResultView;
+  run?: ToolRun;
+}
+
 const TranscriptContext = createContext<{
   annotations: TranscriptAnnotations;
   renderNested: (timeline: Timeline) => React.ReactNode;
@@ -94,6 +101,8 @@ const TranscriptContext = createContext<{
   sessionRunning: boolean;
   /** Working directory of the session this transcript belongs to (worktree path or project path). */
   cwd?: string;
+  /** Closing run of collapsible module-card calls (see ToolCardContribution.collapseClosing), in order. */
+  closing?: ClosingCall[];
 } | null>(null);
 
 const EMPTY_TRANSCRIPT = createTranscript();
@@ -250,9 +259,16 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
 
   const sessionRunning = transcript.running;
   const sessionCwd = targetTab?.worktree?.worktreePath ?? activeProject?.path;
+  const closing = useMemo<ClosingCall[]>(
+    () =>
+      findClosingCalls(timeline.items, (b) =>
+        toolCards.some((c) => c.collapseClosing && c.match({ name: b.name, arguments: b.arguments ?? {} })),
+      ).map((block) => ({ block, result: timeline.toolResults[block.id], run: transcript.tools[block.id] })),
+    [timeline.items, timeline.toolResults, transcript.tools, toolCards],
+  );
   const ctxValue = useMemo(
-    () => ({ annotations, renderNested, sessionRunning, cwd: sessionCwd }),
-    [annotations, renderNested, sessionRunning, sessionCwd],
+    () => ({ annotations, renderNested, sessionRunning, cwd: sessionCwd, closing }),
+    [annotations, renderNested, sessionRunning, sessionCwd, closing],
   );
   // Once Pi starts the run, the real user message and "Working…" take over.
   const showPendingStart = !!pendingStart && !transcript.running;
@@ -868,6 +884,52 @@ const ToolRawBody: React.FC<{ block: ToolCallBlockT; result?: ToolResultView }> 
   return <div className="msg-tool__body">{pieces}</div>;
 };
 
+/** Collapsed single row for the closing module-card calls (e.g. the Jev review); expands to the regular cards. */
+const ClosingCardsGroup: React.FC<{ label: string; calls: ClosingCall[]; cwd?: string }> = ({ label, calls, cwd }) => {
+  const [open, setOpen] = useState(false);
+  const toolCards = useContributions("toolCards");
+  const running = calls.some((c) => !c.block.complete || c.run?.status === "running" || (!c.result && !c.run));
+  const failed = calls.filter((c) => c.result?.isError).length;
+  return (
+    <div className={`msg-tool msg-tool--closing${open ? " is-open" : ""}`} data-tool-call-ids={calls.map((c) => c.block.id).join(" ")}>
+      <button className="msg-tool__head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <ChevronRight size={13} className="msg-chevron" />
+        <span className="msg-tool__name">{label}</span>
+        <span className="msg-tool__arg">
+          {calls.length} {calls.length === 1 ? "check" : "checks"}
+          {failed > 0 ? ` · ${failed} failed` : ""}
+          {running ? " · running…" : ""}
+        </span>
+      </button>
+      {open && (
+        <div className="msg-tool__body msg-tool__body--closing">
+          {calls.map(({ block, result, run }) => {
+            const card = toolCards.find((c) => c.match({ name: block.name, arguments: block.arguments ?? {} }));
+            if (!card) return null;
+            return (
+              <ModuleToolCard
+                key={block.id}
+                card={card}
+                call={{
+                  id: block.id,
+                  name: block.name,
+                  arguments: block.arguments ?? {},
+                  complete: block.complete,
+                  running: run?.status === "running",
+                  result: result ? { text: result.text, isError: result.isError, details: result.details } : undefined,
+                  run: run ? { startedAt: run.startedAt, endedAt: run.endedAt, status: run.status } : undefined,
+                  cwd,
+                }}
+                RawBody={() => <ToolRawBody block={block} result={result} />}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ToolCall: React.FC<{
   block: ToolCallBlockT;
   result?: ToolResultView;
@@ -922,6 +984,12 @@ const ToolCall: React.FC<{
   // 4. Module-owned card (e.g. the inline plan review)
   const moduleCard = toolCards.find((c) => c.match({ name: block.name, arguments: block.arguments ?? {} }));
   if (moduleCard) {
+    const closing = moduleCard.collapseClosing ? ctx?.closing : undefined;
+    if (closing && closing.length > 0 && closing.some((c) => c.block.id === block.id)) {
+      // The whole closing run renders once, as a collapsed group at its first call.
+      if (closing[0]!.block.id !== block.id) return null;
+      return <ClosingCardsGroup label={moduleCard.collapseClosing!.label} calls={closing} cwd={ctx?.cwd} />;
+    }
     return (
       <ModuleToolCard
         card={moduleCard}

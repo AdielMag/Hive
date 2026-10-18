@@ -902,3 +902,16 @@ div.msg-tool__head {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Collapsed closing run (e.g. Jev review): quiet, so the agent's answer stays the focus. */
+.msg-tool--closing .msg-tool__head {
+  height: 28px;
+  color: var(--text-secondary);
+}
+.msg-tool__body--closing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-top: 1px solid var(--border-subtle);
+}

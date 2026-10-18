@@ -20,7 +20,7 @@ export default defineRendererModule({
       "settings.accounts": [JevSettings as never],
     },
     // ask_jev rows in the transcript: answer chips, In | Out | Raw.
-    toolCards: [{ id: "ask-jev", match: ({ name }) => name === "ask_jev", component: JevToolCard }],
+    toolCards: [{ id: "ask-jev", match: ({ name }) => name === "ask_jev", collapseClosing: { label: "Jev review" }, component: JevToolCard }],
     // Insights dashboard: a Jev-owned tab, opened from Settings → Jev or the command palette.
     tabKinds: [{ kind: INSIGHTS_TAB_KIND, title: () => "Jev insights", icon: ({ size }) => <Gauge size={size} />, component: JevInsights }],
     commands: [

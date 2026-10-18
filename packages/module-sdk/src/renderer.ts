@@ -309,6 +309,12 @@ export interface ToolCardContribution extends ContributionBase {
    * session as "waiting for your input" in the tab strip and sidebar until the call ends.
    */
   awaitsUser?: boolean;
+  /**
+   * When set, matching calls that close the transcript (a contiguous run right after the agent's final text,
+   * nothing after them) are folded into ONE collapsed row with this label, so they don't push the answer
+   * out of view. Expanding it shows the regular cards.
+   */
+  collapseClosing?: { label: string };
   component: ComponentType<ToolCardProps>;
 }
 

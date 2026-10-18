@@ -306,3 +306,29 @@ export function groupTimelineItems(
   flushBatch();
   return out;
 }
+
+/**
+ * Closing tool calls: the contiguous run of `match`ing tool calls at the very end of the transcript that
+ * directly follows the agent's final user-facing text (e.g. the `ask_jev` self-review run after the answer).
+ * Empty when the run isn't preceded by text, or anything else follows it. Returned in transcript order.
+ */
+export function findClosingCalls(items: TimelineItem[], match: (block: ToolCallBlockT) => boolean): ToolCallBlockT[] {
+  const blocks: AssistantBlock[] = [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]!;
+    if (item.kind !== "assistant") break;
+    if (item.errorMessage) return [];
+    blocks.unshift(...item.blocks);
+  }
+  const out: ToolCallBlockT[] = [];
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i]!;
+    if (b.type === "thinking") continue;
+    if (b.type === "toolCall" && match(b)) {
+      out.unshift(b);
+      continue;
+    }
+    return b.type === "text" && b.text?.trim() ? out : [];
+  }
+  return [];
+}
