@@ -2,6 +2,48 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.33.0 — 2026-10-18 · [diff](https://github.com/AdielMag/Hive/compare/v0.32.0...v0.33.0)
+
+### ✨ Features
+
+- **tidy:** detect squash/rebase-merged worktree branches ([`7248ee4`](https://github.com/AdielMag/Hive/commit/7248ee40f709be67f08d1c896a2a240f3994af48))
+- **worktrees:** add AI-assisted merge conflict resolution ([`9831b97`](https://github.com/AdielMag/Hive/commit/9831b9786b5cfa1d1b96e96aed29bda91f25e172))
+- **theme-engine:** increase arc frame and tint color intensity ([`f3ed2a4`](https://github.com/AdielMag/Hive/commit/f3ed2a465483237052e6cae783cfb56a7bcaeab4))
+- **actions:** add "Fix it" action to open agent session for failed runs ([`5c317d3`](https://github.com/AdielMag/Hive/commit/5c317d326c5448782f424fae1dfeac5bdb825f20))
+- **actions:** add in-app gh login flow and signed-out indicator ([`8dad71f`](https://github.com/AdielMag/Hive/commit/8dad71feebe70b83e07ea3046e6c3a71baf68db7))
+- **ui:** add design system doc and wrap hover styles in hover media queries ([`9d0a602`](https://github.com/AdielMag/Hive/commit/9d0a6026598a8247ff343287b38ae8b79c130c20))
+- **desktop:** extract mention parsing helpers and add tests ([`aaa8dd9`](https://github.com/AdielMag/Hive/commit/aaa8dd962dcf282420226047712dc7f94fe5f0ee))
+- **composer:** add @file and /command autocomplete to prompt input ([`e03bd75`](https://github.com/AdielMag/Hive/commit/e03bd75dd2b40895adcbb7add4f20110049132ec))
+- **transcript:** collapse closing module-card calls into one row ([`3a647d5`](https://github.com/AdielMag/Hive/commit/3a647d599b2e5be79753885acbb5dccd1babf92e))
+- **worktrees:** add tidy dialog to clean unused Hive worktrees ([`135c0ab`](https://github.com/AdielMag/Hive/commit/135c0ab0d9b5c936cb994056a41ac0a749c2044a))
+- **worktree:** keep session open after merge ([`fd0bbac`](https://github.com/AdielMag/Hive/commit/fd0bbac0e4348d378124ea6df7850ebf5c48016d))
+- **tools:** replace usage chips with ranked bars and error stats ([`4aa64b4`](https://github.com/AdielMag/Hive/commit/4aa64b4de52a9ff88ede033c426e7430dfd0e6ee))
+- **sessions:** add LLM-assisted "Archive old" action ([`e62f900`](https://github.com/AdielMag/Hive/commit/e62f900998533aada0911ec9d428336a777b49dd))
+- **statusbar:** redesign cost popover with token mix and context meter ([`acc7c9f`](https://github.com/AdielMag/Hive/commit/acc7c9ff9bedbc3ef197a92d90788e30a81f9490))
+
+### 🐛 Fixes
+
+- **actions:** silence no-control-regex lint ([`6033415`](https://github.com/AdielMag/Hive/commit/60334159bac84295ce415beebd0a158f19fde5a5))
+- **actions:** replace removed lucide Github icon with LogIn ([`4c8d92e`](https://github.com/AdielMag/Hive/commit/4c8d92ea917c012ac0858d37e92b06d4bfd2ea82))
+- **desktop:** drop useless regex escape in stale-sessions (lint) ([`7c2c5e7`](https://github.com/AdielMag/Hive/commit/7c2c5e7cf850cd9cb4ccdc927b56e24ffb9a7072))
+- **session:** show pending indicator for warm idle session prompts ([`3e4d886`](https://github.com/AdielMag/Hive/commit/3e4d88660f1fd3fa1d6ac3de627ef2ea20351170))
+
+### 🧹 Other changes
+
+- **worktrees:** compare tidy worktree paths via realpath (Windows 8.3) ([`83c5cd8`](https://github.com/AdielMag/Hive/commit/83c5cd8e1332d64daab6cb89a6d1b01f2cca2552))
+- **theme-engine:** loosen arc frame chroma bound ([`b4578bf`](https://github.com/AdielMag/Hive/commit/b4578bf172c467db7b79ba70710596e5a81969e5))
+- **theme-engine:** update arc frame chroma bound after intensity increase ([`7081c6a`](https://github.com/AdielMag/Hive/commit/7081c6adb99ceb02baab7db1120fe0fd8466e4a8))
+- Merge branch 'hive/the-tidy-up-session-button-and-logic-1ac12c' ([`45f56d6`](https://github.com/AdielMag/Hive/commit/45f56d66ca9d3401b6b5f54bbef3fb4c3f120f17))
+- Merge branch 'hive/whever-we-try-to-merge-and-get-a-mer-57b33f' ([`e25cb1d`](https://github.com/AdielMag/Hive/commit/e25cb1d69cb6dbca2f2ffb6cf0e7f79a926f637e))
+- Merge origin/main into fix-it branch ([`0391ae5`](https://github.com/AdielMag/Hive/commit/0391ae5c18eea04d2414f986ceac15ba922efc9b))
+- Merge branch 'hive/review-hive-with-emil-skills-and-imp-e715a7' ([`40f6f9a`](https://github.com/AdielMag/Hive/commit/40f6f9ad0e2aa301cc9c5f770c8a47aa1bd6e7d9))
+- Merge branch 'hive/in-the-message-area-whevenver-we-use-9eb235' ([`3750d34`](https://github.com/AdielMag/Hive/commit/3750d3447f3254737c4f59dba2d9ce4d76274e83))
+- Merge branch 'hive/a-lot-of-times-when-an-agent-finshed-10e81d' ([`77b250e`](https://github.com/AdielMag/Hive/commit/77b250e4742a36eeeede7b0a3147e635a54c23cb))
+- Merge branch 'hive/whevner-we-merge-a-session-it-closes-68bafd' ([`3ffa6d3`](https://github.com/AdielMag/Hive/commit/3ffa6d30ab193d620681b4314417fab53aec035c))
+- Merge branch 'hive/tools-breakdown-looks-bad-imrpvoe-it-7911fb' ([`7797259`](https://github.com/AdielMag/Hive/commit/77972596a764f6554c82ee47a475692661232867))
+- Merge branch 'hive/in-the-session-windows-add-a-button-86d41a' ([`46fb9de`](https://github.com/AdielMag/Hive/commit/46fb9de0e8a26b4281e74d6b9161bd58a9468193))
+- Merge branch 'hive/improve-session-cost-window-needs-to-28165b' ([`0a854ec`](https://github.com/AdielMag/Hive/commit/0a854ec64732fc858d0b2613d17c17cc263c920b))
+
 ## v0.32.0 — 2026-10-18 · [diff](https://github.com/AdielMag/Hive/compare/v0.31.0...v0.32.0)
 
 ### ✨ Features
