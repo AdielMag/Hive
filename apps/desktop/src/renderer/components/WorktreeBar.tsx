@@ -1,6 +1,6 @@
 /** Thin header above the transcript for sessions running in their own git worktree. */
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Check, GitBranch, GitMerge, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { Check, GitBranch, GitMerge, Loader2, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import type { MergeConflictFile, WorktreeStatus } from "@hive/protocol";
 import { useSessionStore, useSessionWorktree } from "../store/session-store.ts";
 import { resolveFeatureModel, useFeatureModelStore } from "../store/feature-models-store.ts";
@@ -25,11 +25,13 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const activeTabId = useSessionStore((s) => s.activeTabId);
   const id = tabId ?? activeTabId;
   const wt = useSessionWorktree(id);
-  const sessionPath = useSessionStore((s) => s.tabs.find((t) => t.id === id)?.sessionPath);
+  const tab = useSessionStore((s) => s.tabs.find((t) => t.id === id));
+  const sessionPath = tab?.sessionPath;
 
   const [status, setStatus] = useState<WorktreeStatus | null>(null);
   const [stagedCount, setStagedCount] = useState<number>(0);
-  const [busy, setBusy] = useState<"merge" | "discard" | "autocommit" | null>(null);
+  const [busy, setBusy] = useState<"merge" | "discard" | "autocommit" | "keep" | null>(null);
+  const [merged, setMerged] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [conflicts, setConflicts] = useState<MergeConflictFile[] | null>(null);
 
@@ -71,6 +73,7 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
     setStatus(null);
     setStagedCount(0);
     setNotice(null);
+    setMerged(null);
     setConflicts(null);
     if (!path) return;
     const run = () => void refresh();
@@ -136,7 +139,7 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const onConflictsClosed = (outcome: "merged" | "aborted") => {
     setConflicts(null);
     if (outcome === "merged") {
-      setNotice({ kind: "ok", text: `Conflicts resolved and merged into ${wt.baseBranch}. Discard the worktree when you're done.` });
+      setMerged(`Conflicts resolved and merged into ${wt.baseBranch}.`);
       toast({ kind: "success", message: `Merged ${wt.branch} into ${wt.baseBranch}` });
     } else {
       setNotice({ kind: "error", text: "Merge aborted. Nothing was changed." });
@@ -178,12 +181,9 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
         if (pick === "resolve") await openConflicts();
         return;
       }
-      // Keep the session open and show the result here; the user can Discard the worktree when done.
-      setNotice(
-        res.ok
-          ? { kind: "ok", text: `${mergeSuccessMessage(res, wt.baseBranch)} Discard the worktree when you're done.` }
-          : { kind: "error", text: mergeFailureMessage(res) },
-      );
+      // Merged: the bar switches to a "finished" state until the worktree is deleted or the user keeps going.
+      if (res.ok) setMerged(mergeSuccessMessage(res, wt.baseBranch));
+      else setNotice({ kind: "error", text: mergeFailureMessage(res) });
     } catch (err) {
       setNotice({ kind: "error", text: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -192,12 +192,45 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
     }
   };
 
+  /** Keep working in this session: drop the merged worktree, then reopen the session so it gets a fresh one. */
+  const onKeepGoing = async () => {
+    if (!sessionPath || !tab) {
+      toast({ kind: "warning", message: "The session isn't ready yet. Try again in a moment." });
+      return;
+    }
+    let latest = status;
+    try {
+      latest = await window.studio.worktreeStatus(wt);
+    } catch {}
+    const force = discardNeedsForce(latest);
+    if (force) {
+      const pick = await askChoice({
+        title: "Uncommitted changes will be lost",
+        body: ["The old worktree has changes that were not part of the merge. Starting a fresh worktree deletes them permanently."],
+        choices: [
+          { id: "cancel", label: "Cancel" },
+          { id: "go", label: "Delete and keep going", tone: "danger" },
+        ],
+      });
+      if (pick !== "go") return;
+    }
+    const { projectId, title } = tab;
+    setBusy("keep");
+    try {
+      if (await removeSessionWorktree(sessionPath, wt, force)) {
+        await useSessionStore.getState().openSessionTab(sessionPath, projectId, title);
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const onDiscard = async () => {
     if (!sessionPath) {
       toast({ kind: "warning", message: "The session isn't ready yet. Try again in a moment." });
       return;
     }
-    const first = await askChoice({
+    const first = merged ? "discard" : await askChoice({
       title: "Discard this worktree?",
       body: [
         `This closes the session, deletes the worktree folder and the branch ${wt.branch}, and archives the session.`,
@@ -237,6 +270,38 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
       setBusy(null);
     }
   };
+
+  if (merged && !missing) {
+    return (
+      <div className="wt-bar wt-bar--merged" role="status">
+        <GitMerge size={14} className="wt-bar__merged-icon" />
+        <div className="wt-bar__merged-text">
+          <strong>{merged}</strong>
+          <span>
+            This worktree is finished and stays until you delete it. Delete it, or keep going in a fresh worktree.
+          </span>
+        </div>
+        <div className="wt-bar__actions">
+          <button
+            className="ui-btn ui-btn--ghost ui-btn--sm wt-bar__btn--discard"
+            onClick={() => void onDiscard()}
+            disabled={busy !== null}
+            title="Delete the worktree and branch, and archive the session"
+          >
+            {busy === "discard" ? <Loader2 size={12} className="spin" /> : <Trash2 size={12} />} Delete worktree
+          </button>
+          <button
+            className="ui-btn ui-btn--sm wt-bar__btn--merge"
+            onClick={() => void onKeepGoing()}
+            disabled={busy !== null}
+            title="Delete this worktree and continue this session in a new one"
+          >
+            {busy === "keep" ? <Loader2 size={12} className="spin" /> : <RotateCcw size={12} />} Keep going
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`wt-bar${missing ? " is-missing" : ""}`} title={worktreeTooltipLines(wt).join("\n")}>
