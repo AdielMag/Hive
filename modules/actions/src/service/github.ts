@@ -120,6 +120,7 @@ export function parseWorkflowInputs(yamlText: string): WorkflowInputs {
 export function tailLog(text: string, maxLines = 250, maxChars = 12_000): string {
   const lines = text
     .split(/\r?\n/)
+    // eslint-disable-next-line no-control-regex
     .map((l) => l.replace(/^\uFEFF?\d{4}-\d\d-\d\dT[\d:.]+Z ?/, "").replace(/\u001b\[[0-9;]*m/g, ""));
   const out = lines.slice(-maxLines).join("\n");
   return out.length > maxChars ? out.slice(-maxChars) : out;
