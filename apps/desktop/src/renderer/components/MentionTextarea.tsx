@@ -42,13 +42,13 @@ function loadProjectFiles(root: string): Promise<string[]> {
   return p;
 }
 
-interface Trigger {
+export interface Trigger {
   char: "@" | "/";
   start: number; // index of the trigger char
   query: string;
 }
 
-function findTrigger(text: string, caret: number): Trigger | null {
+export function findTrigger(text: string, caret: number): Trigger | null {
   const before = text.slice(0, caret);
   const m = /(^|\s)([@/])([^\s]*)$/.exec(before);
   if (!m) return null;
@@ -56,7 +56,26 @@ function findTrigger(text: string, caret: number): Trigger | null {
   return { char: m[2] as "@" | "/", start, query: m[3]! };
 }
 
-function splitPath(p: string): { name: string; dir: string } {
+export type MentionSegment = string | { char: "@" | "/"; token: string };
+
+/** Splits text into plain strings and known `@file` / `/command` tokens (to be drawn as chips). */
+export function segmentMentions(value: string, files: ReadonlySet<string>, commands: ReadonlySet<string>): MentionSegment[] {
+  const out: MentionSegment[] = [];
+  const re = /(^|\s)([@/])([^\s]+)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(value))) {
+    const char = m[2] as "@" | "/";
+    if (!(char === "@" ? files : commands).has(m[3]!)) continue;
+    const tokenStart = m.index + m[1]!.length;
+    out.push(value.slice(last, tokenStart), { char, token: m[3]! });
+    last = tokenStart + 1 + m[3]!.length;
+  }
+  out.push(value.slice(last));
+  return out;
+}
+
+export function splitPath(p: string): { name: string; dir: string } {
   const i = p.lastIndexOf("/");
   return i < 0 ? { name: p, dir: "" } : { name: p.slice(i + 1), dir: p.slice(0, i) };
 }
@@ -196,26 +215,16 @@ export const MentionTextarea: React.FC<Props> = ({ value, onValueChange, textare
 
   // Backdrop: same text, transparent, with completed tokens wrapped in chip marks.
   const backdrop = useMemo(() => {
-    const nodes: React.ReactNode[] = [];
-    const re = /(^|\s)([@/])([^\s]+)/g;
-    let last = 0;
-    let m: RegExpExecArray | null;
-    let k = 0;
-    while ((m = re.exec(value))) {
-      const known = m[2] === "@" ? fileSet.has(m[3]!) : commandSet.has(m[3]!);
-      if (!known) continue;
-      const tokenStart = m.index + m[1]!.length;
-      nodes.push(value.slice(last, tokenStart));
-      nodes.push(
-        <mark key={k++} className={`mention-chip mention-chip--${m[2] === "@" ? "file" : "command"}`}>
-          {m[2]}
-          {m[3]}
-        </mark>,
-      );
-      last = tokenStart + 1 + m[3]!.length;
-    }
-    nodes.push(value.slice(last));
-    return nodes;
+    return segmentMentions(value, fileSet, commandSet).map((seg, i) =>
+      typeof seg === "string" ? (
+        seg
+      ) : (
+        <mark key={i} className={`mention-chip mention-chip--${seg.char === "@" ? "file" : "command"}`}>
+          {seg.char}
+          {seg.token}
+        </mark>
+      ),
+    );
   }, [value, fileSet, commandSet]);
 
   return (
