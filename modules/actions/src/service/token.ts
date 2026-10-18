@@ -89,6 +89,7 @@ function gitCredentialFill(env: NodeJS.ProcessEnv): Promise<string | null> {
 export function createTokenProvider(dataDir: () => string, env: NodeJS.ProcessEnv = process.env) {
   const file = () => join(dataDir(), "token.json");
   let gitCache: { at: number; token: string | null } | null = null;
+  let epoch = 0;
   let ghCache: { at: number; token: string | null } | null = null;
 
   function readSaved(): string | null {
@@ -103,15 +104,17 @@ export function createTokenProvider(dataDir: () => string, env: NodeJS.ProcessEn
 
   async function fromGit(): Promise<string | null> {
     if (gitCache && Date.now() - gitCache.at < GIT_CACHE_MS) return gitCache.token;
+    const at = epoch;
     const token = await gitCredentialFill(env);
-    gitCache = { at: Date.now(), token };
+    if (at === epoch) gitCache = { at: Date.now(), token };
     return token;
   }
 
   async function fromGh(): Promise<string | null> {
     if (ghCache && Date.now() - ghCache.at < GIT_CACHE_MS) return ghCache.token;
+    const at = epoch;
     const token = await ghAuthToken(env);
-    ghCache = { at: Date.now(), token };
+    if (at === epoch) ghCache = { at: Date.now(), token };
     return token;
   }
 
@@ -128,11 +131,19 @@ export function createTokenProvider(dataDir: () => string, env: NodeJS.ProcessEn
       return { token: null, source: "none" };
     },
     save(token: string): void {
+      epoch++;
       writeFileSync(file(), JSON.stringify({ token: token.trim() }), { mode: 0o600 });
       ghCache = null;
       gitCache = null;
     },
+    /** Drops cached gh / git lookups so a fresh login is picked up immediately. */
+    invalidate(): void {
+      epoch++;
+      ghCache = null;
+      gitCache = null;
+    },
     clear(): void {
+      epoch++;
       rmSync(file(), { force: true });
       ghCache = null;
       gitCache = null;
