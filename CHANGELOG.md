@@ -2,6 +2,19 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.31.0 — 2026-10-16 · [diff](https://github.com/AdielMag/Hive/compare/v0.30.0...v0.31.0)
+
+### ✨ Features
+
+- **worktree:** clean up worktrees after merge and recreate on resume ([`4bb196a`](https://github.com/AdielMag/Hive/commit/4bb196af40fb1ef81f8a7438b24db286f303ed52))
+- **desktop:** link extra folders to project workspaces ([`9afcbb5`](https://github.com/AdielMag/Hive/commit/9afcbb54145e40abe10edeb925a3ad791057a9f7))
+- **worktree-bar:** auto-stage all changes before AI auto-commit ([`bb7fa90`](https://github.com/AdielMag/Hive/commit/bb7fa905a90600e0668a3bfb11b437cbaef58c66))
+
+### 🧹 Other changes
+
+- Merge branch 'hive/worktree-are-not-being-deleted-at-al-0a5094' ([`2b66e7c`](https://github.com/AdielMag/Hive/commit/2b66e7c819bfc293926169b0b080e2160179dd5f))
+- Merge branch 'hive/now-in-the-dropdown-there-is-now-way-bc0578' ([`511c2ca`](https://github.com/AdielMag/Hive/commit/511c2ca35f2faf2edff52e4fdc80fa99e7eb3d7f))
+
 ## v0.30.0 — 2026-10-16 · [diff](https://github.com/AdielMag/Hive/compare/v0.29.1...v0.30.0)
 
 ### ✨ Features
