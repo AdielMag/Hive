@@ -5,7 +5,7 @@ import { useUi } from "../store/ui-store.ts";
 import { ModelPickerPopover, type ModelPickerAnchor } from "./ModelPickerPopover.tsx";
 
 /** Which setting a right-click on the chip changes. */
-export type AiModelChipFeature = "gitCommit" | "usageAnalysis" | "session";
+export type AiModelChipFeature = "gitCommit" | "usageAnalysis" | "sessionTidy" | "session";
 
 export interface AiModelChipProps {
   model: ResolvedFeatureModel;

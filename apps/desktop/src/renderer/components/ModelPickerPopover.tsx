@@ -9,7 +9,7 @@ import { useUi } from "../store/ui-store.ts";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 
-export type ModelPickerFeature = "gitCommit" | "usageAnalysis" | "session";
+export type ModelPickerFeature = "gitCommit" | "usageAnalysis" | "sessionTidy" | "session";
 
 export interface ModelPickerAnchor {
   x: number;
@@ -64,17 +64,25 @@ export const ModelPickerPopover: React.FC<Props> = ({ anchor, feature, onClose }
       setModel: s.setModel,
     })),
   );
-  const { config, setGitCommitConfig, setUsageAnalysisConfig } = useFeatureModelStore(
+  const { config, setGitCommitConfig, setUsageAnalysisConfig, setSessionTidyConfig } = useFeatureModelStore(
     useShallow((s) => ({
       config: s.config,
       setGitCommitConfig: s.setGitCommitConfig,
       setUsageAnalysisConfig: s.setUsageAnalysisConfig,
+      setSessionTidyConfig: s.setSessionTidyConfig,
     })),
   );
 
   const pref: FeatureModelPreference | null =
-    feature === "gitCommit" ? config.gitCommit : feature === "usageAnalysis" ? config.usageAnalysis : null;
-  const apply = feature === "gitCommit" ? setGitCommitConfig : setUsageAnalysisConfig;
+    feature === "gitCommit"
+      ? config.gitCommit
+      : feature === "usageAnalysis"
+        ? config.usageAnalysis
+        : feature === "sessionTidy"
+          ? config.sessionTidy
+          : null;
+  const apply =
+    feature === "gitCommit" ? setGitCommitConfig : feature === "sessionTidy" ? setSessionTidyConfig : setUsageAnalysisConfig;
 
   // Same visibility rules as the Composer's picker: only enabled models, falling back to all.
   const visibleModels = useMemo(() => {
