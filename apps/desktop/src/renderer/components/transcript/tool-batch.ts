@@ -166,7 +166,9 @@ export function groupTimelineItems(
     if (pendingBatch.length >= 2) {
       out.push({
         kind: "toolBatch",
-        key: `batch-${pendingBatch.map((p) => p.block.id).join("-")}`,
+        // Anchor on the first call only: the key must stay stable as more calls
+        // join the batch, otherwise React remounts the group and it re-collapses.
+        key: `batch-${pendingBatch[0]!.block.id || pendingBatch[0]!.itemKey}`,
         items: [...pendingBatch],
       });
     } else if (pendingBatch.length === 1) {
