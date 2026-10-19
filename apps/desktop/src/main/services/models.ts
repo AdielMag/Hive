@@ -18,6 +18,8 @@ export const DEFAULT_COMPACTION: CompactionSettings = {
   keepRecentMaxTokens: DEFAULT_KEEP_RECENT_MAX,
 };
 
+const DISABLED_PROVIDERS_FILE_NAME = "hive-disabled-providers.json";
+
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
 /** Keep percentages sane: trigger 10–98%, recent history 1% up to 5 points below the trigger. */
@@ -50,13 +52,34 @@ export class ModelsService {
   private modelsStorePath: string;
   /** Studio's own record of the chosen percentages (Pi's settings.json only holds token counts). */
   private compactionPrefsPath: string;
+  /** Providers the user switched off (Hive-only: Pi's settings.json has no such concept). */
+  private disabledProvidersPath: string;
 
   constructor(customConfigDir?: string, studioDataDir?: string) {
     this.configDir = customConfigDir || process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
     this.settingsPath = join(this.configDir, "settings.json");
     this.modelsStorePath = join(this.configDir, "models-store.json");
     this.compactionPrefsPath = join(studioDataDir ?? this.configDir, NEW_COMPACTION_FILE_NAME);
+    this.disabledProvidersPath = join(studioDataDir ?? this.configDir, DISABLED_PROVIDERS_FILE_NAME);
     migrateCompactionPrefs(this.compactionPrefsPath);
+  }
+
+  getDisabledProviders(): string[] {
+    if (!existsSync(this.disabledProvidersPath)) return [];
+    try {
+      const parsed = JSON.parse(readFileSync(this.disabledProvidersPath, "utf8"));
+      return Array.isArray(parsed) ? [...new Set(parsed.filter((p): p is string => typeof p === "string" && p !== ""))] : [];
+    } catch {
+      return [];
+    }
+  }
+
+  saveDisabledProviders(disabledProviders: string[]): { success: boolean } {
+    const clean = [...new Set(disabledProviders.filter((p) => typeof p === "string" && p !== ""))];
+    const dir = dirname(this.disabledProvidersPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(this.disabledProvidersPath, JSON.stringify(clean, null, 2), "utf8");
+    return { success: true };
   }
 
   private readSettings(): Record<string, any> {
@@ -162,6 +185,7 @@ export class ModelsService {
     return {
       models,
       enabledModels,
+      disabledProviders: this.getDisabledProviders(),
       defaultModel,
       defaultProvider,
     };

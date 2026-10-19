@@ -286,6 +286,9 @@ const api: StudioApi = {
   saveEnabledModels(enabledModels: string[]) {
     return ipcRenderer.invoke(IPC.modelsSaveEnabled, { enabledModels });
   },
+  saveDisabledProviders(disabledProviders: string[]) {
+    return ipcRenderer.invoke(IPC.modelsSaveDisabledProviders, { disabledProviders });
+  },
   getCompactionSettings() {
     return ipcRenderer.invoke(IPC.settingsGetCompaction);
   },

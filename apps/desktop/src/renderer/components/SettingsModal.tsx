@@ -1,5 +1,5 @@
 /** Settings dialog: Appearance, Models, AI providers, Updates, About. */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, Volume2, X } from "lucide-react";
 import { AppearanceSettingsContent } from "./AppearanceSettingsContent.tsx";
 import { SoundSettingsContent } from "./SoundSettingsContent.tsx";
@@ -8,6 +8,8 @@ import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
 import { CompactionSettingsContent } from "./CompactionSettingsContent.tsx";
 import { KeyboardSettings } from "../features/commands/KeyboardSettings.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
+import { ProviderEnabledToggle } from "./ProviderEnabledToggle.tsx";
+import { providerDisplayName } from "../lib/provider-filter.ts";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { toast } from "../modules/toast-store.ts";
@@ -160,6 +162,23 @@ const AccountsTab: React.FC = () => {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const focus = useUi((s) => s.settingsFocus);
   const focusRef = useRef<HTMLDivElement | null>(null);
+  const allCatalogModels = useSessionStore((s) => s.allCatalogModels);
+  const sessionModels = useSessionStore((s) => s.models);
+
+  // Providers that have models (e.g. zai, openrouter) but no sign-in flow here: still need an on/off switch.
+  const modelOnlyProviders = useMemo(() => {
+    const known = new Set((accounts ?? []).map((a) => a.providerId));
+    const extra = new Map<string, number>();
+    const seen = new Set<string>();
+    for (const m of [...allCatalogModels, ...sessionModels]) {
+      if (!m.provider || known.has(m.provider)) continue;
+      const key = `${m.provider}/${m.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      extra.set(m.provider, (extra.get(m.provider) ?? 0) + 1);
+    }
+    return Array.from(extra.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [accounts, allCatalogModels, sessionModels]);
 
   const load = useCallback(async () => {
     try {
@@ -245,6 +264,7 @@ const AccountsTab: React.FC = () => {
                 <div className="ui-row__title">{acc.name}</div>
                 <div className="ui-row__hint">{acc.connected ? acc.email : acc.providerId}</div>
               </div>
+              <ProviderEnabledToggle provider={acc.providerId} name={acc.name} />
               {acc.connected && acc.needsAttention ? (
                 <span className="ui-chip ui-chip--warn" title="The access token expired a while ago and may not be refreshing">
                   <AlertCircle size={11} /> May need refresh
@@ -314,6 +334,23 @@ const AccountsTab: React.FC = () => {
           </div>
         );
       })}
+      {accounts &&
+        modelOnlyProviders.map(([provider, count]) => (
+          <div key={provider} className="ui-card settings__account">
+            <div className="settings__account-head">
+              <div className="quota-card__logo">
+                <ProviderIcon provider={provider} size={18} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="ui-row__title">{providerDisplayName(provider)}</div>
+                <div className="ui-row__hint">
+                  {count} model{count === 1 ? "" : "s"} · credentials are managed through Pi
+                </div>
+              </div>
+              <ProviderEnabledToggle provider={provider} name={providerDisplayName(provider)} />
+            </div>
+          </div>
+        ))}
       <Slot name="settings.accounts" props={{ focus }} />
     </div>
   );

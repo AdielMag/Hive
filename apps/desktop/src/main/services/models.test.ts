@@ -86,4 +86,46 @@ describe("ModelsService", () => {
       rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  describe("disabled providers", () => {
+    it("defaults to none and round-trips through saveDisabledProviders", () => {
+      const tmp = mkdtempSync(join(tmpdir(), "pi-models-test-"));
+      try {
+        const service = new ModelsService(tmp);
+        expect(service.getModelsCatalog().disabledProviders).toEqual([]);
+        expect(service.saveDisabledProviders(["zai", "openrouter", "zai", ""]).success).toBe(true);
+        expect(service.getModelsCatalog().disabledProviders).toEqual(["zai", "openrouter"]);
+        // a fresh instance (app restart) sees the same list
+        expect(new ModelsService(tmp).getDisabledProviders()).toEqual(["zai", "openrouter"]);
+        service.saveDisabledProviders([]);
+        expect(service.getModelsCatalog().disabledProviders).toEqual([]);
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    });
+
+    it("does not touch settings.json enabledModels", () => {
+      const tmp = mkdtempSync(join(tmpdir(), "pi-models-test-"));
+      try {
+        writeFileSync(join(tmp, "settings.json"), JSON.stringify({ enabledModels: ["zai/glm-5"] }));
+        const service = new ModelsService(tmp);
+        service.saveDisabledProviders(["zai"]);
+        const catalog = service.getModelsCatalog();
+        expect(catalog.enabledModels).toEqual(["zai/glm-5"]);
+        expect(catalog.disabledProviders).toEqual(["zai"]);
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    });
+
+    it("tolerates a corrupt file", () => {
+      const tmp = mkdtempSync(join(tmpdir(), "pi-models-test-"));
+      try {
+        writeFileSync(join(tmp, "hive-disabled-providers.json"), "{not json");
+        expect(new ModelsService(tmp).getDisabledProviders()).toEqual([]);
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    });
+  });
 });
