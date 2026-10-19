@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.34.1 — 2026-10-19 · [diff](https://github.com/AdielMag/Hive/compare/v0.34.0...v0.34.1)
+
+### 🐛 Fixes
+
+- **transcript:** keep tool batch key stable as calls are added ([`ff6e778`](https://github.com/AdielMag/Hive/commit/ff6e778d2639a704f0877e4961f0727e95188b95))
+
 ## v0.34.0 — 2026-10-18 · [diff](https://github.com/AdielMag/Hive/compare/v0.33.0...v0.34.0)
 
 ### ✨ Features
