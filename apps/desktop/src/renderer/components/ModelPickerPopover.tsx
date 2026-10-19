@@ -8,6 +8,7 @@ import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { ProviderIcon } from "./ProviderIcon.tsx";
+import { filterDisabledProviders } from "../lib/provider-filter.ts";
 
 export type ModelPickerFeature = "gitCommit" | "usageAnalysis" | "sessionTidy" | "session";
 
@@ -54,11 +55,12 @@ export const ModelPickerPopover: React.FC<Props> = ({ anchor, feature, onClose }
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
 
-  const { models, allCatalogModels, enabledModelKeys, selectedModel, defaultModel, setModel } = useSessionStore(
+  const { models, allCatalogModels, enabledModelKeys, disabledProviders, selectedModel, defaultModel, setModel } = useSessionStore(
     useShallow((s) => ({
       models: s.models,
       allCatalogModels: s.allCatalogModels,
       enabledModelKeys: s.enabledModelKeys,
+      disabledProviders: s.disabledProviders,
       selectedModel: s.selectedModel,
       defaultModel: s.defaultModel,
       setModel: s.setModel,
@@ -89,14 +91,14 @@ export const ModelPickerPopover: React.FC<Props> = ({ anchor, feature, onClose }
     const map = new Map<string, (typeof models)[0]>();
     for (const m of allCatalogModels) map.set(`${m.provider}/${m.id}`, m);
     for (const m of models) map.set(`${m.provider}/${m.id}`, m);
-    const base = Array.from(map.values());
+    const base = filterDisabledProviders(Array.from(map.values()), disabledProviders);
     if (!enabledModelKeys || enabledModelKeys.length === 0) return base;
     const enabled = new Set(enabledModelKeys);
     const filtered = base.filter(
       (m) => enabled.has(`${m.provider}/${m.id}`) || enabledModelKeys.some((k) => !k.includes("/") && k === m.id),
     );
     return filtered.length > 0 ? filtered : base;
-  }, [allCatalogModels, models, enabledModelKeys]);
+  }, [allCatalogModels, models, enabledModelKeys, disabledProviders]);
 
   const q = query.trim().toLowerCase();
 

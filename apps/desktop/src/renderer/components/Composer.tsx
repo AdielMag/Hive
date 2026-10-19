@@ -28,6 +28,7 @@ import { ReloadButton, ReloadStatusBar } from "./ReloadControls.tsx";
 import { RunTimeBar } from "./RunTimeBar.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { Slot } from "../modules/ModuleViews.tsx";
+import { filterDisabledProviders } from "../lib/provider-filter.ts";
 import type { AttachedItem } from "@hive/protocol";
 import { activePath } from "@hive/pi-adapter";
 import "../styles/composer.css";
@@ -58,7 +59,7 @@ interface ComposerProps {
 
 export const Composer: React.FC<ComposerProps> = ({ height }) => {
   const activeKey = useSessionStore((s) => s.activeKey);
-  const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets, pendingUiDialog, respondDialog } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets, pendingUiDialog: s.pendingUiDialog, respondDialog: s.respondDialog })));
+  const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, disabledProviders, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets, pendingUiDialog, respondDialog } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, disabledProviders: s.disabledProviders, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets, pendingUiDialog: s.pendingUiDialog, respondDialog: s.respondDialog })));
 
   // While this session reloads Pi's extensions the editor is locked (the runtime is being replaced).
   const isReloading = useSessionStore((s) => (s.activeKey ? s.reloadStates[s.activeKey]?.phase === "reloading" : false));
@@ -94,8 +95,8 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
     for (const m of models) {
       map.set(`${m.provider}/${m.id}`, m);
     }
-    return Array.from(map.values());
-  }, [allCatalogModels, models]);
+    return filterDisabledProviders(Array.from(map.values()), disabledProviders);
+  }, [allCatalogModels, models, disabledProviders]);
 
   // Filter to only enabled models (if enabledModelKeys is specified)
   const visibleModels = useMemo(() => {

@@ -17,6 +17,8 @@ import { useFeatureModelStore, resolveFeatureModel } from "../store/feature-mode
 import { AiModelChip } from "./AiModelChip.tsx";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useContributions } from "../modules/registry.ts";
+import { ProviderEnabledToggle } from "./ProviderEnabledToggle.tsx";
+import { filterDisabledProviders } from "../lib/provider-filter.ts";
 
 function formatContext(tokens?: number): string {
   if (!tokens) return "";
@@ -29,12 +31,13 @@ export const ModelsSettingsContent: React.FC = () => {
   const aiFeatures = useContributions("aiFeatures");
   const hasGitCommit = aiFeatures.some((f) => f.id === "gitCommit");
   const hasUsageAnalysis = aiFeatures.some((f) => f.id === "usageAnalysis");
-  const { allCatalogModels, models, enabledModelKeys, saveEnabledModels, selectedModel, defaultModel, defaultProvider } =
+  const { allCatalogModels, models, enabledModelKeys, disabledProviders, saveEnabledModels, selectedModel, defaultModel, defaultProvider } =
     useSessionStore(
       useShallow((s) => ({
         allCatalogModels: s.allCatalogModels,
         models: s.models,
         enabledModelKeys: s.enabledModelKeys,
+        disabledProviders: s.disabledProviders,
         saveEnabledModels: s.saveEnabledModels,
         selectedModel: s.selectedModel,
         defaultModel: s.defaultModel,
@@ -125,7 +128,32 @@ export const ModelsSettingsContent: React.FC = () => {
     return groups;
   }, [filteredModels]);
 
-  const defaultCustomKey = combinedModels[0] ? `${combinedModels[0].provider}/${combinedModels[0].id}` : "";
+  // "Specific Model..." only offers models of providers that are switched on.
+  const selectableModels = useMemo(
+    () => filterDisabledProviders(combinedModels, disabledProviders),
+    [combinedModels, disabledProviders],
+  );
+  const defaultCustomKey = selectableModels[0] ? `${selectableModels[0].provider}/${selectableModels[0].id}` : "";
+
+  /** Options for a "Specific Model..." select. A model chosen earlier from a now-disabled provider stays visible, flagged. */
+  const renderModelOptions = (currentKey: string | undefined) => {
+    const current = currentKey ? combinedModels.find((m) => `${m.provider}/${m.id}` === currentKey) : undefined;
+    const orphan = current && disabledProviders.includes(current.provider) ? current : undefined;
+    return (
+      <>
+        {orphan && (
+          <option key={`${orphan.provider}/${orphan.id}`} value={`${orphan.provider}/${orphan.id}`}>
+            {orphan.name || orphan.id} ({orphan.provider}, provider disabled)
+          </option>
+        )}
+        {selectableModels.map((m) => (
+          <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+            {m.name || m.id} ({m.provider})
+          </option>
+        ))}
+      </>
+    );
+  };
 
   const resolvedCommitModel = useMemo(
     () => resolveFeatureModel(config.gitCommit, selectedModel, defaultModel, combinedModels, defaultProvider),
@@ -138,14 +166,14 @@ export const ModelsSettingsContent: React.FC = () => {
   );
 
   // Count active models
-  const totalModelsCount = combinedModels.length;
+  const totalModelsCount = selectableModels.length;
   const activeModelsCount = useMemo(() => {
-    return combinedModels.filter((m) => isModelEnabled(m)).length;
-  }, [combinedModels, enabledModelKeys]);
+    return selectableModels.filter((m) => isModelEnabled(m)).length;
+  }, [selectableModels, enabledModelKeys]);
 
   // Enable all in current view
   const handleEnableAllInView = async () => {
-    const keysToAdd = filteredModels.map((m) => `${m.provider}/${m.id}`);
+    const keysToAdd = filterDisabledProviders(filteredModels, disabledProviders).map((m) => `${m.provider}/${m.id}`);
     const nextSet = new Set([...enabledModelKeys, ...keysToAdd]);
     await saveEnabledModels(Array.from(nextSet));
   };
@@ -322,11 +350,7 @@ export const ModelsSettingsContent: React.FC = () => {
                   outline: "none",
                 }}
               >
-                {combinedModels.map((m) => (
-                  <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
-                    {m.name || m.id} ({m.provider})
-                  </option>
-                ))}
+                {renderModelOptions(config.gitCommit.modelId || defaultCustomKey)}
               </select>
             )}
           </div>
@@ -404,11 +428,7 @@ export const ModelsSettingsContent: React.FC = () => {
                   outline: "none",
                 }}
               >
-                {combinedModels.map((m) => (
-                  <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
-                    {m.name || m.id} ({m.provider})
-                  </option>
-                ))}
+                {renderModelOptions(config.usageAnalysis.modelId || defaultCustomKey)}
               </select>
             )}
           </div>
@@ -527,6 +547,7 @@ export const ModelsSettingsContent: React.FC = () => {
                 <button
                   key={p}
                   onClick={() => setSelectedProvider(p)}
+                  title={disabledProviders.includes(p) ? `${getProviderDisplayName(p)} is disabled` : undefined}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -534,6 +555,8 @@ export const ModelsSettingsContent: React.FC = () => {
                     padding: "3px 10px",
                     borderRadius: 12,
                     border: "none",
+                    opacity: disabledProviders.includes(p) ? 0.5 : 1,
+                    textDecoration: disabledProviders.includes(p) ? "line-through" : "none",
                     background: isSelected ? "var(--accent-base)" : "var(--bg-card)",
                     color: isSelected ? "#fff" : "var(--text-secondary)",
                     fontSize: 11,
@@ -572,6 +595,7 @@ export const ModelsSettingsContent: React.FC = () => {
           Object.entries(groupedModels).map(([provider, providerModels]) => {
             const providerActiveCount = providerModels.filter((m) => isModelEnabled(m)).length;
             const allProviderActive = providerActiveCount === providerModels.length;
+            const providerOff = disabledProviders.includes(provider);
 
             return (
               <div
@@ -604,25 +628,30 @@ export const ModelsSettingsContent: React.FC = () => {
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => handleToggleProvider(provider, !allProviderActive)}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "var(--accent-base)",
-                      fontSize: 11,
-                      fontWeight: 500,
-                      cursor: "pointer",
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                    }}
-                  >
-                    {allProviderActive ? "Deselect All" : "Select All"}
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button
+                      onClick={() => handleToggleProvider(provider, !allProviderActive)}
+                      disabled={providerOff}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "var(--accent-base)",
+                        fontSize: 11,
+                        fontWeight: 500,
+                        cursor: providerOff ? "default" : "pointer",
+                        opacity: providerOff ? 0.4 : 1,
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                      }}
+                    >
+                      {allProviderActive ? "Deselect All" : "Select All"}
+                    </button>
+                    <ProviderEnabledToggle provider={provider} name={getProviderDisplayName(provider)} />
+                  </div>
                 </div>
 
-                {/* Model Rows */}
-                <div style={{ display: "flex", flexDirection: "column" }}>
+                {/* Model Rows (dimmed and inert while the provider is disabled; selections are kept) */}
+                <div style={{ display: "flex", flexDirection: "column", opacity: providerOff ? 0.4 : 1, pointerEvents: providerOff ? "none" : "auto" }}>
                   {providerModels.map((m) => {
                     const enabled = isModelEnabled(m);
                     const ctxStr = formatContext(m.contextWindow);
