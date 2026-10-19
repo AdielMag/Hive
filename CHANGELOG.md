@@ -2,6 +2,17 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.35.1 — 2026-10-19 · [diff](https://github.com/AdielMag/Hive/compare/v0.34.1...v0.35.1)
+
+### ✨ Features
+
+- **models:** add support for enabling and disabling AI providers ([`598044b`](https://github.com/AdielMag/Hive/commit/598044b2851f00511862e6e048ac6122dd494878))
+- **models:** add support for enabling and disabling AI providers ([`5180427`](https://github.com/AdielMag/Hive/commit/5180427d54283e360d530870aeb96e4fe88fd3c9))
+
+### 🧹 Other changes
+
+- Merge branch 'hive/cant-pull-from-main-pull-than-push-5afdc8' ([`dd7a3d1`](https://github.com/AdielMag/Hive/commit/dd7a3d15bef63909227052ea3c944b6dc1d0331c))
+
 ## v0.34.1 — 2026-10-19 · [diff](https://github.com/AdielMag/Hive/compare/v0.34.0...v0.34.1)
 
 ### 🐛 Fixes
