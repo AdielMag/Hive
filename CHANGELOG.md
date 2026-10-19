@@ -2,6 +2,12 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.35.0 — 2026-10-19 · [diff](https://github.com/AdielMag/Hive/compare/v0.34.1...v0.35.0)
+
+### ✨ Features
+
+- **models:** add support for enabling and disabling AI providers ([`598044b`](https://github.com/AdielMag/Hive/commit/598044b2851f00511862e6e048ac6122dd494878))
+
 ## v0.34.1 — 2026-10-19 · [diff](https://github.com/AdielMag/Hive/compare/v0.34.0...v0.34.1)
 
 ### 🐛 Fixes
