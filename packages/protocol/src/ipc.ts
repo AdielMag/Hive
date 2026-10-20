@@ -354,6 +354,7 @@ export const IPC = {
   // Models
   modelsGetCatalog: "models:get-catalog",
   modelsSaveEnabled: "models:save-enabled",
+  modelsSaveDisabledProviders: "models:save-disabled-providers",
   // Insights
   // Shell
   openExternal: "shell:open-external",
@@ -488,6 +489,8 @@ export interface ModelCatalogItem {
 export interface ModelsCatalogResponse {
   models: ModelCatalogItem[];
   enabledModels: string[];
+  /** Providers switched off in Settings: their models are hidden from every model picker. */
+  disabledProviders: string[];
   defaultModel?: string;
   defaultProvider?: string;
 }
@@ -622,6 +625,7 @@ export interface StudioApi {
   // Models
   getModelsCatalog(): Promise<ModelsCatalogResponse>;
   saveEnabledModels(enabledModels: string[]): Promise<{ success: boolean }>;
+  saveDisabledProviders(disabledProviders: string[]): Promise<{ success: boolean }>;
 
   // Insights
   /** Subscription limits for every connected account. `force` bypasses the short-lived cache. */

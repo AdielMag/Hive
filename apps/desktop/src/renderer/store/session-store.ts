@@ -40,6 +40,7 @@ import { NEW_SESSION_TITLE, pickTitleModel, sessionDisplayTitle, titleFromPrompt
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { parseAgentResultText, type SubagentView } from "../lib/ai/subagents.ts";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
+import { filterDisabledProviders, withProviderDisabled } from "../lib/provider-filter.ts";
 
 export interface SubagentModalTarget {
   view: SubagentView;
@@ -310,6 +311,8 @@ export interface SessionStoreState {
   models: Array<Model<any>>;
   allCatalogModels: Array<Model<any>>;
   enabledModelKeys: string[];
+  /** Providers switched off in Settings; their models are filtered out of every picker. */
+  disabledProviders: string[];
   defaultModel?: string;
   defaultProvider?: string;
   selectedModel: Model<any> | null;
@@ -368,6 +371,7 @@ export interface SessionStoreState {
   dismissCompaction: (key: string) => void;
   loadModelsCatalog: () => Promise<void>;
   saveEnabledModels: (keys: string[]) => Promise<void>;
+  setProviderDisabled: (provider: string, disabled: boolean) => Promise<void>;
   ensureActiveSession: (targetTabId?: string, opts?: { title?: string }) => Promise<string | null>;
   renameWorktreeBranch: (tabId: string, newTitle: string) => Promise<void>;
   addAttachments: (items: AttachedItem[]) => void;
@@ -950,10 +954,13 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
     }
     if (!model && models && models.length > 0) {
       const enabled = get().enabledModelKeys;
+      // A new session shouldn't land on a provider the user switched off (unless nothing else exists).
+      const allowed = filterDisabledProviders(models, get().disabledProviders);
+      const pool = allowed.length > 0 ? allowed : models;
       const match = enabled.length
-        ? models.find((m) => enabled.includes(`${m.provider}/${m.id}`) || (!m.id.includes("/") && enabled.includes(m.id)))
+        ? pool.find((m) => enabled.includes(`${m.provider}/${m.id}`) || (!m.id.includes("/") && enabled.includes(m.id)))
         : null;
-      model = match ?? models[0] ?? null;
+      model = match ?? pool[0] ?? null;
     }
     if (model) {
       patchTab({ model });
@@ -1012,6 +1019,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   models: [],
   allCatalogModels: [],
   enabledModelKeys: [],
+  disabledProviders: [],
   defaultModel: undefined,
   defaultProvider: undefined,
   selectedModel: null,
@@ -1395,6 +1403,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         set({
           allCatalogModels: catalogModels,
           enabledModelKeys: enabledKeys,
+          disabledProviders: catalog.disabledProviders ?? [],
           defaultModel: catalog.defaultModel,
           defaultProvider: catalog.defaultProvider,
         });
@@ -1402,10 +1411,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         if (get().models.length === 0 && catalogModels.length > 0) {
           set({ models: catalogModels });
           if (!get().selectedModel) {
+            const allowed = filterDisabledProviders(catalogModels, get().disabledProviders);
+            const pool = allowed.length > 0 ? allowed : catalogModels;
             const match = enabledKeys.length > 0
-              ? catalogModels.find((m) => enabledKeys.includes(`${m.provider}/${m.id}`) || (!m.id.includes("/") && enabledKeys.includes(m.id)))
+              ? pool.find((m) => enabledKeys.includes(`${m.provider}/${m.id}`) || (!m.id.includes("/") && enabledKeys.includes(m.id)))
               : null;
-            const chosen = match ?? catalogModels[0] ?? null;
+            const chosen = match ?? pool[0] ?? null;
             if (chosen) {
               const levels = getSupportedThinkingLevels(chosen);
               const clamped = clampThinkingLevel(chosen, get().selectedThinkingLevel);
@@ -1429,6 +1440,18 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       set({ enabledModelKeys: keys });
     } catch (err) {
       console.error("Failed to save enabled models", err);
+    }
+  },
+
+  setProviderDisabled: async (provider: string, disabled: boolean) => {
+    const previous = get().disabledProviders;
+    const next = withProviderDisabled(previous, provider, disabled);
+    set({ disabledProviders: next });
+    try {
+      await window.studio.saveDisabledProviders(next);
+    } catch (err) {
+      console.error("Failed to save disabled providers", err);
+      set({ disabledProviders: previous });
     }
   },
 

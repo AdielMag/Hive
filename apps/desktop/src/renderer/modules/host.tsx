@@ -18,6 +18,7 @@ import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import { useFeatureModelStore, resolveFeatureModel, type FeatureModelsConfig } from "../store/feature-models-store.ts";
 import { openLink, setLinkHandler } from "./link-bus.ts";
 import { Slot } from "./ModuleViews.tsx";
+import { filterDisabledProviders } from "../lib/provider-filter.ts";
 import { AiModelChip } from "../components/AiModelChip.tsx";
 import { ContextBreakdownPanel } from "../components/ContextBreakdownPanel.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
@@ -180,7 +181,10 @@ export function createModuleHost(moduleId: string): ModuleHost {
       list: (dirPath) => window.studio.listFiles(dirPath),
     },
     models: {
-      catalog: () => useSessionStore.getState().allCatalogModels,
+      catalog: () => {
+        const s = useSessionStore.getState();
+        return filterDisabledProviders(s.allCatalogModels, s.disabledProviders);
+      },
       enabledKeys: () => useSessionStore.getState().enabledModelKeys,
       loadCatalog: () => useSessionStore.getState().loadModelsCatalog(),
     },
