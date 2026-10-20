@@ -2,6 +2,17 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.36.0 — 2026-10-20 · [diff](https://github.com/AdielMag/Hive/compare/v0.35.1...v0.36.0)
+
+### ✨ Features
+
+- **desktop:** allow context menu items without onSelect handler ([`ec95f49`](https://github.com/AdielMag/Hive/commit/ec95f49c70decb89821e8cd5410a48294c806b09))
+- **projects:** add custom icons and project-colored session tabs ([`b9836e9`](https://github.com/AdielMag/Hive/commit/b9836e9dc09c22adf8eaa8d7d388832010e2acdf))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`5c13f67`](https://github.com/AdielMag/Hive/commit/5c13f671ef040d7a3420c6cf14cb6e858378b82a))
+
 ## v0.35.1 — 2026-10-19 · [diff](https://github.com/AdielMag/Hive/compare/v0.34.1...v0.35.1)
 
 ### ✨ Features
