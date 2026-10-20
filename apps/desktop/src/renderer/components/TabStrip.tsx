@@ -66,6 +66,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
     newSessionInMainTree,
     setNewSessionInMainTree,
     catalog,
+    projects,
   } = useSessionStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -85,6 +86,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
       newSessionInMainTree: s.newSessionInMainTree,
       setNewSessionInMainTree: s.setNewSessionInMainTree,
       catalog: s.allSessions,
+      projects: s.projects,
     })),
   );
 
@@ -93,6 +95,8 @@ export const TabStrip: React.FC<TabStripProps> = ({
   const [dropIndicatorLeft, setDropIndicatorLeft] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
+
+  const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
   const tabs = useMemo(() => {
     if (!tabIds) return allTabs;
@@ -104,6 +108,11 @@ export const TabStrip: React.FC<TabStripProps> = ({
     }
     return list;
   }, [allTabs, tabIds]);
+
+  const hasMultipleProjects = useMemo(() => {
+    const set = new Set(tabs.map((t) => t.projectId).filter(Boolean));
+    return set.size > 1;
+  }, [tabs]);
 
   const activeTabId = propActiveTabId !== undefined ? propActiveTabId : storeActiveTabId;
 
@@ -240,8 +249,30 @@ export const TabStrip: React.FC<TabStripProps> = ({
     e.preventDefault();
     e.stopPropagation();
     const tabIndex = tabs.findIndex((t) => t.id === tab.id);
+    const tabProject = tab.projectId ? projectsById.get(tab.projectId) : undefined;
 
     const items: ContextMenuEntry[] = [];
+
+    if (tabProject) {
+      items.push({
+        label: `Project: ${tabProject.name}`,
+        icon: tabProject.icon ? (
+          <span style={{ fontSize: 13, lineHeight: 1 }}>{tabProject.icon}</span>
+        ) : (
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: tabProject.color,
+              display: "inline-block",
+            }}
+          />
+        ),
+        disabled: true,
+      });
+      items.push({ kind: "separator" });
+    }
 
     if (paneId) {
       items.push({
@@ -359,6 +390,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
           const unseen = !busy && !needsInput && (activity === "done" || activity === "error" ? activity : subagentUnseen);
           const dotKind = needsInput ? "input" : unseen;
           const draft = hasDraft(isSession && !active ? tabUi[tab.id] : undefined);
+          const tabProject = tab.projectId ? projectsById.get(tab.projectId) : undefined;
           const stateLabel =
             (needsInput
               ? " (waiting for your input)"
@@ -380,15 +412,31 @@ export const TabStrip: React.FC<TabStripProps> = ({
               onDragStart={(e) => handleDragStart(e, tab)}
               onDragEnd={handleDragEnd}
               onContextMenu={(e) => openContextMenu(e, tab)}
-              className={`tab${active ? " is-active" : ""}${busy ? " is-running" : ""}${unseen ? ` has-unseen is-${unseen}` : ""}${needsInput ? " needs-input" : ""}`}
+              className={`tab${active ? " is-active" : ""}${busy ? " is-running" : ""}${unseen ? ` has-unseen is-${unseen}` : ""}${needsInput ? " needs-input" : ""}${tabProject ? " has-project" : ""}`}
+              style={{ "--tab-pcolor": tabProject?.color } as React.CSSProperties}
               onClick={() => handleSelect(tab.id)}
               onAuxClick={(e) => {
                 if (e.button === 1) handleClose(tab.id);
               }}
-              title={(tab.filePath ?? tab.title) + stateLabel + (tabWorktree ? `\nBranch: ${tabWorktree.branch}` : "")}
-              aria-label={tab.title + stateLabel}
+              title={(tabProject ? `[${tabProject.name}] ` : "") + (tab.filePath ?? tab.title) + stateLabel + (tabWorktree ? `\nBranch: ${tabWorktree.branch}` : "")}
+              aria-label={(tabProject ? `${tabProject.name} · ` : "") + tab.title + stateLabel}
             >
-              <span className="tab__icon">
+              {tabProject && (
+                <span
+                  className={`tab__project-badge${hasMultipleProjects ? " has-name" : ""}`}
+                  title={`Project: ${tabProject.name}`}
+                >
+                  {tabProject.icon ? (
+                    <span className="tab__project-icon">{tabProject.icon}</span>
+                  ) : (
+                    <span className="tab__project-dot" style={{ background: tabProject.color }} />
+                  )}
+                  {hasMultipleProjects && (
+                    <span className="tab__project-name">{tabProject.name}</span>
+                  )}
+                </span>
+              )}
+              <span className="tab__icon" style={tabProject ? { color: tabProject.color } : undefined}>
                 <TabIcon tab={tab} />
               </span>
               <TabTitle tab={tab} />

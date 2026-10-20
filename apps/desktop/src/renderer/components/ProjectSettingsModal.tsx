@@ -15,6 +15,7 @@ interface Props {
 }
 
 const folderName = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() || p;
+const PROJECT_ICON_PRESETS = ["🐝", "⚡", "🚀", "📦", "💻", "🌐", "🎯", "🔥", "🛠️", "📱", "🧠", "🎨"];
 
 export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSection = "general", onClose }) => {
   const { project, updateProject, removeProject, tabs, closeTab } = useSessionStore(
@@ -27,6 +28,7 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
     })),
   );
   const [name, setName] = useState(project?.name ?? "");
+  const [customIcon, setCustomIcon] = useState(project?.icon ?? "");
   const linksRef = useRef<HTMLElement>(null);
   const nameRef = useRef(name);
   nameRef.current = name;
@@ -57,8 +59,11 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
   }, [initialSection]);
 
   useEffect(() => {
-    if (project) setName(project.name);
-  }, [project?.name]);
+    if (project) {
+      setName(project.name);
+      setCustomIcon(project.icon ?? "");
+    }
+  }, [project?.name, project?.icon]);
 
   if (!project) return null;
   const links = project.links ?? [];
@@ -90,7 +95,7 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
       <div className="prj-settings" role="dialog" aria-label="Project settings" onMouseDown={(e) => e.stopPropagation()}>
         <header className="prj-settings__header">
           <span className="prj-settings__avatar" style={{ background: project.color }}>
-            {project.name.slice(0, 1).toUpperCase()}
+            {project.icon ? project.icon : project.name.slice(0, 1).toUpperCase()}
           </span>
           <div className="prj-settings__heading">
             <div className="prj-settings__title">{project.name}</div>
@@ -133,6 +138,52 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
                     onClick={() => void updateProject(project.id, { color: c })}
                   />
                 ))}
+              </div>
+            </div>
+
+            <div className="prj-settings__field">
+              <span className="prj-settings__label">Icon / Emoji</span>
+              <div className="prj-settings__icon-row">
+                <div className="prj-settings__icon-presets">
+                  {PROJECT_ICON_PRESETS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={`prj-icon-btn${project.icon === emoji ? " is-selected" : ""}`}
+                      onClick={() => void updateProject(project.id, { icon: project.icon === emoji ? null : emoji })}
+                      aria-label={`Use icon ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+                <div className="prj-settings__icon-custom">
+                  <input
+                    type="text"
+                    className="prj-settings__input prj-settings__input--icon"
+                    placeholder="Custom emoji or symbol"
+                    maxLength={4}
+                    value={customIcon}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setCustomIcon(val);
+                      void updateProject(project.id, { icon: val || null });
+                    }}
+                  />
+                  {project.icon && (
+                    <button
+                      type="button"
+                      className="ui-btn ui-btn--ghost ui-btn--sm"
+                      onClick={() => {
+                        setCustomIcon("");
+                        void updateProject(project.id, { icon: null });
+                      }}
+                      title="Clear icon"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </section>

@@ -77,7 +77,11 @@ export const ProjectPicker: React.FC = () => {
       >
         {activeProject ? (
           <>
-            <FolderKanban size={13} className="project-picker__icon" />
+            {activeProject.icon ? (
+              <span className="project-picker__emoji">{activeProject.icon}</span>
+            ) : (
+              <span className="project-picker__dot" style={{ background: activeProject.color }} />
+            )}
             <span className="project-picker__name">{activeProject.name}</span>
           </>
         ) : (
@@ -103,7 +107,11 @@ export const ProjectPicker: React.FC = () => {
                   className={`project-picker__item${isSelected ? " is-selected" : ""}`}
                   onClick={() => handleSelect(p)}
                 >
-                  <span className="project-picker__dot" style={{ background: p.color }} />
+                  {p.icon ? (
+                    <span className="project-picker__emoji">{p.icon}</span>
+                  ) : (
+                    <span className="project-picker__dot" style={{ background: p.color }} />
+                  )}
                   <span className="project-picker__item-name" title={p.path}>
                     {p.name}
                   </span>

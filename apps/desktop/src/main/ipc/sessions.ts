@@ -49,8 +49,8 @@ export function registerSessionIpc(ctx: AppContext): void {
 
   // Projects & catalog
   handle(IPC.projectsList, () => ctx.guiStore.getProjects());
-  handle(IPC.projectsAdd, ({ path, name, color }: { path: string; name?: string; color?: string }) =>
-    ctx.guiStore.addProject(path, name, color),
+  handle(IPC.projectsAdd, ({ path, name, color, icon }: { path: string; name?: string; color?: string; icon?: string | null }) =>
+    ctx.guiStore.addProject(path, name, color, icon),
   );
   handle(IPC.projectsUpdate, ({ id, updates }: { id: string; updates: Parameters<AppContext["guiStore"]["updateProject"]>[1] }) => {
     const updated = ctx.guiStore.updateProject(id, updates);

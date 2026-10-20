@@ -1087,6 +1087,14 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
+.project-picker__emoji {
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
 .project-picker__name {
   max-width: 180px;
   overflow: hidden;
@@ -1623,14 +1631,15 @@
   display: none;
 }
 .tab {
+  --tab-pcolor: var(--accent-base);
   position: relative;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   height: 30px;
-  min-width: 110px;
+  min-width: 100px;
   max-width: 220px;
-  padding: 0 6px 0 10px;
+  padding: 0 6px 0 8px;
   border-radius: 8px;
   font-size: 12px;
   color: var(--text-secondary);
@@ -1656,12 +1665,58 @@
   bottom: -5px;
   height: 2px;
   border-radius: 2px;
-  background: var(--accent-base);
+  background: var(--tab-pcolor, var(--accent-base));
 }
 .tab__icon {
   display: inline-flex;
-  color: var(--accent-base);
+  color: var(--tab-pcolor, var(--accent-base));
   flex-shrink: 0;
+}
+.tab__project-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--tab-pcolor, var(--accent-base)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tab-pcolor, var(--accent-base)) 28%, transparent);
+  flex-shrink: 0;
+  max-width: 84px;
+  user-select: none;
+}
+.tab__project-badge:not(.has-name) {
+  padding: 0 3px;
+  gap: 0;
+}
+.tab__project-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 4px var(--tab-pcolor, var(--accent-base));
+}
+.tab__project-icon {
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tab__project-name {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tab-pcolor, var(--text-primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+}
+.tab.is-active .tab__project-name {
+  color: var(--tab-pcolor, var(--text-primary));
+  font-weight: 700;
 }
 .tab__title {
   flex: 1;
@@ -1724,7 +1779,7 @@
   bottom: 1px;
   height: 2px;
   border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent-base), transparent) no-repeat;
+  background: linear-gradient(90deg, transparent, var(--tab-pcolor, var(--accent-base)), transparent) no-repeat;
   background-size: 40% 100%;
   animation: tab-sweep 1.6s ease-in-out infinite;
   pointer-events: none;

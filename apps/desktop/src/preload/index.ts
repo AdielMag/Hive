@@ -116,8 +116,8 @@ const api: StudioApi = {
     return ipcRenderer.invoke(IPC.projectsList);
   },
 
-  addProject(path: string, name?: string, color?: string) {
-    return ipcRenderer.invoke(IPC.projectsAdd, { path, name, color });
+  addProject(path: string, name?: string, color?: string, icon?: string | null) {
+    return ipcRenderer.invoke(IPC.projectsAdd, { path, name, color, icon });
   },
 
   updateProject(id: string, updates: any) {

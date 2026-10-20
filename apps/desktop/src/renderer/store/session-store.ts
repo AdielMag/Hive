@@ -374,7 +374,7 @@ export interface SessionStoreState {
   removeAttachment: (id: string) => void;
   clearAttachments: () => void;
   refreshCatalog: () => Promise<void>;
-  addProject: (dirPath: string, name?: string, color?: string) => Promise<ProjectEntry>;
+  addProject: (dirPath: string, name?: string, color?: string, icon?: string | null) => Promise<ProjectEntry>;
   updateProject: (id: string, updates: Partial<ProjectEntry>) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
   subagentModal: SubagentModalTarget | null;
@@ -1482,8 +1482,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     void window.studio.setLastOpenedProjectId(project.id);
   },
 
-  addProject: async (dirPath: string, name?: string, color?: string) => {
-    const project = await window.studio.addProject(dirPath, name, color);
+  addProject: async (dirPath: string, name?: string, color?: string, icon?: string | null) => {
+    const project = await window.studio.addProject(dirPath, name, color, icon);
     await get().refreshCatalog();
     return project;
   },
