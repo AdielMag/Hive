@@ -16,6 +16,7 @@ const BACKOFF_MS = 5 * 60_000;
 export const PROVIDER_NAMES: Record<string, string> = {
   anthropic: "Anthropic Claude",
   antigravity: "Google Antigravity",
+  "google-antigravity": "Google Antigravity",
   "openai-codex": "ChatGPT / Codex",
   openai: "OpenAI",
   google: "Google Gemini",
@@ -173,7 +174,7 @@ export interface StoredAuthEntry {
 }
 
 export function apiKeyFromStoredAuth(providerId: string, entry: StoredAuthEntry): string | null {
-  if (providerId === "antigravity") {
+  if (providerId === "antigravity" || providerId === "google-antigravity") {
     const token = entry.access ?? entry.token;
     if (!token) return null;
     return JSON.stringify({ token, projectId: entry.projectId ?? "aicode-consumers" });

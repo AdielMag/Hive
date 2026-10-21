@@ -45,16 +45,21 @@ export function buildMeters(providers: ProviderQuota[], model?: ActiveModelLite 
   const out: QuotaMeter[] = [];
   for (const p of providers) {
     if (p.status !== "ok") continue;
+    const isAgy = p.providerId === "antigravity" || p.providerId === "google-antigravity";
     const tp = p.groups.filter(isThirdPartyGroup);
     const own = p.groups.filter((g) => !isThirdPartyGroup(g));
-    if (p.providerId !== "antigravity" || !tp.length || !own.length) {
+    if (!isAgy || (!tp.length && !own.length)) {
       out.push(meterOf(p.providerId, p.providerId, p.groups));
       continue;
     }
     const onProvider = modelUsesProvider(model, p.providerId);
     const modelIs3p = isThirdPartyModel(model?.id);
-    out.push(meterOf(`${p.providerId}:gemini`, p.providerId, own, { pool: "Gemini", active: onProvider ? !modelIs3p : undefined }));
-    out.push(meterOf(`${p.providerId}:3p`, p.providerId, tp, { pool: "Claude·GPT", active: onProvider ? modelIs3p : undefined }));
+    if (own.length) {
+      out.push(meterOf(`${p.providerId}:gemini`, p.providerId, own, { pool: "Gemini", active: onProvider ? !modelIs3p : undefined }));
+    }
+    if (tp.length) {
+      out.push(meterOf(`${p.providerId}:3p`, p.providerId, tp, { pool: "Claude·GPT", active: onProvider ? modelIs3p : undefined }));
+    }
   }
   return out;
 }
