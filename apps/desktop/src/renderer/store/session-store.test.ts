@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
+import { createTranscript } from "@hive/pi-adapter";
 import { setUserWaitResolver } from "../modules/session-bus.ts";
 import {
   applyCompactionResult,
@@ -912,11 +913,10 @@ describe("scoped workspace project switching", () => {
     });
 
     const existingTranscript = {
-      items: [{ id: "msg_1", type: "message", role: "user", text: "hello" }],
-      queue: [],
-      tools: {},
-      running: false,
-    } as any;
+      ...createTranscript(),
+      byId: { msg_1: { id: "msg_1", type: "message", parentId: null } as any },
+      order: ["msg_1"],
+    };
 
     useSessionStore.setState({
       tabs: [
