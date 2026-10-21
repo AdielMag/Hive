@@ -493,7 +493,7 @@ export const usePaneLayoutStore = create<PaneLayoutState>((set, get) => ({
   syncWithTabs: (validTabIds, activeTabId, projectId) => {
     const targetProject = projectId !== undefined ? projectId : get().currentProjectId;
     const projectChanged = targetProject !== get().currentProjectId;
-    let layoutsByProject = { ...get().layoutsByProject };
+    const layoutsByProject = { ...get().layoutsByProject };
 
     let currentRoot = get().root;
     let currentActivePane = get().activePaneId;
