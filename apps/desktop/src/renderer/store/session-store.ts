@@ -302,6 +302,7 @@ export interface SessionStoreState {
   // Active session details
   activeKey: string | null;
   activeProject: ProjectEntry | null;
+  projectLastActiveTab: Record<string, string>;
   setActiveProject: (project: ProjectEntry) => Promise<void>;
   status: SessionStatusUpdate | null;
   transcript: TranscriptState;
@@ -898,6 +899,8 @@ async function refreshModels(key: string): Promise<void> {
   });
 }
 
+const hydratedSessionKeys = new Set<string>();
+
 /**
  * Reconcile a live session with its tab. The tab owns its model / thinking level (chosen by the user,
  * possibly before Pi started); if it has none yet, it adopts whatever the session file restored. Only
@@ -909,14 +912,16 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
   const rpc = window.studio.rpc;
   const patchTab = (patch: Partial<TabItem>) =>
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t)) }));
-  if (isDisplayed(tabId)) set({ isLoadingModels: true });
+  const alreadyHydrated = hydratedSessionKeys.has(key);
+  if (isDisplayed(tabId) && !alreadyHydrated) set({ isLoadingModels: true });
   try {
-    const [stateRes, modelsRes] = await Promise.all([
-      rpc(key, { type: "get_state" }),
-      rpc(key, { type: "get_available_models" }),
-    ]);
+    const statePromise = rpc(key, { type: "get_state" });
+    const modelsPromise = alreadyHydrated && get().models.length > 0
+      ? Promise.resolve({ ok: true as const, data: { models: get().models } })
+      : rpc(key, { type: "get_available_models" });
+    const [stateRes, modelsRes] = await Promise.all([statePromise, modelsPromise]);
     const models = modelsRes.ok ? (modelsRes.data as { models: Array<Model<any>> }).models : null;
-    if (models) {
+    if (models && !alreadyHydrated) {
       set((s) => {
         const existing = new Set(s.allCatalogModels.map((m) => `${m.provider}/${m.id}`));
         const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
@@ -968,8 +973,11 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
     }
 
     // Thinking: levels depend on the (possibly just changed) model, so fetch them afterwards.
-    const levelsRes = await rpc(key, { type: "get_available_thinking_levels" });
-    const levels = levelsRes.ok ? (levelsRes.data as { levels: string[] }).levels ?? [] : getSupportedThinkingLevels(model);
+    const levels = alreadyHydrated
+      ? getSupportedThinkingLevels(model)
+      : await rpc(key, { type: "get_available_thinking_levels" }).then((r) =>
+          r.ok ? (r.data as { levels: string[] }).levels ?? getSupportedThinkingLevels(model) : getSupportedThinkingLevels(model),
+        );
     const wantedLevel = get().tabs.find((t) => t.id === tabId)?.thinkingLevel;
     const baseLevel = wantedLevel ?? state.thinkingLevel ?? "medium";
     const effectiveLevel = levels.length > 0 && levels.includes(baseLevel)
@@ -983,10 +991,11 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
     if (isDisplayed(tabId)) {
       set({ thinkingLevels: levels, selectedThinkingLevel: effectiveLevel });
     }
+    hydratedSessionKeys.add(key);
   } catch (err) {
     console.error("Failed to query session state", err);
   } finally {
-    if (isDisplayed(tabId)) set({ isLoadingModels: false });
+    if (isDisplayed(tabId) && !alreadyHydrated) set({ isLoadingModels: false });
   }
 }
 export const LIBRARY_TAB_ID = "studio:library";
@@ -1012,6 +1021,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   activeKey: null,
   activeProject: null,
+  projectLastActiveTab: {},
   status: null,
   transcript: createTranscript(),
   transcriptsByTab: {},
@@ -1116,6 +1126,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (!activeKey || !tabId || get().reloadStates[activeKey]?.phase === "reloading") return;
     if (transcript.running || hasRunningWork(tabId)) return;
     const key = activeKey;
+    hydratedSessionKeys.delete(key);
     setReloadState(key, { phase: "reloading", message: "Reloading extensions, skills and prompts…" });
     // Extensions that were removed never clear their own status/widgets; the new runtime re-sets what it still has.
     updateTabUi(tabId, () => ({ extensionStatus: {}, extensionWidgets: {} }));
@@ -1501,8 +1512,27 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   setActiveProject: async (project: ProjectEntry) => {
-    set({ activeProject: project });
     void window.studio.setLastOpenedProjectId(project.id);
+    const { tabs, projectLastActiveTab } = get();
+    const lastTabId = projectLastActiveTab[project.id];
+    const candidateTab =
+      (lastTabId && tabs.find((t) => t.id === lastTabId && t.projectId === project.id)) ||
+      tabs.find((t) => t.projectId === project.id);
+
+    if (candidateTab) {
+      set({ activeProject: project });
+      await get().switchTab(candidateTab.id);
+    } else {
+      set({
+        activeProject: project,
+        activeTabId: null,
+        activeKey: null,
+        displayedTabId: null,
+        transcript: createTranscript(),
+        stats: null,
+        ...EMPTY_TAB_UI,
+      });
+    }
   },
 
   addProject: async (dirPath: string, name?: string, color?: string, icon?: string | null) => {
@@ -1820,6 +1850,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if ((tab.kind === "session" || !tab.kind) && tab.activeKey && tab.activeKey === get().activeKey) {
       set({ activeTabId: tabId });
       markSeen(tabId);
+      if (tab.projectId) {
+        set((s) => ({ projectLastActiveTab: { ...s.projectLastActiveTab, [tab.projectId!]: tabId } }));
+      }
       return;
     }
     markSeen(tabId);
@@ -1831,6 +1864,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       activeTabId: tabId,
       activeProject: project,
       activeKey: tab.activeKey ?? null,
+      ...(tab.projectId
+        ? { projectLastActiveTab: { ...get().projectLastActiveTab, [tab.projectId]: tabId } }
+        : {}),
       // A session that kept working in the background reflects running if its main thread was active
       // (hydrateSession then confirms with Pi's own isStreaming flag).
       transcript: { ...(get().transcriptsByTab[tabId] ?? createTranscript()), running: bgRunning && (mainThreadRunning.get(tabId) ?? false) },
@@ -1838,16 +1874,19 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     });
 
     if (tab.sessionPath) {
-      try {
-        const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
-        const base = get().transcriptsByTab[tabId] ?? createTranscript();
-        const t = applyEntries(base, entries, leafId, "replace");
-        set((s) => ({
-          transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
-          ...(s.displayedTabId === tabId ? { transcript: t } : {}),
-        }));
-      } catch (err) {
-        console.error("Failed to read session file", err);
+      const existing = get().transcriptsByTab[tabId];
+      if (!existing || existing.items.length === 0) {
+        try {
+          const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
+          const base = existing ?? createTranscript();
+          const t = applyEntries(base, entries, leafId, "replace");
+          set((s) => ({
+            transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
+            ...(s.displayedTabId === tabId ? { transcript: t } : {}),
+          }));
+        } catch (err) {
+          console.error("Failed to read session file", err);
+        }
       }
     }
 
@@ -1862,6 +1901,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     clearPendingStart(tabId);
     // Stop in the background: closing a tab should feel instant.
     if (tab?.activeKey) {
+      hydratedSessionKeys.delete(tab.activeKey);
       void window.studio.stopSession(tab.activeKey).catch(() => {});
     }
     clearActivity(tabId);
@@ -1873,19 +1913,28 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       delete tabUi[tabId];
       const transcriptsByTab = { ...s.transcriptsByTab };
       delete transcriptsByTab[tabId];
-      return { tabs: remaining, tabUi, transcriptsByTab };
+      const projectLastActiveTab = { ...s.projectLastActiveTab };
+      if (tab?.projectId && projectLastActiveTab[tab.projectId] === tabId) {
+        delete projectLastActiveTab[tab.projectId];
+      }
+      return { tabs: remaining, tabUi, transcriptsByTab, projectLastActiveTab };
     });
     if (displayedSessionTabId === tabId) {
       displayedSessionTabId = null;
       set({ displayedTabId: null });
     }
 
-    if (activeTabId === tabId && remaining.length > 0) {
-      const nextTab = remaining.find((t) => t.id === nextActiveTabId) ?? remaining[remaining.length - 1]!;
-      await get().switchTab(nextTab.id);
-    } else if (remaining.length === 0) {
-      const currentProject = get().activeProject ?? (tab?.projectId ? get().projects.find((p) => p.id === tab.projectId) ?? null : null);
-      set({ activeTabId: null, activeProject: currentProject, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });
+    if (activeTabId === tabId) {
+      const currentProjectId = tab?.projectId ?? get().activeProject?.id;
+      const projectTabs = currentProjectId ? remaining.filter((t) => t.projectId === currentProjectId) : remaining;
+
+      if (projectTabs.length > 0) {
+        const nextTab = projectTabs.find((t) => t.id === nextActiveTabId) ?? projectTabs[projectTabs.length - 1]!;
+        await get().switchTab(nextTab.id);
+      } else {
+        const currentProject = get().activeProject ?? (tab?.projectId ? get().projects.find((p) => p.id === tab.projectId) ?? null : null);
+        set({ activeTabId: null, activeProject: currentProject, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });
+      }
     }
   },
 

@@ -54,6 +54,38 @@ const Highlighted: React.FC<{ text: string; ranges: Array<[number, number]> }> =
   return <span>{elements}</span>;
 };
 
+const FILE_CACHE_TTL_MS = 30_000;
+const paletteFilesCache = new Map<string, { files: FlatFile[]; timestamp: number }>();
+const pendingPaletteFiles = new Map<string, Promise<FlatFile[]>>();
+
+function loadPaletteFiles(projectPath: string): Promise<FlatFile[]> {
+  const cached = paletteFilesCache.get(projectPath);
+  if (cached && Date.now() - cached.timestamp < FILE_CACHE_TTL_MS) return Promise.resolve(cached.files);
+  let p = pendingPaletteFiles.get(projectPath);
+  if (!p) {
+    p = window.studio
+      .listFiles(projectPath)
+      .then((tree: any[]) => {
+        const flat: FlatFile[] = [];
+        const walk = (nodes: any[]) => {
+          for (const n of nodes ?? []) {
+            if (n.isDirectory && n.children) walk(n.children);
+            else if (!n.isDirectory) {
+              flat.push({ name: n.name, relativePath: n.relativePath || n.name, path: n.path });
+            }
+          }
+        };
+        walk(tree || []);
+        paletteFilesCache.set(projectPath, { files: flat, timestamp: Date.now() });
+        return flat;
+      })
+      .catch(() => [] as FlatFile[])
+      .finally(() => pendingPaletteFiles.delete(projectPath));
+    pendingPaletteFiles.set(projectPath, p);
+  }
+  return p;
+}
+
 export const CommandPalette: React.FC = () => {
   const commandsVersion = useCommandsVersion((s) => s.version);
   const { open, query, close, setQuery, pushRecent, recents } = usePalette();
@@ -65,34 +97,20 @@ export const CommandPalette: React.FC = () => {
   const { activeProject, projects, allSessions, tabs, activeTabId, openSessionTab, switchTab } =
     useSessionStore();
 
-  // Load project files in background for quick file jump
+  // Load project files lazily only when palette is open
   useEffect(() => {
-    if (!activeProject?.path) {
+    if (!open || !activeProject?.path) {
       setFiles([]);
       return;
     }
     let cancelled = false;
-    window.studio
-      .listFiles(activeProject.path)
-      .then((tree: any[]) => {
-        if (cancelled) return;
-        const flat: FlatFile[] = [];
-        const walk = (nodes: any[]) => {
-          for (const n of nodes) {
-            if (n.isDirectory && n.children) walk(n.children);
-            else if (!n.isDirectory) {
-              flat.push({ name: n.name, relativePath: n.relativePath || n.name, path: n.path });
-            }
-          }
-        };
-        walk(tree || []);
-        setFiles(flat);
-      })
-      .catch(() => {});
+    void loadPaletteFiles(activeProject.path).then((flat) => {
+      if (!cancelled) setFiles(flat);
+    });
     return () => {
       cancelled = true;
     };
-  }, [activeProject?.path]);
+  }, [open, activeProject?.path]);
 
   // Focus and select input on open
   useEffect(() => {

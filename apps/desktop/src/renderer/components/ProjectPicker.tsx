@@ -8,12 +8,11 @@ import { openProjectFolder } from "../features/commands/registry.ts";
 const folderName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() || p;
 
 export const ProjectPicker: React.FC = () => {
-  const { projects, activeProject, setActiveProject, newSessionTab, updateProject } = useSessionStore(
+  const { projects, activeProject, setActiveProject, updateProject } = useSessionStore(
     useShallow((s) => ({
       projects: s.projects,
       activeProject: s.activeProject,
       setActiveProject: s.setActiveProject,
-      newSessionTab: s.newSessionTab,
       updateProject: s.updateProject,
     })),
   );
@@ -32,17 +31,7 @@ export const ProjectPicker: React.FC = () => {
 
   const handleSelect = (p: ProjectEntry) => {
     setOpen(false);
-    if (activeProject?.id !== p.id) {
-      void setActiveProject(p);
-    }
-    const st = useSessionStore.getState();
-    const hasTab = st.tabs.some((t) => t.projectId === p.id);
-    if (!hasTab) {
-      void newSessionTab(p.id);
-    } else {
-      const firstTab = st.tabs.find((t) => t.projectId === p.id);
-      if (firstTab && st.activeTabId !== firstTab.id) void st.switchTab(firstTab.id);
-    }
+    void setActiveProject(p);
   };
 
   const handleOpenFolder = () => {

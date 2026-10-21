@@ -824,6 +824,121 @@ describe("closeTab activeProject preservation", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("scopes next active tab to current project when closing tab with cross-project tabs open", async () => {
+    const p1 = { id: "p1", name: "Project 1", path: "/p1" } as any;
+    const p2 = { id: "p2", name: "Project 2", path: "/p2" } as any;
+    vi.stubGlobal("window", {
+      studio: {
+        stopSession: vi.fn(async () => {}),
+        getProjects: vi.fn(async () => [p1, p2]),
+        listAllSessions: vi.fn(async () => []),
+        setLastOpenedProjectId: vi.fn(),
+      },
+    });
+
+    useSessionStore.setState({
+      projects: [p1, p2],
+      activeProject: p1,
+      tabs: [
+        { id: "p1_tab1", title: "P1 Tab 1", kind: "session", projectId: "p1" } as any,
+        { id: "p1_tab2", title: "P1 Tab 2", kind: "session", projectId: "p1" } as any,
+        { id: "p2_tab1", title: "P2 Tab 1", kind: "session", projectId: "p2" } as any,
+      ],
+      activeTabId: "p1_tab1",
+    });
+
+    await useSessionStore.getState().closeTab("p1_tab1");
+
+    // Must stay in p1 workspace and switch to p1_tab2, NOT jump to p2_tab1
+    expect(useSessionStore.getState().activeProject).toEqual(p1);
+    expect(useSessionStore.getState().activeTabId).toBe("p1_tab2");
+
+    // Close last tab in p1: should set activeTabId to null (showing project hub) and keep p1
+    await useSessionStore.getState().closeTab("p1_tab2");
+    expect(useSessionStore.getState().activeProject).toEqual(p1);
+    expect(useSessionStore.getState().activeTabId).toBeNull();
+    // p2 tab should still remain intact in memory
+    expect(useSessionStore.getState().tabs).toHaveLength(1);
+    expect(useSessionStore.getState().tabs[0]!.id).toBe("p2_tab1");
+
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("scoped workspace project switching", () => {
+  it("restores last active tab for project or falls back to first tab or null", async () => {
+    const p1 = { id: "p1", name: "Project 1", path: "/p1" } as any;
+    const p2 = { id: "p2", name: "Project 2", path: "/p2" } as any;
+    const p3 = { id: "p3", name: "Project 3", path: "/p3" } as any;
+    vi.stubGlobal("window", {
+      studio: {
+        setLastOpenedProjectId: vi.fn(),
+        readSessionFile: vi.fn(async () => ({ entries: [], leafId: null })),
+      },
+    });
+
+    useSessionStore.setState({
+      projects: [p1, p2, p3],
+      activeProject: p1,
+      tabs: [
+        { id: "p1_tab", title: "P1 Tab", kind: "session", projectId: "p1" } as any,
+        { id: "p2_tabA", title: "P2 Tab A", kind: "session", projectId: "p2" } as any,
+        { id: "p2_tabB", title: "P2 Tab B", kind: "session", projectId: "p2" } as any,
+      ],
+      activeTabId: "p1_tab",
+      projectLastActiveTab: { p2: "p2_tabB" },
+    });
+
+    // Switch to p2 -> should restore p2_tabB
+    await useSessionStore.getState().setActiveProject(p2);
+    expect(useSessionStore.getState().activeProject).toEqual(p2);
+    expect(useSessionStore.getState().activeTabId).toBe("p2_tabB");
+
+    // Switch to p3 (no tabs) -> should set activeTabId to null for Project Hub
+    await useSessionStore.getState().setActiveProject(p3);
+    expect(useSessionStore.getState().activeProject).toEqual(p3);
+    expect(useSessionStore.getState().activeTabId).toBeNull();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("does not re-read session file from disk when tab transcript is already cached", async () => {
+    const readSessionFileMock = vi.fn(async () => ({ entries: [], leafId: null }));
+    vi.stubGlobal("window", {
+      studio: {
+        readSessionFile: readSessionFileMock,
+      },
+    });
+
+    const existingTranscript = {
+      items: [{ id: "msg_1", type: "message", role: "user", text: "hello" }],
+      queue: [],
+      tools: {},
+      running: false,
+    } as any;
+
+    useSessionStore.setState({
+      tabs: [
+        { id: "tab_cold", title: "Cold", kind: "session", sessionPath: "/path/cold.jsonl" } as any,
+        { id: "tab_cached", title: "Cached", kind: "session", sessionPath: "/path/cached.jsonl" } as any,
+      ],
+      transcriptsByTab: {
+        tab_cached: existingTranscript,
+      },
+      activeTabId: "tab_cold",
+    });
+
+    // Switch to cached tab
+    await useSessionStore.getState().switchTab("tab_cached");
+    expect(readSessionFileMock).not.toHaveBeenCalled();
+
+    // Switch to cold tab -> should read file
+    await useSessionStore.getState().switchTab("tab_cold");
+    expect(readSessionFileMock).toHaveBeenCalledWith("/path/cold.jsonl");
+
+    vi.unstubAllGlobals();
+  });
 });
 
 
