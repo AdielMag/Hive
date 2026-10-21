@@ -8,7 +8,7 @@ import { ProviderQuotaCard, usageTone } from "./quota-ui.tsx";
 import { useHoverPopover } from "./useHoverPopover.ts";
 import { buildMeters } from "./meters.ts";
 
-const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "openai-codex": "Codex" };
+const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "google-antigravity": "AGY", "openai-codex": "Codex" };
 /** Antigravity quota pools: Gemini models vs. third-party (Claude + GPT-OSS) models. */
 const POOL_LABEL: Record<string, string> = { Gemini: "Gemini", "Claude·GPT": "Claude/GPT" };
 const TONE_COLOR = { ok: "var(--success)", warn: "var(--warning)", danger: "var(--danger)" } as const;

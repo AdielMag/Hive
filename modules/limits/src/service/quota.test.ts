@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   parseAnthropicUsage,
   parseAntigravityQuota,
@@ -12,7 +12,7 @@ import { parseCredentialsOutput, resolveCredentials, SENTINEL } from "./credenti
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import { apiKeyFromStoredAuth, QuotaService } from "./index.ts";
-import { UnsupportedError } from "./fetchers.ts";
+import { AGY_USER_AGENT, fetchAntigravity, UnsupportedError } from "./fetchers.ts";
 import type { PiInstallInfo } from "@hive/protocol";
 
 const NOW = Date.parse("2026-10-01T10:00:00Z");
@@ -118,6 +118,11 @@ describe("stored auth mapping", () => {
     expect(JSON.parse(key!)).toEqual({ token: "ya29.test", projectId: "my-project" });
   });
 
+  it("formats google-antigravity apiKey payload as JSON with token and projectId", () => {
+    const key = apiKeyFromStoredAuth("google-antigravity", { access: "ya29.test2", projectId: "my-project2" });
+    expect(JSON.parse(key!)).toEqual({ token: "ya29.test2", projectId: "my-project2" });
+  });
+
   it("extracts access token for anthropic", () => {
     expect(apiKeyFromStoredAuth("anthropic", { access: "sk-ant-oat-test" })).toBe("sk-ant-oat-test");
   });
@@ -203,5 +208,54 @@ describe("QuotaService", () => {
       account: "user@example.com",
     });
     expect(JSON.parse(antigravityApiKey!)).toEqual({ token: "ya29.stored", projectId: "test-proj" });
+  });
+});
+
+describe("fetchAntigravity", () => {
+  it("sends consumer CLI User-Agent and Accept header, parsing both Gemini and 3P groups", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        groups: [
+          {
+            displayName: "Gemini Models",
+            buckets: [
+              { bucketId: "gemini-5h", window: "5h", remainingFraction: 0.8 },
+              { bucketId: "gemini-weekly", window: "weekly", remainingFraction: 0.9 },
+            ],
+          },
+          {
+            displayName: "Claude and GPT models",
+            buckets: [{ bucketId: "3p-5h", window: "5h", remainingFraction: 1 }],
+          },
+        ],
+      }),
+    } as unknown as Response);
+
+    const groups = await fetchAntigravity(JSON.stringify({ token: "test-token", projectId: "test-p" }));
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.label)).toEqual(["Gemini Models", "Claude and GPT models"]);
+    expect(fetchSpy).toHaveBeenCalled();
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/v1internal:retrieveUserQuotaSummary");
+    const headers = init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer test-token");
+    expect(headers["User-Agent"]).toBe(AGY_USER_AGENT);
+    expect(headers.Accept).toBe("application/json");
+    fetchSpy.mockRestore();
+  });
+
+  it("extracts access token from plain string, token field, or access field", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ groups: [] }),
+    } as unknown as Response);
+
+    await fetchAntigravity("raw-bearer-token");
+    expect((fetchSpy.mock.calls[0]![1]!.headers as Record<string, string>).Authorization).toBe("Bearer raw-bearer-token");
+
+    await fetchAntigravity(JSON.stringify({ access: "access-token-123" }));
+    expect((fetchSpy.mock.calls[1]![1]!.headers as Record<string, string>).Authorization).toBe("Bearer access-token-123");
+    fetchSpy.mockRestore();
   });
 });
