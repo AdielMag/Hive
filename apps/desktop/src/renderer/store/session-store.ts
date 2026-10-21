@@ -1875,7 +1875,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
     if (tab.sessionPath) {
       const existing = get().transcriptsByTab[tabId];
-      if (!existing || existing.items.length === 0) {
+      if (!existing || existing.order.length === 0) {
         try {
           const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
           const base = existing ?? createTranscript();
