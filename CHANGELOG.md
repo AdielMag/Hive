@@ -2,6 +2,27 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.37.0 — 2026-10-21 · [diff](https://github.com/AdielMag/Hive/compare/v0.36.0...v0.37.0)
+
+### ✨ Features
+
+- **limits:** add google-antigravity provider, live refresh on session events ([`2f84ce5`](https://github.com/AdielMag/Hive/commit/2f84ce5bf783e7a6a6bc6403c5eeb553856a6547))
+- **workspaces:** scope tabs and pane layouts to active project ([`16787d8`](https://github.com/AdielMag/Hive/commit/16787d8684a574386a0bc7765ebba901b9a08136))
+
+### 🐛 Fixes
+
+- **desktop:** check transcript order instead of items in session load ([`d8e8aec`](https://github.com/AdielMag/Hive/commit/d8e8aec46b9846fdcbcac32ddaaa064ec7bbf938))
+
+### ♻️ Refactoring
+
+- **pane-layout:** use const for layoutsByProject in syncWithTabs ([`c2ded34`](https://github.com/AdielMag/Hive/commit/c2ded3415b938fa0ac1bc5b65462cf5626785c18))
+
+### 🧹 Other changes
+
+- **session-store:** use createTranscript helper in scoped workspace test ([`53acdbd`](https://github.com/AdielMag/Hive/commit/53acdbd04ae125e9004da020472c29e584f3bc7a))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`e7dbd10`](https://github.com/AdielMag/Hive/commit/e7dbd10442f5ec14a887d148fe3884a95336fa34))
+- Merge branch 'hive/thesubscription-rate-for-antigarvyi-a067a7' ([`657b6a9`](https://github.com/AdielMag/Hive/commit/657b6a9edc36544eb58cc5727edc997325e9f21f))
+
 ## v0.36.0 — 2026-10-20 · [diff](https://github.com/AdielMag/Hive/compare/v0.35.1...v0.36.0)
 
 ### ✨ Features
