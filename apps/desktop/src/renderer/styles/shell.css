@@ -441,6 +441,26 @@
   color: #93c5fd;
   line-height: 1.15;
 }
+.usage-hero__split-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--frame-text-muted);
+  margin-top: 4px;
+}
+.usage-hero__split-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.usage-hero__split-item .mono {
+  color: var(--text-primary, #fff);
+  font-weight: 500;
+}
+.usage-hero__split-dot {
+  opacity: 0.4;
+}
 .usage-hero__pills {
   display: flex;
   align-items: center;
@@ -720,6 +740,143 @@
   color: var(--frame-text-muted);
   line-height: 1.4;
   max-width: 240px;
+}
+
+/* Subagent Breakdown in Usage Panel */
+.usage-panel__subagent-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+}
+.usage-panel__subagent-summary-text {
+  color: var(--frame-text-muted);
+  text-transform: capitalize;
+}
+.usage-panel__subagent-summary-tokens {
+  color: var(--text-primary, #fff);
+  font-weight: 500;
+}
+.usage-panel__subagent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.usage-panel__subagent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+  transition-property: background-color, border-color, transform;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
+}
+@media (hover: hover) {
+  .usage-panel__subagent-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(var(--accent-rgb), 0.35);
+  }
+}
+.usage-panel__subagent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.usage-panel__subagent-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.usage-panel__subagent-type {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent-base);
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+.usage-panel__subagent-desc {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary, #fff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-panel__subagent-cost-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.usage-panel__subagent-cost {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #93c5fd;
+}
+.usage-panel__subagent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+.usage-panel__subagent-status.is-completed {
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+}
+.usage-panel__subagent-status.is-running,
+.usage-panel__subagent-status.is-queued,
+.usage-panel__subagent-status.is-background {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+.usage-panel__subagent-status.is-error,
+.usage-panel__subagent-status.is-failed,
+.usage-panel__subagent-status.is-aborted {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+.usage-panel__subagent-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--frame-text-muted);
+}
+.usage-panel__subagent-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.usage-panel__subagent-inspect-icon {
+  margin-left: auto;
+  opacity: 0.5;
+}
+.usage-panel__subagent-card:hover .usage-panel__subagent-inspect-icon {
+  opacity: 1;
+  color: var(--accent-base);
 }
 
 /* Footer & Analytics Link */

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { computeTokenMetrics } from "./UsagePanel.tsx";
+import { collectSubagents, summarizeSubagents } from "../lib/ai/subagents.ts";
 import type { SessionStats } from "@hive/protocol";
+import type { Timeline } from "@hive/pi-adapter";
 
 describe("computeTokenMetrics", () => {
   it("returns zeroed metrics for null stats", () => {
@@ -104,5 +106,103 @@ describe("computeTokenMetrics", () => {
     const critMetrics = computeTokenMetrics(critStats);
     expect(critMetrics.isHighContext).toBe(true);
     expect(critMetrics.isCriticalContext).toBe(true);
+  });
+
+  it("calculates combined session and subagent usage breakdown", () => {
+    const mockStats: SessionStats = {
+      sessionId: "sess-1",
+      sessionFile: "/path/to/session.jsonl",
+      userMessages: 2,
+      assistantMessages: 3,
+      toolCalls: 5,
+      toolResults: 5,
+      totalMessages: 10,
+      cost: 0.12,
+      tokens: {
+        input: 4000,
+        output: 1000,
+        cacheRead: 20000,
+        cacheWrite: 0,
+        total: 25000,
+      },
+    };
+
+    const timeline: Timeline = {
+      items: [
+        {
+          kind: "assistant",
+          key: "a1",
+          streaming: false,
+          blocks: [
+            {
+              type: "toolCall",
+              id: "call_scout",
+              name: "Agent",
+              arguments: { description: "Explore codebase", subagent_type: "scout" },
+              complete: true,
+            },
+            {
+              type: "toolCall",
+              id: "call_worker",
+              name: "Agent",
+              arguments: { description: "Implement feature", subagent_type: "worker" },
+              complete: true,
+            },
+          ],
+        },
+      ],
+      toolResults: {
+        call_scout: {
+          toolCallId: "call_scout",
+          toolName: "Agent",
+          isError: false,
+          text: "Scout complete",
+          images: [],
+          details: {
+            subagentType: "scout",
+            description: "Explore codebase",
+            status: "completed",
+            cost: 0.005,
+            totalTokens: 12000,
+            toolUses: 4,
+            turnCount: 3,
+          },
+        },
+        call_worker: {
+          toolCallId: "call_worker",
+          toolName: "Agent",
+          isError: false,
+          text: "Worker complete",
+          images: [],
+          details: {
+            subagentType: "worker",
+            description: "Implement feature",
+            status: "completed",
+            cost: 0.065,
+            totalTokens: 35000,
+            toolUses: 10,
+            turnCount: 7,
+          },
+        },
+      },
+    };
+
+    const agents = collectSubagents(timeline, false);
+    expect(agents).toHaveLength(2);
+
+    const subagentsSummary = summarizeSubagents(agents);
+    expect(subagentsSummary.totalCost).toBeCloseTo(0.07, 5);
+    expect(subagentsSummary.totalTokens).toBe(47000);
+    expect(subagentsSummary.totalToolUses).toBe(14);
+    expect(subagentsSummary.totalTurns).toBe(10);
+
+    const mainCost = mockStats.cost;
+    const subagentsCost = subagentsSummary.totalCost;
+    const totalSessionCost = mainCost + subagentsCost;
+    expect(totalSessionCost).toBeCloseTo(0.19, 5);
+
+    const metrics = computeTokenMetrics(mockStats);
+    const combinedTokens = metrics.totalTokens + subagentsSummary.totalTokens;
+    expect(combinedTokens).toBe(72000);
   });
 });

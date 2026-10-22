@@ -44,6 +44,49 @@ describe("usage parsing", () => {
     expect(parseUsageLine(user)).toBeNull();
   });
 
+  it("reads subagent tool results and notifications into usage turns", () => {
+    const subagentToolResult = JSON.stringify({
+      type: "message",
+      timestamp: "2026-10-15T18:58:15.363Z",
+      message: {
+        role: "toolResult",
+        toolName: "Agent",
+        details: {
+          subagentType: "scout",
+          modelName: "gemini 3.8 flash (antigravity)",
+          cost: 0.0019,
+          tokens: "17k token",
+        },
+      },
+    });
+    const parsedResult = parseUsageLine(subagentToolResult);
+    expect(parsedResult).toMatchObject({
+      provider: "google",
+      model: "gemini 3.8 flash (antigravity)",
+      cost: 0.0019,
+    });
+
+    const subagentNotification = JSON.stringify({
+      type: "custom",
+      customType: "subagent-notification",
+      timestamp: "2026-10-15T19:05:00.000Z",
+      details: {
+        id: "bg_1",
+        description: "Background worker",
+        status: "completed",
+        totalCost: 0.035,
+        totalTokens: 20000,
+        modelName: "claude-3-5-sonnet",
+      },
+    });
+    const parsedNotif = parseUsageLine(subagentNotification);
+    expect(parsedNotif).toMatchObject({
+      provider: "anthropic",
+      model: "claude-3-5-sonnet",
+      cost: 0.035,
+    });
+  });
+
   it("aggregates a session into day buckets", () => {
     const p = new SessionUsageParser();
     const day1 = new Date(2026, 8, 30, 10).getTime();
