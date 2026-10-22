@@ -469,6 +469,126 @@ g.is-hover .usage-chart__hit {
     background: rgba(255, 255, 255, 0.04);
   }
 }
+.usage-table tr.is-active td {
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--accent-base);
+}
+
+/* Project selector menu */
+.usage__project-menu-wrap {
+  position: relative;
+}
+.usage__project-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.usage__project-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-prominent);
+}
+.usage__project-btn.is-filtered {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-base);
+  font-weight: 600;
+}
+.usage__project-btn-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+.usage__project-btn-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage__chevron {
+  transition: transform 0.15s ease;
+  opacity: 0.7;
+}
+.usage__chevron.is-open {
+  transform: rotate(180deg);
+}
+.usage__project-dropdown {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  min-width: 220px;
+  max-width: 300px;
+  max-height: 280px;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-prominent);
+  border-radius: 9px;
+  box-shadow: var(--shadow-pop);
+  z-index: 50;
+  overflow-y: auto;
+}
+.usage__project-dropdown-sep {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0;
+}
+.usage__project-option {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.usage__project-option:hover {
+  background: rgba(var(--fg-rgb), 0.05);
+}
+.usage__project-option.is-selected {
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-base);
+}
+.usage__project-option-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.usage__project-option-name {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage__project-option.is-selected .usage__project-option-name {
+  font-weight: 600;
+}
+.usage__project-option-meta {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.usage__project-option-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-base);
+  background: rgba(var(--accent-rgb), 0.2);
+  padding: 1px 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
 .usage-table__sub {
   margin-left: 8px;
   color: var(--text-muted, #8b909a);

@@ -7,6 +7,7 @@ import {
   Activity,
   BarChart2,
   BarChart3,
+  ChevronDown,
   Coins,
   Database,
   FolderKanban,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import {
   daysBetween,
+  filterBucketsByProject,
   filterBucketsBySession,
   lastNDays,
   localDay,
@@ -54,8 +56,14 @@ export const UsageView: React.FC = () => {
   const refresh = useInsights((s) => s.refreshUsage);
   const focus = useInsights((s) => s.focusSession);
   const setFocus = useInsights((s) => s.setFocusSession);
+  const focusProject = useInsights((s) => s.focusProject);
+  const setFocusProject = useInsights((s) => s.setFocusProject);
   const allSessions = analyticsHost().hooks.useSessionCatalog();
+  const registeredProjects = analyticsHost().hooks.useProjects?.() ?? [];
   const resolvedUsageModel = analyticsHost().hooks.useFeatureModel("usageAnalysis");
+
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [range, setRange] = useState<UsageRange>(() => (analyticsHost().storage.get("hive.usage.range") as UsageRange) || "7d");
   const [metric, setMetric] = useState<UsageMetric>("cost");
@@ -66,6 +74,18 @@ export const UsageView: React.FC = () => {
   const [aiAnalysis, setAiAnalysis] = useState<AiUsageAnalysisResult | null>(null);
   const runIdRef = useRef(0);
 
+  // Close project dropdown on outside click
+  useEffect(() => {
+    if (!projectDropdownOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setProjectDropdownOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [projectDropdownOpen]);
+
   // A scoped view is usually opened for a session that just ran, so bypass the report's short cache.
   useEffect(() => {
     void refresh(focus !== null);
@@ -73,8 +93,38 @@ export const UsageView: React.FC = () => {
   useEffect(() => analyticsHost().storage.set("hive.usage.range", range), [range]);
   useEffect(() => analyticsHost().storage.set("hive.usage.chartType", chartType), [chartType]);
 
+  const availableProjects = useMemo(() => {
+    const map = new Map<string, { label: string; count: number; cost: number }>();
+    if (registeredProjects) {
+      for (const p of registeredProjects) {
+        if (p.name) map.set(p.name, { label: p.name, count: 0, cost: 0 });
+      }
+    }
+    if (usage?.buckets) {
+      for (const b of usage.buckets) {
+        const lbl = projectLabel(b.cwd ?? "");
+        if (!lbl || lbl === "Unknown") continue;
+        const entry = map.get(lbl) ?? { label: lbl, count: 0, cost: 0 };
+        entry.count += 1;
+        entry.cost += b.cost;
+        map.set(lbl, entry);
+      }
+    }
+    return [...map.values()].sort((a, b) => b.cost - a.cost || a.label.localeCompare(b.label));
+  }, [registeredProjects, usage]);
+
+  const projectBuckets = useMemo(() => {
+    if (!usage || !focusProject) return null;
+    return filterBucketsByProject(usage.buckets, focusProject);
+  }, [usage, focusProject]);
+
+  const baseBuckets = projectBuckets ?? usage?.buckets ?? [];
+  const focusBuckets = useMemo(() => {
+    if (!usage || !focus) return null;
+    return filterBucketsBySession(baseBuckets, focus);
+  }, [usage, focus, baseBuckets]);
+
   const scoped = focus !== null;
-  const focusBuckets = useMemo(() => (usage && focus ? filterBucketsBySession(usage.buckets, focus) : null), [usage, focus]);
   const days = useMemo(() => {
     if (focusBuckets) {
       if (!focusBuckets.length) return lastNDays(1);
@@ -83,18 +133,40 @@ export const UsageView: React.FC = () => {
     }
     return lastNDays(RANGE_DAYS[range]);
   }, [focusBuckets, range, usage?.generatedAt]);
-  const buckets = focusBuckets ?? usage?.buckets ?? [];
+
+  const buckets = focusBuckets ?? baseBuckets;
+
+  const sessionDays = useMemo(() => {
+    if (!usage) return [];
+    if (focusBuckets) {
+      return focusBuckets.length ? [[...new Set(focusBuckets.map((b) => b.day))]] : [];
+    }
+    if (focusProject && projectBuckets) {
+      const map = new Map<string, Set<string>>();
+      for (const b of projectBuckets) {
+        if (b.session) {
+          let set = map.get(b.session);
+          if (!set) map.set(b.session, (set = new Set()));
+          set.add(b.day);
+        }
+      }
+      return [...map.values()].map((s) => [...s]);
+    }
+    return usage.sessionDays;
+  }, [usage, focusBuckets, focusProject, projectBuckets]);
+
   const summary = useMemo(() => {
     if (!usage) return null;
-    const sessionDays = focusBuckets ? (focusBuckets.length ? [[...new Set(focusBuckets.map((b) => b.day))]] : []) : usage.sessionDays;
     return summarizeUsage(buckets, days, sessionDays);
-  }, [usage, buckets, focusBuckets, days]);
+  }, [usage, buckets, days, sessionDays]);
+
   const prevSummary = useMemo(() => {
     if (!usage || scoped || range === "today") return null;
     const n = RANGE_DAYS[range];
     const prevDays = lastNDays(n * 2).slice(0, n);
-    return summarizeUsage(usage.buckets, prevDays, usage.sessionDays);
-  }, [usage, range, scoped]);
+    const prevBase = focusProject ? filterBucketsByProject(usage.buckets, focusProject) : usage.buckets;
+    return summarizeUsage(prevBase, prevDays);
+  }, [usage, range, scoped, focusProject]);
 
   // Single-day views (Today, or a session that only ran on one day) chart per hour instead of per day.
   const hourly = scoped ? days.length === 1 : range === "today";
@@ -159,7 +231,9 @@ export const UsageView: React.FC = () => {
     }
 
     try {
-      const summaryText = `Total Spend: $${summary.totals.cost.toFixed(2)}
+      const scopeLabel = focus ? `Session: ${labelFor(focus)}` : focusProject ? `Project: ${focusProject}` : "All Projects";
+      const summaryText = `Scope: ${scopeLabel}
+Total Spend: $${summary.totals.cost.toFixed(2)}
 Total Tokens: ${summary.totals.tokens} (Input: ${summary.totals.input}, Output: ${summary.totals.output}, Cache Reads: ${summary.totals.cacheRead})
 Total Turns: ${summary.totals.turns}
 Active Days: ${summary.activeDays} / ${nDays} days
@@ -216,12 +290,93 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
           <div className="usage__subtitle">
             {scoped
               ? "Single session"
-              : usage
-                ? `${usage.sessionFiles.toLocaleString()} session files · scanned in ${usage.scanMs} ms`
-                : "Reading your Pi sessions…"}
+              : focusProject
+                ? `Project: ${focusProject} · ${summary ? summary.sessions : 0} session${summary?.sessions === 1 ? "" : "s"} in range`
+                : usage
+                  ? `${usage.sessionFiles.toLocaleString()} session files across all projects · scanned in ${usage.scanMs} ms`
+                  : "Reading your Pi sessions…"}
           </div>
         </div>
         <div className="usage__actions">
+          {/* Project selector dropdown (All Projects vs Per Project) */}
+          <div className="usage__project-menu-wrap" ref={dropdownRef}>
+            <button
+              type="button"
+              className={`usage__project-btn ${focusProject ? "is-filtered" : ""}`}
+              onClick={() => setProjectDropdownOpen((v) => !v)}
+              aria-expanded={projectDropdownOpen}
+              aria-haspopup="listbox"
+              title={focusProject ? `Filtered to project: ${focusProject}` : "Viewing all projects in total"}
+            >
+              <FolderKanban size={13} className="usage__project-btn-icon" />
+              <span className="usage__project-btn-label">
+                {focusProject ? focusProject : "All Projects"}
+              </span>
+              <ChevronDown size={11} className={`usage__chevron ${projectDropdownOpen ? "is-open" : ""}`} />
+            </button>
+
+            {projectDropdownOpen && (
+              <div className="usage__project-dropdown ui-scroll" role="listbox">
+                <button
+                  type="button"
+                  className={`usage__project-option ${focusProject === null ? "is-selected" : ""}`}
+                  onClick={() => {
+                    setFocusProject(null);
+                    setProjectDropdownOpen(false);
+                  }}
+                  role="option"
+                  aria-selected={focusProject === null}
+                >
+                  <div className="usage__project-option-info">
+                    <span className="usage__project-option-name">All Projects (Total)</span>
+                    <span className="usage__project-option-meta">Across entire workspace</span>
+                  </div>
+                  {focusProject === null && <span className="usage__project-option-badge">Active</span>}
+                </button>
+                {availableProjects.length > 0 && <div className="usage__project-dropdown-sep" />}
+                {availableProjects.map((p) => {
+                  const isCurrent = focusProject === p.label;
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      className={`usage__project-option ${isCurrent ? "is-selected" : ""}`}
+                      onClick={() => {
+                        setFocusProject(p.label);
+                        setProjectDropdownOpen(false);
+                      }}
+                      role="option"
+                      aria-selected={isCurrent}
+                    >
+                      <div className="usage__project-option-info">
+                        <span className="usage__project-option-name">{p.label}</span>
+                        <span className="usage__project-option-meta">
+                          {p.cost > 0 ? formatCost(p.cost) : `${p.count} session entries`}
+                        </span>
+                      </div>
+                      {isCurrent && <span className="usage__project-option-badge">Active</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {focusProject && !focus && (
+            <div className="usage__focus" title={`Scoped to project: ${focusProject}`}>
+              <FolderKanban size={12} />
+              <span className="usage__focus-name">{focusProject}</span>
+              <button
+                type="button"
+                onClick={() => setFocusProject(null)}
+                title="Back to all projects (total)"
+                aria-label="View all projects"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             className="ui-btn"
@@ -229,8 +384,10 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
             disabled={!summary || scoped}
             title={
               scoped
-                ? "AI analysis covers all sessions"
-                : `Analyze telemetry with AI · Using ${resolvedUsageModel.name || resolvedUsageModel.id} (${resolvedUsageModel.sourceLabel})`
+                ? "AI analysis covers projects and workspace"
+                : focusProject
+                  ? `Analyze ${focusProject} telemetry with AI · Using ${resolvedUsageModel.name || resolvedUsageModel.id} (${resolvedUsageModel.sourceLabel})`
+                  : `Analyze telemetry with AI · Using ${resolvedUsageModel.name || resolvedUsageModel.id} (${resolvedUsageModel.sourceLabel})`
             }
             style={{
               display: "flex",
@@ -253,7 +410,7 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
             <div className="usage__focus" title={focus}>
               <MessagesSquare size={13} />
               <span className="usage__focus-name">{labelFor(focus)}</span>
-              <button type="button" onClick={() => setFocus(null)} title="Back to all sessions" aria-label="Show all sessions">
+              <button type="button" onClick={() => setFocus(null)} title={focusProject ? `Back to ${focusProject}` : "Back to all sessions"} aria-label="Show all sessions">
                 <X size={12} />
               </button>
             </div>
@@ -393,7 +550,15 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
                 </button>
               </div>
             </div>
-            <BreakdownTable rows={rows} total={summary.totals} kind={kind} labelFor={labelFor} onPick={setFocus} />
+            <BreakdownTable
+              rows={rows}
+              total={summary.totals}
+              kind={kind}
+              labelFor={labelFor}
+              onPickSession={setFocus}
+              onPickProject={setFocusProject}
+              focusProject={focusProject}
+            />
           </div>
 
           <AiUsageInsightsModal
@@ -468,8 +633,10 @@ const BreakdownTable: React.FC<{
   total: UsageTotals;
   kind: UsageTable;
   labelFor: (path: string) => string;
-  onPick: (path: string) => void;
-}> = ({ rows, total, kind, labelFor, onPick }) => {
+  onPickSession: (path: string) => void;
+  onPickProject: (project: string) => void;
+  focusProject: string | null;
+}> = ({ rows, total, kind, labelFor, onPickSession, onPickProject, focusProject }) => {
   if (!rows.length) return <div className="ui-empty">No activity in this range.</div>;
   const shown = kind === "session" ? rows.slice(0, SESSION_ROW_LIMIT) : rows;
   return (
@@ -490,19 +657,35 @@ const BreakdownTable: React.FC<{
           {shown.map((r) => {
             const share = total.cost > 0 ? r.cost / total.cost : total.tokens > 0 ? r.tokens / total.tokens : 0;
             const name = kind === "model" ? prettyModel(r.key.split("/").slice(1).join("/")) : kind === "session" ? labelFor(r.key) : r.key;
+            const isClickable = kind === "session" || kind === "project";
+            const isSelected = kind === "project" && focusProject === r.key;
+            const handleClick = () => {
+              if (kind === "session") onPickSession(r.key);
+              else if (kind === "project") onPickProject(r.key);
+            };
             return (
               <tr
                 key={r.key}
-                className={kind === "session" ? "is-clickable" : undefined}
-                onClick={kind === "session" ? () => onPick(r.key) : undefined}
-                tabIndex={kind === "session" ? 0 : undefined}
-                onKeyDown={kind === "session" ? (e) => e.key === "Enter" && onPick(r.key) : undefined}
-                title={kind === "session" ? "Show usage for this session only" : undefined}
+                className={`${isClickable ? "is-clickable" : ""} ${isSelected ? "is-active" : ""}`}
+                onClick={isClickable ? handleClick : undefined}
+                tabIndex={isClickable ? 0 : undefined}
+                onKeyDown={isClickable ? (e) => e.key === "Enter" && handleClick() : undefined}
+                title={
+                  kind === "session"
+                    ? "Show usage for this session only"
+                    : kind === "project"
+                      ? isSelected
+                        ? "Currently scoped to this project"
+                        : `Filter usage to ${r.key}`
+                      : undefined
+                }
               >
                 <td>
                   <div className="usage-table__name">
                     {r.provider && kind !== "project" && kind !== "session" && React.createElement(analyticsHost().ui.ProviderIcon, { provider: r.provider, size: 14 })}
+                    {kind === "project" && <FolderKanban size={14} style={{ opacity: 0.7, flexShrink: 0 }} />}
                     <span title={r.key}>{name}</span>
+                    {isSelected && <span className="usage__project-option-badge">Active</span>}
                     {kind === "session" && (
                       <em className="usage-table__sub">
                         {projectLabel(r.cwd ?? "")} · {r.firstDay === r.lastDay ? formatDayLabel(r.lastDay ?? "") : `${formatDayLabel(r.firstDay ?? "")} – ${formatDayLabel(r.lastDay ?? "")}`}

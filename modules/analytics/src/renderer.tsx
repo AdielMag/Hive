@@ -28,12 +28,18 @@ export default defineRendererModule({
         defaultKeys: ["Mod+Shift+U"],
         allowInTerminal: true,
         run: (host, args) => {
-          const focusSession = (args as { focusSession?: string } | undefined)?.focusSession ?? null;
-          useInsights.getState().setFocusSession(focusSession);
+          const typedArgs = args as { focusSession?: string | null; focusProject?: string | null } | undefined;
+          if (typedArgs?.focusSession !== undefined) {
+            useInsights.getState().setFocusSession(typedArgs.focusSession);
+          }
+          if (typedArgs?.focusProject !== undefined) {
+            useInsights.getState().setFocusProject(typedArgs.focusProject);
+          }
           host.tabs.open({
             id: USAGE_TAB_ID,
             kind: USAGE_TAB_KIND,
-            title: "Usage",
+            title: "Usage & Analytics",
+            projectId: "",
             reuse: (t) => t.id === USAGE_TAB_ID || t.kind === USAGE_TAB_KIND,
           });
         },

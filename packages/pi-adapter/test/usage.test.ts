@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SessionUsageParser,
   daysBetween,
+  filterBucketsByProject,
   filterBucketsBySession,
   lastNDays,
   localDay,
@@ -100,6 +101,28 @@ describe("summarizeUsage", () => {
   it("labels projects by folder name", () => {
     expect(projectLabel("C:\\Users\\me\\blog")).toBe("blog");
     expect(projectLabel("")).toBe("Unknown");
+    // Worktrees map back to root project
+    expect(projectLabel("C:\\Users\\talel\\Documents\\Hive\\.hive-worktrees\\session-1234")).toBe("Hive");
+    expect(projectLabel("/Users/me/repo/.hive-worktrees/feature-abc/sub")).toBe("repo");
+  });
+
+  it("filters buckets by project label or path", () => {
+    const mk = (cwd: string, cost: number): UsageBucket => ({
+      day: "2026-05-01", hour: 10, provider: "anthropic", model: "sonnet", cwd, session: "s1",
+      turns: 1, input: 10, output: 20, cacheRead: 0, cacheWrite: 0, cost,
+    });
+    const buckets = [
+      mk("C:\\projects\\alpha", 5),
+      mk("C:\\projects\\alpha\\.hive-worktrees\\task-1", 10),
+      mk("C:\\projects\\beta", 20),
+    ];
+    const alphaBuckets = filterBucketsByProject(buckets, "alpha");
+    expect(alphaBuckets).toHaveLength(2);
+    expect(alphaBuckets.reduce((acc, b) => acc + b.cost, 0)).toBe(15);
+
+    const betaBuckets = filterBucketsByProject(buckets, "beta");
+    expect(betaBuckets).toHaveLength(1);
+    expect(betaBuckets[0]?.cost).toBe(20);
   });
 
   it("groups and filters by session file", () => {

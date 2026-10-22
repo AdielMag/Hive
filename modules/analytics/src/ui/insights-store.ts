@@ -10,6 +10,9 @@ interface InsightsState {
   usage: UsageReport | null;
   usageLoading: boolean;
   usageError: string | null;
+  /** Project name/label the Usage view is scoped to; null = all projects (total). */
+  focusProject: string | null;
+  setFocusProject(project: string | null): void;
   /** Session file path the Usage view is scoped to; null = all sessions. */
   focusSession: string | null;
   setFocusSession(path: string | null): void;
@@ -22,6 +25,8 @@ export const useInsights = create<InsightsState>((set, get) => ({
   usage: null,
   usageLoading: false,
   usageError: null,
+  focusProject: null,
+  setFocusProject: (project) => set({ focusProject: project, focusSession: null }),
   focusSession: null,
   setFocusSession: (path) => set({ focusSession: path }),
 

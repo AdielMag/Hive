@@ -186,6 +186,25 @@ export function filterBucketsBySession(buckets: UsageBucket[], sessionPath: stri
   return buckets.filter((b) => b.session !== undefined && normalizeSessionPath(b.session) === want);
 }
 
+/** If `cwd` is within a session worktree (`<project>/.hive-worktrees/<slug>[/...]`), returns the project root. */
+export function projectRootFromCwd(cwd: string): string {
+  if (!cwd) return "";
+  const m = /^(.*?)[\\/]\.hive-worktrees[\\/][^\\/]+(?:[\\/].*)?$/.exec(cwd);
+  return m ? m[1] ?? cwd : cwd;
+}
+
+/** Buckets that belong to a given project (matched by label or root path). */
+export function filterBucketsByProject(buckets: UsageBucket[], project: string): UsageBucket[] {
+  const want = project.toLowerCase().trim();
+  return buckets.filter((b) => {
+    if (!b.cwd) return false;
+    const label = projectLabel(b.cwd).toLowerCase();
+    if (label === want) return true;
+    const root = projectRootFromCwd(b.cwd).toLowerCase().replace(/\\/g, "/");
+    return root === want || root.endsWith("/" + want);
+  });
+}
+
 /** Inclusive list of local days from `first` to `last` (YYYY-MM-DD). */
 export function daysBetween(first: string, last: string): string[] {
   const out: string[] = [];
@@ -215,8 +234,9 @@ export function lastNDays(days: number, now = Date.now()): string[] {
 
 export function projectLabel(cwd: string): string {
   if (!cwd) return "Unknown";
-  const parts = cwd.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] ?? cwd;
+  const root = projectRootFromCwd(cwd);
+  const parts = root.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] ?? root;
 }
 
 export function summarizeUsage(
