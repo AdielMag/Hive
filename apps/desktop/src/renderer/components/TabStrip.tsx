@@ -109,10 +109,6 @@ export const TabStrip: React.FC<TabStripProps> = ({
     return list;
   }, [allTabs, tabIds]);
 
-  const hasMultipleProjects = useMemo(() => {
-    const set = new Set(tabs.map((t) => t.projectId).filter(Boolean));
-    return set.size > 1;
-  }, [tabs]);
 
   const activeTabId = propActiveTabId !== undefined ? propActiveTabId : storeActiveTabId;
 
@@ -418,25 +414,10 @@ export const TabStrip: React.FC<TabStripProps> = ({
               onAuxClick={(e) => {
                 if (e.button === 1) handleClose(tab.id);
               }}
-              title={(tabProject ? `[${tabProject.name}] ` : "") + (tab.filePath ?? tab.title) + stateLabel + (tabWorktree ? `\nBranch: ${tabWorktree.branch}` : "")}
-              aria-label={(tabProject ? `${tabProject.name} · ` : "") + tab.title + stateLabel}
+              title={(tab.filePath ?? tab.title) + stateLabel + (tabWorktree ? `\nBranch: ${tabWorktree.branch}` : "")}
+              aria-label={tab.title + stateLabel}
             >
-              {tabProject && (
-                <span
-                  className={`tab__project-badge${hasMultipleProjects ? " has-name" : ""}`}
-                  title={`Project: ${tabProject.name}`}
-                >
-                  {tabProject.icon ? (
-                    <span className="tab__project-icon">{tabProject.icon}</span>
-                  ) : (
-                    <span className="tab__project-dot" style={{ background: tabProject.color }} />
-                  )}
-                  {hasMultipleProjects && (
-                    <span className="tab__project-name">{tabProject.name}</span>
-                  )}
-                </span>
-              )}
-              <span className="tab__icon" style={tabProject ? { color: tabProject.color } : undefined}>
+              <span className="tab__icon">
                 <TabIcon tab={tab} />
               </span>
               <TabTitle tab={tab} />
