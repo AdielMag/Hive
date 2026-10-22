@@ -12,10 +12,16 @@ import {
   Wrench,
   Bot,
   Sparkles,
+  Clock,
+  Terminal,
+  Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { buildTimeline } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
-import { formatCost, formatTokens } from "../lib/format.ts";
+import { formatCost, formatDuration, formatTokens } from "../lib/format.ts";
+import { collectSubagents, summarizeSubagents, type SubagentView } from "../lib/ai/subagents.ts";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import type { SessionStats } from "@hive/protocol";
@@ -93,14 +99,31 @@ export function computeTokenMetrics(
 }
 
 export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { stats, selectedModel, activeTab, activeSessionPath } = useSessionStore(
+  const {
+    stats,
+    selectedModel,
+    activeTab,
+    activeSessionPath,
+    activeKey,
+    transcript,
+    isStreaming,
+    openSubagentModal,
+  } = useSessionStore(
     useShallow((s) => ({
       stats: s.stats,
       selectedModel: s.selectedModel,
       activeTab: s.tabs.find((t) => t.id === s.activeTabId),
       activeSessionPath: s.tabs.find((t) => t.id === s.activeTabId)?.sessionPath,
+      activeKey: s.activeKey,
+      transcript: s.transcript,
+      isStreaming: s.isStreaming,
+      openSubagentModal: s.openSubagentModal,
     })),
   );
+
+  const timeline = useMemo(() => buildTimeline(transcript), [transcript]);
+  const subagents = useMemo(() => collectSubagents(timeline, isStreaming), [timeline, isStreaming]);
+  const subagentsSummary = useMemo(() => summarizeSubagents(subagents), [subagents]);
 
   const {
     totalTokens,
@@ -123,6 +146,12 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     () => computeTokenMetrics(stats, selectedModel?.contextWindow ?? 0),
     [stats, selectedModel?.contextWindow],
   );
+
+  const mainCost = stats?.cost ?? 0;
+  const subagentsCost = subagentsSummary.totalCost;
+  const totalSessionCost = mainCost + subagentsCost;
+  const subagentsTokens = subagentsSummary.totalTokens;
+  const combinedTokens = totalTokens + subagentsTokens;
 
   return (
     <div className="usage-panel">
@@ -150,44 +179,68 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       </div>
 
       <div className="usage-panel__body ui-scroll">
-        {stats ? (
+        {stats || subagents.length > 0 ? (
           <>
             {/* Section 1: Hero Cost Card */}
             <div className="usage-panel__card usage-panel__card--hero">
               <div className="usage-hero__top">
                 <div className="usage-hero__label-row">
-                  <span className="usage-hero__label">Session Cost</span>
+                  <span className="usage-hero__label">Total Session Cost</span>
                   <span
-                    className={`usage-hero__chip ${stats.cost === 0 ? "is-free" : "is-active"}`}
+                    className={`usage-hero__chip ${totalSessionCost === 0 ? "is-free" : "is-active"}`}
                   >
-                    {stats.cost === 0 ? "No Charge" : "Live Session"}
+                    {totalSessionCost === 0 ? "No Charge" : "Live Session"}
                   </span>
                 </div>
                 <div className="usage-hero__amount mono">
-                  {formatCost(stats.cost)}
+                  {formatCost(totalSessionCost)}
                 </div>
+                {subagents.length > 0 && (
+                  <div className="usage-hero__split-row">
+                    <span className="usage-hero__split-item">
+                      <span className="usage-hero__split-label">Main session:</span>{" "}
+                      <span className="mono">{formatCost(mainCost)}</span>
+                    </span>
+                    <span className="usage-hero__split-dot">•</span>
+                    <span className="usage-hero__split-item">
+                      <span className="usage-hero__split-label">Subagents ({subagents.length}):</span>{" "}
+                      <span className="mono">{formatCost(subagentsCost)}</span>
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="usage-hero__pills">
                 <div className="usage-hero__pill">
                   <span className="usage-hero__pill-num mono">
-                    {formatTokens(totalTokens)}
+                    {formatTokens(combinedTokens)}
                   </span>
                   <span className="usage-hero__pill-label">Total Tokens</span>
                 </div>
                 <div className="usage-hero__pill-sep" />
                 <div className="usage-hero__pill">
                   <span className="usage-hero__pill-num mono">
-                    {stats.assistantMessages}
+                    {(stats?.assistantMessages ?? 0) + subagentsSummary.totalTurns}
                   </span>
                   <span className="usage-hero__pill-label">Turns</span>
                 </div>
                 <div className="usage-hero__pill-sep" />
                 <div className="usage-hero__pill">
                   <span className="usage-hero__pill-num mono">
-                    {stats.toolCalls}
+                    {(stats?.toolCalls ?? 0) + subagentsSummary.totalToolUses}
                   </span>
                   <span className="usage-hero__pill-label">Tool Calls</span>
                 </div>
+                {subagents.length > 0 && (
+                  <>
+                    <div className="usage-hero__pill-sep" />
+                    <div className="usage-hero__pill">
+                      <span className="usage-hero__pill-num mono">
+                        {subagents.length}
+                      </span>
+                      <span className="usage-hero__pill-label">Subagents</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -318,7 +371,111 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </div>
             </div>
 
-            {/* Section 3: Context Window Utilization */}
+            {/* Section 3: Subagent Breakdown */}
+            {subagents.length > 0 && (
+              <div className="usage-panel__section">
+                <div className="usage-panel__section-title">
+                  <Bot size={12} />
+                  <span>Subagent Breakdown</span>
+                  <span className="usage-panel__section-badge mono">
+                    {subagents.length} agents · {formatCost(subagentsCost)}
+                  </span>
+                </div>
+
+                <div className="usage-panel__card">
+                  <div className="usage-panel__subagent-summary-row">
+                    <span className="usage-panel__subagent-summary-text">
+                      {subagentsSummary.completedCount} completed
+                      {subagentsSummary.activeCount > 0 ? `, ${subagentsSummary.activeCount} running` : ""}
+                      {subagentsSummary.failedCount > 0 ? `, ${subagentsSummary.failedCount} failed` : ""}
+                    </span>
+                    {subagentsTokens > 0 && (
+                      <span className="usage-panel__subagent-summary-tokens mono">
+                        {formatTokens(subagentsTokens)} tokens
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="usage-panel__subagent-list">
+                    {subagents.map((agent) => (
+                      <button
+                        key={agent.toolCallId}
+                        type="button"
+                        className="usage-panel__subagent-card"
+                        onClick={() => {
+                          openSubagentModal({
+                            view: agent,
+                            parentSessionPath: activeSessionPath,
+                            parentActiveKey: activeTab?.activeKey ?? activeKey ?? undefined,
+                            projectId: activeTab?.projectId,
+                          });
+                        }}
+                        title={`Click to inspect subagent: ${agent.description}`}
+                      >
+                        <div className="usage-panel__subagent-head">
+                          <div className="usage-panel__subagent-title-row">
+                            <span className="usage-panel__subagent-type">
+                              {agent.type}
+                            </span>
+                            <span className="usage-panel__subagent-desc" title={agent.description}>
+                              {agent.description}
+                            </span>
+                          </div>
+                          <div className="usage-panel__subagent-cost-row">
+                            <span className="usage-panel__subagent-cost mono">
+                              {formatCost(agent.cost ?? 0)}
+                            </span>
+                            <span
+                              className={`usage-panel__subagent-status is-${agent.status}`}
+                            >
+                              {(agent.status === "running" || agent.status === "queued" || agent.status === "background") && (
+                                <Loader2 size={9} className="spin" />
+                              )}
+                              {agent.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="usage-panel__subagent-meta">
+                          {agent.model && (
+                            <span className="usage-panel__subagent-meta-item">
+                              <Cpu size={10} />
+                              <span>{agent.model}</span>
+                            </span>
+                          )}
+                          {(agent.totalTokens != null || agent.tokens) && (
+                            <span className="usage-panel__subagent-meta-item mono">
+                              {agent.totalTokens ? formatTokens(agent.totalTokens) : agent.tokens}
+                            </span>
+                          )}
+                          {agent.toolUses != null && (
+                            <span className="usage-panel__subagent-meta-item">
+                              <Wrench size={10} />
+                              <span>{agent.toolUses} {agent.toolUses === 1 ? "tool" : "tools"}</span>
+                            </span>
+                          )}
+                          {agent.turns != null && (
+                            <span className="usage-panel__subagent-meta-item">
+                              <Terminal size={10} />
+                              <span>turn {agent.turns}{agent.maxTurns ? `/${agent.maxTurns}` : ""}</span>
+                            </span>
+                          )}
+                          {agent.durationMs != null && (
+                            <span className="usage-panel__subagent-meta-item">
+                              <Clock size={10} />
+                              <span>{formatDuration(agent.durationMs)}</span>
+                            </span>
+                          )}
+                          <ExternalLink size={10} className="usage-panel__subagent-inspect-icon" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Section 4: Context Window Utilization */}
             {contextWindow > 0 && (
               <div className="usage-panel__section">
                 <div className="usage-panel__section-title">
@@ -413,9 +570,21 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <span className="usage-panel__activity-label">Tool Results</span>
                   </div>
                   <span className="usage-panel__activity-value mono">
-                    {stats.toolResults || 0}
+                    {stats?.toolResults || 0}
                   </span>
                 </div>
+
+                {subagents.length > 0 && (
+                  <div className="usage-panel__activity-card">
+                    <div className="usage-panel__activity-head">
+                      <Bot size={12} className="usage-panel__activity-icon" />
+                      <span className="usage-panel__activity-label">Subagents</span>
+                    </div>
+                    <span className="usage-panel__activity-value mono">
+                      {subagents.length}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
