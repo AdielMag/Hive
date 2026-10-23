@@ -243,9 +243,7 @@ export const ProjectTabBar: React.FC = () => {
 
       {contextMenu && (
         <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={contextMenu.items}
+          menu={contextMenu}
           onClose={() => setContextMenu(null)}
         />
       )}

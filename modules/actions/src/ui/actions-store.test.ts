@@ -52,8 +52,9 @@ describe("fixRun", () => {
     sha: "abcdef123456",
     actor: "alice",
     url: "https://github.com/org/repo/actions/runs/12345",
+    createdAt: "2026-01-01T00:00:00Z",
     startedAt: "2026-01-01T00:00:00Z",
-    completedAt: "2026-01-01T00:01:00Z",
+    updatedAt: "2026-01-01T00:01:00Z",
   };
 
   it("sets fixingRunId during execution and prevents duplicate concurrent runs", async () => {
@@ -81,7 +82,7 @@ describe("fixRun", () => {
     setActionsHost(mockHost);
     const stop = startActionsPolling(mockHost);
     useActionsStore.setState({
-      repo: { owner: "org", repo: "repo", branch: "main", defaultBranch: "main", tokenSource: "gh-cli" },
+      repo: { owner: "org", repo: "repo", branch: "main", tokenSource: "gh" },
       fixingRunId: null,
     });
 
@@ -126,7 +127,7 @@ describe("fixRun", () => {
     setActionsHost(mockHost);
     const stop = startActionsPolling(mockHost);
     useActionsStore.setState({
-      repo: { owner: "org", repo: "repo", branch: "main", defaultBranch: "main", tokenSource: "gh-cli" },
+      repo: { owner: "org", repo: "repo", branch: "main", tokenSource: "gh" },
       fixingRunId: null,
     });
 
