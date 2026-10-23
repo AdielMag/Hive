@@ -63,6 +63,7 @@ export interface ActionsState {
   cancelLogin: () => Promise<void>;
   /** Result of the last write action (dispatch / re-run / cancel), shown as a banner. */
   notice: { kind: "ok" | "error"; message: string } | null;
+  fixingRunId: number | null;
   dismissNotice: () => void;
   /** Triggers a `workflow_dispatch`; resolves true on success. */
   dispatchWorkflow: (workflow: ActionsWorkflow, ref: string, inputs: Record<string, string>) => Promise<boolean>;
@@ -153,6 +154,7 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
   panelMounts: 0,
   login: { phase: "idle" },
   notice: null,
+  fixingRunId: null,
 
   dismissNotice: () => set({ notice: null }),
 
@@ -171,18 +173,28 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
   },
 
   fixRun: async (run) => {
-    const { repo } = get();
+    const { repo, fixingRunId } = get();
     const host = hostRef;
-    if (!repo || !host) return false;
-    const res = await actionsApi().failureContext(repo, run.id);
-    if (!res.ok) {
-      set({ notice: { kind: "error", message: res.message } });
+    if (!repo || !host || fixingRunId !== null) return false;
+    set({ fixingRunId: run.id });
+    try {
+      const res = await actionsApi().failureContext(repo, run.id);
+      if (!res.ok) {
+        set({ notice: { kind: "error", message: res.message } });
+        return false;
+      }
+      await host.sessions.newSession();
+      host.sessions.setPrompt(buildFixPrompt(repo, run, res.data));
+      await host.sessions.sendPrompt();
+      return true;
+    } catch (err: any) {
+      set({ notice: { kind: "error", message: err?.message ?? "Failed to diagnose run" } });
       return false;
+    } finally {
+      if (get().fixingRunId === run.id) {
+        set({ fixingRunId: null });
+      }
     }
-    await host.sessions.newSession();
-    host.sessions.setPrompt(buildFixPrompt(repo, run, res.data));
-    await host.sessions.sendPrompt();
-    return true;
   },
 
   cancelRun: async (run) => {
@@ -196,12 +208,12 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
     const project = hostRef?.sessions.activeProject();
     const gen = ++generation;
     if (!project?.path) {
-      set({ projectPath: null, repo: null, runs: [], workflows: [], totalCount: 0, error: null, loading: false, jobs: {}, expandedRunId: null });
+      set({ projectPath: null, repo: null, runs: [], workflows: [], totalCount: 0, error: null, loading: false, jobs: {}, expandedRunId: null, fixingRunId: null });
       return;
     }
     const projectChanged = project.path !== get().projectPath;
     if (projectChanged) {
-      set({ projectPath: project.path, repo: null, runs: [], workflows: [], totalCount: 0, jobs: {}, expandedRunId: null, filters: initialFilters, error: null });
+      set({ projectPath: project.path, repo: null, runs: [], workflows: [], totalCount: 0, jobs: {}, expandedRunId: null, filters: initialFilters, error: null, fixingRunId: null });
     }
     if (!opts?.silent || projectChanged) set({ loading: true });
 
@@ -373,7 +385,7 @@ export function startActionsPolling(host: ModuleHost): () => void {
     clearInterval(timer);
     hostRef = null;
     generation++;
-    useActionsStore.setState({ projectPath: null, repo: null, runs: [], jobs: {}, workflows: [], error: null });
+    useActionsStore.setState({ projectPath: null, repo: null, runs: [], jobs: {}, workflows: [], error: null, fixingRunId: null });
   };
 }
 
