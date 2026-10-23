@@ -6,6 +6,7 @@ export interface AgentDetails {
   subagentType: string;
   toolUses?: number;
   tokens?: string;
+  totalTokens?: number;
   cost?: number;
   turnCount?: number;
   maxTurns?: number;
@@ -244,11 +245,12 @@ export function resolveSubagentView(params: {
   let turns = details?.turnCount;
   let maxTurns = details?.maxTurns ?? (typeof args.max_turns === "number" ? args.max_turns : undefined);
   let tokens = details?.tokens;
+  const rawResult = result as unknown as { usage?: { totalTokens?: number } } | undefined;
   let totalTokens: number | undefined =
-    typeof (details as { totalTokens?: unknown } | undefined)?.totalTokens === "number"
-      ? (details as { totalTokens: number }).totalTokens
-      : typeof (result as { usage?: { totalTokens?: unknown } } | undefined)?.usage?.totalTokens === "number"
-      ? (result as { usage: { totalTokens: number } }).usage.totalTokens
+    typeof details?.totalTokens === "number"
+      ? details.totalTokens
+      : typeof rawResult?.usage?.totalTokens === "number"
+      ? rawResult.usage.totalTokens
       : parseTokenCount(tokens);
   let cost = details?.cost;
   let durationMs = details?.durationMs;

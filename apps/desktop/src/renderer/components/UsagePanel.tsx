@@ -21,7 +21,7 @@ import { useShallow } from "zustand/react/shallow";
 import { buildTimeline } from "@hive/pi-adapter";
 import { useSessionStore } from "../store/session-store.ts";
 import { formatCost, formatDuration, formatTokens } from "../lib/format.ts";
-import { collectSubagents, summarizeSubagents, type SubagentView } from "../lib/ai/subagents.ts";
+import { collectSubagents, summarizeSubagents } from "../lib/ai/subagents.ts";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
 import type { SessionStats } from "@hive/protocol";
@@ -106,7 +106,6 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     activeSessionPath,
     activeKey,
     transcript,
-    isStreaming,
     openSubagentModal,
   } = useSessionStore(
     useShallow((s) => ({
@@ -116,13 +115,12 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       activeSessionPath: s.tabs.find((t) => t.id === s.activeTabId)?.sessionPath,
       activeKey: s.activeKey,
       transcript: s.transcript,
-      isStreaming: s.isStreaming,
       openSubagentModal: s.openSubagentModal,
     })),
   );
 
   const timeline = useMemo(() => buildTimeline(transcript), [transcript]);
-  const subagents = useMemo(() => collectSubagents(timeline, isStreaming), [timeline, isStreaming]);
+  const subagents = useMemo(() => collectSubagents(timeline, transcript.running), [timeline, transcript.running]);
   const subagentsSummary = useMemo(() => summarizeSubagents(subagents), [subagents]);
 
   const {
@@ -540,7 +538,7 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <span className="usage-panel__activity-label">Prompts</span>
                   </div>
                   <span className="usage-panel__activity-value mono">
-                    {stats.userMessages || 0}
+                    {stats?.userMessages || 0}
                   </span>
                 </div>
 
@@ -550,7 +548,7 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <span className="usage-panel__activity-label">Responses</span>
                   </div>
                   <span className="usage-panel__activity-value mono">
-                    {stats.assistantMessages || 0}
+                    {stats?.assistantMessages || 0}
                   </span>
                 </div>
 
@@ -560,7 +558,7 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <span className="usage-panel__activity-label">Tool Calls</span>
                   </div>
                   <span className="usage-panel__activity-value mono">
-                    {stats.toolCalls || 0}
+                    {stats?.toolCalls || 0}
                   </span>
                 </div>
 

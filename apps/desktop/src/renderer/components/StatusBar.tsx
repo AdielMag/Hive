@@ -84,11 +84,10 @@ export const StatusBar: React.FC = () => {
   const activeSessionPath = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId)?.sessionPath);
   const activeTab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const transcript = useSessionStore((s) => s.transcript);
-  const isStreaming = useSessionStore((s) => s.isStreaming);
   const subagents = useMemo(() => {
     const timeline = buildTimeline(transcript);
-    return collectSubagents(timeline, isStreaming);
-  }, [transcript, isStreaming]);
+    return collectSubagents(timeline, isRunning);
+  }, [transcript, isRunning]);
   const subagentsSummary = useMemo(() => summarizeSubagents(subagents), [subagents]);
 
   const mainCost = stats?.cost ?? 0;
