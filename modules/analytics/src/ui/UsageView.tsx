@@ -68,6 +68,11 @@ export const UsageView: React.FC = () => {
   const [range, setRange] = useState<UsageRange>(() => (analyticsHost().storage.get("hive.usage.range") as UsageRange) || "7d");
   const [metric, setMetric] = useState<UsageMetric>("cost");
   const [chartType, setChartType] = useState<ChartType>(() => (analyticsHost().storage.get("hive.usage.chartType") as ChartType) || "line");
+  const [aiFailed, setAiFailed] = useState(false);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
   const [table, setTable] = useState<UsageTable>("model");
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -209,6 +214,7 @@ export const UsageView: React.FC = () => {
     const currentRunId = ++runIdRef.current;
     setAiLoading(true);
     setAiModalOpen(true);
+    setAiFailed(false);
 
     const baseAnalysis = analyzeUsageTelemetry(
       usage,
@@ -273,6 +279,9 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
       }
     } catch (err) {
       console.warn("LLM usage insights generation failed, keeping telemetry heuristics:", err);
+      if (runIdRef.current === currentRunId) {
+        setAiFailed(true);
+      }
     } finally {
       if (runIdRef.current === currentRunId) {
         setAiLoading(false);
@@ -567,6 +576,7 @@ Telemetry Score: ${baseAnalysis.score}/100 (${baseAnalysis.scoreLabel})`;
             analysis={aiAnalysis}
             onReanalyze={handleRunAiAnalysis}
             isLoading={aiLoading}
+            isHeuristicOnly={aiFailed}
             model={resolvedUsageModel}
           />
         </>

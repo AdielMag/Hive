@@ -28,6 +28,7 @@ import {
   scanTidyWorktrees,
   worktreeStatus,
 } from "../services/worktrees.ts";
+import { assertSessionFile } from "../services/path-guard.ts";
 import { handle } from "./util.ts";
 
 const NO_PI = { ok: false as const, error: "Pi CLI not available" };
@@ -63,9 +64,9 @@ export function registerSessionIpc(ctx: AppContext): void {
   handle(IPC.sessionsListAll, () => ctx.catalog?.listAll() ?? []);
   handle(IPC.sessionsReadFile, ({ path }: { path: string }) => {
     if (!ctx.catalog) throw new Error("Catalog service not available");
-    return ctx.catalog.readSessionFile(path);
+    return ctx.catalog.readSessionFile(assertSessionFile(path));
   });
-  handle(IPC.sessionsDelete, ({ path }: { path: string }) => ctx.catalog?.deleteSession(path) ?? false);
+  handle(IPC.sessionsDelete, ({ path }: { path: string }) => ctx.catalog?.deleteSession(assertSessionFile(path)) ?? false);
   handle(IPC.sessionsUpdateMeta, ({ path, updates }: { path: string; updates: Partial<SessionMetaEntry> }) =>
     ctx.guiStore.updateSessionMeta(path, sanitizeSessionMeta(updates)),
   );

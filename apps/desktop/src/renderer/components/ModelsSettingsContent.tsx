@@ -19,6 +19,9 @@ import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useContributions } from "../modules/registry.ts";
 import { ProviderEnabledToggle } from "./ProviderEnabledToggle.tsx";
 import { filterDisabledProviders } from "../lib/provider-filter.ts";
+import { useUi } from "../store/ui-store.ts";
+import { toast } from "../modules/toast-store.ts";
+import { askChoice } from "./ChoiceDialog.tsx";
 
 function formatContext(tokens?: number): string {
   if (!tokens) return "";
@@ -87,6 +90,35 @@ export const ModelsSettingsContent: React.FC = () => {
     return enabledModelKeys.some((k) => !k.includes("/") && k === m.id);
   };
 
+  /**
+   * Persist the enabled list. An empty list means "no filter" to the composer (every model stays available),
+   * so refuse to save it rather than show "0 active" while the picker lists everything.
+   * The store setter swallows IO errors, so verify the write landed.
+   */
+  const save = async (nextKeys: string[]): Promise<void> => {
+    if (nextKeys.length === 0) {
+      await askChoice({
+        title: "Keep at least one model enabled",
+        body: [
+          "With no models selected, Hive falls back to showing every model in the picker, so nothing would actually be turned off.",
+          "Leave at least one model enabled, or turn off whole providers in AI Providers instead.",
+        ],
+        choices: [{ id: "ok", label: "OK", tone: "primary" }],
+      });
+      return;
+    }
+    try {
+      await saveEnabledModels(nextKeys);
+    } catch (err) {
+      toast({ kind: "error", message: `Couldn't save model selection: ${err instanceof Error ? err.message : String(err)}` });
+      return;
+    }
+    const saved = useSessionStore.getState().enabledModelKeys;
+    if (saved.length !== nextKeys.length || !nextKeys.every((k) => saved.includes(k))) {
+      toast({ kind: "error", message: "Couldn't save model selection. Check that ~/.pi/agent/settings.json is writable." });
+    }
+  };
+
   // Toggle a single model
   const toggleModel = async (m: { provider: string; id: string }) => {
     const key = `${m.provider}/${m.id}`;
@@ -99,7 +131,7 @@ export const ModelsSettingsContent: React.FC = () => {
       nextKeys = [...enabledModelKeys, key];
     }
 
-    await saveEnabledModels(nextKeys);
+    await save(nextKeys);
   };
 
   // Filtered models by search query and provider
@@ -175,7 +207,7 @@ export const ModelsSettingsContent: React.FC = () => {
   const handleEnableAllInView = async () => {
     const keysToAdd = filterDisabledProviders(filteredModels, disabledProviders).map((m) => `${m.provider}/${m.id}`);
     const nextSet = new Set([...enabledModelKeys, ...keysToAdd]);
-    await saveEnabledModels(Array.from(nextSet));
+    await save(Array.from(nextSet));
   };
 
   // Disable all in current view
@@ -184,7 +216,7 @@ export const ModelsSettingsContent: React.FC = () => {
       filteredModels.flatMap((m) => [`${m.provider}/${m.id}`, m.id]),
     );
     const nextKeys = enabledModelKeys.filter((k) => !keysToRemove.has(k));
-    await saveEnabledModels(nextKeys);
+    await save(nextKeys);
   };
 
   // Toggle all for a specific provider
@@ -199,7 +231,7 @@ export const ModelsSettingsContent: React.FC = () => {
     } else {
       nextKeys = enabledModelKeys.filter((k) => !providerIds.has(k));
     }
-    await saveEnabledModels(nextKeys);
+    await save(nextKeys);
   };
 
   const getProviderDisplayName = (p: string): string => {
@@ -243,7 +275,7 @@ export const ModelsSettingsContent: React.FC = () => {
           style={{
             padding: "4px 10px",
             borderRadius: 12,
-            background: activeModelsCount > 0 ? "rgba(56, 139, 253, 0.15)" : "rgba(var(--fg-rgb), 0.05)",
+            background: activeModelsCount > 0 ? "color-mix(in srgb, var(--accent-base) 15%, transparent)" : "rgba(var(--fg-rgb), 0.05)",
             color: activeModelsCount > 0 ? "var(--accent-base)" : "var(--text-muted)",
             fontSize: 11,
             fontWeight: 600,
@@ -589,7 +621,16 @@ export const ModelsSettingsContent: React.FC = () => {
               fontSize: 12,
             }}
           >
-            No models found matching your search.
+            {combinedModels.length === 0 ? (
+              <>
+                <div>No models available. Connect a provider in AI Providers.</div>
+                <button className="ui-btn ui-btn--sm" style={{ marginTop: 10 }} onClick={() => useUi.getState().openSettings("accounts")}>
+                  Open AI Providers
+                </button>
+              </>
+            ) : (
+              "No models found matching your search."
+            )}
           </div>
         ) : (
           Object.entries(groupedModels).map(([provider, providerModels]) => {
@@ -667,17 +708,17 @@ export const ModelsSettingsContent: React.FC = () => {
                           padding: "9px 14px",
                           borderBottom: "1px solid rgba(var(--fg-rgb), 0.03)",
                           cursor: "pointer",
-                          background: enabled ? "rgba(56, 139, 253, 0.04)" : "transparent",
+                          background: enabled ? "color-mix(in srgb, var(--accent-base) 5%, transparent)" : "transparent",
                           transition: "background 0.15s ease",
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = enabled
-                            ? "rgba(56, 139, 253, 0.08)"
+                            ? "color-mix(in srgb, var(--accent-base) 10%, transparent)"
                             : "rgba(var(--fg-rgb), 0.03)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = enabled
-                            ? "rgba(56, 139, 253, 0.04)"
+                            ? "color-mix(in srgb, var(--accent-base) 5%, transparent)"
                             : "transparent";
                         }}
                       >

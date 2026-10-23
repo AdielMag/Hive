@@ -39,11 +39,13 @@ export function resolveCredentials(pi: Pick<PiInstallInfo, "nodePath" | "package
       pi.nodePath,
       [helper, pi.packageRoot],
       { timeout: 30_000, windowsHide: true, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, NO_COLOR: "1" } },
-      (err, stdout) => {
+      (err, stdout, stderr) => {
         try {
           resolvePromise(parseCredentialsOutput(String(stdout)));
         } catch (parseErr) {
-          reject(err ?? parseErr);
+          const stderrMsg = typeof stderr === "string" ? stderr.trim() : "";
+          const helperMsg = stderrMsg || (err instanceof Error ? err.message : String(err ?? ""));
+          reject(helperMsg ? new Error(helperMsg) : parseErr);
         }
       },
     );

@@ -18,7 +18,7 @@ import type {
 import { actionsApi } from "./actions-host.ts";
 
 export const PAGE_SIZE = 30;
-const FAST_MS = 5_000;
+const FAST_MS = 10_000;
 const SLOW_MS = 30_000;
 const NO_TOKEN_MS = 60_000;
 const ERROR_MS = 60_000;
@@ -77,6 +77,7 @@ const initialFilters: ActionsFilters = { status: "all", branch: "all", workflowI
 let hostRef: ModuleHost | null = null;
 let generation = 0;
 let loginRun = 0;
+let lastRepoResolvedAt = 0;
 
 export function buildFixPrompt(repo: { owner: string; repo: string }, run: ActionsRun, ctx: FailureContext): string {
   const fence = "```";
@@ -204,44 +205,58 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
     }
     if (!opts?.silent || projectChanged) set({ loading: true });
 
-    const api = actionsApi();
-    // Re-resolve the repo every refresh: cheap (local git) and picks up branch / token changes.
-    const repoRes = await api.repo(project.path);
-    if (gen !== generation) return;
-    if (!repoRes.ok) {
-      set({ repo: null, runs: [], totalCount: 0, loading: false, error: { code: repoRes.code, message: repoRes.message }, lastFetchedAt: Date.now() });
-      return;
-    }
-    const repo = repoRes.data;
-    set({ repo });
+    try {
+      const api = actionsApi();
+      const now = Date.now();
+      const canReuseRepo = !projectChanged && get().repo !== null && opts?.silent && now - lastRepoResolvedAt < 60_000;
+      let repo = get().repo;
 
-    const [runsRes, wfRes] = await Promise.all([
-      api.runs(repo, queryFor({ filters: get().filters, repo }, 1)),
-      get().workflows.length === 0 ? api.workflows(repo) : Promise.resolve(null),
-    ]);
-    if (gen !== generation) return;
-    if (!runsRes.ok) {
-      set({ loading: false, error: { code: runsRes.code, message: runsRes.message }, lastFetchedAt: Date.now() });
-      return;
-    }
-    // Keep already-loaded extra pages so a poll does not collapse "Load more" results.
-    const loaded = get().runs;
-    const fresh = runsRes.data.runs;
-    const freshIds = new Set(fresh.map((r) => r.id));
-    const tail = get().page > 1 ? loaded.filter((r) => !freshIds.has(r.id) && r.id < (fresh[fresh.length - 1]?.id ?? 0)) : [];
-    set({
-      runs: [...fresh, ...tail],
-      totalCount: runsRes.data.totalCount,
-      workflows: wfRes?.ok ? wfRes.data : get().workflows,
-      loading: false,
-      error: null,
-      lastFetchedAt: Date.now(),
-    });
+      if (!canReuseRepo) {
+        const repoRes = await api.repo(project.path);
+        if (gen !== generation) return;
+        if (!repoRes.ok) {
+          set({ repo: null, runs: [], totalCount: 0, loading: false, error: { code: repoRes.code, message: repoRes.message }, lastFetchedAt: Date.now() });
+          return;
+        }
+        repo = repoRes.data;
+        lastRepoResolvedAt = now;
+        set({ repo });
+      }
 
-    const expanded = get().expandedRunId;
-    if (expanded !== null) {
-      const jobsRes = await api.jobs(repo, expanded);
-      if (gen === generation && jobsRes.ok) set({ jobs: { ...get().jobs, [expanded]: jobsRes.data } });
+      if (!repo) return;
+
+      const [runsRes, wfRes] = await Promise.all([
+        api.runs(repo, queryFor({ filters: get().filters, repo }, 1)),
+        get().workflows.length === 0 ? api.workflows(repo) : Promise.resolve(null),
+      ]);
+      if (gen !== generation) return;
+      if (!runsRes.ok) {
+        set({ loading: false, error: { code: runsRes.code, message: runsRes.message }, lastFetchedAt: Date.now() });
+        return;
+      }
+      // Keep already-loaded extra pages so a poll does not collapse "Load more" results.
+      const loaded = get().runs;
+      const fresh = runsRes.data.runs;
+      const freshIds = new Set(fresh.map((r) => r.id));
+      const tail = get().page > 1 ? loaded.filter((r) => !freshIds.has(r.id) && r.id < (fresh[fresh.length - 1]?.id ?? 0)) : [];
+      set({
+        runs: [...fresh, ...tail],
+        totalCount: runsRes.data.totalCount,
+        workflows: wfRes?.ok ? wfRes.data : get().workflows,
+        loading: false,
+        error: null,
+        lastFetchedAt: Date.now(),
+      });
+
+      const expanded = get().expandedRunId;
+      if (expanded !== null) {
+        const jobsRes = await api.jobs(repo, expanded);
+        if (gen === generation && jobsRes.ok) set({ jobs: { ...get().jobs, [expanded]: jobsRes.data } });
+      }
+    } catch (err: any) {
+      if (gen === generation) {
+        set({ loading: false, error: { code: "unknown", message: err?.message ?? String(err) } });
+      }
     }
   },
 
@@ -249,13 +264,17 @@ export const useActionsStore = create<ActionsState>((set, get) => ({
     const { repo, loadingMore, runs, totalCount, page } = get();
     if (!repo || loadingMore || runs.length >= totalCount) return;
     set({ loadingMore: true });
-    const res = await actionsApi().runs(repo, queryFor(get(), page + 1));
-    if (!res.ok) {
-      set({ loadingMore: false, error: { code: res.code, message: res.message } });
-      return;
+    try {
+      const res = await actionsApi().runs(repo, queryFor(get(), page + 1));
+      if (!res.ok) {
+        set({ loadingMore: false, error: { code: res.code, message: res.message } });
+        return;
+      }
+      const seen = new Set(get().runs.map((r) => r.id));
+      set({ runs: [...get().runs, ...res.data.runs.filter((r) => !seen.has(r.id))], page: page + 1, loadingMore: false });
+    } catch (err: any) {
+      set({ loadingMore: false, error: { code: "unknown", message: err?.message ?? String(err) } });
     }
-    const seen = new Set(get().runs.map((r) => r.id));
-    set({ runs: [...get().runs, ...res.data.runs.filter((r) => !seen.has(r.id))], page: page + 1, loadingMore: false });
   },
 
   setFilters: (patch) => {

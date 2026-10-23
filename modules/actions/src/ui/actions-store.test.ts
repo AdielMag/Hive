@@ -4,7 +4,7 @@ import { durationLabel } from "./timing.ts";
 
 describe("pollInterval", () => {
   it("polls fast only when a run is active and the panel is open", () => {
-    expect(pollInterval({ hasActive: true, panelOpen: true, hasToken: true, error: false })).toBe(5_000);
+    expect(pollInterval({ hasActive: true, panelOpen: true, hasToken: true, error: false })).toBe(10_000);
     expect(pollInterval({ hasActive: true, panelOpen: false, hasToken: true, error: false })).toBe(30_000);
     expect(pollInterval({ hasActive: false, panelOpen: true, hasToken: true, error: false })).toBe(30_000);
   });

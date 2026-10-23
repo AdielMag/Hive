@@ -80,7 +80,6 @@ export default defineRendererModule({
   },
   activate(host) {
     setAnalyticsHost(host);
-    void useInsights.getState().refreshUsage();
     return () => {
       setAnalyticsHost(null);
     };

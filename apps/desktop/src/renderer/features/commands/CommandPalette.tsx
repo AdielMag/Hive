@@ -10,6 +10,7 @@ import { usePalette } from "./palette-store.ts";
 import { COMMANDS, COMMANDS_BY_ID, useCommandsVersion } from "./registry.ts";
 import { getShortcutLabel } from "./useShortcut.ts";
 import { fuzzyMatch } from "./fuzzy.ts";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../../store/session-store.ts";
 import "./command-palette.css";
 
@@ -95,7 +96,17 @@ export const CommandPalette: React.FC = () => {
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const { activeProject, projects, allSessions, tabs, activeTabId, openSessionTab, switchTab } =
-    useSessionStore();
+    useSessionStore(
+      useShallow((s) => ({
+        activeProject: s.activeProject,
+        projects: s.projects,
+        allSessions: s.allSessions,
+        tabs: s.tabs,
+        activeTabId: s.activeTabId,
+        openSessionTab: s.openSessionTab,
+        switchTab: s.switchTab,
+      })),
+    );
 
   // Load project files lazily only when palette is open
   useEffect(() => {
@@ -301,7 +312,26 @@ export const CommandPalette: React.FC = () => {
   if (!open) return null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
+    if (e.key === "Tab") {
+      // Trap focus inside the dialog.
+      const focusables = Array.from(
+        e.currentTarget.querySelectorAll<HTMLElement>("input, button, [tabindex]:not([tabindex='-1'])"),
+      ).filter((el) => !(el as HTMLButtonElement).disabled);
+      if (focusables.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !e.currentTarget.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !e.currentTarget.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
+    } else if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
       close();
@@ -330,7 +360,7 @@ export const CommandPalette: React.FC = () => {
         if (e.target === e.currentTarget) close();
       }}
     >
-      <div className="pal" role="dialog" aria-modal="true" aria-label="Command Palette">
+      <div className="pal" role="dialog" aria-modal="true" aria-label="Command Palette" onKeyDown={handleKeyDown}>
         <div className="pal__input-wrap">
           <Search size={16} className="pal__input-icon" />
           <input
@@ -339,7 +369,6 @@ export const CommandPalette: React.FC = () => {
             className="pal__input"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
             placeholder={
               isActionsMode
                 ? "Type an action..."

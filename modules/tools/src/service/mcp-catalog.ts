@@ -24,7 +24,17 @@ interface McpCacheFile {
  * Any sensitive credentials or env configs are strictly omitted.
  */
 export function getMcpCatalog(customPath?: string): McpServerInfo[] {
-  const filePath = customPath || (process.env.PI_CODING_AGENT_DIR ? join(process.env.PI_CODING_AGENT_DIR, "mcp-cache.json") : join(process.env.HOME || process.env.USERPROFILE || "", ".pi", "agent", "mcp-cache.json"));
+  let filePath = customPath || (process.env.PI_CODING_AGENT_DIR ? join(process.env.PI_CODING_AGENT_DIR, "mcp-cache.json") : join(process.env.HOME || process.env.USERPROFILE || "", ".pi", "agent", "mcp-cache.json"));
+  if (filePath.endsWith("mcp.json")) {
+    const candidate = filePath.replace(/mcp\.json$/, "mcp-cache.json");
+    try {
+      if (readFileSync(candidate, "utf8")) {
+        filePath = candidate;
+      }
+    } catch {
+      // keep filePath
+    }
+  }
   try {
     const raw = readFileSync(filePath, "utf8");
     const parsed = JSON.parse(raw) as McpCacheFile;

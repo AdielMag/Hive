@@ -527,7 +527,7 @@ function realOrResolved(p: string): string {
 export function isEditableLibraryPath(path: string, cwd: string | undefined, opts: LibraryRootOptions = {}): boolean {
   if (typeof path !== "string" || !isAbsolute(path) || extname(path).toLowerCase() !== ".md") return false;
   const real = realOrResolved(path);
-  return libraryRoots(cwd, opts).some((r) => isInside(path, r.dir) && isInside(real, realOrResolved(r.dir)));
+  return libraryRoots(cwd, opts).some((r) => isInside(path, r.dir) || isInside(real, realOrResolved(r.dir)));
 }
 
 /** Set (or remove, when value is null) a frontmatter key in a library file and return the refreshed entry. */
@@ -545,25 +545,26 @@ export async function setFrontmatterField(
     if (typeof value === "number" && !Number.isFinite(value)) throw new FrontmatterError("not-allowed", "Number must be finite.");
     if (!isEditableLibraryPath(path, cwd, opts)) throw new FrontmatterError("not-allowed", "Path is not a skill or agent file in a known location.");
 
+    const targetFile = realOrResolved(path);
     let raw: string;
     let st;
     try {
-      [raw, st] = await Promise.all([readFile(path, "utf8"), stat(path)]);
+      [raw, st] = await Promise.all([readFile(targetFile, "utf8"), stat(targetFile)]);
     } catch (err) {
-      throw new FrontmatterError("io", `Could not read ${path}: ${err instanceof Error ? err.message : String(err)}`);
+      throw new FrontmatterError("io", `Could not read ${targetFile}: ${err instanceof Error ? err.message : String(err)}`);
     }
     if (expectedMtimeMs !== undefined && Math.abs(st.mtimeMs - expectedMtimeMs) > 1) {
       throw new FrontmatterError("conflict", "The file changed on disk since it was loaded. Reload and try again.");
     }
     const next = applyFrontmatterEdit(raw, key, value);
     if (next !== raw) {
-      const tmp = `${path}.${process.pid}.${Date.now().toString(36)}.tmp`;
+      const tmp = `${targetFile}.${process.pid}.${Date.now().toString(36)}.tmp`;
       try {
         await writeFile(tmp, next, "utf8");
-        await rename(tmp, path);
+        await rename(tmp, targetFile);
       } catch (err) {
         await unlink(tmp).catch(() => {});
-        throw new FrontmatterError("io", `Could not write ${path}: ${err instanceof Error ? err.message : String(err)}`);
+        throw new FrontmatterError("io", `Could not write ${targetFile}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
     const snapshot = await listLibrary(cwd, opts);
@@ -578,6 +579,7 @@ export async function setFrontmatterField(
 
 export interface DeleteLibraryOptions extends LibraryRootOptions {
   trashItem?: (targetPath: string) => Promise<void>;
+  permanent?: boolean;
 }
 
 /**
@@ -590,10 +592,11 @@ export interface DeleteLibraryOptions extends LibraryRootOptions {
  * Rejects any paths outside known library roots for security.
  */
 export async function deleteLibraryEntry(
-  req: { cwd?: string; path: string },
+  req: { cwd?: string; path: string; permanent?: boolean },
   opts: DeleteLibraryOptions = {},
 ): Promise<LibraryDeleteResult> {
-  const { path } = req;
+  const { path, permanent = false } = req;
+  const isPermanent = permanent || opts.permanent;
   const cwd = req.cwd || undefined;
   if (!path || typeof path !== "string") {
     return { ok: false, error: "Missing or invalid file path." };
@@ -616,12 +619,15 @@ export async function deleteLibraryEntry(
   }
 
   try {
-    if (opts.trashItem) {
+    if (opts.trashItem && !isPermanent) {
       try {
         await opts.trashItem(targetPath);
         return { ok: true };
-      } catch {
-        // Fall back to rm if trash fails (e.g. headless tests or filesystems without trash)
+      } catch (trashErr: any) {
+        return {
+          ok: false,
+          error: `Could not move to system trash: ${trashErr?.message || String(trashErr)}. Permanent delete requires explicit confirmation.`,
+        };
       }
     }
     await rm(targetPath, { recursive: true, force: true });

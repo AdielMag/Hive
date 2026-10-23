@@ -33,7 +33,8 @@ import {
 import { dependentsOf, indexManifests, type ModuleManifest } from "@hive/module-sdk";
 import { MODULE_MANIFESTS } from "../../modules/manifests.ts";
 import { useModules } from "../../modules/registry.ts";
-import { PRESETS, TIER_LABEL, groupByTier, matchingPreset, presetIds } from "./presets.ts";
+import { askChoice } from "../../components/ChoiceDialog.tsx";
+import { PRESETS, TIER_LABEL, groupByTier, matchingPreset, presetIds, type PresetId } from "./presets.ts";
 
 const CORE_FEATURES = [
   "Sessions & transcript",
@@ -144,10 +145,37 @@ export const ModulesSettings: React.FC = () => {
     }
   };
 
-  const toggle = (m: ModuleManifest, on: boolean) => {
+  const applyPreset = async (id: PresetId, title: string) => {
+    const next = new Set(presetIds(MODULE_MANIFESTS, id));
+    const dropped = MODULE_MANIFESTS.filter((m) => enabled.includes(m.id) && !next.has(m.id)).map((m) => m.title);
+    if (dropped.length) {
+      const c = await askChoice({
+        title: `Switch to the ${title} preset?`,
+        body: [`This turns off ${dropped.length} module${dropped.length === 1 ? "" : "s"}: ${dropped.join(", ")}.`],
+        choices: [
+          { id: "cancel", label: "Cancel" },
+          { id: "apply", label: "Switch preset", tone: "danger" },
+        ],
+      });
+      if (c !== "apply") return;
+    }
+    void run(`preset:${id}`, () => setEnabledSet(Array.from(next)));
+  };
+
+  const toggle = async (m: ModuleManifest, on: boolean) => {
     if (!on) {
       const also = dependentsOf(graph, enabled, m.id).map((id) => graph.get(id)?.title ?? id);
-      if (also.length && !window.confirm(`Turning off ${m.title} also turns off: ${also.join(", ")}. Continue?`)) return;
+      if (also.length) {
+        const c = await askChoice({
+          title: `Turn off ${m.title}?`,
+          body: [`This also turns off: ${also.join(", ")}.`],
+          choices: [
+            { id: "cancel", label: "Cancel" },
+            { id: "off", label: "Turn off", tone: "danger" },
+          ],
+        });
+        if (c !== "off") return;
+      }
     }
     void run(m.id, () => setEnabled(m.id, on));
   };
@@ -177,7 +205,7 @@ export const ModulesSettings: React.FC = () => {
               key={p.id}
               className={`modules__preset${isCurrent ? " is-active" : ""}`}
               disabled={busy !== null}
-              onClick={() => void run(`preset:${p.id}`, () => setEnabledSet(presetIds(MODULE_MANIFESTS, p.id)))}
+              onClick={() => void applyPreset(p.id, p.title)}
             >
               <div className="modules__preset-head">
                 <span className="modules__preset-title">

@@ -8,13 +8,12 @@ import "./ui/limits.css";
 
 const Item: React.FC<{ host: ModuleHost }> = ({ host }) => <QuotaStatusItem host={host} />;
 
-let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-const debouncedRefresh = () => {
-  if (refreshTimer) clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => {
-    refreshTimer = null;
-    void useLimits.getState().refresh(true);
-  }, 1000);
+let lastRefreshedAt = 0;
+const throttledRefresh = () => {
+  const now = Date.now();
+  if (now - lastRefreshedAt < 60_000) return;
+  lastRefreshedAt = now;
+  void useLimits.getState().refresh(false);
 };
 
 export default defineRendererModule({
@@ -26,18 +25,13 @@ export default defineRendererModule({
     setLimitsHost(host);
     const stopPolling = startQuotaPolling();
     return () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
       stopPolling();
       setLimitsHost(null);
     };
   },
   onSessionEvent(evt) {
-    const type = evt.event?.type;
-    if (type === "message_end") {
-      const msg = evt.event.message as { role?: string } | undefined;
-      if (msg?.role === "assistant") debouncedRefresh();
-    } else if (type === "turn_complete" || type === "agent_end") {
-      debouncedRefresh();
+    if (evt.event?.type === "agent_end") {
+      throttledRefresh();
     }
   },
 });

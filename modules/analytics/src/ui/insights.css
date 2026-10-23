@@ -490,7 +490,7 @@ g.is-hover .usage-chart__hit {
   background: var(--bg-surface);
   color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .usage__project-btn:hover {
   background: var(--bg-hover);

@@ -60,10 +60,16 @@ export default defineRendererModule({
         category: "Git",
         when: () => false,
         run: (host, args) => {
-          const { filePath, staged, projectId } = (args ?? {}) as { filePath?: string; staged?: boolean; projectId?: string };
+          const { filePath, staged, projectId, untracked, cwd } = (args ?? {}) as {
+            filePath?: string;
+            staged?: boolean;
+            projectId?: string;
+            untracked?: boolean;
+            cwd?: string;
+          };
           const project = host.sessions.activeProject();
           if (!filePath || !project || (projectId && projectId !== project.id)) return;
-          return openDiffTab(host, project, filePath, Boolean(staged));
+          return openDiffTab(host, project, filePath, Boolean(staged), Boolean(untracked), cwd);
         },
       },
     ],

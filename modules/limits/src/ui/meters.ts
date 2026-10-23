@@ -19,6 +19,8 @@ export interface QuotaMeter {
   wk?: QuotaWindow;
   /** True when this pool serves the active session model; undefined when it can't be determined. */
   active?: boolean;
+  cached?: boolean;
+  fetchedAt?: number;
 }
 
 const THIRD_PARTY_MODEL = /claude|gpt|sonnet|opus|haiku|codex|oss|3p/i;
@@ -48,17 +50,18 @@ export function buildMeters(providers: ProviderQuota[], model?: ActiveModelLite 
     const isAgy = p.providerId === "antigravity" || p.providerId === "google-antigravity";
     const tp = p.groups.filter(isThirdPartyGroup);
     const own = p.groups.filter((g) => !isThirdPartyGroup(g));
+    const cachedMeta = { cached: p.source === "cache", fetchedAt: p.fetchedAt };
     if (!isAgy || (!tp.length && !own.length)) {
-      out.push(meterOf(p.providerId, p.providerId, p.groups));
+      out.push(meterOf(p.providerId, p.providerId, p.groups, cachedMeta));
       continue;
     }
     const onProvider = modelUsesProvider(model, p.providerId);
     const modelIs3p = isThirdPartyModel(model?.id);
     if (own.length) {
-      out.push(meterOf(`${p.providerId}:gemini`, p.providerId, own, { pool: "Gemini", active: onProvider ? !modelIs3p : undefined }));
+      out.push(meterOf(`${p.providerId}:gemini`, p.providerId, own, { pool: "Gemini", active: onProvider ? !modelIs3p : undefined, ...cachedMeta }));
     }
     if (tp.length) {
-      out.push(meterOf(`${p.providerId}:3p`, p.providerId, tp, { pool: "Claude·GPT", active: onProvider ? modelIs3p : undefined }));
+      out.push(meterOf(`${p.providerId}:3p`, p.providerId, tp, { pool: "Claude·GPT", active: onProvider ? modelIs3p : undefined, ...cachedMeta }));
     }
   }
   return out;

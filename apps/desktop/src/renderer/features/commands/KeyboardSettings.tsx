@@ -5,6 +5,7 @@ import { useKeybindingStore } from "./keybindings-store.ts";
 import { effectiveKeys, findConflicts, isCustomised } from "./bindings.ts";
 import { chordFromEvent, formatChord, validateGlobalChord } from "./keybinding.ts";
 import type { Command } from "./types.ts";
+import { askChoice } from "../../components/ChoiceDialog.tsx";
 import "./keyboard-settings.css";
 
 interface ConflictInfo {
@@ -33,6 +34,9 @@ export const KeyboardSettings: React.FC = () => {
       setErrorHint(null);
     }
   }, [recordingId, setRecording]);
+
+  // Never leave global shortcuts disabled if Settings closes mid-recording.
+  useEffect(() => () => setRecording(false), [setRecording]);
 
   // Capture keystrokes during shortcut recording
   useEffect(() => {
@@ -139,9 +143,14 @@ export const KeyboardSettings: React.FC = () => {
               type="button"
               className="ui-btn ui-btn--ghost ui-btn--sm"
               onClick={() => {
-                if (window.confirm("Reset all keyboard shortcuts to defaults?")) {
-                  resetAll();
-                }
+                void askChoice({
+                  title: "Reset all keyboard shortcuts?",
+                  body: [`${customCount} customised shortcut${customCount === 1 ? "" : "s"} will go back to the defaults.`],
+                  choices: [
+                    { id: "cancel", label: "Cancel" },
+                    { id: "reset", label: "Reset all", tone: "danger" },
+                  ],
+                }).then((c) => c === "reset" && resetAll());
               }}
             >
               <RotateCcw size={12} />

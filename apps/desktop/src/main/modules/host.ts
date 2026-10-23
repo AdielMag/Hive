@@ -87,15 +87,22 @@ export class MainModuleHost {
   private readonly activating = new Map<string, Promise<void>>();
   private readonly errors = new Map<string, string>();
   private queue: Promise<unknown> = Promise.resolve();
-  /** Settles once startup activation finished (resolved immediately before `start`). */
-  private started: Promise<unknown> = Promise.resolve();
   private readonly log: ModuleLogger;
 
   constructor(private readonly opts: MainModuleHostOptions) {
     this.log = opts.log ?? console;
     const problems = validateGraph(opts.manifests);
     // A broken graph is a build bug; drop offending modules instead of refusing to boot.
-    const bad = new Set(problems.map((p) => p.split(/[ :]/)[0] ?? ""));
+    const bad = new Set<string>();
+    for (const p of problems) {
+      if (p.startsWith("dependency cycle: ")) {
+        const cycle = p.slice("dependency cycle: ".length).split(" -> ").map((s) => s.trim());
+        for (const id of cycle) if (id) bad.add(id);
+      } else {
+        const id = p.split(/[ :]/)[0];
+        if (id) bad.add(id);
+      }
+    }
     if (problems.length) this.log.error("[modules] invalid module graph:", problems);
     this.manifests = problems.length ? opts.manifests.filter((m) => !bad.has(m.id)) : opts.manifests;
     this.graph = indexManifests(this.manifests);
@@ -172,13 +179,11 @@ export class MainModuleHost {
 
   /** Activates enabled modules (requirements first) and re-syncs agent assets. Call once at startup. */
   start(): Promise<string[]> {
-    const p = this.run(async () => {
+    return this.run(async () => {
       const notices = this.syncAssets();
       for (const id of this.state.enabled) await this.activate(id);
       return notices;
     });
-    this.started = p.catch(() => {});
-    return p;
   }
 
   setEnabled(id: string, enabled: boolean): Promise<SetModulesEnabledResult> {
@@ -199,8 +204,22 @@ export class MainModuleHost {
   async invoke(id: string, method: string, args: readonly unknown[]): Promise<unknown> {
     if (!this.graph.has(id)) throw new Error(`Unknown module "${id}"`);
     if (!this.isEnabled(id)) throw new Error(`Module "${id}" is disabled`);
-    await this.started;
-    await this.activating.get(id);
+    if (!this.active.has(id) && this.opts.loaders[id]) {
+      if (this.errors.has(id)) {
+        throw new Error(`Module "${id}" failed to activate: ${this.errors.get(id)}`);
+      }
+      const pending = this.activating.get(id) ?? this.activate(id);
+      const timer = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Timed out waiting for module "${id}" to activate`)), 15_000),
+      );
+      await Promise.race([pending, timer]);
+    } else if (this.activating.has(id)) {
+      const pending = this.activating.get(id)!;
+      const timer = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Timed out waiting for module "${id}" to activate`)), 15_000),
+      );
+      await Promise.race([pending, timer]);
+    }
     if (!this.isEnabled(id)) throw new Error(`Module "${id}" is disabled`);
     const handler = this.active.get(id)?.handlers.get(moduleChannel(id, method));
     if (!handler) throw new Error(`Module "${id}" has no method "${method}"`);

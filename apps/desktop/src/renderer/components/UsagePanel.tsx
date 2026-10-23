@@ -18,7 +18,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { buildTimeline } from "@hive/pi-adapter";
+import { getTimeline } from "../lib/transcript-timeline.ts";
 import { useSessionStore } from "../store/session-store.ts";
 import { formatCost, formatDuration, formatTokens } from "../lib/format.ts";
 import { collectSubagents, summarizeSubagents } from "../lib/ai/subagents.ts";
@@ -119,7 +119,7 @@ export const UsagePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     })),
   );
 
-  const timeline = useMemo(() => buildTimeline(transcript), [transcript]);
+  const timeline = useMemo(() => getTimeline(transcript), [transcript]);
   const subagents = useMemo(() => collectSubagents(timeline, transcript.running), [timeline, transcript.running]);
   const subagentsSummary = useMemo(() => summarizeSubagents(subagents), [subagents]);
 

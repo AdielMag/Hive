@@ -954,3 +954,100 @@ describe("projectsLoaded", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("failed sends and session lifecycle", () => {
+  const baseTab = { id: "tab_f", projectId: "p1", title: "T", pinned: false, mode: "auto-edit", activeKey: "k_f" };
+  const reset = () => {
+    __test.setDisplayedTab("tab_f");
+    useSessionStore.setState({
+      activeKey: "k_f",
+      activeTabId: "tab_f",
+      displayedTabId: "tab_f",
+      tabs: [baseTab],
+      selectedMode: "auto-edit",
+      promptText: "",
+      attachments: [],
+      error: null,
+      compactionHeld: {},
+      compactionStates: {},
+      transcript: { ...createTranscript(), running: false },
+    } as never);
+  };
+
+  beforeEach(() => {
+    reset();
+    __resetCompactionStates();
+  });
+
+  it("restores the draft and sets an error when Pi rejects a prompt", async () => {
+    vi.stubGlobal("window", { studio: { rpc: vi.fn(async () => ({ ok: false, error: "nope" })) } });
+    useSessionStore.setState({ promptText: "hello" });
+    await useSessionStore.getState().sendPrompt();
+    expect(useSessionStore.getState().promptText).toBe("hello");
+    expect(useSessionStore.getState().error).toContain("nope");
+    vi.unstubAllGlobals();
+  });
+
+  it("re-queues held messages when the flush is rejected", async () => {
+    vi.stubGlobal("window", { studio: { rpc: vi.fn(async () => ({ ok: false, error: "busy" })) } });
+    useSessionStore.setState({ compactionHeld: { k_f: [{ text: "a", message: "a", images: [] }] } } as never);
+    const { flushHeldMessages } = await import("./session-store.ts");
+    await flushHeldMessages("k_f");
+    expect(useSessionStore.getState().compactionHeld.k_f).toHaveLength(1);
+    expect(useSessionStore.getState().error).toContain("busy");
+    vi.unstubAllGlobals();
+  });
+
+  it("stops Pi and drops the prompt when the tab is closed while Pi is starting", async () => {
+    let resolveStart!: (v: { key: string }) => void;
+    const stopSession = vi.fn(async () => {});
+    const rpc = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal("window", {
+      studio: {
+        startSession: vi.fn(() => new Promise((r) => (resolveStart = r as never))),
+        stopSession,
+        rpc,
+        refreshCatalog: vi.fn(),
+        readSessionFile: vi.fn(async () => ({ entries: [], leafId: null })),
+      },
+    });
+    useSessionStore.setState({
+      activeKey: null,
+      tabs: [{ ...baseTab, activeKey: undefined }],
+      projects: [{ id: "p1", name: "P", path: "/p" }],
+      promptText: "hi",
+    } as never);
+    const sending = useSessionStore.getState().sendPrompt();
+    await Promise.resolve();
+    await Promise.resolve();
+    useSessionStore.setState({ tabs: [] });
+    resolveStart({ key: "k_new" });
+    await sending;
+    expect(stopSession).toHaveBeenCalledWith("k_new");
+    expect(rpc).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("clears running/streaming on the displayed and cached transcript when Pi dies", () => {
+    const running = { ...createTranscript(), running: true };
+    useSessionStore.setState({ transcript: running, transcriptsByTab: { tab_f: running } } as never);
+    __test.dropSessionKey("k_f", true);
+    expect(useSessionStore.getState().transcript.running).toBe(false);
+    expect(useSessionStore.getState().transcriptsByTab.tab_f?.running).toBe(false);
+    expect(useSessionStore.getState().transcript.streaming).toBeNull();
+  });
+
+  it("abort appends restored queue text to the current draft", async () => {
+    vi.stubGlobal("window", {
+      studio: {
+        rpc: vi.fn(async (_k: string, cmd: { type: string }) =>
+          cmd.type === "clear_queue" ? { ok: true, data: { steering: ["queued"], followUp: [] } } : { ok: true },
+        ),
+      },
+    });
+    useSessionStore.setState({ promptText: "typing" });
+    await useSessionStore.getState().abort();
+    expect(useSessionStore.getState().promptText).toBe("typing\n\nqueued");
+    vi.unstubAllGlobals();
+  });
+});

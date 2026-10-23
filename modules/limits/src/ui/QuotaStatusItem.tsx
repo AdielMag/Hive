@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Gauge, RefreshCw, X } from "lucide-react";
+import { AlertCircle, Gauge, RefreshCw, X } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import { formatAgo, formatDuration } from "@hive/module-sdk/format";
 import { useLimits, useNow } from "./limits-store.ts";
@@ -24,6 +24,7 @@ const Track: React.FC<{ used?: number }> = ({ used }) => (
 export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const quota = useLimits((s) => s.quota);
   const quotaLoading = useLimits((s) => s.loading);
+  const error = useLimits((s) => s.error);
   const refreshQuota = useLimits((s) => s.refresh);
   const now = useNow(30_000);
   const quotaPop = useHoverPopover();
@@ -70,13 +71,14 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
             const resetAt = (used5 !== undefined ? m.w5?.resetsAt : undefined) ?? m.wk?.resetsAt;
             const poolName = m.pool ? (POOL_LABEL[m.pool] ?? m.pool) : undefined;
             const resets = resetAt ? `, resets in ${formatDuration(resetAt - now)}` : "";
-            const tip = poolName
+            const cachedHint = m.cached ? ` (cached${m.fetchedAt ? `, updated ${formatAgo(m.fetchedAt, now)}` : ""})` : "";
+            const tip = (poolName
               ? `Quota pool: ${poolName} (${m.label}) — ${Math.round(worst)}% used${resets} · ${detail}${m.active === true ? " (active model)" : ""}`
-              : `${m.label} — ${Math.round(worst)}% used${resets} · ${detail}`;
+              : `${m.label} — ${Math.round(worst)}% used${resets} · ${detail}`) + cachedHint;
             return (
               <span
                 key={m.key}
-                className={`sb-quota__item${m.active === true ? " is-active-pool" : ""}${m.active === false ? " is-idle-pool" : ""}`}
+                className={`sb-quota__item${m.cached ? " is-cached" : ""}${m.active === true ? " is-active-pool" : ""}${m.active === false ? " is-idle-pool" : ""}`}
                 title={tip}
               >
                 <ProviderIcon provider={m.providerId} size={12} />
@@ -86,9 +88,33 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
                   <Track used={usedWk} />
                 </span>
                 <span className={`sb-quota__pct sb-quota__pct--${tone} mono`}>{Math.round(worst)}%</span>
+                {m.cached && <span className="sb-quota__cached-tag" title={cachedHint.trim()}>cached</span>}
               </span>
             );
           })}
+          {error && (
+            <span
+              className="sb-quota__err-indicator"
+              title={`Error refreshing limits: ${error} · Click to retry`}
+              onClick={(e) => {
+                e.stopPropagation();
+                void refreshQuota(true);
+              }}
+            >
+              <AlertCircle size={11} style={{ color: "var(--danger)" }} />
+            </span>
+          )}
+        </button>
+      )}
+
+      {meters.length === 0 && error && (
+        <button
+          className="sb-quota sb-quota--error"
+          onClick={() => void refreshQuota(true)}
+          title={`Subscription limits error: ${error} — click to retry`}
+        >
+          <AlertCircle size={12} style={{ color: "var(--danger)" }} />
+          <span style={{ fontSize: 11, color: "var(--danger)" }}>Limits error · Retry</span>
         </button>
       )}
 
@@ -128,6 +154,30 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
                 )}
               </div>
             </div>
+
+            {error && (
+              <div
+                className="quota-popover__error"
+                role="alert"
+                style={{
+                  margin: "0 10px 8px",
+                  padding: "6px 10px",
+                  background: "color-mix(in srgb, var(--danger) 12%, transparent)",
+                  border: "1px solid var(--danger)",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 6,
+                }}
+              >
+                <span>{error}</span>
+                <button type="button" className="ui-btn ui-btn--sm" onClick={() => void refreshQuota(true)} disabled={quotaLoading}>
+                  Retry
+                </button>
+              </div>
+            )}
 
             {exhausted && (
               <div className="quota-popover__exhausted" role="alert">

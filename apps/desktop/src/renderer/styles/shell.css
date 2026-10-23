@@ -220,9 +220,9 @@
   color: var(--text-primary);
 }
 .msg-tool-batch__pill.is-error {
-  border-color: rgba(229, 83, 75, 0.45);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
   color: var(--danger, #e5534b);
-  background: rgba(229, 83, 75, 0.08);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 .msg-tool-batch__pill-op {
   font-size: 10px;
@@ -1808,6 +1808,10 @@
     background: rgba(var(--fg-rgb), 0.04);
     color: var(--text-primary);
   }
+}
+.tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-base);
 }
 .tab.is-active {
   background: rgba(var(--fg-rgb), 0.07);

@@ -24,6 +24,7 @@ export interface GitRepoStatus {
   staged: GitFileStatus[];
   unstaged: GitFileStatus[];
   untracked: GitFileStatus[];
+  error?: string;
 }
 
 export interface GitCommitLog {
@@ -136,6 +137,7 @@ export const GitMethods = {
   createBranchFrom: "createBranchFrom",
   renameBranch: "renameBranch",
   merge: "merge",
+  mergeAbort: "mergeAbort",
   stage: "stage",
   stageAll: "stageAll",
   unstage: "unstage",
@@ -160,7 +162,7 @@ export const GitCommands = {
   openDiff: "git.openDiff",
 } as const;
 
-export type GitDiffOptions = { staged?: boolean; filePath?: string };
+export type GitDiffOptions = { staged?: boolean; filePath?: string; untracked?: boolean };
 
 export interface GitApi {
   getGitStatus(cwd: string): Promise<GitRepoStatus>;
@@ -176,6 +178,7 @@ export interface GitApi {
   gitCreateBranchFrom(cwd: string, branch: string, startPoint: string, checkout?: boolean): Promise<string>;
   gitRenameBranch(cwd: string, oldName: string, newName: string): Promise<string>;
   gitMerge(cwd: string, branch: string): Promise<string>;
+  gitMergeAbort(cwd: string): Promise<string>;
   stageFile(cwd: string, filePath: string): Promise<void>;
   stageAll(cwd: string): Promise<void>;
   unstageFile(cwd: string, filePath: string): Promise<void>;
@@ -211,6 +214,7 @@ export function createGitApi(invoke: Invoke): GitApi {
     gitCreateBranchFrom: (cwd, branch, startPoint, checkout) => invoke(M.createBranchFrom, cwd, branch, startPoint, checkout),
     gitRenameBranch: (cwd, oldName, newName) => invoke(M.renameBranch, cwd, oldName, newName),
     gitMerge: (cwd, branch) => invoke(M.merge, cwd, branch),
+    gitMergeAbort: (cwd) => invoke(M.mergeAbort, cwd),
     stageFile: (cwd, filePath) => invoke(M.stage, cwd, filePath),
     stageAll: (cwd) => invoke(M.stageAll, cwd),
     unstageFile: (cwd, filePath) => invoke(M.unstage, cwd, filePath),

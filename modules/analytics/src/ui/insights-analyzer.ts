@@ -61,13 +61,13 @@ export function analyzeUsageTelemetry(
 
   // 2. Cache Hit Rate Analysis
   if (cacheHitRate > 0.4) {
-    const savedDollars = (cacheTokens / 1_000_000) * 2.5; // avg estimate
+    const savedDollars = (cacheTokens / 1_000_000) * 2.5; // ~avg estimate based on ~$2.50/Mtok blended cache discount
     insights.push({
       id: "cache-strong",
       type: "positive",
       title: "Exceptional Prompt Cache Reuse",
-      description: `${Math.round(cacheHitRate * 100)}% of input tokens are served directly from cache, saving prompt execution time and lowering provider costs significantly.`,
-      metric: `${formatTokens(cacheTokens)} cached (~${formatCost(savedDollars)} saved)`,
+      description: `${Math.round(cacheHitRate * 100)}% of input tokens are served directly from cache (estimated savings assume ~\$2.50/Mtok blended discount).`,
+      metric: `${formatTokens(cacheTokens)} cached (~${formatCost(savedDollars)} est. saved)`,
       impact: "High",
     });
   } else if (cacheHitRate < 0.15 && totals.turns > 15) {
@@ -83,7 +83,7 @@ export function analyzeUsageTelemetry(
       id: "rec-cache",
       title: "Leverage Prompt Prefix Stability",
       action: "Keep system instructions and long context stable across consecutive turns to trigger 50–90% cheaper cache reads.",
-      estimatedSavings: "Up to 40% on input tokens",
+      estimatedSavings: "~30%–40% on input tokens (estimate assuming steady context prefixes)",
       difficulty: "Easy",
     });
   }
@@ -123,9 +123,9 @@ export function analyzeUsageTelemetry(
   insights.push({
     id: "run-rate",
     type: "trend",
-    title: "Trajectory & Velocity",
-    description: `Average daily spend is ${formatCost(dailyAverageCost)} across ${activeDays} active day(s). Active turn density: ${Math.round(totals.turns / Math.max(1, activeDays))} turns/day.`,
-    metric: `${formatCost(projected30d)} / month projected`,
+    title: "Trajectory & Velocity (Estimated)",
+    description: `Average daily spend is ~${formatCost(dailyAverageCost)} across ${activeDays} active day(s). Active turn density: ~${Math.round(totals.turns / Math.max(1, activeDays))} turns/day (estimate based on current cadence).`,
+    metric: `~${formatCost(projected30d)} / month projected (est.)`,
     impact: "Medium",
   });
 

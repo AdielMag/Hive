@@ -232,6 +232,15 @@ function whenCompactionApplied(key: string, timeoutMs = 15_000): Promise<void> {
   });
 }
 
+/** Put an unsent prompt back in a tab's composer, after anything typed since (newline-separated). */
+function restoreDraft(tabId: string, text: string, attachments: AttachedItem[]): void {
+  if (!useSessionStore.getState().tabs.some((t) => t.id === tabId)) return;
+  updateTabUi(tabId, (ui) => ({
+    promptText: ui.promptText.trim() && text ? `${ui.promptText}\n${text}` : ui.promptText || text,
+    attachments: attachments.length > 0 ? [...ui.attachments, ...attachments] : ui.attachments,
+  }));
+}
+
 /** Send everything held for `key` as one prompt now that compaction is over. */
 export async function flushHeldMessages(key: string): Promise<void> {
   const held = useSessionStore.getState().compactionHeld[key];
@@ -243,7 +252,20 @@ export async function flushHeldMessages(key: string): Promise<void> {
   });
   const message = held.map((h) => h.message).join("\n\n");
   const images = held.flatMap((h) => h.images);
-  await window.studio.rpc(key, { type: "prompt", message, ...(images.length > 0 ? { images } : {}) });
+  let failure: string | null = null;
+  try {
+    const res = await window.studio.rpc(key, { type: "prompt", message, ...(images.length > 0 ? { images } : {}) });
+    if (!res?.ok) failure = res?.error || "Pi didn't accept the message.";
+  } catch (err) {
+    failure = err instanceof Error ? err.message : String(err);
+  }
+  if (failure !== null) {
+    // Re-queue (ahead of anything held meanwhile) so the message isn't lost.
+    useSessionStore.setState((s) => ({
+      compactionHeld: { ...s.compactionHeld, [key]: [...held, ...(s.compactionHeld[key] ?? [])] },
+      error: `Couldn't send your message: ${failure}`,
+    }));
+  }
 }
 
 export async function handleCompactionEvent(key: string, ev: unknown): Promise<void> {
@@ -417,7 +439,7 @@ export interface SessionStoreState {
   /** Answer (or cancel) the displayed tab's pending question form. */
   respondForm: (result: Omit<StudioFormResult, "kind">) => Promise<void>;
   /** Ask the runner to terminate a running or queued subagent. Failures surface via `error`. */
-  stopSubagent: (target: { agentId?: string; type?: string; description?: string }) => Promise<void>;
+  stopSubagent: (target: { agentId?: string; type?: string; description?: string }) => Promise<boolean>;
   deleteSessionFile: (sessionPath: string) => Promise<void>;
   /** Delete a specific queued message from steering or follow-up queue. */
   deleteQueuedMessage: (type: "steering" | "followUp", index: number) => Promise<void>;
@@ -778,6 +800,15 @@ function dropSessionKey(key: string, crashed = false): void {
     // Nobody is left to answer a pending dialog/form; leaving it open would block the whole window.
     updateTabUi(tabId, () => ({ pendingUiDialog: null, pendingForm: null }));
   }
+  useSessionStore.setState((s) => {
+    // A dead process can't finish its run: don't leave "Working..." + Stop on the displayed/cached transcript.
+    const settle = (t: TranscriptState): TranscriptState => (t.running || t.streaming ? { ...t, running: false, streaming: null } : t);
+    const cached = tabId ? s.transcriptsByTab[tabId] : undefined;
+    return {
+      ...(s.activeKey === key || (tabId && isDisplayed(tabId)) ? { transcript: settle(s.transcript) } : {}),
+      ...(tabId && cached ? { transcriptsByTab: { ...s.transcriptsByTab, [tabId]: settle(cached) } } : {}),
+    };
+  });
   useSessionStore.setState((s) => ({
     tabs: s.tabs.map((t) => (t.activeKey === key ? { ...t, activeKey: undefined, isCold: true } : t)),
     ...(s.activeKey === key ? { activeKey: null } : {}),
@@ -1372,6 +1403,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
               ...(titleToUse ? { title: titleToUse } : {}),
             };
         const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath, startId: tabId, ...newSessionOpts });
+        // The tab was closed while Pi was starting: don't orphan the process.
+        if (!get().tabs.some((t) => t.id === tabId)) {
+          void window.studio.stopSession(res.key).catch(() => {});
+          return null;
+        }
         setPendingStartStep(tabId, "model");
         set((s) => ({
           // Only steal focus if the user is still on this tab.
@@ -1807,9 +1843,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     try {
       const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
       const t = applyEntries(createTranscript(), entries, leafId, "replace");
-      set((s) => ({
-        transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
-      }));
+      set((s) =>
+        s.tabs.some((x) => x.id === tabId) && !s.transcriptsByTab[tabId]
+          ? { transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t } }
+          : {},
+      );
     } catch (err) {
       console.error("Failed to load background tab transcript", err);
     }
@@ -1880,10 +1918,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
           const base = existing ?? createTranscript();
           const t = applyEntries(base, entries, leafId, "replace");
-          set((s) => ({
-            transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
-            ...(s.displayedTabId === tabId ? { transcript: t } : {}),
-          }));
+          set((s) =>
+            s.tabs.some((x) => x.id === tabId)
+              ? {
+                  transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
+                  ...(s.displayedTabId === tabId ? { transcript: t } : {}),
+                }
+              : {},
+          );
         } catch (err) {
           console.error("Failed to read session file", err);
         }
@@ -1901,9 +1943,20 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     clearPendingStart(tabId);
     // Stop in the background: closing a tab should feel instant.
     if (tab?.activeKey) {
-      hydratedSessionKeys.delete(tab.activeKey);
-      void window.studio.stopSession(tab.activeKey).catch(() => {});
+      const closedKey = tab.activeKey;
+      hydratedSessionKeys.delete(closedKey);
+      void window.studio.stopSession(closedKey).catch(() => {});
+      setReloadState(closedKey, null);
+      setCompactionState(closedKey, null);
+      postCompactionTokens.delete(closedKey);
+      set((s) => {
+        if (!s.compactionHeld[closedKey]) return {};
+        const compactionHeld = { ...s.compactionHeld };
+        delete compactionHeld[closedKey];
+        return { compactionHeld };
+      });
     }
+    bridgeSubagentIds.delete(tabId);
     clearActivity(tabId);
     // The session file may only now be complete on disk; make sure it's listed so it can be reopened.
     if (tab?.sessionPath) void get().refreshCatalog();
@@ -1945,11 +1998,15 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     let { transcript, activeKey } = get();
     if (!promptText.trim() && attachments.length === 0) return;
     // Pi is swapping its extension runtime; a prompt now would hit a half-loaded session.
-    if (activeKey && get().reloadStates[activeKey]?.phase === "reloading") return;
+    if (activeKey && get().reloadStates[activeKey]?.phase === "reloading") {
+      set({ error: "Pi is reloading - try again in a moment." });
+      return;
+    }
 
     playUiSound("prompt_send");
 
-    const { activeTabId } = get();
+    // Capture everything tab-dependent before any await: the user may switch tabs while Pi starts.
+    const { activeTabId, selectedMode } = get();
     const curTab = get().tabs.find((t) => t.id === activeTabId);
     const isFirstPrompt = curTab?.title === NEW_SESSION_TITLE || !curTab?.sessionPath;
     const autoTitle = titleFromPrompt(promptText, 40) || attachments[0]?.name || "";
@@ -1981,7 +2038,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         }));
         if (first) pendingStartTimers.set(tabId, setTimeout(() => clearPendingStart(tabId), PENDING_START_TIMEOUT_MS));
       }
+      const startedTabId = activeTabId;
       activeKey = await get().ensureActiveSession(activeTabId ?? undefined, { title: autoTitle || undefined });
+      if (startedTabId && !get().tabs.some((t) => t.id === startedTabId)) {
+        // Tab closed while Pi was starting (ensureActiveSession already stopped the process): drop the prompt quietly.
+        clearPendingStart(startedTabId);
+        return;
+      }
       if (!activeKey) {
         if (activeTabId) {
           clearPendingStart(activeTabId);
@@ -1993,8 +2056,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         return;
       }
       if (activeTabId) setPendingStartStep(activeTabId, "sending");
-      // The snapshot above predates the session start; don't act on a stale `running`.
-      transcript = get().transcript;
+      // The snapshot above predates the session start; don't act on a stale `running` (of this tab, not the displayed one).
+      transcript = activeTabId && !isDisplayed(activeTabId) ? get().transcriptsByTab[activeTabId] ?? createTranscript() : get().transcript;
     } else if (isFirstPrompt && autoTitle && activeTabId) {
       // If the session was already running and had a worktree with a placeholder branch (e.g. hive/session-xxxx),
       // rename the worktree branch to a descriptive name based on the user's initial request!
@@ -2037,7 +2100,6 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
 
     // Prefix mode steering if in non-default mode
-    const { selectedMode } = get();
     if (selectedMode === "plan") {
       message = `[Mode: Plan - Analyze, research, and outline an architectural plan. Do not execute file edits unless explicitly directed to do so.]\n\n${message}`;
     } else if (selectedMode === "manual") {
@@ -2147,32 +2209,45 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       return;
     }
 
+    // A rejected/failed send must not lose the user's text: put it back in the composer and say why.
+    const failSend = (reason: string | undefined) => {
+      if (trackPending && activeTabId) clearPendingStart(activeTabId);
+      if (activeTabId) restoreDraft(activeTabId, promptText, attachments);
+      set({ error: `Couldn't send your message: ${reason || "Pi didn't accept it."}` });
+    };
+    const sendRpc = async (command: Parameters<StudioApi["rpc"]>[1]) => {
+      try {
+        const res = await window.studio.rpc(activeKey, command);
+        if (!res?.ok) failSend(res?.error);
+        return res;
+      } catch (err) {
+        failSend(err instanceof Error ? err.message : String(err));
+        return null;
+      }
+    };
+
     if (running && streamingBehavior === "steer") {
-      await window.studio.rpc(activeKey, {
+      await sendRpc({
         type: "steer",
         message,
         ...(images.length > 0 ? { images } : {}),
       });
     } else if (running && streamingBehavior === "followUp") {
-      await window.studio.rpc(activeKey, {
+      await sendRpc({
         type: "follow_up",
         message,
         ...(images.length > 0 ? { images } : {}),
       });
     } else {
       // Without a run (rejected prompt, or a slash command Pi handles itself) no agent_start will clear the indicator.
-      let started = false;
-      try {
-        const res = await window.studio.rpc(activeKey, {
-          type: "prompt",
-          message,
-          ...(images.length > 0 ? { images } : {}),
-          ...(running ? { streamingBehavior: "steer" } : {}),
-        });
-        started = !!res?.ok && !promptText.trim().startsWith("/");
-      } finally {
-        if (trackPending && activeTabId && !started) clearPendingStart(activeTabId);
-      }
+      const res = await sendRpc({
+        type: "prompt",
+        message,
+        ...(images.length > 0 ? { images } : {}),
+        ...(running ? { streamingBehavior: "steer" } : {}),
+      });
+      const started = !!res?.ok && !promptText.trim().startsWith("/");
+      if (trackPending && activeTabId && !started) clearPendingStart(activeTabId);
     }
   },
 
@@ -2281,8 +2356,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           cutoff === null
             ? next
             : { ...next, live: next.live.filter((m) => typeof m.timestamp === "number" && m.timestamp < cutoff) },
-        promptText: text,
-        attachments: images,
+        // Keep whatever the user has typed meanwhile.
+        promptText: mode === "resend" || !s.promptText.trim() ? text : `${s.promptText}\n${text}`,
+        attachments: mode === "resend" ? images : [...s.attachments, ...images],
       };
     });
     if (mode === "resend") {
@@ -2316,7 +2392,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (res.ok) {
       const q = res.data as { steering?: string[]; followUp?: string[] };
       const restored = [...(q.steering ?? []), ...(q.followUp ?? [])].join("\n");
-      if (restored) set({ promptText: restored });
+      if (restored) set((s) => ({ promptText: s.promptText.trim() ? `${s.promptText}\n\n${restored}` : restored }));
     }
     await window.studio.rpc(activeKey, { type: "abort" });
     // Also stop background subagents so nothing keeps running.
@@ -2477,20 +2553,22 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   stopSubagent: async (target) => {
     const { activeKey } = get();
-    if (!activeKey) return;
+    if (!activeKey) return false;
     try {
       await window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, {
         kind: "subagent_stop",
         id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
         ...target,
       });
+      return true;
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
     }
   },
 
   deleteSessionFile: async (sessionPath: string) => {
-    // Close any open tab first and stop Pi process so Windows releases file handles.
+    // Stop the running Pi first so Windows releases the file lock; close tabs only once the delete succeeded.
     const openTabs = get().tabs.filter((t) => t.sessionPath === sessionPath);
     for (const t of openTabs) {
       if (t.activeKey) {
@@ -2498,9 +2576,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           await window.studio.stopSession(t.activeKey);
         } catch {}
       }
-      await get().closeTab(t.id);
     }
-    await window.studio.deleteSessionFile(sessionPath);
+    try {
+      await window.studio.deleteSessionFile(sessionPath);
+    } catch (err) {
+      throw new Error(`Couldn't delete the session: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    for (const t of openTabs) await get().closeTab(t.id);
     await get().refreshCatalog();
   },
 
@@ -2765,4 +2847,8 @@ export const __test = {
   mainThreadRunning,
   runningSubagents,
   bridgeSubagentsRunning,
+  dropSessionKey,
+  setDisplayedTab: (id: string | null) => {
+    displayedSessionTabId = id;
+  },
 };

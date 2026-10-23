@@ -1,6 +1,6 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import type {
   FileCreateRequest,
   FileDeleteRequest,
@@ -9,8 +9,24 @@ import type {
   FileRevealRequest,
 } from "./shared.ts";
 
+export function safeRealpath(p: string): string {
+  try {
+    if (existsSync(p)) {
+      return realpathSync(p);
+    }
+    const parent = dirname(p);
+    if (parent !== p) {
+      const realParent = safeRealpath(parent);
+      return resolve(realParent, basename(p));
+    }
+  } catch {
+    // fallback
+  }
+  return resolve(p);
+}
+
 export function normPath(p: string): string {
-  const r = resolve(p);
+  const r = safeRealpath(p);
   return process.platform === "win32" ? r.toLowerCase() : r;
 }
 

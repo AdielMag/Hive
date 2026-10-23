@@ -196,13 +196,11 @@ export class ModelsService {
       mkdirSync(this.configDir, { recursive: true });
     }
 
-    let settings: Record<string, any> = {};
-    if (existsSync(this.settingsPath)) {
-      try {
-        settings = JSON.parse(readFileSync(this.settingsPath, "utf8"));
-      } catch {
-        settings = {};
-      }
+    let settings: Record<string, any>;
+    try {
+      settings = this.readSettingsForWrite();
+    } catch (err) {
+      throw new Error(`Refusing to overwrite unreadable Pi settings: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     settings.enabledModels = enabledModels;

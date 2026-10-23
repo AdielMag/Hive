@@ -3,7 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Coins, ExternalLink, Volume2, VolumeX, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { buildTimeline, parseAnsi } from "@hive/pi-adapter";
+import { parseAnsi } from "@hive/pi-adapter";
+import { getTimeline } from "../lib/transcript-timeline.ts";
 import { collectSubagents, summarizeSubagents } from "../lib/ai/subagents.ts";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
@@ -85,7 +86,7 @@ export const StatusBar: React.FC = () => {
   const activeTab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const transcript = useSessionStore((s) => s.transcript);
   const subagents = useMemo(() => {
-    const timeline = buildTimeline(transcript);
+    const timeline = getTimeline(transcript);
     return collectSubagents(timeline, isRunning);
   }, [transcript, isRunning]);
   const subagentsSummary = useMemo(() => summarizeSubagents(subagents), [subagents]);

@@ -129,6 +129,10 @@
   color: var(--danger);
 }
 
+.wt-bar__msg.is-info {
+  color: var(--text-secondary);
+}
+
 .wt-bar__msg.is-ok {
   color: var(--success);
 }
