@@ -324,6 +324,12 @@ export interface SessionStoreState {
   // Active session details
   activeKey: string | null;
   activeProject: ProjectEntry | null;
+  openProjectIds: string[];
+  openProjectTab: (projectId: string) => Promise<void>;
+  closeProjectTab: (projectId: string) => Promise<void>;
+  reorderProjectTabs: (fromIndex: number, toIndex: number) => void;
+  closeOtherProjectTabs: (keepProjectId: string) => Promise<void>;
+  closeProjectTabsToRight: (projectId: string) => Promise<void>;
   projectLastActiveTab: Record<string, string>;
   setActiveProject: (project: ProjectEntry) => Promise<void>;
   status: SessionStatusUpdate | null;
@@ -1032,6 +1038,24 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
 export const LIBRARY_TAB_ID = "studio:library";
 
 const MAIN_TREE_KEY = "hive.new-session.main-tree";
+const OPEN_PROJECT_TABS_KEY = "hive.open-project-tabs.v1";
+
+function loadPersistedOpenProjectIds(): string[] {
+  try {
+    const raw = getStoredItem(OPEN_PROJECT_TABS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistOpenProjectIds(ids: string[]) {
+  try {
+    setStoredItem(OPEN_PROJECT_TABS_KEY, JSON.stringify(ids));
+  } catch {}
+}
 
 /** Worktree a session tab runs in: the tab's own (set when it starts), else the catalog's (resumed sessions). */
 export function useSessionWorktree(tabId: string | null | undefined): SessionWorktree | undefined {
@@ -1052,6 +1076,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   activeKey: null,
   activeProject: null,
+  openProjectIds: typeof window !== "undefined" ? loadPersistedOpenProjectIds() : [],
   projectLastActiveTab: {},
   status: null,
   transcript: createTranscript(),
@@ -1358,7 +1383,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         (bootstrap.initialProjectPath ? await get().addProject(bootstrap.initialProjectPath) : null);
 
       if (targetProject) {
-        set({ activeProject: targetProject });
+        const persisted = get().openProjectIds.filter((id) => projects.some((p) => p.id === id));
+        const openProjectIds = persisted.length > 0
+          ? (persisted.includes(targetProject.id) ? persisted : [...persisted, targetProject.id])
+          : [targetProject.id];
+        set({ activeProject: targetProject, openProjectIds });
+        persistOpenProjectIds(openProjectIds);
         void window.studio.setLastOpenedProjectId(targetProject.id);
         if (get().tabs.length === 0) {
           await get().newSessionTab(targetProject.id);
@@ -1539,7 +1569,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           changed = true;
           return { ...t, title };
         });
-        return changed ? { projects, projectsLoaded: true, allSessions, tabs } : { projects, projectsLoaded: true, allSessions };
+        const validProjectIds = new Set(projects.map((p) => p.id));
+        const filteredOpenIds = s.openProjectIds.filter((id) => validProjectIds.has(id));
+        if (filteredOpenIds.length !== s.openProjectIds.length) {
+          persistOpenProjectIds(filteredOpenIds);
+        }
+        return changed
+          ? { projects, projectsLoaded: true, allSessions, tabs, openProjectIds: filteredOpenIds }
+          : { projects, projectsLoaded: true, allSessions, openProjectIds: filteredOpenIds };
       });
     } catch (err) {
       console.error("refreshCatalog failed", err);
@@ -1549,7 +1586,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   setActiveProject: async (project: ProjectEntry) => {
     void window.studio.setLastOpenedProjectId(project.id);
-    const { tabs, projectLastActiveTab } = get();
+    const { tabs, projectLastActiveTab, openProjectIds } = get();
+    if (!openProjectIds.includes(project.id)) {
+      const nextOpen = [...openProjectIds, project.id];
+      set({ openProjectIds: nextOpen });
+      persistOpenProjectIds(nextOpen);
+    }
     const lastTabId = projectLastActiveTab[project.id];
     const candidateTab =
       (lastTabId && tabs.find((t) => t.id === lastTabId && t.projectId === project.id)) ||
@@ -1571,8 +1613,91 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
   },
 
+  openProjectTab: async (projectId: string) => {
+    const { projects, openProjectIds } = get();
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return;
+    if (!openProjectIds.includes(projectId)) {
+      const next = [...openProjectIds, projectId];
+      set({ openProjectIds: next });
+      persistOpenProjectIds(next);
+    }
+    await get().setActiveProject(project);
+  },
+
+  closeProjectTab: async (projectId: string) => {
+    const { openProjectIds, activeProject, projects } = get();
+    const idx = openProjectIds.indexOf(projectId);
+    if (idx === -1) return;
+    const nextOpen = openProjectIds.filter((id) => id !== projectId);
+    set({ openProjectIds: nextOpen });
+    persistOpenProjectIds(nextOpen);
+
+    if (activeProject?.id === projectId) {
+      if (nextOpen.length > 0) {
+        const nextIdx = Math.min(idx, nextOpen.length - 1);
+        const nextProject = projects.find((p) => p.id === nextOpen[nextIdx]);
+        if (nextProject) {
+          await get().setActiveProject(nextProject);
+          return;
+        }
+      }
+      set({
+        activeProject: null,
+        activeTabId: null,
+        activeKey: null,
+        displayedTabId: null,
+        transcript: createTranscript(),
+        stats: null,
+        ...EMPTY_TAB_UI,
+      });
+    }
+  },
+
+  reorderProjectTabs: (fromIndex: number, toIndex: number) => {
+    const { openProjectIds } = get();
+    if (fromIndex < 0 || fromIndex >= openProjectIds.length || toIndex < 0 || toIndex >= openProjectIds.length) return;
+    const next = [...openProjectIds];
+    const [moved] = next.splice(fromIndex, 1);
+    if (!moved) return;
+    next.splice(toIndex, 0, moved);
+    set({ openProjectIds: next });
+    persistOpenProjectIds(next);
+  },
+
+  closeOtherProjectTabs: async (keepProjectId: string) => {
+    const { projects, openProjectIds } = get();
+    if (!openProjectIds.includes(keepProjectId)) return;
+    const next = [keepProjectId];
+    set({ openProjectIds: next });
+    persistOpenProjectIds(next);
+    const p = projects.find((x) => x.id === keepProjectId);
+    if (p && get().activeProject?.id !== keepProjectId) {
+      await get().setActiveProject(p);
+    }
+  },
+
+  closeProjectTabsToRight: async (projectId: string) => {
+    const { openProjectIds, activeProject, projects } = get();
+    const idx = openProjectIds.indexOf(projectId);
+    if (idx === -1) return;
+    const next = openProjectIds.slice(0, idx + 1);
+    set({ openProjectIds: next });
+    persistOpenProjectIds(next);
+    if (activeProject && !next.includes(activeProject.id)) {
+      const p = projects.find((x) => x.id === projectId);
+      if (p) await get().setActiveProject(p);
+    }
+  },
+
   addProject: async (dirPath: string, name?: string, color?: string, icon?: string | null) => {
     const project = await window.studio.addProject(dirPath, name, color, icon);
+    const { openProjectIds } = get();
+    if (!openProjectIds.includes(project.id)) {
+      const next = [...openProjectIds, project.id];
+      set({ openProjectIds: next });
+      persistOpenProjectIds(next);
+    }
     await get().refreshCatalog();
     return project;
   },
@@ -1584,6 +1709,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   removeProject: async (id: string) => {
     await window.studio.removeProject(id);
+    const { openProjectIds } = get();
+    if (openProjectIds.includes(id)) {
+      await get().closeProjectTab(id);
+    }
     await get().refreshCatalog();
   },
 

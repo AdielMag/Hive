@@ -237,7 +237,7 @@ export const CommandPalette: React.FC = () => {
           score: match.score + 5,
           run: () => {
             close();
-            void useSessionStore.getState().newSessionTab(p.id);
+            void useSessionStore.getState().openProjectTab(p.id);
           },
         });
       }

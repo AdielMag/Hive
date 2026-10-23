@@ -1050,4 +1050,75 @@ describe("failed sends and session lifecycle", () => {
     expect(useSessionStore.getState().promptText).toBe("typing\n\nqueued");
     vi.unstubAllGlobals();
   });
+
+  describe("project tabs", () => {
+    const projA = { id: "pA", name: "Project A", path: "/a", color: "#111" } as any;
+    const projB = { id: "pB", name: "Project B", path: "/b", color: "#222" } as any;
+    const projC = { id: "pC", name: "Project C", path: "/c", color: "#333" } as any;
+
+    beforeEach(() => {
+      vi.stubGlobal("window", {
+        studio: {
+          setLastOpenedProjectId: vi.fn(),
+          addProject: vi.fn(),
+          removeProject: vi.fn(),
+          refreshCatalog: vi.fn(),
+        },
+      });
+      useSessionStore.setState({
+        projects: [projA, projB, projC],
+        openProjectIds: ["pA", "pB"],
+        activeProject: projA,
+        tabs: [],
+        activeTabId: null,
+      });
+    });
+
+    it("opens a new project tab and activates it", async () => {
+      await useSessionStore.getState().openProjectTab("pC");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pA", "pB", "pC"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pC");
+    });
+
+    it("focuses an existing project tab without duplicating it", async () => {
+      await useSessionStore.getState().openProjectTab("pB");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pA", "pB"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pB");
+    });
+
+    it("closes a project tab and switches to the nearest sibling", async () => {
+      useSessionStore.setState({ openProjectIds: ["pA", "pB", "pC"], activeProject: projB });
+      await useSessionStore.getState().closeProjectTab("pB");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pA", "pC"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pC");
+    });
+
+    it("closes the last project tab and resets activeProject to null", async () => {
+      useSessionStore.setState({ openProjectIds: ["pA"], activeProject: projA });
+      await useSessionStore.getState().closeProjectTab("pA");
+      expect(useSessionStore.getState().openProjectIds).toEqual([]);
+      expect(useSessionStore.getState().activeProject).toBeNull();
+      expect(useSessionStore.getState().activeTabId).toBeNull();
+    });
+
+    it("reorders project tabs", () => {
+      useSessionStore.setState({ openProjectIds: ["pA", "pB", "pC"] });
+      useSessionStore.getState().reorderProjectTabs(0, 2);
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pB", "pC", "pA"]);
+    });
+
+    it("closes other project tabs", async () => {
+      useSessionStore.setState({ openProjectIds: ["pA", "pB", "pC"], activeProject: projA });
+      await useSessionStore.getState().closeOtherProjectTabs("pB");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pB"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pB");
+    });
+
+    it("closes project tabs to the right", async () => {
+      useSessionStore.setState({ openProjectIds: ["pA", "pB", "pC"], activeProject: projC });
+      await useSessionStore.getState().closeProjectTabsToRight("pB");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pA", "pB"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pB");
+    });
+  });
 });

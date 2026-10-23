@@ -1,12 +1,25 @@
-# Project-Level and Total Scoping for Usage & Analytics
+# Project Tabs in Top Bar
 
-Enable filtering usage and cost telemetry per project and viewing workspace-wide totals across all projects in Usage & Analytics.
+Add Rider-style project tabs to the top bar above session tabs, allowing multiple projects to be open simultaneously, reordered, and switched seamlessly with a companion dropdown picker.
 
 ## Approach
-- Add worktree-to-project normalization in `@hive/pi-adapter` so `.hive-worktrees` sessions correctly aggregate under their parent project.
-- Extend `insights-store` and `UsageView` with a `focusProject` state alongside `focusSession`, supporting seamless switching between "All Projects" (Total) and individual projects.
-- Add an interactive Project selector in the `UsageView` toolbar and make rows in the Projects breakdown table clickable to drill into project-specific metrics, charts, and sessions.
-- Expose `useProjects` hook in `ModuleHost` so module tabs can access workspace project metadata, and allow `view.usage` to open with project scope.
+- Add `openProjectIds` state to `session-store.ts` (persisted to `localStorage`), tracking open project tabs in order.
+- Create a dedicated `ProjectTabBar` component in `AppTitleBar` with draggable project tabs, active indicator, close buttons, drop indicators, and context menus.
+- Retain the project switcher dropdown next to tabs: selecting an already-open project activates its tab; selecting an unopened project opens a new tab.
+- Add an appearance setting (`projectTabsEnabled`, default `true`) in Settings so users can toggle between project tabs and classic single-project mode.
+- Switching project tabs updates `activeProject`, preserving and restoring each project's session tabs and split-pane layout independently.
+
+## Decisions
+
+> [!CHOICE] Closing the last open project tab
+> **Question**: What should happen when the user clicks close on the only remaining open project tab?
+> - (x) **Show Welcome screen**: Closes the project tab and displays the Welcome / Open screen with the top bar dropdown ready [Recommended]
+> - ( ) **Keep sole tab open**: Disable or hide the close button on the last open project tab so at least one project stays active
+
+> [!CHOICE] Project tab sizing behavior
+> **Question**: How should project tabs size themselves in the top bar?
+> - (x) **Compact auto-sizing**: Fixed maximum width (160–180px) with text ellipsis and horizontal wheel scroll for many tabs [Recommended]
+> - ( ) **Flexible tabs**: Tabs stretch dynamically to occupy available space up to a maximum width
 
 <!-- MORE -->
 
@@ -14,19 +27,25 @@ Enable filtering usage and cost telemetry per project and viewing workspace-wide
 
 | File | Change |
 |---|---|
-| `packages/pi-adapter/src/usage.ts` | `[MODIFY]` Update `projectLabel` to resolve `.hive-worktrees/*` paths to the project root; export `filterBucketsByProject` |
-| `packages/pi-adapter/test/usage.test.ts` | `[MODIFY]` Add tests for worktree project resolution and project bucket filtering |
-| `packages/module-sdk/src/renderer.ts` | `[MODIFY]` Expose `useProjects(): Array<{ id: string; name: string; path: string }>` in `ModuleHost.hooks` |
-| `apps/desktop/src/renderer/modules/host.tsx` | `[MODIFY]` Implement `useProjects` hook returning `useSessionStore.getState().projects` |
-| `modules/analytics/src/ui/insights-store.ts` | `[MODIFY]` Add `focusProject` and `setFocusProject` to Zustand state |
-| `modules/analytics/src/ui/UsageView.tsx` | `[MODIFY]` Add project selector in header, filter metrics/charts by `focusProject`, make project table rows clickable, update AI analysis context |
-| `modules/analytics/src/renderer.tsx` | `[MODIFY]` Allow `view.usage` to receive `focusProject`, and mark Usage tab global (`projectId: ""`) so it persists across workspaces |
-| `modules/analytics/src/ui/insights.css` | `[MODIFY]` Add styles for project dropdown menu, active filter chip, and clickable project table rows |
+| `apps/desktop/src/renderer/store/session-store.ts` | `[MODIFY]` Add `openProjectIds`, `openProjectTab`, `closeProjectTab`, `reorderProjectTabs`, `closeOtherProjectTabs`, and disk persistence |
+| `apps/desktop/src/renderer/store/ui-store.ts` | `[MODIFY]` Add `projectTabsEnabled` preference to UI store |
+| `apps/desktop/src/renderer/components/ProjectTabBar.tsx` | `[NEW]` Project tabs bar with drag-and-drop reordering, active tab styling, close button, drop indicator, and context menu |
+| `apps/desktop/src/renderer/components/ProjectPicker.tsx` | `[MODIFY]` Refactor dropdown menu logic to support open/switch behavior and standalone dropdown trigger |
+| `apps/desktop/src/renderer/components/AppTitleBar.tsx` | `[MODIFY]` Integrate `ProjectTabBar` in titlebar center, respecting `projectTabsEnabled` setting |
+| `apps/desktop/src/renderer/components/AppearanceSettingsContent.tsx` | `[MODIFY]` Add toggle switch for "Show projects as tabs in top bar" under Workbench |
+| `apps/desktop/src/renderer/features/commands/CommandPalette.tsx` | `[MODIFY]` Update project selection in palette to use `openProjectTab` |
+| `apps/desktop/src/renderer/styles/shell.css` | `[MODIFY]` Styling for project tabs, tab drag states, drop indicators, and title bar flex layout |
+| `apps/desktop/src/renderer/store/session-store.test.ts` | `[MODIFY]` Unit tests for `openProjectTab`, `closeProjectTab`, and `reorderProjectTabs` |
 
 ## Risks
-- None. Session parsing remains cached and append-only; filtering is done in-memory on parsed buckets.
+- Titlebar window drag: Window dragging (`-webkit-app-region: drag`) must remain functional on empty spaces, while project tabs and buttons must have `no-drag` so tab clicking and drag-reordering work smoothly without moving the window.
+- macOS traffic lights: Top bar layout must preserve the 78px left padding on macOS to prevent overlapping native window controls.
 
 ## Verify
-- `node ./node_modules/vitest/vitest.mjs run --project unit packages/pi-adapter/test/usage.test.ts`
-- `node ./node_modules/vitest/vitest.mjs run --project unit modules/analytics/src/ui/insights-analyzer.test.ts`
-- Manual verification of project dropdown switching, "All Projects" total view, and clicking project rows in Breakdown table.
+- `node ../session-bbf066/node_modules/vitest/vitest.mjs run apps/desktop/src/renderer/store/session-store.test.ts`
+- Manual checks:
+  1. Open project from dropdown: if open, activates existing tab; if not open, opens new tab.
+  2. Drag and drop reordering of project tabs with visual drop indicator.
+  3. Close project tab: switches to adjacent tab.
+  4. Session tabs and split pane layouts are retained independently per project tab.
+  5. Toggle setting in Settings > Appearance switches between tabs mode and classic picker mode.

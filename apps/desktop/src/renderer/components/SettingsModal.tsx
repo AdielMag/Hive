@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, Volume2, X } from "lucide-react";
 import { AppearanceSettingsContent } from "./AppearanceSettingsContent.tsx";
+import { WorkbenchSettingsSection } from "./WorkbenchSettingsSection.tsx";
 import { SoundSettingsContent } from "./SoundSettingsContent.tsx";
 import { playUiSound } from "../store/sound-store.ts";
 import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
@@ -133,7 +134,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             </button>
           </header>
           <div className="settings__body">
-            {tab === "appearance" && <AppearanceSettingsContent />}
+            {tab === "appearance" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                <AppearanceSettingsContent />
+                <WorkbenchSettingsSection />
+              </div>
+            )}
             {tab === "sound" && <SoundSettingsContent />}
             {tab === "models" && <ModelsSettingsContent />}
             {tab === "compaction" && <CompactionSettingsContent />}
