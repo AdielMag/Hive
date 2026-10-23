@@ -2,6 +2,27 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.38.0 — 2026-10-23 · [diff](https://github.com/AdielMag/Hive/compare/v0.37.0...v0.38.0)
+
+### ✨ Features
+
+- **usage:** include subagent costs and breakdown in session stats ([`40bfdea`](https://github.com/AdielMag/Hive/commit/40bfdeaed4e71bf13a06474d4677edfe527e12e2))
+- **analytics:** add project scoping to usage and analytics view ([`77fde96`](https://github.com/AdielMag/Hive/commit/77fde96f89c116d9a9332b0cdd09aaa835183d90))
+
+### 🐛 Fixes
+
+- resolve type errors and subagent status tracking ([`49fb7ea`](https://github.com/AdielMag/Hive/commit/49fb7ea24c694d8529a50c8ef063e6162639e1fc))
+
+### ♻️ Refactoring
+
+- **tabs:** remove project badge from tab headers ([`62deaf8`](https://github.com/AdielMag/Hive/commit/62deaf8d32355f32e642265b9ca0c67f212941f7))
+
+### 🧹 Other changes
+
+- Merge branch 'hive/per-session-usage-should-show-inside-def6ec' ([`035afdd`](https://github.com/AdielMag/Hive/commit/035afdd8da4202fae9b9a822891f158516d0b56b))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`6960eba`](https://github.com/AdielMag/Hive/commit/6960eba5543daa0fb929198d3e4ca9ccf0c9afa6))
+- Merge branch 'hive/tab-headers-now-are-too-clutered-ico-73406b' ([`9bf46de`](https://github.com/AdielMag/Hive/commit/9bf46de2da2d3cb8269294500b0fe7dea225b69b))
+
 ## v0.37.0 — 2026-10-21 · [diff](https://github.com/AdielMag/Hive/compare/v0.36.0...v0.37.0)
 
 ### ✨ Features
