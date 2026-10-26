@@ -2,6 +2,24 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.39.0 — 2026-10-26 · [diff](https://github.com/AdielMag/Hive/compare/v0.38.0...v0.39.0)
+
+### ✨ Features
+
+- **actions:** show diagnosing state when fixing failed runs ([`963aaac`](https://github.com/AdielMag/Hive/commit/963aaac46c7970596cf7c525fa88d63c8177a4ed))
+- **desktop:** add project tabs in top bar ([`503b6e5`](https://github.com/AdielMag/Hive/commit/503b6e5347f36633eddd9c05cb10c6dab284ffce))
+
+### 🐛 Fixes
+
+- **analytics:** remove unnecessary backslash in cache insight text ([`119fd6e`](https://github.com/AdielMag/Hive/commit/119fd6ea9f1a85e04b58a1c3483407835e7a4b64))
+- **transcript:** split tool batches around thinking blocks ([`2a10606`](https://github.com/AdielMag/Hive/commit/2a106064a4b1cf92a075a38fe34a1763e5d396ff))
+- update ContextMenu usage and actions test fixtures ([`41ab35c`](https://github.com/AdielMag/Hive/commit/41ab35c78e487bfc4a91dabefd207daf7bb2c983))
+- **desktop:** harden path access, bridge auth, and service stability ([`f15a5c1`](https://github.com/AdielMag/Hive/commit/f15a5c1fb6052011ae19eab994f58be39b2e3e01))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`35f1cbc`](https://github.com/AdielMag/Hive/commit/35f1cbc8b2ab53400c495acbdd1c8b1d87759b01))
+
 ## v0.38.0 — 2026-10-23 · [diff](https://github.com/AdielMag/Hive/compare/v0.37.0...v0.38.0)
 
 ### ✨ Features
