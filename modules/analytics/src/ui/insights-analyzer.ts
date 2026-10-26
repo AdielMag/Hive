@@ -66,7 +66,7 @@ export function analyzeUsageTelemetry(
       id: "cache-strong",
       type: "positive",
       title: "Exceptional Prompt Cache Reuse",
-      description: `${Math.round(cacheHitRate * 100)}% of input tokens are served directly from cache (estimated savings assume ~\$2.50/Mtok blended discount).`,
+      description: `${Math.round(cacheHitRate * 100)}% of input tokens are served directly from cache (estimated savings assume ~$2.50/Mtok blended discount).`,
       metric: `${formatTokens(cacheTokens)} cached (~${formatCost(savedDollars)} est. saved)`,
       impact: "High",
     });
