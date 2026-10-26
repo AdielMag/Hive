@@ -214,9 +214,17 @@ export function groupTimelineItems(
     // If there is no user-facing text, all blocks are tooling and/or thinking
     if (!hasText) {
       let currentThinking: string | undefined = undefined;
+      let thinkIdx = 0;
       for (const block of item.blocks) {
         if (block.type === "thinking") {
-          currentThinking = block.thinking;
+          // A thought breaks the batch: show it as its own row, then start a fresh batch.
+          flushBatch();
+          if (block.thinking?.trim()) {
+            out.push({
+              kind: "timelineRow",
+              item: { ...item, key: `${item.key}-think-${thinkIdx++}`, blocks: [block] },
+            });
+          }
         } else if (block.type === "toolCall") {
           const batchable = isBatchableTool(
             block,
@@ -247,11 +255,6 @@ export function groupTimelineItems(
             currentThinking = undefined;
           }
         }
-      }
-      // If there was only thinking in this message (e.g. streaming thought) and no tool calls, emit it
-      if (currentThinking && !item.blocks.some((b) => b.type === "toolCall")) {
-        flushBatch();
-        out.push({ kind: "timelineRow", item });
       }
       continue;
     }
