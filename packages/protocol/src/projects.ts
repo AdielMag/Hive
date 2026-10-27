@@ -102,6 +102,8 @@ export interface TabItem {
   model?: any; // selected model for this tab
   thinkingLevel?: string;
   mode?: AgentMode;
+  /** Mode the agent was last steered with (prompt prefix); used to announce mode switches. */
+  lastSteeredMode?: AgentMode;
   /** Git worktree the session runs in (absent = main tree). */
   worktree?: SessionWorktree;
 

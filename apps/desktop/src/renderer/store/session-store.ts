@@ -82,6 +82,38 @@ const EMPTY_TAB_UI: TabUiState = {
 
 const DEFAULT_MODE: AgentMode = "auto-edit";
 
+const MODE_STEERING: Record<AgentMode, { label: string; steer: string }> = {
+  "auto-edit": { label: "Auto Edit", steer: "Edit files directly when the task needs it." },
+  plan: {
+    label: "Plan",
+    steer: "Analyze, research, and outline an architectural plan. Do not execute file edits unless explicitly directed to do so.",
+  },
+  manual: { label: "Manual", steer: "Propose changes and request user confirmation before modifying files." },
+  debug: {
+    label: "Debug",
+    steer: "Prioritize root cause diagnosis, examining error traces, logs, and reproduction steps.",
+  },
+  ask: {
+    label: "Ask",
+    steer: "Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.",
+  },
+};
+
+/**
+ * Mode line prepended to a prompt, or null when no steering is needed (default mode, never switched).
+ * `previous` is the mode the agent was last steered with in this tab; when it differs, the line says so
+ * explicitly, because the older "[Mode: …]" lines are still in the conversation the agent reads.
+ */
+export function buildModeSteering(mode: AgentMode, previous?: AgentMode): string | null {
+  const switched = previous !== undefined && previous !== mode;
+  if (mode === "auto-edit" && !switched) return null;
+  const { label, steer } = MODE_STEERING[mode];
+  const note = switched
+    ? ` (switched from ${MODE_STEERING[previous].label}; instructions from the earlier mode no longer apply)`
+    : "";
+  return `[Mode: ${label}${note} - ${steer}]`;
+}
+
 /** True when a parked tab has something unsent in its composer. */
 export function hasDraft(ui: TabUiState | undefined): boolean {
   return !!ui && (ui.promptText.trim().length > 0 || ui.attachments.length > 0);
@@ -2230,15 +2262,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       message = (message ? message + "\n\n" : "") + fileBlocks.join("\n\n");
     }
 
-    // Prefix mode steering if in non-default mode
-    if (selectedMode === "plan") {
-      message = `[Mode: Plan - Analyze, research, and outline an architectural plan. Do not execute file edits unless explicitly directed to do so.]\n\n${message}`;
-    } else if (selectedMode === "manual") {
-      message = `[Mode: Manual - Propose changes and request user confirmation before modifying files.]\n\n${message}`;
-    } else if (selectedMode === "debug") {
-      message = `[Mode: Debug - Prioritize root cause diagnosis, examining error traces, logs, and reproduction steps.]\n\n${message}`;
-    } else if (selectedMode === "ask") {
-      message = `[Mode: Ask - Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.]\n\n${message}`;
+    // Prefix mode steering; say so explicitly when the mode changed since the agent was last steered.
+    const previousMode = get().tabs.find((t) => t.id === activeTabId)?.lastSteeredMode;
+    const steering = buildModeSteering(selectedMode, previousMode);
+    if (steering) message = `${steering}\n\n${message}`;
+    if (activeTabId) {
+      set((s) => ({ tabs: s.tabs.map((t) => (t.id === activeTabId ? { ...t, lastSteeredMode: selectedMode } : t)) }));
     }
 
     // A cold start already emptied the composer; don't wipe what the user typed while Pi was starting.

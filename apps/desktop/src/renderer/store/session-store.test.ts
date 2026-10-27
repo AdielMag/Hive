@@ -234,6 +234,34 @@ describe("agent execution modes store actions", () => {
     );
   });
 
+  it("announces a switch from ask to auto-edit so the agent drops the old Ask restrictions", async () => {
+    useSessionStore.getState().setMode("ask");
+    useSessionStore.setState({ promptText: "Explain the cache" });
+    await useSessionStore.getState().sendPrompt();
+
+    useSessionStore.getState().setMode("auto-edit");
+    useSessionStore.setState({ promptText: "Now fix the bug" });
+    await useSessionStore.getState().sendPrompt();
+
+    expect(rpcCalls.length).toBe(2);
+    expect(rpcCalls[1].message).toMatch(/^\[Mode: Auto Edit \(switched from Ask; instructions from the earlier mode no longer apply\) - /);
+    expect(rpcCalls[1].message).toMatch(/\]\n\nNow fix the bug$/);
+  });
+
+  it("does not repeat the switch note once the agent has been steered into the new mode", async () => {
+    useSessionStore.getState().setMode("ask");
+    useSessionStore.setState({ promptText: "Explain the cache" });
+    await useSessionStore.getState().sendPrompt();
+
+    useSessionStore.getState().setMode("auto-edit");
+    useSessionStore.setState({ promptText: "Fix it" });
+    await useSessionStore.getState().sendPrompt();
+
+    useSessionStore.setState({ promptText: "Thanks, next one" });
+    await useSessionStore.getState().sendPrompt();
+    expect(rpcCalls[2].message).toBe("Thanks, next one");
+  });
+
   it("does not prefix prompt when in default auto-edit mode", async () => {
     useSessionStore.getState().setMode("auto-edit");
     useSessionStore.setState({ promptText: "Fix the bug" });
