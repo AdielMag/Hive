@@ -25,7 +25,7 @@ import { bridgeExtensionPath } from "../paths.ts";
 import { createBridgeServer, type BridgeSessionHandle } from "../bridge-server/index.ts";
 import type { SessionRegistry } from "@hive/protocol";
 import type { CheckpointService } from "./checkpoints/service.ts";
-import { createWorktree, removeWorktree } from "./worktrees.ts";
+import { createWorktree, removeWorktree, repairNodeModules } from "./worktrees.ts";
 
 /** The slice of GuiStore the manager needs (session meta persistence for worktrees). */
 export interface SessionMetaStore {
@@ -76,8 +76,10 @@ export class MainSessionManager {
     let createdWorktree = false;
     if (request.sessionPath) {
       const recorded = this.store?.getSessionMeta(request.sessionPath).worktree;
-      if (recorded && existsSync(recorded.worktreePath)) worktree = recorded;
-      else if (recorded && request.useWorktree !== false) {
+      if (recorded && existsSync(recorded.worktreePath)) {
+        worktree = recorded;
+        repairNodeModules(recorded.projectPath || request.projectPath, recorded.worktreePath);
+      } else if (recorded && request.useWorktree !== false) {
         // The worktree was deleted (e.g. merged and cleaned up, or removed by hand). Don't fall back to the main
         // tree: give the session a fresh worktree forked from the same base.
         const title = recorded.branch.replace(/^hive\//, "").replace(/-[0-9a-f]{6}$/, "").replace(/-/g, " ");

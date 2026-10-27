@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -11,6 +11,7 @@ import {
   mergeWorktree,
   projectPathFromWorktreeCwd,
   removeWorktree,
+  repairNodeModules,
   renameWorktreeBranch,
   sanitizeSlug,
   scanTidyWorktrees,
@@ -133,10 +134,10 @@ describe("worktrees", { timeout: 60_000 }, () => {
 
   it("removes the worktree and branch, keeping the real node_modules", async () => {
     initRepo(repo);
-    mkdirSync(join(repo, "node_modules"));
-    writeFileSync(join(repo, "node_modules", "pkg.txt"), "p\n");
+    mkdirSync(join(repo, "node_modules", "pkg"), { recursive: true });
+    writeFileSync(join(repo, "node_modules", "pkg", "pkg.txt"), "p\n");
     const wt = (await createWorktree({ projectPath: repo, title: "rm" }))!;
-    expect(existsSync(join(wt.worktreePath, "node_modules", "pkg.txt"))).toBe(true);
+    expect(existsSync(join(wt.worktreePath, "node_modules", "pkg", "pkg.txt"))).toBe(true);
     expect((await worktreeStatus(wt)).dirty).toBe(0);
 
     writeFileSync(join(wt.worktreePath, "u.txt"), "u\n");
@@ -147,9 +148,73 @@ describe("worktrees", { timeout: 60_000 }, () => {
 
     expect(await removeWorktree(wt, { force: true })).toEqual({ ok: true, branchDeleted: true });
     expect(existsSync(wt.worktreePath)).toBe(false);
-    expect(existsSync(join(repo, "node_modules", "pkg.txt"))).toBe(true);
+    expect(existsSync(join(repo, "node_modules", "pkg", "pkg.txt"))).toBe(true);
     expect(git(repo, "branch", "--list", wt.branch)).toBe("");
     expect(await worktreeStatus(wt)).toMatchObject({ exists: false });
+  });
+
+  describe("monorepo node_modules", () => {
+    /** Repo with workspaces `packages/*` + `apps/*`, a root node_modules whose @hive/core link points at the ROOT tree. */
+    function initMonorepo(): void {
+      mkdirSync(join(repo, "packages", "core"), { recursive: true });
+      mkdirSync(join(repo, "apps", "desktop"), { recursive: true });
+      writeFileSync(join(repo, "package.json"), JSON.stringify({ name: "root", workspaces: ["packages/*", "apps/*"] }));
+      writeFileSync(join(repo, "packages", "core", "package.json"), JSON.stringify({ name: "@hive/core" }));
+      writeFileSync(join(repo, "apps", "desktop", "package.json"), JSON.stringify({ name: "@hive/desktop" }));
+      initRepo(repo);
+      mkdirSync(join(repo, "node_modules", "lodash"), { recursive: true });
+      writeFileSync(join(repo, "node_modules", "lodash", "index.js"), "x\n");
+      mkdirSync(join(repo, "node_modules", "@hive"), { recursive: true });
+      symlinkSync(join(repo, "packages", "core"), join(repo, "node_modules", "@hive", "core"), "junction");
+      mkdirSync(join(repo, "node_modules", "@other", "pkg"), { recursive: true });
+      mkdirSync(join(repo, "apps", "desktop", "node_modules", "vite"), { recursive: true });
+      writeFileSync(join(repo, "apps", "desktop", "node_modules", "vite", "v.js"), "v\n");
+    }
+
+    it("points workspace packages at the worktree and shares third-party deps", async () => {
+      initMonorepo();
+      const wt = (await createWorktree({ projectPath: repo, title: "mono" }))!;
+      const nm = join(wt.worktreePath, "node_modules");
+      expect(lstatSync(nm).isSymbolicLink()).toBe(false);
+      // third-party: shared with root
+      expect(realpathSync(join(nm, "lodash"))).toBe(realpathSync(join(repo, "node_modules", "lodash")));
+      expect(realpathSync(join(nm, "@other", "pkg"))).toBe(realpathSync(join(repo, "node_modules", "@other", "pkg")));
+      // workspaces: the worktree's own sources, not the root's
+      expect(realpathSync(join(nm, "@hive", "core"))).toBe(realpathSync(join(wt.worktreePath, "packages", "core")));
+      expect(realpathSync(join(nm, "@hive", "desktop"))).toBe(realpathSync(join(wt.worktreePath, "apps", "desktop")));
+      // per-workspace node_modules
+      expect(existsSync(join(wt.worktreePath, "apps", "desktop", "node_modules", "vite", "v.js"))).toBe(true);
+      expect((await worktreeStatus(wt)).dirty).toBe(0);
+    });
+
+    it("repairs the legacy single-junction layout", async () => {
+      initMonorepo();
+      const wtPath = join(tmp, "legacy-wt");
+      git(repo, "worktree", "add", "-q", "-b", "legacy", wtPath, "HEAD");
+      const nm = join(wtPath, "node_modules");
+      symlinkSync(join(repo, "node_modules"), nm, "junction"); // the old single-junction layout
+      expect(realpathSync(join(nm, "@hive", "core"))).toBe(realpathSync(join(repo, "packages", "core")));
+
+      repairNodeModules(repo, wtPath);
+
+      expect(lstatSync(nm).isSymbolicLink()).toBe(false);
+      expect(realpathSync(join(nm, "@hive", "core"))).toBe(realpathSync(join(wtPath, "packages", "core")));
+      expect(existsSync(join(nm, "lodash", "index.js"))).toBe(true);
+      expect(existsSync(join(repo, "node_modules", "lodash", "index.js"))).toBe(true);
+      repairNodeModules(repo, wtPath); // idempotent
+      expect(realpathSync(join(nm, "@hive", "core"))).toBe(realpathSync(join(wtPath, "packages", "core")));
+    });
+
+    it("removing the worktree never touches the root's node_modules or sources", async () => {
+      initMonorepo();
+      const wt = (await createWorktree({ projectPath: repo, title: "rm-mono" }))!;
+      expect(await removeWorktree(wt, { force: true })).toMatchObject({ ok: true });
+      expect(existsSync(wt.worktreePath)).toBe(false);
+      expect(existsSync(join(repo, "node_modules", "lodash", "index.js"))).toBe(true);
+      expect(existsSync(join(repo, "node_modules", "@hive", "core", "package.json"))).toBe(true);
+      expect(existsSync(join(repo, "apps", "desktop", "node_modules", "vite", "v.js"))).toBe(true);
+      expect(existsSync(join(repo, "packages", "core", "package.json"))).toBe(true);
+    });
   });
 
   it("refuses paths outside .hive-worktrees", async () => {
