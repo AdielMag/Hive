@@ -62,8 +62,8 @@
   width: 22px;
   height: 22px;
   border-radius: var(--radius-sm);
-  background: var(--accent-subtle);
-  color: var(--accent-base);
+  background: rgba(var(--fg-rgb), 0.06);
+  color: var(--text-secondary);
 }
 .usage-kpi__delta {
   margin-left: auto;

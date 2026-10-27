@@ -476,8 +476,8 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  height: 26px;
-  padding: 0 10px;
+  height: var(--control-sm);
+  padding: 0 8px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
@@ -735,8 +735,8 @@
 .ga-card__head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 10px;
   cursor: pointer;
 }
 .ga-card__head:focus-visible {

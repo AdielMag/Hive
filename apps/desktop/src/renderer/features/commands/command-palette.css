@@ -197,7 +197,7 @@
 .pal__kbd {
   font-size: var(--fs-xs);
   font-family: var(--font-sans);
-  font-variant-numeric: tabular-nums;);
+  font-variant-numeric: tabular-nums;
   padding: 2px 5px;
   border-radius: var(--radius-xs);
   background: var(--bg-card);
@@ -238,7 +238,7 @@
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   font-family: var(--font-sans);
-  font-variant-numeric: tabular-nums;);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
   margin-right: 4px;
 }

@@ -38,7 +38,7 @@
   place-items: center;
   background: rgba(var(--fg-rgb), 0.06);
   border: 1px solid var(--border-subtle);
-  color: var(--accent-base);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
