@@ -224,6 +224,20 @@
   color: var(--danger, #e5534b);
   background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
+.msg-tool-batch__pill.is-skill {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+@media (hover: hover) {
+  .msg-tool-batch__pill.is-skill.is-clickable:hover {
+    border-color: rgba(245, 158, 11, 0.55);
+    background: rgba(245, 158, 11, 0.15);
+  }
+}
+.msg-tool-batch__pill-sparkle {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
 .msg-tool-batch__pill-op {
   font-size: 10px;
   font-weight: 700;
@@ -245,6 +259,9 @@
 }
 .msg-tool-batch__pill-op.is-search {
   color: #39c5cf;
+}
+.msg-tool-batch__pill-op.is-skill {
+  color: #f59e0b;
 }
 .msg-tool-batch__pill-op.is-default {
   color: var(--text-muted);

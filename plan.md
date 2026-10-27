@@ -1,31 +1,35 @@
-# Fix Split Window Queued Messages Leak & New Session Pane Targeting
+# Batch and Highlight Skill Loads in Transcript
 
-Fix two split-pane layout defects: prevent queued messages in one pane from displaying in other split panes, and ensure the `+` new session button in a split pane spawns the new tab inside that specific pane.
+When skills enter context (via agent `read` on `SKILL.md` or user `/skill`), they currently get buried as generic `read SKILL.md` pills inside standard tool batches or stack vertically as bulky cards. This change implements smart hybrid batching: consecutive skill loads group into a dedicated horizontal bar with interactive chips, while mixed tool runs display a glowing skill pill instead of a generic file read.
 
 ## Approach
-- Scope `QueuedMessagesList` and `QueuedMessagesBar` to a target `tabId` instead of reading global store active transcript.
-- Update queue store actions (`deleteQueuedMessage`, `editQueuedMessage`, `runQueuedNow`, `steerQueuedNext`, `clearAllQueued`, `popQueuedToEditor`, `removeHeldMessage`, `popHeldToEditor`) to accept an optional `targetTabId`, updating both `transcript` (when active) and `transcriptsByTab[tabId]`.
-- Pass `paneId` from `TabStrip`'s `+` button into `newSessionTab(projectId, paneId)` and activate the target pane in `pane-layout-store`.
-- Add unit tests verifying per-tab queue isolation and split-pane session creation.
+- Pass active skill load annotations into timeline grouping in `Transcript.tsx` so grouping knows which calls load skills.
+- Group consecutive skill loads into a dedicated `skillBatch` timeline row rendered by `SkillBatchRow` with interactive chips.
+- Update `extractToolPill` in `tool-batch.ts` to tag skill loads with `opCategory: "skill"` and target `skill: <name>` when mixed in tool batches.
+- Add CSS highlighting for skill batches, pills, and cards with glowing borders and distinct badge styling.
+- Add unit test coverage in `ToolBatchGroup.test.ts` for skill pill extraction and batch grouping.
+
+## Decisions
+
+> [!CHOICE] Highlight Palette
+> **Question**: Which color theme should highlight loaded skills?
+> - (x) **Amber Gold**: matches Hive's Library module (#f59e0b) for consistency [Recommended]
+> - ( ) **Violet Sparkle**: distinct magical purple (#a855f7) with high-contrast glow
 
 <!-- MORE -->
 
 ## Changes
-
 | File | Change |
 |---|---|
-| `apps/desktop/src/renderer/components/transcript/QueuedMessages.tsx` | `[MODIFY]` Accept `tabId?: string` in `QueuedMessagesList`, `QueuedMessageCard`, and `QueuedMessagesBar`; query per-tab queue and compaction held state. |
-| `apps/desktop/src/renderer/components/Transcript.tsx` | `[MODIFY]` Pass `tabId={targetTabId}` to `<QueuedMessagesList />`. |
-| `apps/desktop/src/renderer/components/Composer.tsx` | `[MODIFY]` Accept `tabId?: string` prop and pass to `<QueuedMessagesBar tabId={tabId} />`. |
-| `apps/desktop/src/renderer/components/SessionView.tsx` | `[MODIFY]` Pass `tabId={targetTabId}` into `<Composer tabId={targetTabId} />`. |
-| `apps/desktop/src/renderer/store/session-store.ts` | `[MODIFY]` Update `newSessionTab` to accept `targetPaneId?: string`; update queue actions to accept `targetTabId?: string` and update `transcriptsByTab[targetTabId]`. |
-| `apps/desktop/src/renderer/store/pane-layout-store.ts` | `[MODIFY]` Add `addTabToPane(tabId, paneId)` helper so new tabs can be placed into the target split pane directly. |
-| `apps/desktop/src/renderer/components/TabStrip.tsx` | `[MODIFY]` Pass `paneId` to `newSessionTab(activeProject.id, paneId)` on `+` click and activate `paneId`. |
-| `apps/desktop/src/renderer/components/WorkbenchPane.tsx` | `[MODIFY]` Ensure clicking on tabstrip `+` or background activates the pane. |
-| `apps/desktop/src/renderer/store/session-store.test.ts` | `[MODIFY]` Add tests for per-tab queued message operations and `newSessionTab` targeting. |
-| `apps/desktop/src/renderer/store/pane-layout-store.test.ts` | `[MODIFY]` Add tests for `addTabToPane`. |
+| `apps/desktop/src/renderer/components/transcript/tool-batch.ts` | `[MODIFY]` Add skill load detection to `extractToolPill`, add `skillBatch` group item type, and group consecutive skill loads |
+| `apps/desktop/src/renderer/components/transcript/SkillBatchRow.tsx` | `[NEW]` Horizontal banner displaying loaded skills in a row with expandable detail drawers |
+| `apps/desktop/src/renderer/components/Transcript.tsx` | `[MODIFY]` Provide skill load annotations to grouping and render `SkillBatchRow` |
+| `apps/desktop/src/renderer/styles/transcript-ai.css` | `[MODIFY]` Add styling for `.msg-skill-batch`, `.msg-tool-batch__pill-op.is-skill`, and enhanced skill card borders |
+| `apps/desktop/src/renderer/components/transcript/ToolBatchGroup.test.ts` | `[MODIFY]` Add tests for skill pill extraction and consecutive skill load grouping |
+
+## Risks
+- Tool batch regression: existing non-skill tool batch grouping must remain unchanged. Mitigated by comprehensive unit tests in `ToolBatchGroup.test.ts`.
 
 ## Verify
-- `npx vitest run apps/desktop/src/renderer/store/session-store.test.ts apps/desktop/src/renderer/store/pane-layout-store.test.ts`
+- `npm test -- apps/desktop/src/renderer/components/transcript/ToolBatchGroup.test.ts`
 - `npm run typecheck`
-- `npm run check:modules`

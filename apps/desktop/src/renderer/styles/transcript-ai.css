@@ -1,17 +1,18 @@
 /* Skill Load Card */
 .msg-skill-card {
   padding: 10px 14px;
-  background: rgba(var(--accent-rgb), 0.04);
-  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.28);
   border-radius: var(--radius-md, 8px);
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 @media (hover: hover) {
   .msg-skill-card:hover {
-    border-color: rgba(var(--accent-rgb), 0.35);
+    border-color: rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.08);
   }
 }
 .msg-skill-card__header {
@@ -27,8 +28,8 @@
   border-radius: 6px;
   display: grid;
   place-items: center;
-  background: var(--accent-subtle);
-  color: var(--accent-base);
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
   flex-shrink: 0;
 }
 .msg-skill-card__title {
@@ -41,10 +42,10 @@
 }
 .msg-skill-card__action {
   font-size: 11px;
-  color: var(--text-muted);
+  color: #f59e0b;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  font-weight: 600;
+  font-weight: 700;
 }
 .msg-skill-card__name {
   font-size: 13.5px;
@@ -61,9 +62,149 @@
   margin-top: 8px;
   padding: 10px 14px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(245, 158, 11, 0.2);
   border-radius: 6px;
   max-height: 380px;
+  overflow-y: auto;
+}
+
+/* Skill Batch Row */
+.msg-skill-batch {
+  margin: 4px 0;
+  padding: 7px 12px;
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+@media (hover: hover) {
+  .msg-skill-batch:hover {
+    border-color: rgba(245, 158, 11, 0.45);
+  }
+}
+.msg-skill-batch__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.msg-skill-batch__lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f59e0b;
+  font-weight: 700;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+.msg-skill-batch__icon {
+  display: grid;
+  place-items: center;
+  color: #f59e0b;
+}
+.msg-skill-batch__chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.msg-skill-batch__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+@media (hover: hover) {
+  .msg-skill-batch__chip:hover {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.5);
+  }
+}
+.msg-skill-batch__chip.is-active {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.25);
+}
+.msg-skill-batch__chip-sparkle {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+.msg-skill-batch__chip-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.msg-skill-batch__chip-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border-radius: 4px;
+}
+.msg-skill-batch__chip-chevron {
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+}
+.msg-skill-batch__drawer {
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.msg-skill-batch__drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.msg-skill-batch__drawer-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.msg-skill-batch__drawer-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.msg-skill-batch__drawer-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.msg-skill-batch__drawer-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 7px;
+  flex-shrink: 0;
+}
+.msg-skill-batch__body {
+  padding: 8px 12px;
+  background: var(--bg-subtle, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  max-height: 340px;
   overflow-y: auto;
 }
 

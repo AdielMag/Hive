@@ -101,6 +101,21 @@ describe("tool-batch utilities", () => {
       expect(pill.opCategory).toBe("search");
       expect(pill.target).toBe("ToolBatchGroup in components");
     });
+
+    it("extracts pill data for skill loads", () => {
+      const skillBlock: ToolCallBlockT = {
+        type: "toolCall",
+        id: "skill-call-1",
+        name: "read",
+        arguments: { path: "skills/architect/SKILL.md" },
+        complete: true,
+      };
+      const pill = extractToolPill(skillBlock);
+      expect(pill.op).toBe("skill");
+      expect(pill.opCategory).toBe("skill");
+      expect(pill.target).toBe("architect");
+      expect(pill.tooltip).toContain("Skill loaded: architect");
+    });
   });
 
   describe("isBatchableTool", () => {
@@ -309,6 +324,80 @@ describe("tool-batch utilities", () => {
       expect(grouped).toHaveLength(3);
       // None should be toolBatch since they are separated by Agent
       expect(grouped.every((g) => g.kind === "timelineRow")).toBe(true);
+    });
+
+    it("groups pure consecutive skill loads into a dedicated skillBatch", () => {
+      const items: TimelineItem[] = [
+        {
+          kind: "assistant",
+          key: "a1",
+          blocks: [
+            { type: "toolCall", id: "s1", name: "read", arguments: { path: "skills/architect/SKILL.md" }, complete: true },
+            { type: "toolCall", id: "s2", name: "read", arguments: { path: "skills/frontend/SKILL.md" }, complete: true },
+          ],
+          streaming: false,
+        },
+      ];
+
+      const grouped = groupTimelineItems(items, results, tools);
+      expect(grouped).toHaveLength(1);
+      expect(grouped[0]?.kind).toBe("skillBatch");
+      if (grouped[0]?.kind === "skillBatch") {
+        expect(grouped[0].items).toHaveLength(2);
+        expect(grouped[0].items[0]!.load.name).toBe("architect");
+        expect(grouped[0].items[1]!.load.name).toBe("frontend");
+      }
+    });
+
+    it("keeps mixed single skill with tools in a toolBatch with skill pill", () => {
+      const items: TimelineItem[] = [
+        {
+          kind: "assistant",
+          key: "a1",
+          blocks: [
+            { type: "toolCall", id: "s1", name: "read", arguments: { path: "skills/architect/SKILL.md" }, complete: true },
+            { type: "toolCall", id: "t1", name: "read", arguments: { path: "src/index.ts" }, complete: true },
+          ],
+          streaming: false,
+        },
+      ];
+
+      const grouped = groupTimelineItems(items, results, tools);
+      expect(grouped).toHaveLength(1);
+      expect(grouped[0]?.kind).toBe("toolBatch");
+      if (grouped[0]?.kind === "toolBatch") {
+        expect(grouped[0].items).toHaveLength(2);
+        const pill = extractToolPill(grouped[0].items[0]!.block);
+        expect(pill.opCategory).toBe("skill");
+        expect(pill.target).toBe("architect");
+      }
+    });
+
+    it("splits 2 regular tools followed by a skill into toolBatch and skillBatch", () => {
+      const items: TimelineItem[] = [
+        {
+          kind: "assistant",
+          key: "a1",
+          blocks: [
+            { type: "toolCall", id: "t1", name: "read", arguments: { path: "src/a.ts" }, complete: true },
+            { type: "toolCall", id: "t2", name: "read", arguments: { path: "src/b.ts" }, complete: true },
+            { type: "toolCall", id: "s1", name: "read", arguments: { path: "skills/architect/SKILL.md" }, complete: true },
+          ],
+          streaming: false,
+        },
+      ];
+
+      const grouped = groupTimelineItems(items, results, tools);
+      expect(grouped).toHaveLength(2);
+      expect(grouped[0]?.kind).toBe("toolBatch");
+      expect(grouped[1]?.kind).toBe("skillBatch");
+      if (grouped[0]?.kind === "toolBatch") {
+        expect(grouped[0].items).toHaveLength(2);
+      }
+      if (grouped[1]?.kind === "skillBatch") {
+        expect(grouped[1].items).toHaveLength(1);
+        expect(grouped[1].items[0]!.load.name).toBe("architect");
+      }
     });
   });
 });
