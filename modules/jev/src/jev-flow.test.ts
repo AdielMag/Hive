@@ -347,7 +347,7 @@ describe("ask_jev batch (items)", () => {
     expect(t.description).toMatch(/items/);
     expect(t.description).toMatch(/git diff -- src\/a\.ts/);
     expect(t.promptGuidelines.length).toBeGreaterThanOrEqual(4);
-    expect(t.promptGuidelines.join(" ")).toMatch(/never your own summary/);
+    expect(t.promptGuidelines.join(" ")).toMatch(/never pass your own summary/);
   });
 
   it("runs every item with its own usage record and a block per item", async () => {
