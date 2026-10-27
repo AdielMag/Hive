@@ -506,9 +506,9 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         <div className="bw__col bw__col--log">
           <div className="bw__head">
             <span style={{ width: gWidth + 2, flexShrink: 0 }} />
-            <span style={{ flex: 1, minWidth: 0 }}>Commit</span>
-            <span className="bw__author" style={{ width: 150 }}>Author</span>
-            <span className="bw__date" style={{ width: 130 }}>Date</span>
+            <span style={{ flex: 1, minWidth: 240 }}>Commit</span>
+            <span className="bw__author" style={{ width: 120, flexShrink: 0 }}>Author</span>
+            <span className="bw__date" style={{ width: 90, flexShrink: 0 }}>Date</span>
           </div>
           <div className="bw__scroll" tabIndex={0} onKeyDown={onLogKey} style={{ outline: "none" }}>
             {graph.length === 0 ? (
@@ -530,7 +530,7 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
                       title={`${c.hash}\n${c.author} · ${formatDate(c.date) || c.relativeDate}`}
                     >
                       <GraphCell row={row} width={gWidth} head={isHead} dim={dim} />
-                      <div className="bw__main">
+                      <div className="bw__main" style={{ flex: 1, minWidth: 240 }}>
                         {refs.slice(0, 4).map((r) => (
                           <RefChip key={`${r.kind}:${r.label}`} {...r} />
                         ))}
@@ -538,11 +538,11 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
                         <span className="bw__msg">{c.message}</span>
                         {c.parents.length > 1 && <span style={{ fontSize: 11, color: laneColor(row.col), flexShrink: 0 }}>merge</span>}
                       </div>
-                      <span className="bw__author" style={{ width: 150 }}>
+                      <span className="bw__author" style={{ width: 120, flexShrink: 0 }}>
                         <Avatar name={c.author} />
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{c.author}</span>
                       </span>
-                      <span className="bw__date" style={{ width: 130 }} title={c.relativeDate}>
+                      <span className="bw__date" style={{ width: 90, flexShrink: 0 }} title={c.relativeDate}>
                         {formatDate(c.date) || c.relativeDate}
                       </span>
                     </div>
@@ -560,10 +560,14 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           </div>
         </div>
 
-        <div className="bw__vresize" onMouseDown={startDetailResize} />
-        <div className="bw__col bw__col--detail" style={{ width: detailW }}>
-          <CommitDetails detail={detail} loading={detailLoading} onCopy={copy} />
-        </div>
+        {selected && (
+          <>
+            <div className="bw__vresize" onMouseDown={startDetailResize} />
+            <div className="bw__col bw__col--detail" style={{ width: detailW }}>
+              <CommitDetails detail={detail} loading={detailLoading} onCopy={copy} onClose={() => setSelected(null)} />
+            </div>
+          </>
+        )}
       </div>
 
       <div className="bw__foot">

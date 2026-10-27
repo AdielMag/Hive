@@ -199,6 +199,15 @@
 .sb-quota__item + .sb-quota__item {
   border-left: 1px solid rgba(var(--fg-rgb), 0.14);
 }
+.sb-quota__label {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--frame-text-muted);
+}
+.sb-quota__item.is-active-pool .sb-quota__label,
+.sb-quota__item:hover .sb-quota__label {
+  color: var(--frame-text);
+}
 .sb-quota__pool {
   font-size: var(--fs-xs);
   letter-spacing: 0.02em;

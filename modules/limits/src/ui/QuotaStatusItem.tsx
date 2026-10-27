@@ -80,12 +80,12 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
                 title={tip}
               >
                 <ProviderIcon provider={m.providerId} size={12} />
-                {m.pool && <span className="sb-quota__pool">{POOL_LABEL[m.pool] ?? m.pool}</span>}
+                <span className="sb-quota__label">{m.pool ? (POOL_LABEL[m.pool] ?? m.pool) : (SHORT[m.providerId] ?? m.providerId)}</span>
                 <span className="sb-quota__tracks" aria-hidden>
                   <Track used={used5} />
                   <Track used={usedWk} />
                 </span>
-                <span className={`sb-quota__pct sb-quota__pct--${tone} mono`}>{Math.round(worst)}%</span>
+                <span className={`sb-quota__pct sb-quota__pct--${tone}`}>{Math.round(worst)}%</span>
               </span>
             );
           })}

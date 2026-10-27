@@ -1,6 +1,6 @@
 /** Right column: metadata + changed files of the selected commit. */
 import React, { useMemo } from "react";
-import { Copy, FileText, Folder, GitMerge, Loader2 } from "lucide-react";
+import { Copy, FileText, Folder, GitMerge, Loader2, X } from "lucide-react";
 import type { GitCommitDetail, GitCommitFile } from "@hive-module/git/shared";
 import { Avatar, RefChip } from "./bits.tsx";
 
@@ -28,7 +28,8 @@ export const CommitDetails: React.FC<{
   detail: GitCommitDetail | null;
   loading: boolean;
   onCopy(text: string): void;
-}> = ({ detail, loading, onCopy }) => {
+  onClose?: () => void;
+}> = ({ detail, loading, onCopy, onClose }) => {
   const groups = useMemo(() => {
     const map = new Map<string, GitCommitFile[]>();
     for (const f of detail?.files ?? []) {
@@ -57,7 +58,20 @@ export const CommitDetails: React.FC<{
   return (
     <>
       <div className="bw__detail-head">
-        <div className="bw__subject">{detail.subject}</div>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+          <div className="bw__subject">{detail.subject}</div>
+          {onClose && (
+            <button
+              type="button"
+              className="bw__ibtn"
+              onClick={onClose}
+              title="Close commit details"
+              style={{ flexShrink: 0, marginTop: -2 }}
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
         {detail.body && <div className="bw__body-text">{detail.body}</div>}
         <div className="bw__meta">
           <Avatar name={detail.author} large />

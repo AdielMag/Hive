@@ -139,7 +139,7 @@ export const StatusBar: React.FC = () => {
           data-right-opener
           style={cost > 0 ? undefined : { visibility: "hidden" }}
           tabIndex={cost > 0 ? undefined : -1}
-          className={`statusbar__btn statusbar__cost mono${costPop.open ? " is-active" : ""}`}
+          className={`statusbar__btn statusbar__cost${costPop.open ? " is-active" : ""}`}
           onClick={() => {
             useUi.getState().toggleRight("usage");
           }}
