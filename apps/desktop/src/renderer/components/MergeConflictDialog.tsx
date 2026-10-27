@@ -169,10 +169,15 @@ export const MergeConflictDialog: React.FC<MergeConflictDialogProps> = ({ worktr
       if (c !== "abort") return;
     }
     setSubmitting("abort");
+    setError(null);
     try {
       await window.studio.worktreeConflictsAbort(worktree);
     } catch (err) {
-      toast({ kind: "error", message: `Abort failed: ${err instanceof Error ? err.message : String(err)}` });
+      const msg = `Abort failed: ${err instanceof Error ? err.message : String(err)}`;
+      setError(msg);
+      toast({ kind: "error", message: msg });
+      setSubmitting(null);
+      return;
     }
     settled.current = true;
     onClose("aborted");

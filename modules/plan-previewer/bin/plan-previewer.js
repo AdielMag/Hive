@@ -241,16 +241,22 @@ function waitForFeedback(port, timeoutSec, planFile) {
       (res) => {
         let body = "";
         res.on("data", (chunk) => (body += chunk));
+        let done = false;
         res.on("end", () => {
+          done = true;
           try {
             resolve(JSON.parse(body));
           } catch {
-            resolve(null);
+            resolve({ unreachable: true });
           }
+        });
+        // Connection dropped mid-wait (Hive quit/crashed): not a timeout.
+        res.on("close", () => {
+          if (!done) resolve({ unreachable: true });
         });
       },
     );
-    req.on("error", () => resolve(null));
+    req.on("error", () => resolve({ unreachable: true }));
   });
 }
 
@@ -341,6 +347,12 @@ async function main() {
       `\n[PLAN-REVIEW]: Plan previewer was dismissed by the user without submitting changes.\n` +
         `To review the plan again, run: plan-previewer ${filePath}\n`,
     );
+  } else if (data && data.unreachable) {
+    console.error(
+      `\nError: Hive is not reachable (no Plan Previewer server on port ${port}).\n` +
+        "Start Hive with the Plan Previewer module enabled, then re-run this command. Do NOT loop on this error.\n",
+    );
+    process.exit(2);
   } else {
     console.log(
       `\nPlan previewer wait timeout completed after ${options.waitTimeoutSec}s - no decision submitted yet.\n` +

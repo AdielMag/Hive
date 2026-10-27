@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, ExternalLink, GitBranch, RotateCcw, Square, Wrench, Zap } from "lucide-react";
+import { ChevronDown, ExternalLink, GitBranch, Loader2, RotateCcw, Square, Wrench, Zap } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import type { ActionsRun } from "../shared.ts";
 import { isActiveState, useActionsStore } from "./actions-store.ts";
@@ -16,6 +16,7 @@ const Avatar: React.FC<{ name: string }> = ({ name }) => (
 
 export const RunCard: React.FC<{ run: ActionsRun; host: ModuleHost; now: number }> = ({ run, host, now }) => {
   const expanded = useActionsStore((s) => s.expandedRunId === run.id);
+  const isFixing = useActionsStore((s) => s.fixingRunId === run.id);
   const toggleRun = useActionsStore((s) => s.toggleRun);
   const rerunRun = useActionsStore((s) => s.rerunRun);
   const cancelRun = useActionsStore((s) => s.cancelRun);
@@ -25,7 +26,7 @@ export const RunCard: React.FC<{ run: ActionsRun; host: ModuleHost; now: number 
   const toggle = () => toggleRun(run.id);
 
   return (
-    <article id={`ga-run-${run.id}`} className={`ga-card ga-card--${run.state}${expanded ? " is-open" : ""}`}>
+    <article id={`ga-run-${run.id}`} className={`ga-card ga-card--${run.state}${expanded ? " is-open" : ""}${isFixing ? " is-fixing" : ""}`}>
       <div
         className="ga-card__head"
         role="button"
@@ -64,6 +65,12 @@ export const RunCard: React.FC<{ run: ActionsRun; host: ModuleHost; now: number 
                 <span className="ga-pill__text">{run.actor}</span>
               </span>
             )}
+            {isFixing && (
+              <span className="ga-pill ga-pill--fixing" role="status">
+                <Loader2 size={10} className="ga-spin" />
+                <span className="ga-pill__text">Diagnosing...</span>
+              </span>
+            )}
           </div>
         </div>
         <div className="ga-card__side">
@@ -72,7 +79,7 @@ export const RunCard: React.FC<{ run: ActionsRun; host: ModuleHost; now: number 
           <ChevronDown size={12} className="ga-card__chev" />
         </div>
       </div>
-      <div className="ga-card__tools">
+      <div className={`ga-card__tools${isFixing ? " is-busy" : ""}`}>
         {active ? (
           <button type="button" className="ga-ib" title="Cancel run" aria-label="Cancel run" onClick={() => void cancelRun(run)}>
             <Square size={11} />
@@ -83,15 +90,27 @@ export const RunCard: React.FC<{ run: ActionsRun; host: ModuleHost; now: number 
           </button>
         )}
         {run.state === "failure" && (
-          <button type="button" className="ga-ib" title="Fix it: open a new session with the failure details" aria-label="Fix failed run in a new session" onClick={() => void fixRun(run)}>
-            <Wrench size={12} />
+          <button
+            type="button"
+            className={`ga-ib${isFixing ? " is-busy" : ""}`}
+            disabled={isFixing}
+            title={isFixing ? "Diagnosing failure: opening session..." : "Fix it: open a new session with the failure details"}
+            aria-label={isFixing ? "Diagnosing failure: opening session..." : "Fix it: open a new session with the failure details"}
+            onClick={(e) => {
+              e.stopPropagation();
+              void fixRun(run);
+            }}
+          >
+            {isFixing ? <Loader2 size={12} className="ga-spin" /> : <Wrench size={12} />}
           </button>
         )}
         <button type="button" className="ga-ib" title="Open on GitHub" aria-label="Open run on GitHub" onClick={() => void host.openExternal(run.url)}>
           <ExternalLink size={12} />
         </button>
       </div>
-      {run.state === "running" && <div className="ga-progress" aria-hidden="true" />}
+      {(run.state === "running" || isFixing) && (
+        <div className={`ga-progress${isFixing ? " ga-progress--fix" : ""}`} aria-hidden="true" />
+      )}
       {expanded && <RunDetail run={run} host={host} now={now} />}
     </article>
   );

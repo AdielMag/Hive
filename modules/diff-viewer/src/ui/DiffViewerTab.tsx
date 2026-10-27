@@ -25,13 +25,18 @@ export const DiffViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
     return { added, deleted };
   }, [content]);
 
+  const MAX_DIFF_CHARS = 60_000;
   const handleAskPi = async () => {
     if (!activeProject) return;
     const relPath = tab.filePath?.replace(activeProject.path, "").replace(/^[/\\]/, "") || fileName;
-    host.sessions.setPrompt(
-      `Please review and explain the ${isStaged ? "staged" : "unstaged"} changes in ${relPath}:\n\n\`\`\`diff\n${content}\n\`\`\`\n`,
-    );
+    let diffText = content;
+    if (diffText.length > MAX_DIFF_CHARS) {
+      diffText = `${diffText.slice(0, MAX_DIFF_CHARS)}\n\n[...diff truncated (${diffText.length - MAX_DIFF_CHARS} characters omitted)...]`;
+    }
     await host.sessions.newSession(activeProject.id);
+    host.sessions.setPrompt(
+      `Please review and explain the ${isStaged ? "staged" : "unstaged"} changes in ${relPath}:\n\n\`\`\`diff\n${diffText}\n\`\`\`\n`,
+    );
   };
 
   const empty = !content.trim() || content === "No differences detected.";

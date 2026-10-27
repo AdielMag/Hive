@@ -2,6 +2,7 @@ import { app, dialog, shell } from "electron";
 import { IPC, type Bootstrap, type PiLocateResult } from "@hive/protocol";
 import type { AppContext } from "../context.ts";
 import { isSafeExternalUrl } from "../window.ts";
+import { grantPath } from "../services/path-guard.ts";
 import { handle } from "./util.ts";
 
 const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"];
@@ -74,6 +75,7 @@ export function registerAppIpc(ctx: AppContext): void {
       title: "Select files, images or videos to attach",
       filters,
     });
+    for (const fp of r.canceled ? [] : r.filePaths) grantPath(fp);
     return r.canceled ? [] : r.filePaths;
   });
 

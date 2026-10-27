@@ -99,6 +99,12 @@ export const DispatchForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const dispatchWorkflow = useActionsStore((s) => s.dispatchWorkflow);
   const active = useMemo(() => workflows.filter((w) => w.active), [workflows]);
   const [workflowId, setWorkflowId] = useState<number | null>(active[0]?.id ?? null);
+
+  useEffect(() => {
+    if (workflowId === null && active.length > 0 && active[0]) {
+      setWorkflowId(active[0].id);
+    }
+  }, [workflowId, active]);
   const [query, setQuery] = useState("");
   const [ref, setRef] = useState(repo?.branch ?? "main");
   const [meta, setMeta] = useState<{ dispatchable: boolean; inputs: WorkflowInput[] } | null>(null);
@@ -133,6 +139,10 @@ export const DispatchForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
           if (!res.ok) return setLoadError(res.message);
           setMeta(res.data);
           setValues(Object.fromEntries(res.data.inputs.map((i) => [i.name, i.default ?? (i.type === "choice" ? (i.options?.[0] ?? "") : "")])));
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setLoadError(err?.message ?? "Failed to read workflow inputs.");
         });
     }, 300);
     return () => {

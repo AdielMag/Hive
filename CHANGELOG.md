@@ -2,6 +2,116 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.40.0 — 2026-10-27 · [diff](https://github.com/AdielMag/Hive/compare/v0.39.0...v0.40.0)
+
+### ✨ Features
+
+- **jev:** support question shorthands and boolean aliases ([`1d4ed70`](https://github.com/AdielMag/Hive/commit/1d4ed70950eb0eac190fe8285116d2bcc2010d89))
+- **desktop:** announce agent mode switches in prompt steering ([`f268b4f`](https://github.com/AdielMag/Hive/commit/f268b4f843661c35f86d294f252113ddc9d470f0))
+- **bash-guard:** add Jev triage and plain-language descriptions ([`8e6b030`](https://github.com/AdielMag/Hive/commit/8e6b03036c194d3992b336727baf62209ff88c9a))
+- **marketplace:** redesign panel with card grid, metadata, and caching ([`bac5727`](https://github.com/AdielMag/Hive/commit/bac57275a8eca24a9c501f14e1a469d9a5c4fbdd))
+- **desktop:** display pending dialogs in inactive session panes ([`d82e531`](https://github.com/AdielMag/Hive/commit/d82e531644d1a9916587f290e0856fa7ab86cf56))
+- **desktop:** configure AI model for archiving old sessions ([`b553b0e`](https://github.com/AdielMag/Hive/commit/b553b0ecc94050d9021a0742ea3ebdb623efe420))
+
+### 🐛 Fixes
+
+- **desktop:** scope queued messages and new sessions to target pane ([`c865521`](https://github.com/AdielMag/Hive/commit/c865521daedfa0dd016beae5c9aa8c240ad99685))
+- **desktop:** isolate workspace packages in worktree node_modules ([`7880828`](https://github.com/AdielMag/Hive/commit/788082864e5ef13c89f05e0293ab32b46037a0eb))
+- **limits:** honor retry-after and bypass backoff on forced refresh ([`a1ac55f`](https://github.com/AdielMag/Hive/commit/a1ac55f4cf91993d8ff4e7a70b473c118fca2ed0))
+
+### 🧹 Other changes
+
+- **jev:** update prompt guideline assertion in jev-flow test ([`4a94d09`](https://github.com/AdielMag/Hive/commit/4a94d09ebfa75c725685325e40de7bdccf1cb86d))
+- Merge branch 'hive/when-having-multipelk-windows-and-ty-3d2ef2' ([`93c9665`](https://github.com/AdielMag/Hive/commit/93c966570a6135d07e1cc60fe84d13634d1da555))
+- Merge branch 'hive/jev-is-not-being-used-in-ask-jev-and-fb2702' ([`ba56cd6`](https://github.com/AdielMag/Hive/commit/ba56cd6d52f885f3d9ab6e4350d88505d9322f41))
+- Merge branch 'hive/bash-guard-module-is-not-great-it-as-f7c971' ([`453549c`](https://github.com/AdielMag/Hive/commit/453549ce5c413b14024279110f3b48f9995ba6d5))
+- Merge branch 'hive/marketpalce-is-very-lean-and-bad-ext-2b6292' ([`ea3b989`](https://github.com/AdielMag/Hive/commit/ea3b9892d2a5856ce5bda5766f5d7914aafbe2d1))
+- Merge branch 'hive/in-each-worktree-we-cant-run-npm-ans-5befee' ([`4fb1b3c`](https://github.com/AdielMag/Hive/commit/4fb1b3c1ce50dea09b4c5bea422cdb3aa1968a9b))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`53e829a`](https://github.com/AdielMag/Hive/commit/53e829a8d3115f234b919a88122dbade8a8f957e))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`b56424b`](https://github.com/AdielMag/Hive/commit/b56424bc5fb188b72094141f8431981edb53e355))
+
+## v0.39.0 — 2026-10-26 · [diff](https://github.com/AdielMag/Hive/compare/v0.38.0...v0.39.0)
+
+### ✨ Features
+
+- **actions:** show diagnosing state when fixing failed runs ([`963aaac`](https://github.com/AdielMag/Hive/commit/963aaac46c7970596cf7c525fa88d63c8177a4ed))
+- **desktop:** add project tabs in top bar ([`503b6e5`](https://github.com/AdielMag/Hive/commit/503b6e5347f36633eddd9c05cb10c6dab284ffce))
+
+### 🐛 Fixes
+
+- **analytics:** remove unnecessary backslash in cache insight text ([`119fd6e`](https://github.com/AdielMag/Hive/commit/119fd6ea9f1a85e04b58a1c3483407835e7a4b64))
+- **transcript:** split tool batches around thinking blocks ([`2a10606`](https://github.com/AdielMag/Hive/commit/2a106064a4b1cf92a075a38fe34a1763e5d396ff))
+- update ContextMenu usage and actions test fixtures ([`41ab35c`](https://github.com/AdielMag/Hive/commit/41ab35c78e487bfc4a91dabefd207daf7bb2c983))
+- **desktop:** harden path access, bridge auth, and service stability ([`f15a5c1`](https://github.com/AdielMag/Hive/commit/f15a5c1fb6052011ae19eab994f58be39b2e3e01))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`35f1cbc`](https://github.com/AdielMag/Hive/commit/35f1cbc8b2ab53400c495acbdd1c8b1d87759b01))
+
+## v0.38.0 — 2026-10-23 · [diff](https://github.com/AdielMag/Hive/compare/v0.37.0...v0.38.0)
+
+### ✨ Features
+
+- **usage:** include subagent costs and breakdown in session stats ([`40bfdea`](https://github.com/AdielMag/Hive/commit/40bfdeaed4e71bf13a06474d4677edfe527e12e2))
+- **analytics:** add project scoping to usage and analytics view ([`77fde96`](https://github.com/AdielMag/Hive/commit/77fde96f89c116d9a9332b0cdd09aaa835183d90))
+
+### 🐛 Fixes
+
+- resolve type errors and subagent status tracking ([`49fb7ea`](https://github.com/AdielMag/Hive/commit/49fb7ea24c694d8529a50c8ef063e6162639e1fc))
+
+### ♻️ Refactoring
+
+- **tabs:** remove project badge from tab headers ([`62deaf8`](https://github.com/AdielMag/Hive/commit/62deaf8d32355f32e642265b9ca0c67f212941f7))
+
+### 🧹 Other changes
+
+- Merge branch 'hive/per-session-usage-should-show-inside-def6ec' ([`035afdd`](https://github.com/AdielMag/Hive/commit/035afdd8da4202fae9b9a822891f158516d0b56b))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`6960eba`](https://github.com/AdielMag/Hive/commit/6960eba5543daa0fb929198d3e4ca9ccf0c9afa6))
+- Merge branch 'hive/tab-headers-now-are-too-clutered-ico-73406b' ([`9bf46de`](https://github.com/AdielMag/Hive/commit/9bf46de2da2d3cb8269294500b0fe7dea225b69b))
+
+## v0.37.0 — 2026-10-21 · [diff](https://github.com/AdielMag/Hive/compare/v0.36.0...v0.37.0)
+
+### ✨ Features
+
+- **limits:** add google-antigravity provider, live refresh on session events ([`2f84ce5`](https://github.com/AdielMag/Hive/commit/2f84ce5bf783e7a6a6bc6403c5eeb553856a6547))
+- **workspaces:** scope tabs and pane layouts to active project ([`16787d8`](https://github.com/AdielMag/Hive/commit/16787d8684a574386a0bc7765ebba901b9a08136))
+
+### 🐛 Fixes
+
+- **desktop:** check transcript order instead of items in session load ([`d8e8aec`](https://github.com/AdielMag/Hive/commit/d8e8aec46b9846fdcbcac32ddaaa064ec7bbf938))
+
+### ♻️ Refactoring
+
+- **pane-layout:** use const for layoutsByProject in syncWithTabs ([`c2ded34`](https://github.com/AdielMag/Hive/commit/c2ded3415b938fa0ac1bc5b65462cf5626785c18))
+
+### 🧹 Other changes
+
+- **session-store:** use createTranscript helper in scoped workspace test ([`53acdbd`](https://github.com/AdielMag/Hive/commit/53acdbd04ae125e9004da020472c29e584f3bc7a))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`e7dbd10`](https://github.com/AdielMag/Hive/commit/e7dbd10442f5ec14a887d148fe3884a95336fa34))
+- Merge branch 'hive/thesubscription-rate-for-antigarvyi-a067a7' ([`657b6a9`](https://github.com/AdielMag/Hive/commit/657b6a9edc36544eb58cc5727edc997325e9f21f))
+
+## v0.36.0 — 2026-10-20 · [diff](https://github.com/AdielMag/Hive/compare/v0.35.1...v0.36.0)
+
+### ✨ Features
+
+- **desktop:** allow context menu items without onSelect handler ([`ec95f49`](https://github.com/AdielMag/Hive/commit/ec95f49c70decb89821e8cd5410a48294c806b09))
+- **projects:** add custom icons and project-colored session tabs ([`b9836e9`](https://github.com/AdielMag/Hive/commit/b9836e9dc09c22adf8eaa8d7d388832010e2acdf))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`5c13f67`](https://github.com/AdielMag/Hive/commit/5c13f671ef040d7a3420c6cf14cb6e858378b82a))
+
+## v0.35.1 — 2026-10-19 · [diff](https://github.com/AdielMag/Hive/compare/v0.34.1...v0.35.1)
+
+### ✨ Features
+
+- **models:** add support for enabling and disabling AI providers ([`598044b`](https://github.com/AdielMag/Hive/commit/598044b2851f00511862e6e048ac6122dd494878))
+- **models:** add support for enabling and disabling AI providers ([`5180427`](https://github.com/AdielMag/Hive/commit/5180427d54283e360d530870aeb96e4fe88fd3c9))
+
+### 🧹 Other changes
+
+- Merge branch 'hive/cant-pull-from-main-pull-than-push-5afdc8' ([`dd7a3d1`](https://github.com/AdielMag/Hive/commit/dd7a3d15bef63909227052ea3c944b6dc1d0331c))
+
 ## v0.34.1 — 2026-10-19 · [diff](https://github.com/AdielMag/Hive/compare/v0.34.0...v0.34.1)
 
 ### 🐛 Fixes

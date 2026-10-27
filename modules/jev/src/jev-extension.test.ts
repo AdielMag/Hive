@@ -306,16 +306,23 @@ describe("ask_jev helpers", () => {
       risky: { type: "noul", instructions: "Is it risky?", true_means: "touches auth" },
       kind: { type: "choice", instructions: "Which?", options: { bug: "a defect", feat: "new" } },
       sev: { type: "score", instructions: "How bad?", levels: ["low", "high"] },
+      isAuth: "Does this file touch authentication?",
+      boolTest: { type: "boolean", instructions: "Is this boolean?" },
+      yesNoTest: { type: "yes_no", instructions: "Is this yes/no?" },
     });
     expect(q.risky).toEqual({ type: "noul", instructions: "Is it risky?", criteria: { true: "touches auth", false: undefined } });
     expect(q.kind).toMatchObject({ type: "choice", criteria: { bug: "a defect", feat: "new" } });
     expect(q.sev).toMatchObject({ type: "score", criteria: ["low", "high"] });
+    expect(q.isAuth).toEqual({ type: "noul", instructions: "Does this file touch authentication?" });
+    expect(q.boolTest).toEqual({ type: "noul", instructions: "Is this boolean?" });
+    expect(q.yesNoTest).toEqual({ type: "noul", instructions: "Is this yes/no?" });
 
     expect(() => toApiQuestions({})).toThrow(/empty/);
     expect(() => toApiQuestions({ a: { type: "choice", instructions: "q", options: { only: "one" } } })).toThrow(/2-255/);
     expect(() => toApiQuestions({ a: { type: "score", instructions: "q", levels: ["x"] } })).toThrow(/2-10/);
     expect(() => toApiQuestions({ a: { type: "noul", instructions: " " } })).toThrow(/instructions/);
     expect(() => toApiQuestions({ a: { type: "wat" as any, instructions: "q" } })).toThrow(/unknown type/);
+    expect(() => toApiQuestions({ a: "" })).toThrow(/instructions/);
   });
 
   it("formats each answer type", () => {

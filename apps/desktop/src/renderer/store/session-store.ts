@@ -82,6 +82,38 @@ const EMPTY_TAB_UI: TabUiState = {
 
 const DEFAULT_MODE: AgentMode = "auto-edit";
 
+const MODE_STEERING: Record<AgentMode, { label: string; steer: string }> = {
+  "auto-edit": { label: "Auto Edit", steer: "Edit files directly when the task needs it." },
+  plan: {
+    label: "Plan",
+    steer: "Analyze, research, and outline an architectural plan. Do not execute file edits unless explicitly directed to do so.",
+  },
+  manual: { label: "Manual", steer: "Propose changes and request user confirmation before modifying files." },
+  debug: {
+    label: "Debug",
+    steer: "Prioritize root cause diagnosis, examining error traces, logs, and reproduction steps.",
+  },
+  ask: {
+    label: "Ask",
+    steer: "Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.",
+  },
+};
+
+/**
+ * Mode line prepended to a prompt, or null when no steering is needed (default mode, never switched).
+ * `previous` is the mode the agent was last steered with in this tab; when it differs, the line says so
+ * explicitly, because the older "[Mode: …]" lines are still in the conversation the agent reads.
+ */
+export function buildModeSteering(mode: AgentMode, previous?: AgentMode): string | null {
+  const switched = previous !== undefined && previous !== mode;
+  if (mode === "auto-edit" && !switched) return null;
+  const { label, steer } = MODE_STEERING[mode];
+  const note = switched
+    ? ` (switched from ${MODE_STEERING[previous].label}; instructions from the earlier mode no longer apply)`
+    : "";
+  return `[Mode: ${label}${note} - ${steer}]`;
+}
+
 /** True when a parked tab has something unsent in its composer. */
 export function hasDraft(ui: TabUiState | undefined): boolean {
   return !!ui && (ui.promptText.trim().length > 0 || ui.attachments.length > 0);
@@ -232,6 +264,15 @@ function whenCompactionApplied(key: string, timeoutMs = 15_000): Promise<void> {
   });
 }
 
+/** Put an unsent prompt back in a tab's composer, after anything typed since (newline-separated). */
+function restoreDraft(tabId: string, text: string, attachments: AttachedItem[]): void {
+  if (!useSessionStore.getState().tabs.some((t) => t.id === tabId)) return;
+  updateTabUi(tabId, (ui) => ({
+    promptText: ui.promptText.trim() && text ? `${ui.promptText}\n${text}` : ui.promptText || text,
+    attachments: attachments.length > 0 ? [...ui.attachments, ...attachments] : ui.attachments,
+  }));
+}
+
 /** Send everything held for `key` as one prompt now that compaction is over. */
 export async function flushHeldMessages(key: string): Promise<void> {
   const held = useSessionStore.getState().compactionHeld[key];
@@ -243,7 +284,20 @@ export async function flushHeldMessages(key: string): Promise<void> {
   });
   const message = held.map((h) => h.message).join("\n\n");
   const images = held.flatMap((h) => h.images);
-  await window.studio.rpc(key, { type: "prompt", message, ...(images.length > 0 ? { images } : {}) });
+  let failure: string | null = null;
+  try {
+    const res = await window.studio.rpc(key, { type: "prompt", message, ...(images.length > 0 ? { images } : {}) });
+    if (!res?.ok) failure = res?.error || "Pi didn't accept the message.";
+  } catch (err) {
+    failure = err instanceof Error ? err.message : String(err);
+  }
+  if (failure !== null) {
+    // Re-queue (ahead of anything held meanwhile) so the message isn't lost.
+    useSessionStore.setState((s) => ({
+      compactionHeld: { ...s.compactionHeld, [key]: [...held, ...(s.compactionHeld[key] ?? [])] },
+      error: `Couldn't send your message: ${failure}`,
+    }));
+  }
 }
 
 export async function handleCompactionEvent(key: string, ev: unknown): Promise<void> {
@@ -302,6 +356,13 @@ export interface SessionStoreState {
   // Active session details
   activeKey: string | null;
   activeProject: ProjectEntry | null;
+  openProjectIds: string[];
+  openProjectTab: (projectId: string) => Promise<void>;
+  closeProjectTab: (projectId: string) => Promise<void>;
+  reorderProjectTabs: (fromIndex: number, toIndex: number) => void;
+  closeOtherProjectTabs: (keepProjectId: string) => Promise<void>;
+  closeProjectTabsToRight: (projectId: string) => Promise<void>;
+  projectLastActiveTab: Record<string, string>;
   setActiveProject: (project: ProjectEntry) => Promise<void>;
   status: SessionStatusUpdate | null;
   transcript: TranscriptState;
@@ -349,10 +410,10 @@ export interface SessionStoreState {
   compactionStates: Record<string, CompactionState>;
   /** Messages sent while a session compacts, per live-session-key; shown as queued, sent when compaction ends. */
   compactionHeld: Record<string, HeldMessage[]>;
-  /** Drop one held (compaction-queued) message of the active session. */
-  removeHeldMessage: (index: number) => void;
+  /** Drop one held (compaction-queued) message of the active session (or target tab). */
+  removeHeldMessage: (index: number, targetTabId?: string) => void;
   /** Move a held message back into the composer. */
-  popHeldToEditor: (index: number) => void;
+  popHeldToEditor: (index: number, targetTabId?: string) => void;
   isInitializing: boolean;
   error: string | null;
 
@@ -378,7 +439,7 @@ export interface SessionStoreState {
   removeAttachment: (id: string) => void;
   clearAttachments: () => void;
   refreshCatalog: () => Promise<void>;
-  addProject: (dirPath: string, name?: string, color?: string) => Promise<ProjectEntry>;
+  addProject: (dirPath: string, name?: string, color?: string, icon?: string | null) => Promise<ProjectEntry>;
   updateProject: (id: string, updates: Partial<ProjectEntry>) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
   subagentModal: SubagentModalTarget | null;
@@ -390,7 +451,7 @@ export interface SessionStoreState {
   ) => void;
   updateSubagentTab: (identifier: string, view: SubagentView) => void;
   openSessionTab: (sessionPath: string, projectId: string, title?: string) => Promise<void>;
-  newSessionTab: (projectId: string) => Promise<void>;
+  newSessionTab: (projectId: string, targetPaneId?: string) => Promise<void>;
   /** Open (or focus) the singleton Skills & Agents library tab. */
   openLibraryTab: () => void;
   openModuleTab: (spec: OpenTabSpec) => string;
@@ -413,25 +474,27 @@ export interface SessionStoreState {
   setMode: (mode: AgentMode) => void;
   clearError: () => void;
   respondDialog: (response: RpcExtensionUIResponse) => Promise<void>;
+  /** Answer a pending dialog of any tab, displayed or parked (e.g. an inactive split pane). */
+  respondTabDialog: (tabId: string, response: RpcExtensionUIResponse) => Promise<void>;
   /** Answer (or cancel) the displayed tab's pending question form. */
   respondForm: (result: Omit<StudioFormResult, "kind">) => Promise<void>;
   /** Ask the runner to terminate a running or queued subagent. Failures surface via `error`. */
-  stopSubagent: (target: { agentId?: string; type?: string; description?: string }) => Promise<void>;
+  stopSubagent: (target: { agentId?: string; type?: string; description?: string }) => Promise<boolean>;
   deleteSessionFile: (sessionPath: string) => Promise<void>;
   /** Delete a specific queued message from steering or follow-up queue. */
-  deleteQueuedMessage: (type: "steering" | "followUp", index: number) => Promise<void>;
+  deleteQueuedMessage: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
   /** Update the text of a specific queued message. */
-  editQueuedMessage: (type: "steering" | "followUp", index: number, newText: string) => Promise<void>;
+  editQueuedMessage: (type: "steering" | "followUp", index: number, newText: string, targetTabId?: string) => Promise<void>;
   /** Interrupt whatever is running and immediately prompt the LLM with this queued message ("Do now"). */
-  runQueuedNow: (type: "steering" | "followUp", index: number) => Promise<void>;
+  runQueuedNow: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
   /** Steer a queued message for the next step without aborting the current step ("Next step"). */
-  steerQueuedNext: (type: "steering" | "followUp", index: number) => Promise<void>;
+  steerQueuedNext: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
   /** Steer/run a queued message immediately ("Do now"). Alias to runQueuedNow. */
-  steerQueuedNow: (type: "steering" | "followUp", index: number) => Promise<void>;
-  /** Clear all queued messages for the active session. */
-  clearAllQueued: () => Promise<void>;
+  steerQueuedNow: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
+  /** Clear all queued messages for the active session (or target tab). */
+  clearAllQueued: (targetTabId?: string) => Promise<void>;
   /** Remove a queued message and put its text back into the composer editor. */
-  popQueuedToEditor: (type: "steering" | "followUp", index: number) => Promise<void>;
+  popQueuedToEditor: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
   /** Set (or clear, with "") the user-facing title of a session. */
   renameSession: (sessionPath: string, title: string) => Promise<void>;
   /** Hide / unhide a session in the sidebar without touching its file. */
@@ -777,6 +840,15 @@ function dropSessionKey(key: string, crashed = false): void {
     // Nobody is left to answer a pending dialog/form; leaving it open would block the whole window.
     updateTabUi(tabId, () => ({ pendingUiDialog: null, pendingForm: null }));
   }
+  useSessionStore.setState((s) => {
+    // A dead process can't finish its run: don't leave "Working..." + Stop on the displayed/cached transcript.
+    const settle = (t: TranscriptState): TranscriptState => (t.running || t.streaming ? { ...t, running: false, streaming: null } : t);
+    const cached = tabId ? s.transcriptsByTab[tabId] : undefined;
+    return {
+      ...(s.activeKey === key || (tabId && isDisplayed(tabId)) ? { transcript: settle(s.transcript) } : {}),
+      ...(tabId && cached ? { transcriptsByTab: { ...s.transcriptsByTab, [tabId]: settle(cached) } } : {}),
+    };
+  });
   useSessionStore.setState((s) => ({
     tabs: s.tabs.map((t) => (t.activeKey === key ? { ...t, activeKey: undefined, isCold: true } : t)),
     ...(s.activeKey === key ? { activeKey: null } : {}),
@@ -898,6 +970,8 @@ async function refreshModels(key: string): Promise<void> {
   });
 }
 
+const hydratedSessionKeys = new Set<string>();
+
 /**
  * Reconcile a live session with its tab. The tab owns its model / thinking level (chosen by the user,
  * possibly before Pi started); if it has none yet, it adopts whatever the session file restored. Only
@@ -909,14 +983,16 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
   const rpc = window.studio.rpc;
   const patchTab = (patch: Partial<TabItem>) =>
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t)) }));
-  if (isDisplayed(tabId)) set({ isLoadingModels: true });
+  const alreadyHydrated = hydratedSessionKeys.has(key);
+  if (isDisplayed(tabId) && !alreadyHydrated) set({ isLoadingModels: true });
   try {
-    const [stateRes, modelsRes] = await Promise.all([
-      rpc(key, { type: "get_state" }),
-      rpc(key, { type: "get_available_models" }),
-    ]);
+    const statePromise = rpc(key, { type: "get_state" });
+    const modelsPromise = alreadyHydrated && get().models.length > 0
+      ? Promise.resolve({ ok: true as const, data: { models: get().models } })
+      : rpc(key, { type: "get_available_models" });
+    const [stateRes, modelsRes] = await Promise.all([statePromise, modelsPromise]);
     const models = modelsRes.ok ? (modelsRes.data as { models: Array<Model<any>> }).models : null;
-    if (models) {
+    if (models && !alreadyHydrated) {
       set((s) => {
         const existing = new Set(s.allCatalogModels.map((m) => `${m.provider}/${m.id}`));
         const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
@@ -968,8 +1044,11 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
     }
 
     // Thinking: levels depend on the (possibly just changed) model, so fetch them afterwards.
-    const levelsRes = await rpc(key, { type: "get_available_thinking_levels" });
-    const levels = levelsRes.ok ? (levelsRes.data as { levels: string[] }).levels ?? [] : getSupportedThinkingLevels(model);
+    const levels = alreadyHydrated
+      ? getSupportedThinkingLevels(model)
+      : await rpc(key, { type: "get_available_thinking_levels" }).then((r) =>
+          r.ok ? (r.data as { levels: string[] }).levels ?? getSupportedThinkingLevels(model) : getSupportedThinkingLevels(model),
+        );
     const wantedLevel = get().tabs.find((t) => t.id === tabId)?.thinkingLevel;
     const baseLevel = wantedLevel ?? state.thinkingLevel ?? "medium";
     const effectiveLevel = levels.length > 0 && levels.includes(baseLevel)
@@ -983,15 +1062,34 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
     if (isDisplayed(tabId)) {
       set({ thinkingLevels: levels, selectedThinkingLevel: effectiveLevel });
     }
+    hydratedSessionKeys.add(key);
   } catch (err) {
     console.error("Failed to query session state", err);
   } finally {
-    if (isDisplayed(tabId)) set({ isLoadingModels: false });
+    if (isDisplayed(tabId) && !alreadyHydrated) set({ isLoadingModels: false });
   }
 }
 export const LIBRARY_TAB_ID = "studio:library";
 
 const MAIN_TREE_KEY = "hive.new-session.main-tree";
+const OPEN_PROJECT_TABS_KEY = "hive.open-project-tabs.v1";
+
+function loadPersistedOpenProjectIds(): string[] {
+  try {
+    const raw = getStoredItem(OPEN_PROJECT_TABS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistOpenProjectIds(ids: string[]) {
+  try {
+    setStoredItem(OPEN_PROJECT_TABS_KEY, JSON.stringify(ids));
+  } catch {}
+}
 
 /** Worktree a session tab runs in: the tab's own (set when it starts), else the catalog's (resumed sessions). */
 export function useSessionWorktree(tabId: string | null | undefined): SessionWorktree | undefined {
@@ -1012,6 +1110,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   activeKey: null,
   activeProject: null,
+  openProjectIds: typeof window !== "undefined" ? loadPersistedOpenProjectIds() : [],
+  projectLastActiveTab: {},
   status: null,
   transcript: createTranscript(),
   transcriptsByTab: {},
@@ -1048,24 +1148,34 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   reloadEpoch: 0,
   compactionStates: {},
   compactionHeld: {},
-  removeHeldMessage: (index) => {
-    const { activeKey } = get();
-    if (!activeKey) return;
-    set((s) => {
-      const list = [...(s.compactionHeld[activeKey] ?? [])];
+  removeHeldMessage: (index, targetTabId) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
+    set((state) => {
+      const list = [...(state.compactionHeld[key] ?? [])];
       list.splice(index, 1);
-      const next = { ...s.compactionHeld };
-      if (list.length) next[activeKey] = list;
-      else delete next[activeKey];
+      const next = { ...state.compactionHeld };
+      if (list.length) next[key] = list;
+      else delete next[key];
       return { compactionHeld: next };
     });
   },
-  popHeldToEditor: (index) => {
-    const { activeKey, compactionHeld, promptText } = get();
-    const item = activeKey ? compactionHeld[activeKey]?.[index] : undefined;
+  popHeldToEditor: (index, targetTabId) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    const item = key ? s.compactionHeld[key]?.[index] : undefined;
     if (!item) return;
-    get().removeHeldMessage(index);
-    set({ promptText: promptText ? `${promptText}\n${item.text}` : item.text });
+    get().removeHeldMessage(index, targetTabId);
+    if (!targetTabId || targetTabId === s.activeTabId || targetTabId === s.displayedTabId) {
+      set({ promptText: s.promptText ? `${s.promptText}\n${item.text}` : item.text });
+    } else {
+      updateTabUi(targetTabId, (ui) => ({
+        promptText: ui.promptText ? `${ui.promptText}\n${item.text}` : item.text,
+      }));
+    }
   },
   isInitializing: true,
   error: null,
@@ -1116,6 +1226,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (!activeKey || !tabId || get().reloadStates[activeKey]?.phase === "reloading") return;
     if (transcript.running || hasRunningWork(tabId)) return;
     const key = activeKey;
+    hydratedSessionKeys.delete(key);
     setReloadState(key, { phase: "reloading", message: "Reloading extensions, skills and prompts…" });
     // Extensions that were removed never clear their own status/widgets; the new runtime re-sets what it still has.
     updateTabUi(tabId, () => ({ extensionStatus: {}, extensionWidgets: {} }));
@@ -1316,7 +1427,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         (bootstrap.initialProjectPath ? await get().addProject(bootstrap.initialProjectPath) : null);
 
       if (targetProject) {
-        set({ activeProject: targetProject });
+        const persisted = get().openProjectIds.filter((id) => projects.some((p) => p.id === id));
+        const openProjectIds = persisted.length > 0
+          ? (persisted.includes(targetProject.id) ? persisted : [...persisted, targetProject.id])
+          : [targetProject.id];
+        set({ activeProject: targetProject, openProjectIds });
+        persistOpenProjectIds(openProjectIds);
         void window.studio.setLastOpenedProjectId(targetProject.id);
         if (get().tabs.length === 0) {
           await get().newSessionTab(targetProject.id);
@@ -1361,6 +1477,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
               ...(titleToUse ? { title: titleToUse } : {}),
             };
         const res = await window.studio.startSession({ projectPath: project.path, sessionPath: tab.sessionPath, startId: tabId, ...newSessionOpts });
+        // The tab was closed while Pi was starting: don't orphan the process.
+        if (!get().tabs.some((t) => t.id === tabId)) {
+          void window.studio.stopSession(res.key).catch(() => {});
+          return null;
+        }
         setPendingStartStep(tabId, "model");
         set((s) => ({
           // Only steal focus if the user is still on this tab.
@@ -1492,7 +1613,14 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           changed = true;
           return { ...t, title };
         });
-        return changed ? { projects, projectsLoaded: true, allSessions, tabs } : { projects, projectsLoaded: true, allSessions };
+        const validProjectIds = new Set(projects.map((p) => p.id));
+        const filteredOpenIds = s.openProjectIds.filter((id) => validProjectIds.has(id));
+        if (filteredOpenIds.length !== s.openProjectIds.length) {
+          persistOpenProjectIds(filteredOpenIds);
+        }
+        return changed
+          ? { projects, projectsLoaded: true, allSessions, tabs, openProjectIds: filteredOpenIds }
+          : { projects, projectsLoaded: true, allSessions, openProjectIds: filteredOpenIds };
       });
     } catch (err) {
       console.error("refreshCatalog failed", err);
@@ -1501,12 +1629,119 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   setActiveProject: async (project: ProjectEntry) => {
-    set({ activeProject: project });
     void window.studio.setLastOpenedProjectId(project.id);
+    const { tabs, projectLastActiveTab, openProjectIds } = get();
+    if (!openProjectIds.includes(project.id)) {
+      const nextOpen = [...openProjectIds, project.id];
+      set({ openProjectIds: nextOpen });
+      persistOpenProjectIds(nextOpen);
+    }
+    const lastTabId = projectLastActiveTab[project.id];
+    const candidateTab =
+      (lastTabId && tabs.find((t) => t.id === lastTabId && t.projectId === project.id)) ||
+      tabs.find((t) => t.projectId === project.id);
+
+    if (candidateTab) {
+      set({ activeProject: project });
+      await get().switchTab(candidateTab.id);
+    } else {
+      set({
+        activeProject: project,
+        activeTabId: null,
+        activeKey: null,
+        displayedTabId: null,
+        transcript: createTranscript(),
+        stats: null,
+        ...EMPTY_TAB_UI,
+      });
+    }
   },
 
-  addProject: async (dirPath: string, name?: string, color?: string) => {
-    const project = await window.studio.addProject(dirPath, name, color);
+  openProjectTab: async (projectId: string) => {
+    const { projects, openProjectIds } = get();
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return;
+    if (!openProjectIds.includes(projectId)) {
+      const next = [...openProjectIds, projectId];
+      set({ openProjectIds: next });
+      persistOpenProjectIds(next);
+    }
+    await get().setActiveProject(project);
+  },
+
+  closeProjectTab: async (projectId: string) => {
+    const { openProjectIds, activeProject, projects } = get();
+    const idx = openProjectIds.indexOf(projectId);
+    if (idx === -1) return;
+    const nextOpen = openProjectIds.filter((id) => id !== projectId);
+    set({ openProjectIds: nextOpen });
+    persistOpenProjectIds(nextOpen);
+
+    if (activeProject?.id === projectId) {
+      if (nextOpen.length > 0) {
+        const nextIdx = Math.min(idx, nextOpen.length - 1);
+        const nextProject = projects.find((p) => p.id === nextOpen[nextIdx]);
+        if (nextProject) {
+          await get().setActiveProject(nextProject);
+          return;
+        }
+      }
+      set({
+        activeProject: null,
+        activeTabId: null,
+        activeKey: null,
+        displayedTabId: null,
+        transcript: createTranscript(),
+        stats: null,
+        ...EMPTY_TAB_UI,
+      });
+    }
+  },
+
+  reorderProjectTabs: (fromIndex: number, toIndex: number) => {
+    const { openProjectIds } = get();
+    if (fromIndex < 0 || fromIndex >= openProjectIds.length || toIndex < 0 || toIndex >= openProjectIds.length) return;
+    const next = [...openProjectIds];
+    const [moved] = next.splice(fromIndex, 1);
+    if (!moved) return;
+    next.splice(toIndex, 0, moved);
+    set({ openProjectIds: next });
+    persistOpenProjectIds(next);
+  },
+
+  closeOtherProjectTabs: async (keepProjectId: string) => {
+    const { projects, openProjectIds } = get();
+    if (!openProjectIds.includes(keepProjectId)) return;
+    const next = [keepProjectId];
+    set({ openProjectIds: next });
+    persistOpenProjectIds(next);
+    const p = projects.find((x) => x.id === keepProjectId);
+    if (p && get().activeProject?.id !== keepProjectId) {
+      await get().setActiveProject(p);
+    }
+  },
+
+  closeProjectTabsToRight: async (projectId: string) => {
+    const { openProjectIds, activeProject, projects } = get();
+    const idx = openProjectIds.indexOf(projectId);
+    if (idx === -1) return;
+    const next = openProjectIds.slice(0, idx + 1);
+    set({ openProjectIds: next });
+    persistOpenProjectIds(next);
+    if (activeProject && !next.includes(activeProject.id)) {
+      const p = projects.find((x) => x.id === projectId);
+      if (p) await get().setActiveProject(p);
+    }
+  },
+
+  addProject: async (dirPath: string, name?: string, color?: string, icon?: string | null) => {
+    const project = await window.studio.addProject(dirPath, name, color, icon);
+    const { openProjectIds } = get();
+    if (!openProjectIds.includes(project.id)) {
+      const next = [...openProjectIds, project.id];
+      set({ openProjectIds: next });
+      persistOpenProjectIds(next);
+    }
     await get().refreshCatalog();
     return project;
   },
@@ -1518,6 +1753,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   removeProject: async (id: string) => {
     await window.studio.removeProject(id);
+    const { openProjectIds } = get();
+    if (openProjectIds.includes(id)) {
+      await get().closeProjectTab(id);
+    }
     await get().refreshCatalog();
   },
 
@@ -1650,7 +1889,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     void get().ensureActiveSession(tabId);
   },
 
-  newSessionTab: async (projectId: string) => {
+  newSessionTab: async (projectId: string, targetPaneId?: string) => {
     const { tabs, projects } = get();
     const project = projects.find((p) => p.id === projectId) ?? null;
     if (!project) return;
@@ -1670,6 +1909,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       thinkingLevel: initialThinking,
       mode: get().selectedMode,
     };
+
+    if (targetPaneId) {
+      usePaneLayoutStore.getState().addTabToPane(tabId, targetPaneId);
+    }
 
     set({ tabs: [...tabs, newTab] });
     set({
@@ -1781,9 +2024,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     try {
       const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
       const t = applyEntries(createTranscript(), entries, leafId, "replace");
-      set((s) => ({
-        transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
-      }));
+      set((s) =>
+        s.tabs.some((x) => x.id === tabId) && !s.transcriptsByTab[tabId]
+          ? { transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t } }
+          : {},
+      );
     } catch (err) {
       console.error("Failed to load background tab transcript", err);
     }
@@ -1824,6 +2069,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if ((tab.kind === "session" || !tab.kind) && tab.activeKey && tab.activeKey === get().activeKey) {
       set({ activeTabId: tabId });
       markSeen(tabId);
+      if (tab.projectId) {
+        set((s) => ({ projectLastActiveTab: { ...s.projectLastActiveTab, [tab.projectId!]: tabId } }));
+      }
       return;
     }
     markSeen(tabId);
@@ -1835,6 +2083,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       activeTabId: tabId,
       activeProject: project,
       activeKey: tab.activeKey ?? null,
+      ...(tab.projectId
+        ? { projectLastActiveTab: { ...get().projectLastActiveTab, [tab.projectId]: tabId } }
+        : {}),
       // A session that kept working in the background reflects running if its main thread was active
       // (hydrateSession then confirms with Pi's own isStreaming flag).
       transcript: { ...(get().transcriptsByTab[tabId] ?? createTranscript()), running: bgRunning && (mainThreadRunning.get(tabId) ?? false) },
@@ -1842,16 +2093,23 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     });
 
     if (tab.sessionPath) {
-      try {
-        const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
-        const base = get().transcriptsByTab[tabId] ?? createTranscript();
-        const t = applyEntries(base, entries, leafId, "replace");
-        set((s) => ({
-          transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
-          ...(s.displayedTabId === tabId ? { transcript: t } : {}),
-        }));
-      } catch (err) {
-        console.error("Failed to read session file", err);
+      const existing = get().transcriptsByTab[tabId];
+      if (!existing || existing.order.length === 0) {
+        try {
+          const { entries, leafId } = await window.studio.readSessionFile(tab.sessionPath);
+          const base = existing ?? createTranscript();
+          const t = applyEntries(base, entries, leafId, "replace");
+          set((s) =>
+            s.tabs.some((x) => x.id === tabId)
+              ? {
+                  transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
+                  ...(s.displayedTabId === tabId ? { transcript: t } : {}),
+                }
+              : {},
+          );
+        } catch (err) {
+          console.error("Failed to read session file", err);
+        }
       }
     }
 
@@ -1866,8 +2124,20 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     clearPendingStart(tabId);
     // Stop in the background: closing a tab should feel instant.
     if (tab?.activeKey) {
-      void window.studio.stopSession(tab.activeKey).catch(() => {});
+      const closedKey = tab.activeKey;
+      hydratedSessionKeys.delete(closedKey);
+      void window.studio.stopSession(closedKey).catch(() => {});
+      setReloadState(closedKey, null);
+      setCompactionState(closedKey, null);
+      postCompactionTokens.delete(closedKey);
+      set((s) => {
+        if (!s.compactionHeld[closedKey]) return {};
+        const compactionHeld = { ...s.compactionHeld };
+        delete compactionHeld[closedKey];
+        return { compactionHeld };
+      });
     }
+    bridgeSubagentIds.delete(tabId);
     clearActivity(tabId);
     // The session file may only now be complete on disk; make sure it's listed so it can be reopened.
     if (tab?.sessionPath) void get().refreshCatalog();
@@ -1877,19 +2147,28 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       delete tabUi[tabId];
       const transcriptsByTab = { ...s.transcriptsByTab };
       delete transcriptsByTab[tabId];
-      return { tabs: remaining, tabUi, transcriptsByTab };
+      const projectLastActiveTab = { ...s.projectLastActiveTab };
+      if (tab?.projectId && projectLastActiveTab[tab.projectId] === tabId) {
+        delete projectLastActiveTab[tab.projectId];
+      }
+      return { tabs: remaining, tabUi, transcriptsByTab, projectLastActiveTab };
     });
     if (displayedSessionTabId === tabId) {
       displayedSessionTabId = null;
       set({ displayedTabId: null });
     }
 
-    if (activeTabId === tabId && remaining.length > 0) {
-      const nextTab = remaining.find((t) => t.id === nextActiveTabId) ?? remaining[remaining.length - 1]!;
-      await get().switchTab(nextTab.id);
-    } else if (remaining.length === 0) {
-      const currentProject = get().activeProject ?? (tab?.projectId ? get().projects.find((p) => p.id === tab.projectId) ?? null : null);
-      set({ activeTabId: null, activeProject: currentProject, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });
+    if (activeTabId === tabId) {
+      const currentProjectId = tab?.projectId ?? get().activeProject?.id;
+      const projectTabs = currentProjectId ? remaining.filter((t) => t.projectId === currentProjectId) : remaining;
+
+      if (projectTabs.length > 0) {
+        const nextTab = projectTabs.find((t) => t.id === nextActiveTabId) ?? projectTabs[projectTabs.length - 1]!;
+        await get().switchTab(nextTab.id);
+      } else {
+        const currentProject = get().activeProject ?? (tab?.projectId ? get().projects.find((p) => p.id === tab.projectId) ?? null : null);
+        set({ activeTabId: null, activeProject: currentProject, activeKey: null, transcript: createTranscript(), ...EMPTY_TAB_UI });
+      }
     }
   },
 
@@ -1900,11 +2179,15 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     let { transcript, activeKey } = get();
     if (!promptText.trim() && attachments.length === 0) return;
     // Pi is swapping its extension runtime; a prompt now would hit a half-loaded session.
-    if (activeKey && get().reloadStates[activeKey]?.phase === "reloading") return;
+    if (activeKey && get().reloadStates[activeKey]?.phase === "reloading") {
+      set({ error: "Pi is reloading - try again in a moment." });
+      return;
+    }
 
     playUiSound("prompt_send");
 
-    const { activeTabId } = get();
+    // Capture everything tab-dependent before any await: the user may switch tabs while Pi starts.
+    const { activeTabId, selectedMode } = get();
     const curTab = get().tabs.find((t) => t.id === activeTabId);
     const isFirstPrompt = curTab?.title === NEW_SESSION_TITLE || !curTab?.sessionPath;
     const autoTitle = titleFromPrompt(promptText, 40) || attachments[0]?.name || "";
@@ -1936,7 +2219,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         }));
         if (first) pendingStartTimers.set(tabId, setTimeout(() => clearPendingStart(tabId), PENDING_START_TIMEOUT_MS));
       }
+      const startedTabId = activeTabId;
       activeKey = await get().ensureActiveSession(activeTabId ?? undefined, { title: autoTitle || undefined });
+      if (startedTabId && !get().tabs.some((t) => t.id === startedTabId)) {
+        // Tab closed while Pi was starting (ensureActiveSession already stopped the process): drop the prompt quietly.
+        clearPendingStart(startedTabId);
+        return;
+      }
       if (!activeKey) {
         if (activeTabId) {
           clearPendingStart(activeTabId);
@@ -1948,8 +2237,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         return;
       }
       if (activeTabId) setPendingStartStep(activeTabId, "sending");
-      // The snapshot above predates the session start; don't act on a stale `running`.
-      transcript = get().transcript;
+      // The snapshot above predates the session start; don't act on a stale `running` (of this tab, not the displayed one).
+      transcript = activeTabId && !isDisplayed(activeTabId) ? get().transcriptsByTab[activeTabId] ?? createTranscript() : get().transcript;
     } else if (isFirstPrompt && autoTitle && activeTabId) {
       // If the session was already running and had a worktree with a placeholder branch (e.g. hive/session-xxxx),
       // rename the worktree branch to a descriptive name based on the user's initial request!
@@ -1991,16 +2280,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       message = (message ? message + "\n\n" : "") + fileBlocks.join("\n\n");
     }
 
-    // Prefix mode steering if in non-default mode
-    const { selectedMode } = get();
-    if (selectedMode === "plan") {
-      message = `[Mode: Plan - Analyze, research, and outline an architectural plan. Do not execute file edits unless explicitly directed to do so.]\n\n${message}`;
-    } else if (selectedMode === "manual") {
-      message = `[Mode: Manual - Propose changes and request user confirmation before modifying files.]\n\n${message}`;
-    } else if (selectedMode === "debug") {
-      message = `[Mode: Debug - Prioritize root cause diagnosis, examining error traces, logs, and reproduction steps.]\n\n${message}`;
-    } else if (selectedMode === "ask") {
-      message = `[Mode: Ask - Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.]\n\n${message}`;
+    // Prefix mode steering; say so explicitly when the mode changed since the agent was last steered.
+    const previousMode = get().tabs.find((t) => t.id === activeTabId)?.lastSteeredMode;
+    const steering = buildModeSteering(selectedMode, previousMode);
+    if (steering) message = `${steering}\n\n${message}`;
+    if (activeTabId) {
+      set((s) => ({ tabs: s.tabs.map((t) => (t.id === activeTabId ? { ...t, lastSteeredMode: selectedMode } : t)) }));
     }
 
     // A cold start already emptied the composer; don't wipe what the user typed while Pi was starting.
@@ -2102,32 +2387,45 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       return;
     }
 
+    // A rejected/failed send must not lose the user's text: put it back in the composer and say why.
+    const failSend = (reason: string | undefined) => {
+      if (trackPending && activeTabId) clearPendingStart(activeTabId);
+      if (activeTabId) restoreDraft(activeTabId, promptText, attachments);
+      set({ error: `Couldn't send your message: ${reason || "Pi didn't accept it."}` });
+    };
+    const sendRpc = async (command: Parameters<StudioApi["rpc"]>[1]) => {
+      try {
+        const res = await window.studio.rpc(activeKey, command);
+        if (!res?.ok) failSend(res?.error);
+        return res;
+      } catch (err) {
+        failSend(err instanceof Error ? err.message : String(err));
+        return null;
+      }
+    };
+
     if (running && streamingBehavior === "steer") {
-      await window.studio.rpc(activeKey, {
+      await sendRpc({
         type: "steer",
         message,
         ...(images.length > 0 ? { images } : {}),
       });
     } else if (running && streamingBehavior === "followUp") {
-      await window.studio.rpc(activeKey, {
+      await sendRpc({
         type: "follow_up",
         message,
         ...(images.length > 0 ? { images } : {}),
       });
     } else {
       // Without a run (rejected prompt, or a slash command Pi handles itself) no agent_start will clear the indicator.
-      let started = false;
-      try {
-        const res = await window.studio.rpc(activeKey, {
-          type: "prompt",
-          message,
-          ...(images.length > 0 ? { images } : {}),
-          ...(running ? { streamingBehavior: "steer" } : {}),
-        });
-        started = !!res?.ok && !promptText.trim().startsWith("/");
-      } finally {
-        if (trackPending && activeTabId && !started) clearPendingStart(activeTabId);
-      }
+      const res = await sendRpc({
+        type: "prompt",
+        message,
+        ...(images.length > 0 ? { images } : {}),
+        ...(running ? { streamingBehavior: "steer" } : {}),
+      });
+      const started = !!res?.ok && !promptText.trim().startsWith("/");
+      if (trackPending && activeTabId && !started) clearPendingStart(activeTabId);
     }
   },
 
@@ -2236,8 +2534,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           cutoff === null
             ? next
             : { ...next, live: next.live.filter((m) => typeof m.timestamp === "number" && m.timestamp < cutoff) },
-        promptText: text,
-        attachments: images,
+        // Keep whatever the user has typed meanwhile.
+        promptText: mode === "resend" || !s.promptText.trim() ? text : `${s.promptText}\n${text}`,
+        attachments: mode === "resend" ? images : [...s.attachments, ...images],
       };
     });
     if (mode === "resend") {
@@ -2271,7 +2570,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (res.ok) {
       const q = res.data as { steering?: string[]; followUp?: string[] };
       const restored = [...(q.steering ?? []), ...(q.followUp ?? [])].join("\n");
-      if (restored) set({ promptText: restored });
+      if (restored) set((s) => ({ promptText: s.promptText.trim() ? `${s.promptText}\n\n${restored}` : restored }));
     }
     await window.studio.rpc(activeKey, { type: "abort" });
     // Also stop background subagents so nothing keeps running.
@@ -2418,6 +2717,17 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     set({ pendingUiDialog: null });
   },
 
+  respondTabDialog: async (tabId, response) => {
+    if (isDisplayed(tabId)) return get().respondDialog(response);
+    const key = get().tabs.find((t) => t.id === tabId)?.activeKey;
+    if (!key) {
+      updateTabUi(tabId, () => ({ pendingUiDialog: null }));
+      return;
+    }
+    await window.studio.respondUi(key, response);
+    updateTabUi(tabId, (ui) => (ui.pendingUiDialog?.id === response.id ? { pendingUiDialog: null } : {}));
+  },
+
   respondForm: async (result) => {
     const { activeKey, pendingForm } = get();
     if (!pendingForm) return;
@@ -2432,20 +2742,22 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
 
   stopSubagent: async (target) => {
     const { activeKey } = get();
-    if (!activeKey) return;
+    if (!activeKey) return false;
     try {
       await window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, {
         kind: "subagent_stop",
         id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
         ...target,
       });
+      return true;
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
     }
   },
 
   deleteSessionFile: async (sessionPath: string) => {
-    // Close any open tab first and stop Pi process so Windows releases file handles.
+    // Stop the running Pi first so Windows releases the file lock; close tabs only once the delete succeeded.
     const openTabs = get().tabs.filter((t) => t.sessionPath === sessionPath);
     for (const t of openTabs) {
       if (t.activeKey) {
@@ -2453,16 +2765,22 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           await window.studio.stopSession(t.activeKey);
         } catch {}
       }
-      await get().closeTab(t.id);
     }
-    await window.studio.deleteSessionFile(sessionPath);
+    try {
+      await window.studio.deleteSessionFile(sessionPath);
+    } catch (err) {
+      throw new Error(`Couldn't delete the session: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    for (const t of openTabs) await get().closeTab(t.id);
     await get().refreshCatalog();
   },
 
-  deleteQueuedMessage: async (type: "steering" | "followUp", index: number) => {
-    const { activeKey } = get();
-    if (!activeKey) return;
-    const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
+  deleteQueuedMessage: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
+    const res = await window.studio.rpc(key, { type: "clear_queue" });
     if (!res.ok) return;
     const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
     const steering = [...(current.steering ?? [])];
@@ -2475,28 +2793,34 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
 
     for (const msg of steering) {
-      await window.studio.rpc(activeKey, { type: "steer", message: msg });
+      await window.studio.rpc(key, { type: "steer", message: msg });
     }
     for (const msg of followUp) {
-      await window.studio.rpc(activeKey, { type: "follow_up", message: msg });
+      await window.studio.rpc(key, { type: "follow_up", message: msg });
     }
 
-    set((s) => ({
-      transcript: {
-        ...s.transcript,
-        queue: { steering, followUp },
-      },
+    const latest = get();
+    const curTab = targetTabId ?? latest.displayedTabId ?? latest.activeTabId;
+    const isCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    const prevT = (curTab ? latest.transcriptsByTab[curTab] : undefined) ?? latest.transcript;
+    const nextT = { ...prevT, queue: { steering, followUp } };
+
+    set((state) => ({
+      ...(isCur ? { transcript: nextT } : {}),
+      ...(curTab ? { transcriptsByTab: { ...state.transcriptsByTab, [curTab]: nextT } } : {}),
     }));
   },
 
-  editQueuedMessage: async (type: "steering" | "followUp", index: number, newText: string) => {
+  editQueuedMessage: async (type: "steering" | "followUp", index: number, newText: string, targetTabId?: string) => {
     const trimmed = newText.trim();
     if (!trimmed) {
-      return get().deleteQueuedMessage(type, index);
+      return get().deleteQueuedMessage(type, index, targetTabId);
     }
-    const { activeKey } = get();
-    if (!activeKey) return;
-    const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
+    const res = await window.studio.rpc(key, { type: "clear_queue" });
     if (!res.ok) return;
     const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
     const steering = [...(current.steering ?? [])];
@@ -2509,29 +2833,38 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
 
     for (const msg of steering) {
-      await window.studio.rpc(activeKey, { type: "steer", message: msg });
+      await window.studio.rpc(key, { type: "steer", message: msg });
     }
     for (const msg of followUp) {
-      await window.studio.rpc(activeKey, { type: "follow_up", message: msg });
+      await window.studio.rpc(key, { type: "follow_up", message: msg });
     }
 
-    set((s) => ({
-      transcript: {
-        ...s.transcript,
-        queue: { steering, followUp },
-      },
+    const latest = get();
+    const curTab = targetTabId ?? latest.displayedTabId ?? latest.activeTabId;
+    const isCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    const prevT = (curTab ? latest.transcriptsByTab[curTab] : undefined) ?? latest.transcript;
+    const nextT = { ...prevT, queue: { steering, followUp } };
+
+    set((state) => ({
+      ...(isCur ? { transcript: nextT } : {}),
+      ...(curTab ? { transcriptsByTab: { ...state.transcriptsByTab, [curTab]: nextT } } : {}),
     }));
   },
 
-  runQueuedNow: async (type: "steering" | "followUp", index: number) => {
-    const { activeKey, transcript } = get();
-    if (!activeKey) return;
+  runQueuedNow: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
 
-    const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
+    const curTab = targetTabId ?? s.displayedTabId ?? s.activeTabId;
+    const targetTranscript = (curTab ? s.transcriptsByTab[curTab] : undefined) ?? s.transcript;
+
+    const res = await window.studio.rpc(key, { type: "clear_queue" });
     if (!res.ok) return;
     const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
-    const steering = [...(current.steering ?? transcript.queue.steering ?? [])];
-    const followUp = [...(current.followUp ?? transcript.queue.followUp ?? [])];
+    const steering = [...(current.steering ?? targetTranscript.queue.steering ?? [])];
+    const followUp = [...(current.followUp ?? targetTranscript.queue.followUp ?? [])];
 
     let target: string | undefined;
     if (type === "steering") {
@@ -2544,57 +2877,68 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       }
     }
     if (!target) {
-      const fallbackList = type === "steering" ? transcript.queue.steering : transcript.queue.followUp;
+      const fallbackList = type === "steering" ? targetTranscript.queue.steering : targetTranscript.queue.followUp;
       target = fallbackList[index];
     }
     if (!target) return;
 
-    if (transcript.running) {
+    if (targetTranscript.running) {
       try {
-        await window.studio.rpc(activeKey, { type: "abort" });
+        await window.studio.rpc(key, { type: "abort" });
       } catch (err) {
         console.warn("Abort failed while running queued message now:", err);
       }
     }
 
     try {
-      await window.studio.rpc(activeKey, { type: "prompt", message: target });
+      await window.studio.rpc(key, { type: "prompt", message: target });
     } catch (err) {
       console.error("Prompt failed while running queued message now:", err);
     }
 
     for (const msg of steering) {
-      await window.studio.rpc(activeKey, { type: "steer", message: msg });
+      await window.studio.rpc(key, { type: "steer", message: msg });
     }
     for (const msg of followUp) {
-      await window.studio.rpc(activeKey, { type: "follow_up", message: msg });
+      await window.studio.rpc(key, { type: "follow_up", message: msg });
     }
 
-    set((s) => ({
-      transcript: {
-        ...s.transcript,
-        running: true,
-        queue: {
-          steering,
-          followUp,
-        },
+    const latest = get();
+    const latestCurTab = targetTabId ?? latest.displayedTabId ?? latest.activeTabId;
+    const latestIsCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    const nextT = {
+      ...targetTranscript,
+      running: true,
+      queue: {
+        steering,
+        followUp,
       },
+    };
+
+    set((state) => ({
+      ...(latestIsCur ? { transcript: nextT } : {}),
+      ...(latestCurTab ? { transcriptsByTab: { ...state.transcriptsByTab, [latestCurTab]: nextT } } : {}),
     }));
   },
 
-  steerQueuedNext: async (type: "steering" | "followUp", index: number) => {
-    const { activeKey, transcript } = get();
-    if (!activeKey) return;
+  steerQueuedNext: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
 
-    if (!transcript.running) {
-      return get().runQueuedNow(type, index);
+    const curTab = targetTabId ?? s.displayedTabId ?? s.activeTabId;
+    const targetTranscript = (curTab ? s.transcriptsByTab[curTab] : undefined) ?? s.transcript;
+
+    if (!targetTranscript.running) {
+      return get().runQueuedNow(type, index, targetTabId);
     }
 
-    const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
+    const res = await window.studio.rpc(key, { type: "clear_queue" });
     if (!res.ok) return;
     const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
-    const steering = [...(current.steering ?? transcript.queue.steering ?? [])];
-    const followUp = [...(current.followUp ?? transcript.queue.followUp ?? [])];
+    const steering = [...(current.steering ?? targetTranscript.queue.steering ?? [])];
+    const followUp = [...(current.followUp ?? targetTranscript.queue.followUp ?? [])];
 
     let target: string | undefined;
     if (type === "steering") {
@@ -2608,54 +2952,76 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
     if (!target) return;
 
-    await window.studio.rpc(activeKey, { type: "steer", message: target });
+    await window.studio.rpc(key, { type: "steer", message: target });
     for (const msg of steering) {
-      await window.studio.rpc(activeKey, { type: "steer", message: msg });
+      await window.studio.rpc(key, { type: "steer", message: msg });
     }
     for (const msg of followUp) {
-      await window.studio.rpc(activeKey, { type: "follow_up", message: msg });
+      await window.studio.rpc(key, { type: "follow_up", message: msg });
     }
 
-    set((s) => ({
-      transcript: {
-        ...s.transcript,
-        queue: {
-          steering: [target!, ...steering],
-          followUp,
-        },
+    const latest = get();
+    const latestCurTab = targetTabId ?? latest.displayedTabId ?? latest.activeTabId;
+    const latestIsCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    const nextT = {
+      ...targetTranscript,
+      queue: {
+        steering: [target!, ...steering],
+        followUp,
       },
+    };
+
+    set((state) => ({
+      ...(latestIsCur ? { transcript: nextT } : {}),
+      ...(latestCurTab ? { transcriptsByTab: { ...state.transcriptsByTab, [latestCurTab]: nextT } } : {}),
     }));
   },
 
-  steerQueuedNow: async (type: "steering" | "followUp", index: number) => {
-    return get().runQueuedNow(type, index);
+  steerQueuedNow: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    return get().runQueuedNow(type, index, targetTabId);
   },
 
-  clearAllQueued: async () => {
-    const { activeKey } = get();
-    if (!activeKey) return;
-    await window.studio.rpc(activeKey, { type: "clear_queue" });
-    set((s) => {
-      const compactionHeld = { ...s.compactionHeld };
-      delete compactionHeld[activeKey];
+  clearAllQueued: async (targetTabId?: string) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
+    await window.studio.rpc(key, { type: "clear_queue" });
+    set((state) => {
+      const compactionHeld = { ...state.compactionHeld };
+      delete compactionHeld[key];
+      const curTab = targetTabId ?? s.displayedTabId ?? s.activeTabId;
+      const isCur = !targetTabId || targetTabId === s.activeTabId || targetTabId === s.displayedTabId;
+      const prevT = (curTab ? state.transcriptsByTab[curTab] : undefined) ?? state.transcript;
+      const nextT = { ...prevT, queue: { steering: [], followUp: [] } };
       return {
         compactionHeld,
-        transcript: {
-          ...s.transcript,
-          queue: { steering: [], followUp: [] },
-        },
+        ...(isCur ? { transcript: nextT } : {}),
+        ...(curTab ? { transcriptsByTab: { ...state.transcriptsByTab, [curTab]: nextT } } : {}),
       };
     });
   },
 
-  popQueuedToEditor: async (type: "steering" | "followUp", index: number) => {
-    const { transcript, promptText } = get();
-    const list = type === "steering" ? transcript.queue.steering : transcript.queue.followUp;
+  popQueuedToEditor: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    const s = get();
+    const curTab = targetTabId ?? s.displayedTabId ?? s.activeTabId;
+    const targetTranscript = (curTab ? s.transcriptsByTab[curTab] : undefined) ?? s.transcript;
+    const list = type === "steering" ? targetTranscript.queue.steering : targetTranscript.queue.followUp;
     const msg = list[index];
     if (msg === undefined) return;
-    await get().deleteQueuedMessage(type, index);
-    const combined = promptText.trim() ? `${promptText}\n\n${msg}` : msg;
-    set({ promptText: combined });
+    await get().deleteQueuedMessage(type, index, targetTabId);
+
+    const latest = get();
+    const isCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    if (isCur) {
+      const { promptText } = latest;
+      const combined = promptText.trim() ? `${promptText}\n\n${msg}` : msg;
+      set({ promptText: combined });
+    } else if (targetTabId) {
+      updateTabUi(targetTabId, (ui) => ({
+        promptText: ui.promptText.trim() ? `${ui.promptText}\n\n${msg}` : msg,
+      }));
+    }
   },
 
   renameSession: async (sessionPath: string, title: string) => {
@@ -2720,4 +3086,8 @@ export const __test = {
   mainThreadRunning,
   runningSubagents,
   bridgeSubagentsRunning,
+  dropSessionKey,
+  setDisplayedTab: (id: string | null) => {
+    displayedSessionTabId = id;
+  },
 };

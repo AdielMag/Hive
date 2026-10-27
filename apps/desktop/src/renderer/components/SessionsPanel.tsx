@@ -16,12 +16,15 @@ import type { SessionCatalogItem } from "@hive/protocol";
 import { transcriptAwaitsUser, useSessionStore } from "../store/session-store.ts";
 import { sessionDisplayTitle } from "../lib/session-title.ts";
 import { AiModelChip } from "./AiModelChip.tsx";
+import { ModelPickerPopover, type ModelPickerAnchor } from "./ModelPickerPopover.tsx";
 import { resolveFeatureModel, useFeatureModelStore } from "../store/feature-models-store.ts";
 import { formatAgo, formatAgoShort } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
 import { worktreeChipLabel, worktreeShortLabel, worktreeTooltipLines } from "../lib/worktree.ts";
 import { groupSessions, isSubagentSession, normPath, subagentId, subagentType } from "../lib/subagent-sessions.ts";
 import { archiveSession } from "../store/worktree-actions.ts";
+import { askChoice } from "./ChoiceDialog.tsx";
+import { toast } from "../modules/toast-store.ts";
 import { startTidy, useTidyStore } from "../store/tidy-store.ts";
 
 type SessionBadge = "running" | "input" | "done" | "error";
@@ -84,6 +87,54 @@ export const SessionsPanel: React.FC = () => {
   const [editingSessionPath, setEditingSessionPath] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [tidyPicker, setTidyPicker] = useState<ModelPickerAnchor | null>(null);
+
+  const confirmDelete = async (s: SessionCatalogItem) => {
+    const choice = await askChoice({
+      title: "Delete this session?",
+      body: [`"${sessionDisplayTitle(s, 50)}" will be permanently deleted. This can't be undone.`],
+      choices: [
+        { id: "cancel", label: "Cancel" },
+        { id: "delete", label: "Delete", tone: "danger" },
+      ],
+    });
+    if (choice !== "delete") return;
+    try {
+      await deleteSessionFile(s.path);
+      toast({ message: "Session deleted", kind: "success" });
+    } catch (e) {
+      toast({ message: `Couldn't delete session: ${e instanceof Error ? e.message : String(e)}`, kind: "error" });
+    }
+  };
+
+  const buildMenuItems = (s: SessionCatalogItem): ContextMenuState["items"] => [
+
+                        {
+                          label: "Rename",
+                          icon: <Pencil size={13} />,
+                          onSelect: () => handleStartRename(s),
+                        },
+                        {
+                          label: s.archived ? "Restore from archive" : "Archive",
+                          icon: s.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />,
+                          onSelect: () => {
+                            if (s.archived) {
+                              void setSessionArchived(s.path, false);
+                            } else {
+                              void archiveSession(s);
+                            }
+                          },
+                        },
+                        { kind: "separator" },
+                        {
+                          label: "Delete",
+                          icon: <Trash2 size={13} />,
+                          danger: true,
+                          onSelect: () => void confirmDelete(s),
+                        },
+                      
+  ];
+
   const tidyPref = useFeatureModelStore((s) => s.config.sessionTidy);
   const defaultModel = useSessionStore((s) => s.defaultModel);
   const resolvedTidyModel = useMemo(
@@ -258,37 +309,22 @@ export const SessionsPanel: React.FC = () => {
                       ? `${display}${badge ? ` (${BADGE_LABEL[badge]})` : ""}\n${formatAgo(new Date(s.modified).getTime())}\n${worktreeChipLabel(s.worktree)}\n${worktreeTooltipLines(s.worktree).join("\n")}`
                       : `${display}${badge ? ` (${BADGE_LABEL[badge]})` : ""}\n${formatAgo(new Date(s.modified).getTime())}`
                   }
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget || isEditing) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void openSessionTab(s.path, activeProject.id);
+                    } else if (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) {
+                      e.preventDefault();
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setContextMenu({ x: r.left + 24, y: r.bottom, items: buildMenuItems(s) });
+                    }
+                  }}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    setContextMenu({
-                      x: e.clientX,
-                      y: e.clientY,
-                      items: [
-                        {
-                          label: "Rename",
-                          icon: <Pencil size={13} />,
-                          onSelect: () => handleStartRename(s),
-                        },
-                        {
-                          label: s.archived ? "Restore from archive" : "Archive",
-                          icon: s.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />,
-                          onSelect: () => {
-                            if (s.archived) {
-                              void setSessionArchived(s.path, false);
-                            } else {
-                              void archiveSession(s);
-                            }
-                          },
-                        },
-                        { kind: "separator" },
-                        {
-                          label: "Delete",
-                          icon: <Trash2 size={13} />,
-                          danger: true,
-                          onSelect: () => void deleteSessionFile(s.path),
-                        },
-                      ],
-                    });
+                    setContextMenu({ x: e.clientX, y: e.clientY, items: buildMenuItems(s) });
                   }}
                 >
                   <div className="sessions-panel__item-main">
@@ -392,6 +428,11 @@ export const SessionsPanel: React.FC = () => {
             type="button"
             className="sessions-panel__tidy-btn"
             onClick={archiveOldWithLlm}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setTidyPicker({ x: e.clientX, y: e.clientY });
+            }}
             title={`Let the model pick old sessions and archive them · ${resolvedTidyModel.name || resolvedTidyModel.id} (${resolvedTidyModel.sourceLabel})
 Right-click to change the model`}
           >
@@ -404,10 +445,11 @@ Right-click to change the model`}
               <>
                 <Sparkles size={12} />
                 <span>Archive old</span>
-                <AiModelChip model={resolvedTidyModel} clickable={false} feature="sessionTidy" />
+                <AiModelChip model={resolvedTidyModel} clickable={false} />
               </>
             )}
           </button>
+          <ModelPickerPopover anchor={tidyPicker} feature="sessionTidy" onClose={() => setTidyPicker(null)} />
         </div>
         <label className="sessions-panel__toggle-label">
           <input

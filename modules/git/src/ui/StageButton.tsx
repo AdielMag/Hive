@@ -11,17 +11,30 @@ export const StageButton: React.FC<{ host: ModuleHost; tab?: ModuleTab }> = ({ h
   const project = host.hooks.useActiveSession().project;
   if (!tab || !tab.filePath || !project) return null;
   const filePath = tab.filePath;
-  const isStaged = Boolean((tab.data as Partial<DiffTabData> | undefined)?.staged);
+  const tabData = tab.data as Partial<DiffTabData> | undefined;
+  const isStaged = Boolean(tabData?.staged);
+  const isUntracked = Boolean(tabData?.untracked);
+  const targetCwd = tabData?.cwd || project.path;
 
   const toggle = async () => {
     try {
       const api = gitApi();
-      if (isStaged) await api.unstageFile(project.path, filePath);
-      else await api.stageFile(project.path, filePath);
-      const updated = await api.getGitDiff(project.path, { staged: !isStaged, filePath });
+      if (isStaged) await api.unstageFile(targetCwd, filePath);
+      else await api.stageFile(targetCwd, filePath);
+      const nextStaged = !isStaged;
+      const updated = await api.getGitDiff(targetCwd, {
+        staged: nextStaged,
+        filePath,
+        untracked: !nextStaged && isUntracked,
+      });
       host.tabs.update(tab.id, {
-        title: diffTabTitle(!isStaged, filePath),
-        data: { staged: !isStaged, content: updated || NO_DIFF_TEXT },
+        title: diffTabTitle(nextStaged, filePath),
+        data: {
+          staged: nextStaged,
+          content: updated || NO_DIFF_TEXT,
+          cwd: targetCwd,
+          untracked: isUntracked,
+        },
       });
       void useGitStore.getState().refreshGit();
     } catch (err) {

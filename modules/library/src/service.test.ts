@@ -249,7 +249,7 @@ describe("deleteLibraryEntry", () => {
     expect(existsSync(skillDir)).toBe(false);
   });
 
-  it("uses trashItem when provided and falls back to rm on failure", async () => {
+  it("uses trashItem when provided", async () => {
     const file = join(agentDir, "agents", "trash-me.md");
     put(file, "---\nname: trash\n---\nTrash me");
 
@@ -267,6 +267,37 @@ describe("deleteLibraryEntry", () => {
     );
     expect(res).toEqual({ ok: true });
     expect(trashed).toBe(true);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it("surfaces trash failure without silently deleting, requiring permanent confirmation", async () => {
+    const file = join(agentDir, "agents", "trash-fail.md");
+    put(file, "---\nname: trash\n---\nTrash me");
+
+    const res = await deleteLibraryEntry(
+      { path: file },
+      {
+        ...opts(),
+        trashItem: async () => {
+          throw new Error("Trash is unsupported on this filesystem");
+        },
+      },
+    );
+    expect(res.ok).toBe(false);
+    expect(!res.ok && res.error).toContain("Permanent delete requires explicit confirmation");
+    expect(existsSync(file)).toBe(true);
+
+    // Explicit permanent delete succeeds
+    const permRes = await deleteLibraryEntry(
+      { path: file, permanent: true },
+      {
+        ...opts(),
+        trashItem: async () => {
+          throw new Error("Trash failed");
+        },
+      },
+    );
+    expect(permRes).toEqual({ ok: true });
     expect(existsSync(file)).toBe(false);
   });
 

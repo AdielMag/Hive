@@ -65,10 +65,43 @@
   color: var(--text-muted);
 }
 
+.command-approval-bar__jev {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+}
+
+.command-approval-bar__description {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.45;
+}
+
+.command-approval-bar__summary {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.command-approval-bar__impact {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
 .command-approval-bar__reason {
   font-size: var(--fs-sm);
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+.command-approval-bar__reason--secondary {
+  font-size: 10.5px;
+  color: var(--text-muted);
 }
 
 .command-approval-bar__code-wrap {

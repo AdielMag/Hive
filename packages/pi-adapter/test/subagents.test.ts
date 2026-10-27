@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  collectSubagents,
   hasActiveSubagents,
   indexSubagents,
   parseAgentResultText,
   parseGetResultText,
   parseOutputLines,
+  parseTokenCount,
   resolveSubagentView,
+  summarizeSubagents,
 } from "../src/ai/subagents.ts";
 import type { AssistantBlock, Timeline } from "../src/index.ts";
 
@@ -273,5 +276,95 @@ Execution summary here...`;
     });
 
     expect(hasActiveSubagents(timeline)).toBe(false);
+  });
+
+  it("parses token count strings accurately", () => {
+    expect(parseTokenCount(1234)).toBe(1234);
+    expect(parseTokenCount("17.1k token")).toBe(17100);
+    expect(parseTokenCount("25k")).toBe(25000);
+    expect(parseTokenCount("1.5m")).toBe(1500000);
+    expect(parseTokenCount("2,450 tokens")).toBe(2450);
+    expect(parseTokenCount("invalid")).toBeUndefined();
+    expect(parseTokenCount(undefined)).toBeUndefined();
+  });
+
+  it("collects subagents and computes usage summary", () => {
+    const timeline: Timeline = {
+      items: [
+        {
+          kind: "assistant",
+          key: "a1",
+          streaming: false,
+          blocks: [
+            {
+              type: "toolCall",
+              id: "call_scout",
+              name: "Agent",
+              arguments: { description: "Explore files", subagent_type: "scout" },
+              complete: true,
+            },
+            {
+              type: "toolCall",
+              id: "call_worker",
+              name: "Agent",
+              arguments: { description: "Implement fix", subagent_type: "worker" },
+              complete: true,
+            },
+          ],
+        },
+      ],
+      toolResults: {
+        call_scout: {
+          toolCallId: "call_scout",
+          toolName: "Agent",
+          isError: false,
+          text: "Agent completed",
+          images: [],
+          details: {
+            subagentType: "scout",
+            description: "Explore files",
+            status: "completed",
+            cost: 0.002,
+            tokens: "15k token",
+            toolUses: 5,
+            turnCount: 4,
+          },
+        },
+        call_worker: {
+          toolCallId: "call_worker",
+          toolName: "Agent",
+          isError: false,
+          text: "Agent completed",
+          images: [],
+          details: {
+            subagentType: "worker",
+            description: "Implement fix",
+            status: "completed",
+            cost: 0.045,
+            totalTokens: 30000,
+            toolUses: 8,
+            turnCount: 6,
+          },
+        },
+      },
+    };
+
+    const agents = collectSubagents(timeline, false);
+    expect(agents).toHaveLength(2);
+    expect(agents[0]?.type).toBe("scout");
+    expect(agents[0]?.cost).toBe(0.002);
+    expect(agents[0]?.totalTokens).toBe(15000);
+    expect(agents[1]?.type).toBe("worker");
+    expect(agents[1]?.cost).toBe(0.045);
+    expect(agents[1]?.totalTokens).toBe(30000);
+
+    const summary = summarizeSubagents(agents);
+    expect(summary.count).toBe(2);
+    expect(summary.completedCount).toBe(2);
+    expect(summary.activeCount).toBe(0);
+    expect(summary.totalCost).toBeCloseTo(0.047, 5);
+    expect(summary.totalTokens).toBe(45000);
+    expect(summary.totalToolUses).toBe(13);
+    expect(summary.totalTurns).toBe(10);
   });
 });

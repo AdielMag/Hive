@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Cpu, Download, ExternalLink, Info, Key, Keyboard, LogOut, Minimize2, Palette, Puzzle, RefreshCw, Volume2, X } from "lucide-react";
 import { AppearanceSettingsContent } from "./AppearanceSettingsContent.tsx";
+import { WorkbenchSettingsSection } from "./WorkbenchSettingsSection.tsx";
 import { SoundSettingsContent } from "./SoundSettingsContent.tsx";
 import { playUiSound } from "../store/sound-store.ts";
 import { ModelsSettingsContent } from "./ModelsSettingsContent.tsx";
@@ -13,6 +14,7 @@ import { providerDisplayName } from "../lib/provider-filter.ts";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { toast } from "../modules/toast-store.ts";
+import { askChoice } from "./ChoiceDialog.tsx";
 import { type UpdateInfo, isInstalling, useUpdates } from "../store/update-store.ts";
 import { UpdateProgressBar } from "./UpdateProgressBar.tsx";
 import { ModulesSettings } from "../features/modules/ModulesSettings.tsx";
@@ -132,7 +134,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             </button>
           </header>
           <div className="settings__body">
-            {tab === "appearance" && <AppearanceSettingsContent />}
+            {tab === "appearance" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                <AppearanceSettingsContent />
+                <WorkbenchSettingsSection />
+              </div>
+            )}
             {tab === "sound" && <SoundSettingsContent />}
             {tab === "models" && <ModelsSettingsContent />}
             {tab === "compaction" && <CompactionSettingsContent />}
@@ -154,12 +161,15 @@ const ModuleSettingsPage: React.FC<{ moduleId: string; Component: React.Componen
   return host ? <Component host={host} /> : null;
 };
 
+const API_KEY_PROVIDERS = new Set(["anthropic", "openai"]);
+
 const AccountsTab: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [replacing, setReplacing] = useState<string | null>(null);
   const focus = useUi((s) => s.settingsFocus);
   const focusRef = useRef<HTMLDivElement | null>(null);
   const allCatalogModels = useSessionStore((s) => s.allCatalogModels);
@@ -184,10 +194,16 @@ const AccountsTab: React.FC = () => {
     try {
       setAccounts(await window.studio.getAuthAccounts());
     } catch (err) {
-      setError(String(err));
+      setError(err instanceof Error ? err.message : String(err));
     }
   }, []);
   useEffect(() => void load(), [load]);
+
+  // Opened from an auth failure on an API-key provider: open the key input straight away.
+  useEffect(() => {
+    const acc = accounts?.find((a) => a.providerId === focus?.providerId);
+    if (acc && acc.connected && acc.type === "api_key" && API_KEY_PROVIDERS.has(acc.providerId)) setReplacing(acc.providerId);
+  }, [accounts, focus]);
 
   // Opened from a failed session: bring the affected account into view.
   useEffect(() => {
@@ -201,48 +217,115 @@ const AccountsTab: React.FC = () => {
     toast({ kind: "success", message: `${name} ${message} — send your message again.` });
   };
 
+  const fail = (what: string, err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    setError(`${what}: ${msg}`);
+    toast({ kind: "error", message: `${what}: ${msg}` });
+  };
+
   const oauth = async (acc: Account) => {
     setError(null);
     setBusy(`login:${acc.providerId}`);
-    const res = await window.studio.loginOAuth(acc.providerId);
-    setBusy(null);
-    if (res.success) {
-      setNotes((n) => ({ ...n, [acc.providerId]: "" }));
-      reconnected(acc.name, "reconnected");
-    } else setError(res.error || "Sign-in failed");
+    try {
+      const res = await window.studio.loginOAuth(acc.providerId);
+      if (res.success) {
+        setNotes((n) => ({ ...n, [acc.providerId]: "" }));
+        reconnected(acc.name, "reconnected");
+      } else fail(`Couldn't sign in to ${acc.name}`, res.error || "sign-in failed");
+    } catch (err) {
+      fail(`Couldn't sign in to ${acc.name}`, err);
+    } finally {
+      setBusy(null);
+    }
     await load();
   };
   const refresh = async (acc: Account) => {
     setError(null);
     setBusy(`refresh:${acc.providerId}`);
-    const res = await window.studio.refreshOAuth(acc.providerId);
-    setBusy(null);
-    if (res.success) {
-      setNotes((n) => ({ ...n, [acc.providerId]: "Token refreshed. If you still see errors, use Reconnect." }));
-      reconnected(acc.name, "token refreshed");
-    } else {
-      setNotes((n) => ({ ...n, [acc.providerId]: "" }));
-      setError(`Couldn't refresh ${acc.name}: ${res.error || "unknown error"}. Use Reconnect to sign in again.`);
+    try {
+      const res = await window.studio.refreshOAuth(acc.providerId);
+      if (res.success) {
+        setNotes((n) => ({ ...n, [acc.providerId]: "Token refreshed. If you still see errors, use Reconnect." }));
+        reconnected(acc.name, "token refreshed");
+      } else {
+        setNotes((n) => ({ ...n, [acc.providerId]: "" }));
+        fail(`Couldn't refresh ${acc.name}`, `${res.error || "unknown error"}. Use Reconnect to sign in again.`);
+      }
+    } catch (err) {
+      fail(`Couldn't refresh ${acc.name}`, err);
+    } finally {
+      setBusy(null);
     }
     await load();
   };
-  const saveKey = async (id: string) => {
+  const saveKey = async (acc: Account) => {
+    const id = acc.providerId;
     const key = keys[id]?.trim();
     if (!key) return;
-    await window.studio.saveApiKey(id, key);
-    setKeys((k) => ({ ...k, [id]: "" }));
+    setError(null);
+    setBusy(`key:${id}`);
+    try {
+      await window.studio.saveApiKey(id, key);
+      setKeys((k) => ({ ...k, [id]: "" }));
+      setReplacing((r) => (r === id ? null : r));
+      reconnected(acc.name, "API key saved");
+    } catch (err) {
+      fail(`Couldn't save the ${acc.name} API key`, err);
+    } finally {
+      setBusy(null);
+    }
     await load();
   };
   const logout = async (id: string, name: string) => {
-    if (!confirm(`Sign out of ${name}?`)) return;
-    await window.studio.logoutAccount(id);
+    const choice = await askChoice({
+      title: `Disconnect ${name}?`,
+      body: [`You'll be signed out of ${name} and its models stop working until you connect again.`],
+      choices: [
+        { id: "cancel", label: "Cancel" },
+        { id: "disconnect", label: "Disconnect", tone: "danger" },
+      ],
+    });
+    if (choice !== "disconnect") return;
+    setBusy(`logout:${id}`);
+    try {
+      await window.studio.logoutAccount(id);
+      toast({ kind: "success", message: `Disconnected ${name}` });
+    } catch (err) {
+      fail(`Couldn't disconnect ${name}`, err);
+    } finally {
+      setBusy(null);
+    }
     await load();
   };
+
+  const keyInput = (acc: Account) => (
+    <div style={{ display: "flex", gap: 6 }}>
+      <input
+        className="settings__input"
+        type="password"
+        placeholder={`${acc.name} API key`}
+        value={keys[acc.providerId] ?? ""}
+        autoFocus={replacing === acc.providerId}
+        onChange={(e) => setKeys({ ...keys, [acc.providerId]: e.target.value })}
+        onKeyDown={(e) => e.key === "Enter" && void saveKey(acc)}
+      />
+      <button className="ui-btn" disabled={!!busy} onClick={() => void saveKey(acc)}>
+        {busy === `key:${acc.providerId}` ? <RefreshCw size={12} className="spin" /> : null} Save key
+      </button>
+    </div>
+  );
 
   return (
     <div className="settings__stack">
       {error && <div className="settings__alert">{error}</div>}
-      {!accounts && <div className="ui-skeleton" style={{ height: 120 }} />}
+      {!accounts && !error && <div className="ui-skeleton" style={{ height: 120 }} />}
+      {!accounts && error && (
+        <div>
+          <button className="ui-btn ui-btn--sm" onClick={() => { setError(null); void load(); }}>
+            <RefreshCw size={12} /> Retry
+          </button>
+        </div>
+      )}
       {accounts?.map((acc) => {
         const isFocus = focus?.providerId === acc.providerId;
         const canOAuth = acc.providerId === "antigravity" || acc.providerId === "anthropic";
@@ -301,10 +384,21 @@ const AccountsTab: React.FC = () => {
                       {reconnecting ? <RefreshCw size={12} className="spin" /> : <ExternalLink size={12} />} Reconnect
                     </button>
                   )}
+                  {acc.type === "api_key" && API_KEY_PROVIDERS.has(acc.providerId) && (
+                    <button
+                      className={`ui-btn ui-btn--sm${isFocus ? " ui-btn--primary" : ""}`}
+                      disabled={!!busy}
+                      onClick={() => setReplacing(replacing === acc.providerId ? null : acc.providerId)}
+                      title="Enter a new API key without disconnecting first"
+                    >
+                      <Key size={12} /> Replace API key
+                    </button>
+                  )}
                   <button className="ui-btn ui-btn--sm" disabled={!!busy} onClick={() => void logout(acc.providerId, acc.name)}>
                     <LogOut size={12} /> Disconnect
                   </button>
                 </div>
+                {replacing === acc.providerId && <div style={{ flexBasis: "100%", marginTop: 6 }}>{keyInput(acc)}</div>}
               </div>
             ) : (
               <div className="settings__account-actions settings__account-actions--col">
@@ -314,21 +408,7 @@ const AccountsTab: React.FC = () => {
                     Sign in with {acc.name}
                   </button>
                 )}
-                {(acc.providerId === "anthropic" || acc.providerId === "openai") && (
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <input
-                      className="settings__input"
-                      type="password"
-                      placeholder={`${acc.name} API key`}
-                      value={keys[acc.providerId] ?? ""}
-                      onChange={(e) => setKeys({ ...keys, [acc.providerId]: e.target.value })}
-                      onKeyDown={(e) => e.key === "Enter" && void saveKey(acc.providerId)}
-                    />
-                    <button className="ui-btn" onClick={() => void saveKey(acc.providerId)}>
-                      Save key
-                    </button>
-                  </div>
-                )}
+                {API_KEY_PROVIDERS.has(acc.providerId) && keyInput(acc)}
               </div>
             )}
           </div>

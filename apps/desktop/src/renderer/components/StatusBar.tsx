@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 import { Coins, ExternalLink, Volume2, VolumeX, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { parseAnsi } from "@hive/pi-adapter";
+import { getTimeline } from "../lib/transcript-timeline.ts";
+import { collectSubagents, summarizeSubagents } from "../lib/ai/subagents.ts";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { COMMANDS_BY_ID } from "../features/commands/registry.ts";
@@ -80,9 +82,18 @@ export const StatusBar: React.FC = () => {
     })),
   );
   const isRunning = running || isSessionActive;
-  const cost = stats?.cost ?? 0;
   const activeSessionPath = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId)?.sessionPath);
   const activeTab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
+  const transcript = useSessionStore((s) => s.transcript);
+  const subagents = useMemo(() => {
+    const timeline = getTimeline(transcript);
+    return collectSubagents(timeline, isRunning);
+  }, [transcript, isRunning]);
+  const subagentsSummary = useMemo(() => summarizeSubagents(subagents), [subagents]);
+
+  const mainCost = stats?.cost ?? 0;
+  const subagentsCost = subagentsSummary.totalCost;
+  const totalCost = mainCost + subagentsCost;
   const modelName: string | undefined = activeTab?.model?.name || activeTab?.model?.id;
   const segments = [
     { label: "Input", cls: "in", value: stats?.tokens.input ?? 0 },
@@ -137,8 +148,8 @@ export const StatusBar: React.FC = () => {
         <button
           ref={costPop.btnRef}
           data-right-opener
-          style={cost > 0 ? undefined : { visibility: "hidden" }}
-          tabIndex={cost > 0 ? undefined : -1}
+          style={totalCost > 0 ? undefined : { visibility: "hidden" }}
+          tabIndex={totalCost > 0 ? undefined : -1}
           className={`statusbar__btn statusbar__cost${costPop.open ? " is-active" : ""}`}
           onClick={() => {
             useUi.getState().toggleRight("usage");
@@ -147,11 +158,15 @@ export const StatusBar: React.FC = () => {
           onMouseLeave={costPop.onLeave}
           onFocus={costPop.onEnter}
           onBlur={costPop.onLeave}
-          title="Session & overall usage breakdown — click to open panel"
+          title={
+            subagents.length > 0
+              ? `Session cost: ${formatCost(totalCost)} (Main: ${formatCost(mainCost)}, Subagents: ${formatCost(subagentsCost)}) — click to open panel`
+              : "Session & overall usage breakdown — click to open panel"
+          }
           aria-haspopup="dialog"
           aria-expanded={costPop.open}
         >
-          {formatCost(cost)}
+          {formatCost(totalCost)}
         </button>
       )}
       {costPop.open &&
@@ -184,8 +199,14 @@ export const StatusBar: React.FC = () => {
             <div className="quota-popover__body ui-scroll">
               <div className="sb-cost__hero">
                 <div className="sb-cost__session" title={activeTab?.title}>{activeTab?.title || "Current session"}</div>
-                <div className="sb-cost__total mono">{formatCost(stats.cost)}</div>
+                <div className="sb-cost__total mono">{formatCost(totalCost)}</div>
                 <div className="sb-cost__chips">
+                  {subagents.length > 0 && (
+                    <>
+                      <span className="sb-cost__chip">main: {formatCost(mainCost)}</span>
+                      <span className="sb-cost__chip">subagents: {formatCost(subagentsCost)} ({subagents.length})</span>
+                    </>
+                  )}
                   {modelName && <span className="sb-cost__chip">{modelName}</span>}
                   {activeTab?.thinkingLevel && activeTab.thinkingLevel !== "off" && (
                     <span className="sb-cost__chip">thinking: {activeTab.thinkingLevel}</span>
@@ -234,6 +255,9 @@ export const StatusBar: React.FC = () => {
                 <dl className="sb-cost__rows">
                   <CostRow label="Assistant turns" value={String(stats.assistantMessages)} />
                   <CostRow label="Tool calls" value={String(stats.toolCalls)} />
+                  {subagents.length > 0 && (
+                    <CostRow label="Subagents" value={`${subagents.length} (${formatCost(subagentsCost)})`} />
+                  )}
                   {stats.assistantMessages > 0 && (
                     <CostRow label="Avg cost / turn" value={formatCost(stats.cost / stats.assistantMessages)} />
                   )}

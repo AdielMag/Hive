@@ -145,8 +145,15 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   }, [refreshAll]);
 
   // Pick up commits/branches made elsewhere (terminal, agent) when the window regains focus.
+  // Throttled: each refresh runs several git commands and re-lays-out the graph.
+  const lastFocusRefresh = useRef(0);
   useEffect(() => {
-    const onFocus = () => void refreshAll();
+    const onFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusRefresh.current < 10_000) return;
+      lastFocusRefresh.current = now;
+      void refreshAll();
+    };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refreshAll]);
@@ -210,8 +217,10 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
       setManualBranch(null);
       return;
     }
-    setManualBranch(target);
-    void run(() => gitApi().gitCheckout(rootProjectPath, target), `Checked out "${target}"`, "Checkout failed");
+    // Switch the view to the root checkout only once the checkout actually succeeded.
+    void run(() => gitApi().gitCheckout(rootProjectPath, target), `Checked out "${target}"`, "Checkout failed").then((ok) => {
+      if (ok) setManualBranch(target);
+    });
   };
 
   const checkoutRef = (ref: string, label: string) => {
@@ -220,8 +229,9 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
       setManualBranch(null);
       return;
     }
-    setManualBranch(ref);
-    void run(() => gitApi().gitCheckout(rootProjectPath, ref), `Checked out ${label}`, "Checkout failed");
+    void run(() => gitApi().gitCheckout(rootProjectPath, ref), `Checked out ${label}`, "Checkout failed").then((ok) => {
+      if (ok) setManualBranch(ref);
+    });
   };
 
   const deleteBranch = async (b: GitBranchDetail) => {
@@ -250,7 +260,26 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     if (!cwd || b.isCurrent) return;
     const into = status?.branch || "HEAD";
     if (!confirm(`Merge "${b.name}" into "${into}"?`)) return;
-    void run(() => gitApi().gitMerge(cwd, b.name), `Merged "${b.name}" into "${into}"`, "Merge failed");
+    void (async () => {
+      try {
+        await gitApi().gitMerge(cwd, b.name);
+        toast(`Merged "${b.name}" into "${into}"`);
+      } catch (err) {
+        const msg = errText(err);
+        toast(`Merge failed: ${msg}`, "error");
+        // A conflicted merge leaves the repo mid-merge; offer the way back out.
+        if (/conflict|merging|unmerged/i.test(msg) && confirm(`Merging "${b.name}" hit conflicts. Abort the merge and restore "${into}"?`)) {
+          try {
+            await gitApi().gitMergeAbort(cwd);
+            toast("Merge aborted");
+          } catch (e2) {
+            toast(`Failed to abort merge: ${errText(e2)}`, "error");
+          }
+        }
+      }
+      detailCache.current.clear();
+      await refreshAll();
+    })();
   };
 
   const removeWorktree = async (wt: GitWorktreeDetail) => {
@@ -320,8 +349,8 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     setDialog(null);
     if (d.kind === "new") {
       const targetPath = rootProjectPath ?? cwd;
-      await run(() => gitApi().gitCreateBranchFrom(targetPath, name, d.from, dialogCheckout), `Created "${name}"${dialogCheckout ? " and checked it out" : ""}`, "Failed to create branch");
-      if (dialogCheckout) setManualBranch(name);
+      const ok = await run(() => gitApi().gitCreateBranchFrom(targetPath, name, d.from, dialogCheckout), `Created "${name}"${dialogCheckout ? " and checked it out" : ""}`, "Failed to create branch");
+      if (ok && dialogCheckout) setManualBranch(name);
     } else if (name !== d.name) {
       await run(() => gitApi().gitRenameBranch(cwd, d.name, name), `Renamed "${d.name}" to "${name}"`, "Rename failed");
     }

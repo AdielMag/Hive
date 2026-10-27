@@ -36,11 +36,12 @@ export interface LibraryState {
   setShowOverridden: (v: boolean) => void;
   setViewMode: (mode: "sections" | "raw") => void;
   updateField: (entry: LibraryEntry, key: string, value: LibraryFieldValue, cwd?: string) => Promise<boolean>;
-  deleteEntry: (entry: LibraryEntry, cwd?: string) => Promise<boolean>;
+  deleteEntry: (entry: LibraryEntry, cwd?: string, permanent?: boolean) => Promise<boolean>;
   clearFeedback: () => void;
 }
 
 let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
+let loadGeneration = 0;
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   snapshot: null,
@@ -57,9 +58,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   feedback: null,
 
   load: async (cwd, preserveSelection = true) => {
+    const gen = ++loadGeneration;
     set({ loading: true, error: null });
     try {
       const snap = await libraryHost().ipc.invoke<LibrarySnapshot>(LibraryMethods.list, { cwd });
+      if (gen !== loadGeneration) return;
       const curSelected = get().selectedId;
       let nextSelected: string | null = null;
       if (preserveSelection && curSelected && snap.entries.some((e) => e.id === curSelected)) {
@@ -69,8 +72,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         const firstActive = snap.entries.find((e) => !e.shadowed) ?? snap.entries[0];
         nextSelected = firstActive ? firstActive.id : null;
       }
-      set({ snapshot: snap, loading: false, selectedId: nextSelected });
+      set({ snapshot: snap, loading: false, selectedId: nextSelected, error: null });
     } catch (err: any) {
+      if (gen !== loadGeneration) return;
       set({ error: err.message || String(err), loading: false });
     }
   },
@@ -149,7 +153,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     }
   },
 
-  deleteEntry: async (entry, cwd) => {
+  deleteEntry: async (entry, cwd, permanent = false) => {
     if (entry.readOnly || !entry.path) return false;
     set({ deletingId: entry.id });
 
@@ -157,6 +161,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       const res = await libraryHost().ipc.invoke<LibraryDeleteResult>(LibraryMethods.delete, {
         cwd,
         path: entry.path,
+        ...(permanent ? { permanent: true } : {}),
       });
 
       if (!res.ok) {

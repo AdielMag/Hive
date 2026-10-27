@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Copy, Minus, Search, Square, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { ProjectPicker } from "./ProjectPicker.tsx";
+import { ProjectTabBar } from "./ProjectTabBar.tsx";
 import { useSessionStore } from "../store/session-store.ts";
 import { useUi } from "../store/ui-store.ts";
 import { openProjectFolder } from "../features/commands/registry.ts";
@@ -31,7 +32,14 @@ export const AppTitleBar: React.FC = () => {
       newSessionTab: s.newSessionTab,
     })),
   );
-  const ui = useUi(useShallow((s) => ({ openSettings: s.openSettings, toggleLeft: s.toggleLeft, toggleRight: s.toggleRight })));
+  const ui = useUi(
+    useShallow((s) => ({
+      openSettings: s.openSettings,
+      toggleLeft: s.toggleLeft,
+      toggleRight: s.toggleRight,
+      projectTabsEnabled: s.projectTabsEnabled,
+    })),
+  );
   const [menu, setMenu] = useState<string | null>(null);
   const moduleMenuItems = useContributions("titleMenu");
   const [maximized, setMaximized] = useState(false);
@@ -150,17 +158,23 @@ export const AppTitleBar: React.FC = () => {
       </div>
 
       <div className="titlebar__center">
-        <ProjectPicker />
-        <button
-          type="button"
-          className="titlebar__search-trigger no-drag"
-          onClick={() => usePalette.getState().openPalette()}
-          title={`Quick search & commands (${kbdPalette ?? "Ctrl+K"})`}
-        >
-          <Search size={11} />
-          <span>Search</span>
-          <kbd>{kbdPalette ?? "Ctrl+K"}</kbd>
-        </button>
+        {ui.projectTabsEnabled ? (
+          <ProjectTabBar />
+        ) : (
+          <>
+            <ProjectPicker />
+            <button
+              type="button"
+              className="titlebar__search-trigger no-drag"
+              onClick={() => usePalette.getState().openPalette()}
+              title={`Quick search & commands (${kbdPalette ?? "Ctrl+K"})`}
+            >
+              <Search size={11} />
+              <span>Search</span>
+              <kbd>{kbdPalette ?? "Ctrl+K"}</kbd>
+            </button>
+          </>
+        )}
       </div>
 
       <div className="titlebar__right no-drag">

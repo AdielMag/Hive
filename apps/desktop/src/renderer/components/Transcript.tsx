@@ -28,9 +28,10 @@ import {
   Wrench,
 } from "lucide-react";
 import { createTranscript } from "@hive/pi-adapter";
-import { buildTimeline, type AssistantBlock, type Timeline, type TimelineItem, type ToolResultView, type ToolRun } from "@hive/pi-adapter";
+import { type AssistantBlock, type Timeline, type TimelineItem, type ToolResultView, type ToolRun } from "@hive/pi-adapter";
 import { useSessionStore, type PendingStartStep } from "../store/session-store.ts";
 import { useActiveRegistry } from "../store/ai-registry-store.ts";
+import { getTimeline } from "../lib/transcript-timeline.ts";
 import { indexSkills, parseSkillBlock, type SkillIndex } from "../lib/ai/skills.ts";
 import { indexSubagents, parseGetResultText, resolveSubagentView, type NotificationDetails, type SubagentIndex } from "../lib/ai/subagents.ts";
 import { SkillLoadCard } from "./transcript/SkillLoadCard.tsx";
@@ -201,7 +202,7 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const registry = useActiveRegistry();
   const toolCards = useContributions("toolCards");
 
-  const timeline = useMemo(() => buildTimeline(transcript), [transcript]);
+  const timeline = useMemo(() => getTimeline(transcript), [transcript]);
 
   const isCustomCard = useCallback(
     (block: ToolCallBlockT) => toolCards.some((c) => c.match({ name: block.name, arguments: block.arguments ?? {} })),
@@ -314,7 +315,7 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
                 <Loader2 size={13} className="spin" /> Working…
               </div>
             )}
-            <QueuedMessagesList />
+            <QueuedMessagesList tabId={targetTabId} />
           </div>
         </div>
         {showJump && (

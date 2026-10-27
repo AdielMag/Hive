@@ -10,6 +10,7 @@ import {
   Sparkles,
   GitCommit,
   BarChart3,
+  Archive,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
@@ -19,6 +20,9 @@ import { ProviderIcon } from "./ProviderIcon.tsx";
 import { useContributions } from "../modules/registry.ts";
 import { ProviderEnabledToggle } from "./ProviderEnabledToggle.tsx";
 import { filterDisabledProviders } from "../lib/provider-filter.ts";
+import { useUi } from "../store/ui-store.ts";
+import { toast } from "../modules/toast-store.ts";
+import { askChoice } from "./ChoiceDialog.tsx";
 
 function formatContext(tokens?: number): string {
   if (!tokens) return "";
@@ -45,11 +49,12 @@ export const ModelsSettingsContent: React.FC = () => {
       })),
     );
 
-  const { config, setGitCommitConfig, setUsageAnalysisConfig } = useFeatureModelStore(
+  const { config, setGitCommitConfig, setUsageAnalysisConfig, setSessionTidyConfig } = useFeatureModelStore(
     useShallow((s) => ({
       config: s.config,
       setGitCommitConfig: s.setGitCommitConfig,
       setUsageAnalysisConfig: s.setUsageAnalysisConfig,
+      setSessionTidyConfig: s.setSessionTidyConfig,
     })),
   );
 
@@ -87,6 +92,35 @@ export const ModelsSettingsContent: React.FC = () => {
     return enabledModelKeys.some((k) => !k.includes("/") && k === m.id);
   };
 
+  /**
+   * Persist the enabled list. An empty list means "no filter" to the composer (every model stays available),
+   * so refuse to save it rather than show "0 active" while the picker lists everything.
+   * The store setter swallows IO errors, so verify the write landed.
+   */
+  const save = async (nextKeys: string[]): Promise<void> => {
+    if (nextKeys.length === 0) {
+      await askChoice({
+        title: "Keep at least one model enabled",
+        body: [
+          "With no models selected, Hive falls back to showing every model in the picker, so nothing would actually be turned off.",
+          "Leave at least one model enabled, or turn off whole providers in AI Providers instead.",
+        ],
+        choices: [{ id: "ok", label: "OK", tone: "primary" }],
+      });
+      return;
+    }
+    try {
+      await saveEnabledModels(nextKeys);
+    } catch (err) {
+      toast({ kind: "error", message: `Couldn't save model selection: ${err instanceof Error ? err.message : String(err)}` });
+      return;
+    }
+    const saved = useSessionStore.getState().enabledModelKeys;
+    if (saved.length !== nextKeys.length || !nextKeys.every((k) => saved.includes(k))) {
+      toast({ kind: "error", message: "Couldn't save model selection. Check that ~/.pi/agent/settings.json is writable." });
+    }
+  };
+
   // Toggle a single model
   const toggleModel = async (m: { provider: string; id: string }) => {
     const key = `${m.provider}/${m.id}`;
@@ -99,7 +133,7 @@ export const ModelsSettingsContent: React.FC = () => {
       nextKeys = [...enabledModelKeys, key];
     }
 
-    await saveEnabledModels(nextKeys);
+    await save(nextKeys);
   };
 
   // Filtered models by search query and provider
@@ -165,6 +199,11 @@ export const ModelsSettingsContent: React.FC = () => {
     [config.usageAnalysis, selectedModel, defaultModel, combinedModels, defaultProvider],
   );
 
+  const resolvedTidyModel = useMemo(
+    () => resolveFeatureModel(config.sessionTidy, selectedModel, defaultModel, combinedModels, defaultProvider),
+    [config.sessionTidy, selectedModel, defaultModel, combinedModels, defaultProvider],
+  );
+
   // Count active models
   const totalModelsCount = selectableModels.length;
   const activeModelsCount = useMemo(() => {
@@ -175,7 +214,7 @@ export const ModelsSettingsContent: React.FC = () => {
   const handleEnableAllInView = async () => {
     const keysToAdd = filterDisabledProviders(filteredModels, disabledProviders).map((m) => `${m.provider}/${m.id}`);
     const nextSet = new Set([...enabledModelKeys, ...keysToAdd]);
-    await saveEnabledModels(Array.from(nextSet));
+    await save(Array.from(nextSet));
   };
 
   // Disable all in current view
@@ -184,7 +223,7 @@ export const ModelsSettingsContent: React.FC = () => {
       filteredModels.flatMap((m) => [`${m.provider}/${m.id}`, m.id]),
     );
     const nextKeys = enabledModelKeys.filter((k) => !keysToRemove.has(k));
-    await saveEnabledModels(nextKeys);
+    await save(nextKeys);
   };
 
   // Toggle all for a specific provider
@@ -199,7 +238,7 @@ export const ModelsSettingsContent: React.FC = () => {
     } else {
       nextKeys = enabledModelKeys.filter((k) => !providerIds.has(k));
     }
-    await saveEnabledModels(nextKeys);
+    await save(nextKeys);
   };
 
   const getProviderDisplayName = (p: string): string => {
@@ -243,7 +282,7 @@ export const ModelsSettingsContent: React.FC = () => {
           style={{
             padding: "4px 10px",
             borderRadius: 12,
-            background: activeModelsCount > 0 ? "rgba(56, 139, 253, 0.15)" : "rgba(var(--fg-rgb), 0.05)",
+            background: activeModelsCount > 0 ? "color-mix(in srgb, var(--accent-base) 15%, transparent)" : "rgba(var(--fg-rgb), 0.05)",
             color: activeModelsCount > 0 ? "var(--accent-base)" : "var(--text-muted)",
             fontSize: 11,
             fontWeight: 600,
@@ -255,8 +294,7 @@ export const ModelsSettingsContent: React.FC = () => {
         </div>
       </div>
 
-      {/* Dedicated Auxiliary AI Models Card: one row per `aiFeatures` contribution of an enabled module. */}
-      {(hasGitCommit || hasUsageAnalysis) && (
+      {/* Dedicated Auxiliary AI Models Card: git/analytics rows come from module `aiFeatures`; Archive old is core. */}
       <div
         style={{
           background: "var(--bg-card)",
@@ -434,8 +472,82 @@ export const ModelsSettingsContent: React.FC = () => {
           </div>
         </div>
         )}
+
+        {/* Archive old sessions (core sessions panel, always available) */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            padding: "10px 12px",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 6,
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 220 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Archive size={14} color="var(--accent-base)" />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                Archive Old Sessions
+              </span>
+              <AiModelChip model={resolvedTidyModel} clickable={false} />
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              Used when clicking "Archive old" in the Sessions panel (right-click it to change)
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <select
+              value={config.sessionTidy.source}
+              onChange={(e) => {
+                const nextSource = e.target.value as any;
+                setSessionTidyConfig({
+                  source: nextSource,
+                  modelId: nextSource === "custom" ? (config.sessionTidy.modelId || defaultCustomKey) : config.sessionTidy.modelId,
+                });
+              }}
+              style={{
+                background: "var(--bg-input)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 5,
+                padding: "4px 8px",
+                fontSize: 11,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="session">Active Session Model (Dynamic)</option>
+              <option value="pi-default">Pi CLI Default ({defaultModel || "Default"})</option>
+              <option value="custom">Specific Model...</option>
+            </select>
+
+            {config.sessionTidy.source === "custom" && (
+              <select
+                value={config.sessionTidy.modelId || defaultCustomKey}
+                onChange={(e) => setSessionTidyConfig({ modelId: e.target.value })}
+                style={{
+                  background: "var(--bg-input)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 5,
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  maxWidth: 200,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                {renderModelOptions(config.sessionTidy.modelId || defaultCustomKey)}
+              </select>
+            )}
+          </div>
+        </div>
       </div>
-      )}
 
       {/* Search and Provider Filters */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -589,7 +701,16 @@ export const ModelsSettingsContent: React.FC = () => {
               fontSize: 12,
             }}
           >
-            No models found matching your search.
+            {combinedModels.length === 0 ? (
+              <>
+                <div>No models available. Connect a provider in AI Providers.</div>
+                <button className="ui-btn ui-btn--sm" style={{ marginTop: 10 }} onClick={() => useUi.getState().openSettings("accounts")}>
+                  Open AI Providers
+                </button>
+              </>
+            ) : (
+              "No models found matching your search."
+            )}
           </div>
         ) : (
           Object.entries(groupedModels).map(([provider, providerModels]) => {
@@ -667,17 +788,17 @@ export const ModelsSettingsContent: React.FC = () => {
                           padding: "9px 14px",
                           borderBottom: "1px solid rgba(var(--fg-rgb), 0.03)",
                           cursor: "pointer",
-                          background: enabled ? "rgba(56, 139, 253, 0.04)" : "transparent",
+                          background: enabled ? "color-mix(in srgb, var(--accent-base) 5%, transparent)" : "transparent",
                           transition: "background 0.15s ease",
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = enabled
-                            ? "rgba(56, 139, 253, 0.08)"
+                            ? "color-mix(in srgb, var(--accent-base) 10%, transparent)"
                             : "rgba(var(--fg-rgb), 0.03)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = enabled
-                            ? "rgba(56, 139, 253, 0.04)"
+                            ? "color-mix(in srgb, var(--accent-base) 5%, transparent)"
                             : "transparent";
                         }}
                       >

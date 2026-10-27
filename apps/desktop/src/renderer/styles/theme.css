@@ -35,6 +35,8 @@
   --success: #57ab5a;
   --warning: #d29922;
   --danger: #e5534b;
+  --on-danger: #fff;
+  --text-on-color: #fff; /* text on arbitrary user/project colors */
   --info: #39c5cf;
   --project-color: var(--accent-base);
 

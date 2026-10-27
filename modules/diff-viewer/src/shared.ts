@@ -36,6 +36,8 @@ export interface FileTabData {
 export interface DiffTabData {
   content: string;
   staged?: boolean;
+  cwd?: string;
+  untracked?: boolean;
 }
 
 export const diffTabId = (staged: boolean, filePath: string): string => `diff:${staged ? "staged" : "working"}:${filePath}`;

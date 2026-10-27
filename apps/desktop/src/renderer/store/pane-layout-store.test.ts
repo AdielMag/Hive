@@ -156,4 +156,16 @@ describe("pane-layout-store tree operations", () => {
     expect(leaves.map((l) => l.tabIds)).toEqual([["b"], ["a", "c"]]);
     expect(left.id).toBe(leaves[0]!.id);
   });
+
+  it("adds a new tab into a specific target pane via addTabToPane", () => {
+    const root = createDefaultLayout(["tab1", "tab2"], "tab1") as PaneLeaf;
+    const splitTree = splitPane(root, "tab2", root.id, "right") as PaneSplit;
+    const [, rightPane] = splitTree.children as [PaneLeaf, PaneLeaf];
+
+    const updated = moveTabToPane(splitTree, "tab3", rightPane.id);
+    const leaves = getAllLeaves(updated);
+    const rightLeaf = leaves.find((l) => l.id === rightPane.id);
+    expect(rightLeaf?.tabIds).toEqual(["tab2", "tab3"]);
+    expect(rightLeaf?.activeTabId).toBe("tab3");
+  });
 });

@@ -23,6 +23,7 @@ export default defineMainModule({
     h(M.createBranchFrom, (cwd: string, branch: string, startPoint: string, checkout?: boolean) => git.gitCreateBranchFrom(cwd, branch, startPoint, checkout));
     h(M.renameBranch, (cwd: string, oldName: string, newName: string) => git.gitRenameBranch(cwd, oldName, newName));
     h(M.merge, (cwd: string, branch: string) => git.gitMerge(cwd, branch));
+    h(M.mergeAbort, (cwd: string) => git.gitMergeAbort(cwd));
     h(M.stage, (cwd: string, filePath: string) => git.stageFile(cwd, filePath));
     h(M.stageAll, (cwd: string) => git.stageAll(cwd));
     h(M.unstage, (cwd: string, filePath: string) => git.unstageFile(cwd, filePath));

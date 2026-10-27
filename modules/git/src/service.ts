@@ -24,14 +24,22 @@ export async function runGit(
   cwd: string,
   options?: { env?: NodeJS.ProcessEnv; timeout?: number },
 ): Promise<string> {
-  const { stdout } = await execFileAsync("git", ["-c", "core.quotepath=false", ...args], {
-    cwd,
-    windowsHide: true,
-    maxBuffer: 10 * 1024 * 1024,
-    ...(options?.env ? { env: options.env } : {}),
-    ...(options?.timeout ? { timeout: options.timeout } : {}),
-  });
-  return stdout.trim();
+  try {
+    const { stdout } = await execFileAsync("git", ["-c", "core.quotepath=false", ...args], {
+      cwd,
+      windowsHide: true,
+      maxBuffer: 10 * 1024 * 1024,
+      ...(options?.env ? { env: options.env } : {}),
+      ...(options?.timeout ? { timeout: options.timeout } : {}),
+    });
+    return stdout.trim();
+  } catch (err: any) {
+    if (args.includes("--no-index") && err?.code === 1 && typeof err?.stdout === "string" && !err?.stderr?.includes("fatal:")) {
+      return err.stdout.trim();
+    }
+    const detail = String(err?.stderr || err?.stdout || "").trim();
+    throw new Error(detail || err?.message || String(err));
+  }
 }
 
 /** Network operations must never block on an interactive credential prompt. */
@@ -167,7 +175,7 @@ export function parseNumstat(raw: string): Map<string, { additions: number; dele
 
 async function numstat(cwd: string, staged: boolean): Promise<Map<string, { additions: number; deletions: number }>> {
   try {
-    return parseNumstat(await runGit(["diff", ...(staged ? ["--cached"] : []), "--numstat", "--no-renames"], cwd));
+    return parseNumstat(await runGit(["--no-optional-locks", "diff", ...(staged ? ["--cached"] : []), "--numstat", "--no-renames"], cwd));
   } catch {
     return new Map();
   }
@@ -175,7 +183,7 @@ async function numstat(cwd: string, staged: boolean): Promise<Map<string, { addi
 
 export async function getGitStatus(cwd: string): Promise<GitRepoStatus> {
   try {
-    const raw = await runGit(["status", "--porcelain=v2", "--branch"], cwd);
+    const raw = await runGit(["--no-optional-locks", "status", "--porcelain=v2", "--branch"], cwd);
     const parsed = parseStatusV2(raw);
     const [stagedStats, unstagedStats] = await Promise.all([
       parsed.staged.length ? numstat(cwd, true) : Promise.resolve(new Map()),
@@ -190,7 +198,9 @@ export async function getGitStatus(cwd: string): Promise<GitRepoStatus> {
     decorate(parsed.staged, stagedStats);
     decorate(parsed.unstaged, unstagedStats);
     return { isRepo: true, ...parsed };
-  } catch {
+  } catch (err: any) {
+    const msg = String(err?.message || err || "").trim();
+    const isNotRepo = /not a git repository/i.test(msg);
     return {
       isRepo: false,
       branch: "",
@@ -199,6 +209,7 @@ export async function getGitStatus(cwd: string): Promise<GitRepoStatus> {
       staged: [],
       unstaged: [],
       untracked: [],
+      ...(!isNotRepo && msg ? { error: msg } : {}),
     };
   }
 }
@@ -408,6 +419,10 @@ export async function gitMerge(cwd: string, branch: string): Promise<string> {
   return runGit(["merge", "--no-edit", safeRef(branch, "branch name")], cwd);
 }
 
+export async function gitMergeAbort(cwd: string): Promise<string> {
+  return runGit(["merge", "--abort"], cwd);
+}
+
 export async function getGitTags(cwd: string): Promise<GitTag[]> {
   try {
     const fmt = ["%(refname:short)", "%(objectname:short)", "%(creatordate:relative)", "%(subject)"].join("%00");
@@ -508,8 +523,12 @@ export async function getGitGraph(cwd: string, maxCount = 120, options?: GitGrap
 
 export async function getGitDiff(
   cwd: string,
-  options?: { staged?: boolean; filePath?: string },
+  options?: { staged?: boolean; filePath?: string; untracked?: boolean },
 ): Promise<string> {
+  const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
+  if (options?.untracked && options?.filePath) {
+    return runGit(["diff", "--no-index", "--", nullDevice, options.filePath], cwd);
+  }
   const args = ["diff"];
   if (options?.staged) {
     args.push("--staged");
@@ -517,10 +536,25 @@ export async function getGitDiff(
   if (options?.filePath) {
     args.push("--", options.filePath);
   }
-  try {
-    return await runGit(args, cwd);
-  } catch {
-    return "";
+  return runGit(args, cwd);
+}
+
+function killChildProcess(child: ReturnType<typeof spawn>): void {
+  const pid = child.pid;
+  if (!pid) return;
+  if (process.platform === "win32") {
+    try {
+      const killer = spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+      killer.on("error", () => {});
+    } catch {
+      // ignore
+    }
+  } else {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -571,6 +605,22 @@ ${diffContent}`;
 
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      killChildProcess(child);
+      reject(new Error("generateCommitMessage timed out after 90s"));
+    }, 90_000);
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+    };
+
+    child.stdin.on("error", () => {
+      // Avoid unhandled EPIPE if the child process exits before writing completes
+    });
 
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
@@ -581,10 +631,16 @@ ${diffContent}`;
     });
 
     child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
       reject(new Error(`Failed to spawn Pi CLI: ${err.message}`));
     });
 
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
       if (code !== 0) {
         reject(new Error(stderr.trim() || `Pi CLI exited with code ${code}`));
         return;

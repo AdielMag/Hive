@@ -91,6 +91,33 @@ export const LibraryView: React.FC = () => {
 
       {/* Main split view */}
       <div className="lib-view__body">
+        {error && snapshot && (
+          <div
+            className="lib-banner lib-banner--error"
+            style={{
+              margin: "8px 16px 0",
+              padding: "6px 12px",
+              background: "color-mix(in srgb, var(--danger) 12%, transparent)",
+              border: "1px solid var(--danger)",
+              borderRadius: 6,
+              fontSize: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              color: "var(--danger)",
+            }}
+          >
+            <span>Failed to refresh library: {error}</span>
+            <button
+              type="button"
+              className="ui-btn ui-btn--sm"
+              onClick={() => void load(cwd, true)}
+              disabled={loading}
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {loading && !snapshot ? (
           <div className="lib-view__loading text-muted">
             <Loader2 size={24} className="spin" />

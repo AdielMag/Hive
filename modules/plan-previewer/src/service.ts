@@ -33,6 +33,8 @@ interface PlanSessionRecord {
   questionRoundId: number;
   watcher: fs.FSWatcher | null;
   selfWriteUntil: number;
+  /** Feedback submitted while no CLI waiter was attached; delivered by the next /api/wait-feedback. */
+  pendingFeedback: Record<string, unknown> | null;
 }
 
 export class PlanPreviewerService {
@@ -124,6 +126,7 @@ export class PlanPreviewerService {
         questionRoundId: 0,
         watcher: null,
         selfWriteUntil: 0,
+        pendingFeedback: null,
       };
       this.plans.set(normalizePlanPath(resolved).toLowerCase(), rec);
     } else if (context) {
@@ -133,14 +136,19 @@ export class PlanPreviewerService {
   }
 
   private handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-    // CORS headers for local tools
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
+    // Local CLI only: no CORS. Browsers always attach Origin to cross-origin requests, so any Origin means a
+    // web page (CSRF); a non-loopback Host means DNS rebinding. The Hive renderer uses IPC, not this server.
+    const host = String(req.headers.host ?? "").replace(/:\d+$/, "").toLowerCase();
+    if (req.headers.origin !== undefined || !["127.0.0.1", "localhost", "[::1]"].includes(host)) {
+      this.json(res, { success: false, error: "Forbidden" }, 403);
+      return;
+    }
     if (req.method === "OPTIONS") {
-      res.writeHead(204);
-      res.end();
+      this.json(res, { success: false, error: "Forbidden" }, 403);
+      return;
+    }
+    if (req.method === "POST" && !/^application\/json/i.test(String(req.headers["content-type"] ?? ""))) {
+      this.json(res, { success: false, error: "Content-Type must be application/json"}, 415);
       return;
     }
 
@@ -172,7 +180,7 @@ export class PlanPreviewerService {
       const rec = targetPath ? this.getPlanRecord(targetPath) : null;
       let mtime = 0;
       const fPath = rec?.filePath ?? targetPath;
-      if (fPath && fs.existsSync(fPath)) {
+      if (rec && fPath && fs.existsSync(fPath)) {
         try {
           mtime = fs.statSync(fPath).mtimeMs;
         } catch {}
@@ -193,7 +201,8 @@ export class PlanPreviewerService {
     if (req.method === "GET" && pathname === "/api/plan") {
       const planFileQuery = url.searchParams.get("planFile") || url.searchParams.get("filePath");
       const targetPath = planFileQuery ? path.resolve(planFileQuery) : this.activePlanPath;
-      if (!targetPath || !fs.existsSync(targetPath)) {
+      // Only plan files announced via /api/notify may be read over HTTP.
+      if (!targetPath || !this.getPlanRecord(targetPath) || !fs.existsSync(targetPath)) {
         this.json(res, { success: false, error: "No active plan file" }, 404);
         return;
       }
@@ -208,6 +217,10 @@ export class PlanPreviewerService {
         const targetPath = filePath ? path.resolve(filePath) : this.activePlanPath;
         if (!targetPath) {
           this.json(res, { success: false, error: "No plan file provided" }, 400);
+          return;
+        }
+        if (!isPlanFilePath(targetPath)) {
+          this.json(res, { success: false, error: "Plan file must be a .md file" }, 400);
           return;
         }
         this.setActivePlan(targetPath, context);
@@ -246,6 +259,15 @@ export class PlanPreviewerService {
       const timeoutSec = parseInt(url.searchParams.get("timeout") || "240", 10);
       const timeoutMs = (!isNaN(timeoutSec) && timeoutSec > 0 ? timeoutSec : 240) * 1000;
 
+      const target = planFileQuery ? path.resolve(planFileQuery) : null;
+      const pendingRec = target ? this.getPlanRecord(target) : null;
+      if (pendingRec?.pendingFeedback) {
+        const feedback = pendingRec.pendingFeedback;
+        pendingRec.pendingFeedback = null;
+        this.json(res, { success: true, timeout: false, feedback });
+        return;
+      }
+
       const waiter = {
         res,
         timer: setTimeout(() => {
@@ -257,6 +279,11 @@ export class PlanPreviewerService {
       };
 
       this.pendingFeedbackWaiters.push(waiter);
+      res.on("close", () => {
+        clearTimeout(waiter.timer);
+        const idx = this.pendingFeedbackWaiters.indexOf(waiter);
+        if (idx !== -1) this.pendingFeedbackWaiters.splice(idx, 1);
+      });
       return;
     }
 
@@ -264,6 +291,12 @@ export class PlanPreviewerService {
       this.readBody(req, (body) => {
         if (!body) {
           this.json(res, { success: false, error: "Invalid feedback body" }, 400);
+          return;
+        }
+        const fp = (body as PlanFeedbackPayload).filePath;
+        // Over HTTP, feedback may only target a plan announced via /api/notify.
+        if (typeof fp !== "string" || !fp.trim() || !this.getPlanRecord(fp)) {
+          this.json(res, { success: false, error: "Unknown plan file" }, 400);
           return;
         }
         const result = this.submitFeedback(body as PlanFeedbackPayload);
@@ -301,8 +334,9 @@ export class PlanPreviewerService {
     const resolved = path.resolve(filePath);
     this.activePlanPath = resolved;
     const rec = this.getOrCreatePlanRecord(resolved, context);
-    // Setting a plan active again (CLI notify) starts a fresh review round for it
-    rec.planApproved = false;
+    // Setting a plan active again (CLI notify) starts a fresh review round, unless a decision is still
+    // waiting to be picked up (e.g. the CLI wait timed out before the user approved).
+    if (!rec.pendingFeedback) rec.planApproved = false;
     if (context) rec.sessionContext = context;
 
     this.updateActiveMarker(resolved);
@@ -347,12 +381,30 @@ export class PlanPreviewerService {
     }
 
     try {
-      rec.watcher = fs.watch(rec.filePath, () => {
-        if (Date.now() < rec.selfWriteUntil) return;
-        rec.fileVersion++;
-        const content = fs.existsSync(rec.filePath) ? fs.readFileSync(rec.filePath, "utf8") : "";
-        this.emit(PlanEvents.updated, { filePath: rec.filePath, fileVersion: rec.fileVersion, content });
+      let debounce: NodeJS.Timeout | null = null;
+      const watcher = fs.watch(rec.filePath, () => {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(() => {
+          debounce = null;
+          if (Date.now() < rec.selfWriteUntil) return;
+          rec.fileVersion++;
+          let content = "";
+          try {
+            content = fs.existsSync(rec.filePath) ? fs.readFileSync(rec.filePath, "utf8") : "";
+          } catch {}
+          this.emit(PlanEvents.updated, { filePath: rec.filePath, fileVersion: rec.fileVersion, content });
+        }, 100);
+        debounce.unref?.();
       });
+      // The file can disappear (EPERM/ENOENT on Windows); an unhandled watcher error would crash the process.
+      watcher.on("error", () => {
+        try {
+          watcher.close();
+        } catch {}
+        if (rec.watcher === watcher) rec.watcher = null;
+        if (debounce) clearTimeout(debounce);
+      });
+      rec.watcher = watcher;
     } catch {}
   }
 
@@ -406,15 +458,17 @@ export class PlanPreviewerService {
 
   public submitFeedback(payload: PlanFeedbackPayload): { success: boolean; error?: string } {
     try {
-      const planFile = path.resolve(payload.filePath || this.activePlanPath || "");
-      if (!planFile) {
+      const rawPath = payload.filePath || this.activePlanPath || "";
+      if (typeof rawPath !== "string" || !rawPath.trim()) {
         return { success: false, error: "No plan file provided" };
       }
+      const planFile = path.resolve(rawPath);
       const rec = this.getOrCreatePlanRecord(planFile);
 
       // If user provided updated markdown content, save it
       if (typeof payload.content === "string") {
-        this.savePlanContent(planFile, payload.content);
+        const saved = this.savePlanContent(planFile, payload.content);
+        if (!saved.success) return { success: false, error: saved.error || "Failed to save plan" };
       }
 
       const answers = Array.isArray(payload.answers) ? payload.answers : [];
@@ -469,6 +523,9 @@ export class PlanPreviewerService {
         (w) => !w.planFile || !samePlanPath(w.planFile, planFile),
       );
 
+      if (matchingWaiters.length === 0) rec.pendingFeedback = feedbackData;
+      else rec.pendingFeedback = null;
+
       matchingWaiters.forEach((waiter) => {
         clearTimeout(waiter.timer);
         this.json(waiter.res, { success: true, timeout: false, feedback: feedbackData });
@@ -503,6 +560,11 @@ export class PlanPreviewerService {
       this.server = null;
     }
   }
+}
+
+/** Plan files are markdown; anything else is refused over HTTP. */
+function isPlanFilePath(p: string): boolean {
+  return /\.(md|markdown|mdx)$/i.test(p);
 }
 
 /** Keep only string fields of the CLI-supplied origin (untrusted JSON from localhost). */

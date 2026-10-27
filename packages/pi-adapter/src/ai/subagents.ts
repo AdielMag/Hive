@@ -6,6 +6,7 @@ export interface AgentDetails {
   subagentType: string;
   toolUses?: number;
   tokens?: string;
+  totalTokens?: number;
   cost?: number;
   turnCount?: number;
   maxTurns?: number;
@@ -54,10 +55,28 @@ export interface SubagentView {
   turns?: number;
   maxTurns?: number;
   tokens?: string;
+  totalTokens?: number;
   cost?: number;
   durationMs?: number;
   error?: string;
   resultText?: string;
+}
+
+/**
+ * Parses numeric token count from a number or string (e.g. "17.1k token", "25k", "1,500").
+ */
+export function parseTokenCount(tokens: unknown): number | undefined {
+  if (typeof tokens === "number" && Number.isFinite(tokens)) return tokens;
+  if (typeof tokens !== "string" || !tokens.trim()) return undefined;
+  const t = tokens.trim().toLowerCase();
+  const m = t.match(/^([\d.,]+)\s*([km])?/i);
+  if (!m) return undefined;
+  const numVal = parseFloat(m[1]!.replace(/,/g, ""));
+  if (!Number.isFinite(numVal)) return undefined;
+  const unit = m[2]?.toLowerCase();
+  if (unit === "k") return Math.round(numVal * 1_000);
+  if (unit === "m") return Math.round(numVal * 1_000_000);
+  return Math.round(numVal);
 }
 
 /**
@@ -226,6 +245,13 @@ export function resolveSubagentView(params: {
   let turns = details?.turnCount;
   let maxTurns = details?.maxTurns ?? (typeof args.max_turns === "number" ? args.max_turns : undefined);
   let tokens = details?.tokens;
+  const rawResult = result as unknown as { usage?: { totalTokens?: number } } | undefined;
+  let totalTokens: number | undefined =
+    typeof details?.totalTokens === "number"
+      ? details.totalTokens
+      : typeof rawResult?.usage?.totalTokens === "number"
+      ? rawResult.usage.totalTokens
+      : parseTokenCount(tokens);
   let cost = details?.cost;
   let durationMs = details?.durationMs;
   let error = details?.error || (result?.isError ? result.text : undefined);
@@ -239,7 +265,10 @@ export function resolveSubagentView(params: {
     if (typeof notif.maxTurns === "number") maxTurns = notif.maxTurns;
     if (typeof notif.totalCost === "number") cost = notif.totalCost;
     if (typeof notif.durationMs === "number") durationMs = notif.durationMs;
-    if (typeof notif.totalTokens === "number") tokens = `${Math.round(notif.totalTokens / 1000)}k`;
+    if (typeof notif.totalTokens === "number") {
+      totalTokens = notif.totalTokens;
+      tokens = `${Math.round(notif.totalTokens / 1000)}k`;
+    }
     if (notif.error) error = notif.error;
   } else if (agentId && subagentIndex?.results.has(agentId)) {
     // Check get_subagent_result outcome
@@ -265,6 +294,7 @@ export function resolveSubagentView(params: {
     turns,
     maxTurns,
     tokens,
+    totalTokens,
     cost,
     durationMs,
     error,
@@ -323,4 +353,85 @@ export function hasActiveSubagents(timeline: Timeline): boolean {
     }
   }
   return false;
+}
+
+/**
+ * Collects all subagents on a timeline, resolved via `resolveSubagentView`.
+ */
+export function collectSubagents(timeline: Timeline, sessionRunning?: boolean): SubagentView[] {
+  const subagentIndex = indexSubagents(timeline);
+  const list: SubagentView[] = [];
+
+  for (const item of timeline.items) {
+    if (item.kind !== "assistant") continue;
+    for (const block of item.blocks) {
+      if (block.type !== "toolCall") continue;
+      if (block.name === "Agent" || block.name === "SubagentWorkflow") {
+        const res = timeline.toolResults[block.id];
+        const view = resolveSubagentView({ block, result: res, subagentIndex, sessionRunning });
+        list.push(view);
+      }
+    }
+  }
+
+  return list;
+}
+
+export interface SubagentSummary {
+  totalCost: number;
+  totalTokens: number;
+  totalToolUses: number;
+  totalTurns: number;
+  count: number;
+  activeCount: number;
+  completedCount: number;
+  failedCount: number;
+}
+
+/**
+ * Aggregates summary statistics over a collection of subagents.
+ */
+export function summarizeSubagents(agents: SubagentView[]): SubagentSummary {
+  let totalCost = 0;
+  let totalTokens = 0;
+  let totalToolUses = 0;
+  let totalTurns = 0;
+  let activeCount = 0;
+  let completedCount = 0;
+  let failedCount = 0;
+
+  for (const a of agents) {
+    if (typeof a.cost === "number" && Number.isFinite(a.cost)) {
+      totalCost += a.cost;
+    }
+    const t = a.totalTokens ?? parseTokenCount(a.tokens);
+    if (typeof t === "number" && Number.isFinite(t)) {
+      totalTokens += t;
+    }
+    if (typeof a.toolUses === "number") {
+      totalToolUses += a.toolUses;
+    }
+    if (typeof a.turns === "number") {
+      totalTurns += a.turns;
+    }
+
+    if (a.status === "running" || a.status === "queued" || a.status === "background") {
+      activeCount++;
+    } else if (a.status === "completed" || a.status === "steered") {
+      completedCount++;
+    } else {
+      failedCount++;
+    }
+  }
+
+  return {
+    totalCost,
+    totalTokens,
+    totalToolUses,
+    totalTurns,
+    count: agents.length,
+    activeCount,
+    completedCount,
+    failedCount,
+  };
 }

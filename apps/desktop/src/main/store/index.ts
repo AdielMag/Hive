@@ -98,7 +98,7 @@ export class GuiStore {
     return bestMatch;
   }
 
-  addProject(dirPath: string, name?: string, color?: string): ProjectEntry {
+  addProject(dirPath: string, name?: string, color?: string, icon?: string | null): ProjectEntry {
     const canonical = normalizePath(dirPath);
     const existing = this.projects.find((p) => normalizePath(p.path) === canonical);
     if (existing) return existing;
@@ -113,6 +113,7 @@ export class GuiStore {
       name: derivedName,
       path: canonical,
       color: assignedColor,
+      icon: icon ?? null,
       pinned: false,
       hidden: false,
       links: [],
@@ -131,6 +132,7 @@ export class GuiStore {
     updates: {
       name?: string;
       color?: string;
+      icon?: string | null;
       links?: ProjectEntry["links"];
       defaults?: ProjectDefaults;
       pinned?: boolean;

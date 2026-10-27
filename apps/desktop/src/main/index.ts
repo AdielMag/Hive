@@ -9,6 +9,7 @@ import { createMainWindow } from "./window.ts";
 import { migrateUserDataDir } from "./migrate-legacy.ts";
 import { appendToProcessPath } from "./paths.ts";
 import { listOrphans } from "./services/worktrees.ts";
+import { cleanOldAttachments } from "./services/files.ts";
 
 /** Best effort, log only: session worktrees git knows about that no session references (e.g. left by a crash). */
 async function logOrphanWorktrees(c: AppContext): Promise<void> {
@@ -53,6 +54,7 @@ if (!app.requestSingleInstanceLock()) {
     // Enabled modules only: a disabled module is never imported and starts no services. CLI shims of
     // enabled modules live in the managed bin dir, appended to PATH so Pi sessions and terminals find them.
     appendToProcessPath(ctx.modules.binDir);
+    cleanOldAttachments();
     void ctx.modules.start().catch((err) => console.error("Failed to start modules", err));
     void logOrphanWorktrees(ctx).catch((err) => console.warn("[worktrees] orphan scan failed", err));
     // Give models added since the last save their percentage-based compaction values.
@@ -86,5 +88,5 @@ app.on("will-quit", (event) => {
   event.preventDefault();
   // Give modules and Pi processes a bounded window to exit cleanly, then quit regardless.
   const work = Promise.all([ctx.modules.disposeAll(), sessions ? sessions.stopAll() : Promise.resolve()]);
-  void Promise.race([work, new Promise((r) => setTimeout(r, 3000))]).finally(() => app.quit());
+  void Promise.race([work, new Promise((r) => setTimeout(r, 4000))]).finally(() => app.quit());
 });

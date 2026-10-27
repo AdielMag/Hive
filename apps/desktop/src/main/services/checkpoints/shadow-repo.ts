@@ -33,6 +33,8 @@ export interface ChangedFile {
 export interface RestorePlan {
   filesToRestore: string[];
   filesToDelete: string[];
+  /** Files absent from the target tree that were never snapshotted (or are skippable); left untouched. */
+  filesKept: string[];
   conflicts: string[];
 }
 
@@ -87,6 +89,7 @@ export class ShadowRepo {
         cwd: isBareInit ? this.gitDir : this.cwd,
         windowsHide: true,
         maxBuffer: 25 * 1024 * 1024,
+        timeout: 60_000,
         env: {
           ...process.env,
           ...(isBareInit ? {} : { GIT_DIR: this.gitDir, GIT_WORK_TREE: this.cwd }),
@@ -297,15 +300,27 @@ export class ShadowRepo {
 
     const filesToRestore: string[] = [];
     const filesToDelete: string[] = [];
+    const filesKept: string[] = [];
     const conflicts: string[] = [];
     const allowedSet = pathsToRestore ? new Set(pathsToRestore) : null;
+
+    // Only files the shadow repo has captured (tracked in its index) may be deleted.
+    // Never-snapshotted files (too large, binary, over file cap) are user data: keep.
+    const trackedListing = await this.runGit(["ls-files", "-z", "--cached"]);
+    const trackedSet = new Set(
+      (trackedListing ? trackedListing.split(" ").filter(Boolean) : []).map((f) => f.replaceAll("\\", "/")),
+    );
 
     // Check files in working tree that weren't in targetTree
     for (const rel of currentFiles) {
       const normalizedRel = rel.replaceAll("\\", "/");
       if (allowedSet && !allowedSet.has(normalizedRel)) continue;
       if (!targetSet.has(normalizedRel)) {
-        filesToDelete.push(rel);
+        if (trackedSet.has(normalizedRel) && !this.wouldSkip(rel)) {
+          filesToDelete.push(rel);
+        } else {
+          filesKept.push(rel);
+        }
       }
     }
 
@@ -334,8 +349,22 @@ export class ShadowRepo {
     return {
       filesToRestore,
       filesToDelete,
+      filesKept,
       conflicts,
     };
+  }
+
+  /** True if snapshot() would skip this file (size/extension). Unreadable files count as skipped. */
+  private wouldSkip(rel: string): boolean {
+    try {
+      const stat = statSync(join(this.cwd, rel));
+      if (stat.isDirectory()) return false;
+      const dot = rel.lastIndexOf(".");
+      const ext = dot >= 0 ? rel.slice(dot).toLowerCase() : "";
+      return stat.size > this.maxFileSizeBytes || DEFAULT_IGNORED_EXTENSIONS.has(ext);
+    } catch {
+      return false;
+    }
   }
 
   /**

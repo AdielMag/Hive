@@ -14,7 +14,7 @@ export type { TerminalSessionInfo } from "./shared.ts";
 /** Scrollback kept per session so a reloaded renderer can replay it. */
 const SCROLLBACK_CHARS = 256 * 1024;
 /** Output is coalesced for this long (or until FLUSH_CHARS) before it is sent over IPC. */
-const FLUSH_MS = 8;
+const FLUSH_MS = 16;
 const FLUSH_CHARS = 64 * 1024;
 
 const isWin = platform() === "win32";
@@ -192,9 +192,12 @@ export class TerminalManager {
       s.timer = null;
     }
     if (!s.pending) return;
-    const data = s.pending;
-    s.pending = "";
-    this.sinks.get(s.id)?.onData(s.id, data, s.produced);
+    const chunk = s.pending.slice(0, FLUSH_CHARS);
+    s.pending = s.pending.slice(FLUSH_CHARS);
+    this.sinks.get(s.id)?.onData(s.id, chunk, s.produced);
+    if (s.pending.length > 0) {
+      s.timer = setTimeout(() => this.flush(s), FLUSH_MS);
+    }
   }
 
   public write(id: string, data: string): void {
@@ -273,5 +276,3 @@ function trimScrollback(s: string): string {
   if (nl >= 0 && nl < 4096) out = out.slice(nl + 1);
   return out;
 }
-
-export const terminalManager = new TerminalManager();

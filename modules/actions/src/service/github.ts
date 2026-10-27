@@ -145,6 +145,7 @@ export function defaultExecGh(
   options?: { input?: string; env?: NodeJS.ProcessEnv },
 ): Promise<{ stdout: string; stderr: string; status: number }> {
   return new Promise((resolve, reject) => {
+    let timer: NodeJS.Timeout | null = null;
     try {
       const child = spawn("gh", args, {
         windowsHide: true,
@@ -152,14 +153,22 @@ export function defaultExecGh(
       });
       let stdout = "";
       let stderr = "";
+      timer = setTimeout(() => {
+        child.kill();
+        reject(new Error("GitHub CLI (`gh`) execution timed out after 30s"));
+      }, 30_000);
       child.stdout.on("data", (d: Buffer) => {
         stdout += d.toString();
       });
       child.stderr.on("data", (d: Buffer) => {
         stderr += d.toString();
       });
-      child.on("error", (err) => reject(err));
+      child.on("error", (err) => {
+        if (timer) clearTimeout(timer);
+        reject(err);
+      });
       child.on("close", (code) => {
+        if (timer) clearTimeout(timer);
         resolve({ stdout, stderr, status: code ?? 0 });
       });
       if (options?.input) {
@@ -167,6 +176,7 @@ export function defaultExecGh(
       }
       child.stdin.end();
     } catch (err) {
+      if (timer) clearTimeout(timer);
       reject(err);
     }
   });

@@ -7,7 +7,7 @@ export default defineMainModule({
   id: MODULE_ID,
   activate(ctx) {
     ctx.ipc.handle(ToolsMethods.getMcpCatalog, () =>
-      getMcpCatalog(join(ctx.paths.piAgentDir, "mcp.json")),
+      getMcpCatalog(join(ctx.paths.piAgentDir, "mcp-cache.json")),
     );
   },
 });

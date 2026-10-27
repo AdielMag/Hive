@@ -5,6 +5,8 @@ import { FolderOpen, Link2, Plus, Settings2, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_PROJECT_HUES, type LinkedProject } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
+import { askChoice } from "./ChoiceDialog.tsx";
+import { toast } from "../modules/toast-store.ts";
 
 export type ProjectSettingsSection = "general" | "links";
 
@@ -15,6 +17,7 @@ interface Props {
 }
 
 const folderName = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() || p;
+const PROJECT_ICON_PRESETS = ["🐝", "⚡", "🚀", "📦", "💻", "🌐", "🎯", "🔥", "🛠️", "📱", "🧠", "🎨"];
 
 export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSection = "general", onClose }) => {
   const { project, updateProject, removeProject, tabs, closeTab } = useSessionStore(
@@ -27,6 +30,7 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
     })),
   );
   const [name, setName] = useState(project?.name ?? "");
+  const [customIcon, setCustomIcon] = useState(project?.icon ?? "");
   const linksRef = useRef<HTMLElement>(null);
   const nameRef = useRef(name);
   nameRef.current = name;
@@ -57,8 +61,11 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
   }, [initialSection]);
 
   useEffect(() => {
-    if (project) setName(project.name);
-  }, [project?.name]);
+    if (project) {
+      setName(project.name);
+      setCustomIcon(project.icon ?? "");
+    }
+  }, [project?.name, project?.icon]);
 
   if (!project) return null;
   const links = project.links ?? [];
@@ -72,17 +79,39 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
   };
 
   const remove = async () => {
-    if (!confirm(`Remove "${project.name}" from Hive?\n\nThe folder and its Pi sessions stay on disk.`)) return;
-    for (const t of tabs.filter((t) => t.projectId === project.id)) {
-      if (t.activeKey) {
-        try {
-          await window.studio.stopSession(t.activeKey);
-        } catch {}
-      }
-      await closeTab(t.id);
+    const projectTabs = tabs.filter((t) => t.projectId === project.id);
+    const transcripts = useSessionStore.getState().transcriptsByTab;
+    const running = projectTabs.filter((t) => t.activeKey && transcripts[t.id]?.running).length;
+    const body = [`"${project.name}" will be removed from Hive. The folder and its Pi sessions stay on disk.`];
+    if (projectTabs.length > 0) {
+      body.push(
+        `${projectTabs.length} open tab${projectTabs.length === 1 ? "" : "s"} will be closed` +
+          (running > 0 ? `, and ${running} running session${running === 1 ? "" : "s"} will be stopped.` : "."),
+      );
     }
-    await removeProject(project.id);
-    onClose();
+    const choice = await askChoice({
+      title: `Remove ${project.name}?`,
+      body,
+      choices: [
+        { id: "cancel", label: "Cancel" },
+        { id: "remove", label: "Remove project", tone: "danger" },
+      ],
+    });
+    if (choice !== "remove") return;
+    try {
+      for (const t of projectTabs) {
+        if (t.activeKey) {
+          try {
+            await window.studio.stopSession(t.activeKey);
+          } catch {}
+        }
+        await closeTab(t.id);
+      }
+      await removeProject(project.id);
+      onClose();
+    } catch (err) {
+      toast({ kind: "error", message: `Couldn't remove ${project.name}: ${err instanceof Error ? err.message : String(err)}` });
+    }
   };
 
   return createPortal(
@@ -90,7 +119,7 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
       <div className="prj-settings" role="dialog" aria-label="Project settings" onMouseDown={(e) => e.stopPropagation()}>
         <header className="prj-settings__header">
           <span className="prj-settings__avatar" style={{ background: project.color }}>
-            {project.name.slice(0, 1).toUpperCase()}
+            {project.icon ? project.icon : project.name.slice(0, 1).toUpperCase()}
           </span>
           <div className="prj-settings__heading">
             <div className="prj-settings__title">{project.name}</div>
@@ -133,6 +162,52 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
                     onClick={() => void updateProject(project.id, { color: c })}
                   />
                 ))}
+              </div>
+            </div>
+
+            <div className="prj-settings__field">
+              <span className="prj-settings__label">Icon / Emoji</span>
+              <div className="prj-settings__icon-row">
+                <div className="prj-settings__icon-presets">
+                  {PROJECT_ICON_PRESETS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={`prj-icon-btn${project.icon === emoji ? " is-selected" : ""}`}
+                      onClick={() => void updateProject(project.id, { icon: project.icon === emoji ? null : emoji })}
+                      aria-label={`Use icon ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+                <div className="prj-settings__icon-custom">
+                  <input
+                    type="text"
+                    className="prj-settings__input prj-settings__input--icon"
+                    placeholder="Custom emoji or symbol"
+                    maxLength={4}
+                    value={customIcon}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setCustomIcon(val);
+                      void updateProject(project.id, { icon: val || null });
+                    }}
+                  />
+                  {project.icon && (
+                    <button
+                      type="button"
+                      className="ui-btn ui-btn--ghost ui-btn--sm"
+                      onClick={() => {
+                        setCustomIcon("");
+                        void updateProject(project.id, { icon: null });
+                      }}
+                      title="Clear icon"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </section>

@@ -570,6 +570,47 @@
 .prj-swatch.is-selected {
   box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 4px var(--text-primary);
 }
+.prj-settings__icon-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.prj-settings__icon-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.prj-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.12s ease, background 0.12s ease;
+}
+@media (hover: hover) {
+  .prj-icon-btn:hover {
+    transform: scale(1.1);
+    border-color: var(--border-prominent);
+  }
+}
+.prj-icon-btn.is-selected {
+  border-color: var(--accent-base);
+  background: color-mix(in srgb, var(--accent-base) 15%, var(--bg-card));
+  box-shadow: 0 0 0 1px var(--accent-base);
+}
+.prj-settings__icon-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.prj-settings__input--icon {
+  max-width: 180px;
+}
 .prj-settings__empty {
   display: flex;
   align-items: center;

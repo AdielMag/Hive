@@ -27,6 +27,7 @@ import { MentionTextarea } from "./MentionTextarea.tsx";
 import { ReloadButton, ReloadStatusBar } from "./ReloadControls.tsx";
 import { RunTimeBar } from "./RunTimeBar.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
+import { toast } from "../modules/toast-store.ts";
 import { Slot } from "../modules/ModuleViews.tsx";
 import { filterDisabledProviders } from "../lib/provider-filter.ts";
 import type { AttachedItem } from "@hive/protocol";
@@ -55,9 +56,10 @@ function videoExtFromMime(mime: string): string {
 
 interface ComposerProps {
   height?: number;
+  tabId?: string | null;
 }
 
-export const Composer: React.FC<ComposerProps> = ({ height }) => {
+export const Composer: React.FC<ComposerProps> = ({ height, tabId }) => {
   const activeKey = useSessionStore((s) => s.activeKey);
   const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, disabledProviders, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets, pendingUiDialog, respondDialog } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, disabledProviders: s.disabledProviders, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets, pendingUiDialog: s.pendingUiDialog, respondDialog: s.respondDialog })));
 
@@ -66,6 +68,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
 
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [modelFilter, setModelFilter] = useState("");
+  const [modelHighlight, setModelHighlight] = useState(0);
   const modelPickerRef = useRef<HTMLDivElement>(null);
   const modelSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -198,7 +201,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       });
       return;
     }
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       if (isRunning) {
         if (e.ctrlKey || e.metaKey) {
@@ -245,6 +248,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             });
           } catch (err) {
             console.error("Failed to read image", p, err);
+            toast({ message: `Couldn't attach ${p.split(/[\\/]/).pop() || "image"}`, kind: "error" });
           }
         } else {
           try {
@@ -260,6 +264,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
             });
           } catch (err) {
             console.error("Failed to read file", p, err);
+            toast({ message: `Couldn't attach ${p.split(/[\\/]/).pop() || "file"}`, kind: "error" });
           }
         }
       }
@@ -268,6 +273,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       }
     } catch (err) {
       console.error("Error picking files", err);
+      toast({ message: "Couldn't attach files", kind: "error" });
     }
   };
 
@@ -418,6 +424,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       });
     } catch (err) {
       console.error("Failed to attach video", name, err);
+      toast({ message: `Couldn't attach ${name}`, kind: "error" });
       return null;
     }
   }
@@ -479,7 +486,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       <ModelSwitchCacheBar />
 
       {/* Queued messages banner if any */}
-      <QueuedMessagesBar />
+      <QueuedMessagesBar tabId={tabId} />
 
       {/* Pi reload progress / result for this session */}
       <ReloadStatusBar />
@@ -675,7 +682,35 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                       ref={modelSearchInputRef}
                       type="text"
                       value={modelFilter}
-                      onChange={(e) => setModelFilter(e.target.value)}
+                      onChange={(e) => {
+                        setModelFilter(e.target.value);
+                        setModelHighlight(0);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.nativeEvent.isComposing) return;
+                        const n = filteredModels.length;
+                        if (e.key === "ArrowDown" && n > 0) {
+                          e.preventDefault();
+                          setModelHighlight((h) => (h + 1) % n);
+                        } else if (e.key === "ArrowUp" && n > 0) {
+                          e.preventDefault();
+                          setModelHighlight((h) => (h - 1 + n) % n);
+                        } else if (e.key === "Enter") {
+                          e.preventDefault();
+                          const m = filteredModels[Math.min(modelHighlight, n - 1)];
+                          if (m) {
+                            void setModel(m.provider, m.id);
+                            setModelPickerOpen(false);
+                            setModelFilter("");
+                          }
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setModelPickerOpen(false);
+                          setModelFilter("");
+                        }
+                      }}
+                      aria-label="Search models"
                       placeholder="Search models..."
                       style={{
                         background: "transparent",
@@ -689,6 +724,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                     {modelFilter && (
                       <button
                         onClick={() => setModelFilter("")}
+                        aria-label="Clear search"
                         style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0 }}
                       >
                         <X size={11} />
@@ -697,20 +733,40 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                   </div>
 
                   {/* Models list */}
-                  <div style={{ overflowY: "auto", padding: "4px 0", flex: 1 }}>
+                  <div role="listbox" aria-label="Models" style={{ overflowY: "auto", padding: "4px 0", flex: 1 }}>
                     {filteredModels.length === 0 ? (
-                      <div style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: 11, fontStyle: "italic" }}>
-                        No matching models
+                      <div style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: 11 }}>
+                        {baseModels.length === 0 ? (
+                          <>
+                            <div style={{ fontStyle: "italic", marginBottom: 6 }}>No models available</div>
+                            <button
+                              type="button"
+                              className="ui-btn ui-btn--sm"
+                              onClick={() => {
+                                setModelPickerOpen(false);
+                                useUi.getState().openSettings("models");
+                              }}
+                            >
+                              Open Settings → AI Providers
+                            </button>
+                          </>
+                        ) : (
+                          <span style={{ fontStyle: "italic" }}>No matching models</span>
+                        )}
                       </div>
                     ) : (
-                      filteredModels.map((m) => {
+                      filteredModels.map((m, mi) => {
                         const isSelected = selectedModel?.provider === m.provider && selectedModel?.id === m.id;
+                        const isHighlighted = mi === modelHighlight;
                         const ctxStr = formatContextWindow(m.contextWindow);
                         const modelLevels = getSupportedThinkingLevels(m);
                         const hasReasoning = Boolean(m.reasoning) && modelLevels.some((l) => l !== "off");
                         return (
                           <div
                             key={`${m.provider}/${m.id}`}
+                            ref={isHighlighted ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                            role="option"
+                            aria-selected={isSelected}
                             onMouseDown={(e) => {
                               e.preventDefault();
                             }}
@@ -728,14 +784,14 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                               gap: 8,
                               cursor: "pointer",
                               fontSize: 11,
-                              background: isSelected ? "rgba(var(--accent-rgb), 0.12)" : "transparent",
+                              background: isSelected ? "rgba(var(--accent-rgb), 0.12)" : isHighlighted ? "var(--bg-card-hover)" : "transparent",
                               color: isSelected ? "var(--accent-base)" : "var(--text-primary)",
                             }}
                             onMouseEnter={(e) => {
                               if (!isSelected) e.currentTarget.style.background = "var(--bg-card-hover)";
                             }}
                             onMouseLeave={(e) => {
-                              if (!isSelected) e.currentTarget.style.background = "transparent";
+                              if (!isSelected) e.currentTarget.style.background = isHighlighted ? "var(--bg-card-hover)" : "transparent";
                             }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden", flex: 1 }}>
@@ -880,21 +936,21 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                     borderRadius: 4,
                     border: "none",
                     background: "var(--danger)",
-                    color: "#fff",
+                    color: "var(--on-danger)",
                     fontWeight: 500,
                     cursor: "pointer",
                     fontSize: 11,
                   }}
                 >
-                  <Square size={12} fill="#fff" /> <span className="composer-hide-md">Stop</span>
+                  <Square size={12} fill="currentColor" /> <span className="composer-hide-md">Stop</span>
                 </button>
               </>
             ) : (
               <button
                 className="composer-send"
                 onClick={() => void sendPrompt()}
-                disabled={!canSend}
-                title="Send"
+                disabled={!canSend || isReloading}
+                title={isReloading ? "Pi is reloading…" : "Send"}
                 style={{
                   transition: "transform 120ms var(--ease-out), background-color 0.15s ease, color 0.15s ease",
                   display: "flex",

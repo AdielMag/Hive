@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ShadowRepo } from "./shadow-repo.ts";
 
@@ -104,6 +104,38 @@ export class CheckpointService {
     }
   }
 
+  private static readonly MAX_TURNS_KEPT = 200;
+
+  /** Approximate recursive directory size in bytes (bounded walk). */
+  private dirSize(dir: string, budget = { n: 200_000 }): number {
+    let total = 0;
+    let entries: import("node:fs").Dirent[];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
+    for (const e of entries) {
+      if (budget.n-- <= 0) return total;
+      const p = join(dir, e.name);
+      try {
+        total += e.isDirectory() ? this.dirSize(p, budget) : statSync(p).size;
+      } catch {}
+    }
+    return total;
+  }
+
+  /** Best-effort: drop oldest turn records when shadow repo exceeds budget or turn cap. */
+  private pruneIfOverBudget(repo: ShadowRepo, index: CheckpointIndex): void {
+    try {
+      const over = this.dirSize(repo.gitDir) > this.maxProjectStorageBytes;
+      const cap = CheckpointService.MAX_TURNS_KEPT;
+      if (index.turns.length > cap) {
+        index.turns.splice(0, index.turns.length - cap);
+      } else if (over && index.turns.length > 10) {
+        index.turns.splice(0, Math.ceil(index.turns.length / 2));
+      }
+    } catch (err) {
+      console.warn("[checkpoints] prune failed", err);
+    }
+  }
+
   /**
    * Called when a prompt is sent. Captures "before" snapshot.
    */
@@ -149,6 +181,7 @@ export class CheckpointService {
       record.settledAt = Date.now();
       if (snap.partial) record.partial = true;
 
+      this.pruneIfOverBudget(repo, index);
       this.saveIndex(cwd, index);
       return record;
     });

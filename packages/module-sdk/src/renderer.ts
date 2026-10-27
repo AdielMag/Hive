@@ -158,6 +158,8 @@ export interface ModuleHost {
     useFeatureModel(featureId: string): ResolvedFeatureModelLite;
     /** Active project, live transcript state and session registry. */
     useActiveSession(): ActiveSessionContext;
+    /** All projects configured in Hive. */
+    useProjects(): Array<{ id: string; name: string; path: string; icon?: string | null; color?: string }>;
     /** Current Arc theme & editor preferences with reactive setters. */
     useTheme(): {
       theme: ArcTheme;

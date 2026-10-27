@@ -28,12 +28,16 @@ export interface ClassificationResult {
  */
 export const DANGEROUS_RULES: readonly ClassificationRule[] = LEGACY_RULES;
 
+/** Max command length inspected by the parser (16KB) to avoid regex/parser hangs on huge inputs. */
+const MAX_COMMAND_LENGTH = 16_384;
+
 /**
  * Splits a command into its individual segments (pipelines, `&&`/`||`/`;` chains, subshells,
  * command substitutions and unwrapped `bash -c "..."` strings).
  */
 export function extractCommandSegments(rawCommand: string): string[] {
-  return collectSegments(rawCommand);
+  const capped = rawCommand.length > MAX_COMMAND_LENGTH ? rawCommand.slice(0, MAX_COMMAND_LENGTH) : rawCommand;
+  return collectSegments(capped);
 }
 
 /**
@@ -43,15 +47,29 @@ export function classifyBashCommand(command: string): ClassificationResult {
   const fullCommand = command.trim();
   if (!fullCommand) return { dangerous: false, fullCommand };
 
-  const hit = analyzeCommand(fullCommand);
-  if (!hit) return { dangerous: false, fullCommand };
-  return {
-    dangerous: true,
-    severity: hit.severity,
-    ruleId: hit.id,
-    ruleTitle: hit.title,
-    reason: hit.reason,
-    matchedSegment: hit.matchedSegment,
-    fullCommand,
-  };
+  const toAnalyze = fullCommand.length > MAX_COMMAND_LENGTH ? fullCommand.slice(0, MAX_COMMAND_LENGTH) : fullCommand;
+  const hit = analyzeCommand(toAnalyze);
+  if (hit) {
+    return {
+      dangerous: true,
+      severity: hit.severity,
+      ruleId: hit.id,
+      ruleTitle: hit.title,
+      reason: hit.reason,
+      matchedSegment: hit.matchedSegment,
+      fullCommand,
+    };
+  }
+  if (fullCommand.length > MAX_COMMAND_LENGTH) {
+    return {
+      dangerous: true,
+      severity: "high",
+      ruleId: "excessive-length",
+      ruleTitle: "Excessively Large Command",
+      reason: `Command length (${fullCommand.length} chars) exceeds the safety inspection cap (16KB) and cannot be verified safe.`,
+      matchedSegment: fullCommand.slice(0, 200) + "...",
+      fullCommand,
+    };
+  }
+  return { dangerous: false, fullCommand };
 }

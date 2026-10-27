@@ -95,6 +95,12 @@ export const BrowserTab: React.FC<{ tab: ModuleTab }> = ({ tab }) => {
       }
     };
 
+    const handleCrashed = (e: any) => {
+      setIsLoading(false);
+      const reason = e?.reason || "crashed";
+      setLoadError(`The webpage crashed (${reason}). Click Try Again to reload.`);
+    };
+
     webview.addEventListener("did-start-loading", handleStartLoading);
     webview.addEventListener("did-stop-loading", handleStopLoading);
     webview.addEventListener("did-navigate", handleDidNavigate);
@@ -102,6 +108,8 @@ export const BrowserTab: React.FC<{ tab: ModuleTab }> = ({ tab }) => {
     webview.addEventListener("page-title-updated", handleTitleUpdated);
     webview.addEventListener("page-favicon-updated", handleFaviconUpdated);
     webview.addEventListener("did-fail-load", handleFailLoad);
+    webview.addEventListener("render-process-gone", handleCrashed);
+    webview.addEventListener("crashed", handleCrashed);
 
     return () => {
       webview.removeEventListener("did-start-loading", handleStartLoading);
@@ -111,6 +119,8 @@ export const BrowserTab: React.FC<{ tab: ModuleTab }> = ({ tab }) => {
       webview.removeEventListener("page-title-updated", handleTitleUpdated);
       webview.removeEventListener("page-favicon-updated", handleFaviconUpdated);
       webview.removeEventListener("did-fail-load", handleFailLoad);
+      webview.removeEventListener("render-process-gone", handleCrashed);
+      webview.removeEventListener("crashed", handleCrashed);
     };
   }, [tab.id, tab.isSleeping, updateBrowserTab]);
 

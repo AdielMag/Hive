@@ -1,5 +1,7 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import { createTranscript } from "@hive/pi-adapter";
 import { setUserWaitResolver } from "../modules/session-bus.ts";
+import { usePaneLayoutStore } from "./pane-layout-store.ts";
 import {
   applyCompactionResult,
   handleCompactionEvent,
@@ -69,18 +71,24 @@ describe("hasDraft", () => {
 describe("queued messages store actions", () => {
   const rpcCalls: any[] = [];
 
+  afterEach(() => {
+    __test.setDisplayedTab(null);
+  });
+
   beforeEach(() => {
     rpcCalls.length = 0;
     (globalThis as any).window = {
       studio: {
-        rpc: async (_key: string, cmd: any) => {
+        rpc: async (key: string, cmd: any) => {
           rpcCalls.push(cmd);
           if (cmd.type === "clear_queue") {
+            const targetTab = useSessionStore.getState().tabs.find((t) => t.activeKey === key);
+            const t = (targetTab ? useSessionStore.getState().transcriptsByTab[targetTab.id] : undefined) ?? useSessionStore.getState().transcript;
             return {
               ok: true,
               data: {
-                steering: [...useSessionStore.getState().transcript.queue.steering],
-                followUp: [...useSessionStore.getState().transcript.queue.followUp],
+                steering: [...(t.queue.steering ?? [])],
+                followUp: [...(t.queue.followUp ?? [])],
               },
             };
           }
@@ -170,6 +178,129 @@ describe("queued messages store actions", () => {
     expect(q.steering).toEqual([]);
     expect(q.followUp).toEqual([]);
   });
+
+  it("deletes a queued message for a target background tab without modifying active transcript", async () => {
+    useSessionStore.setState({
+      tabs: [
+        { id: "tab_active", kind: "session", projectId: "p1", title: "Active", pinned: false, isCold: false, activeKey: "session_test" },
+        { id: "tab_split", kind: "session", projectId: "p1", title: "Split", pinned: false, isCold: false, activeKey: "session_split" },
+      ],
+      activeTabId: "tab_active",
+      displayedTabId: "tab_active",
+      transcriptsByTab: {
+        tab_split: {
+          ...useSessionStore.getState().transcript,
+          queue: { steering: ["bg steer"], followUp: ["bg follow 1", "bg follow 2"] },
+        },
+      },
+    });
+
+    await useSessionStore.getState().deleteQueuedMessage("followUp", 0, "tab_split");
+
+    // Active transcript queue remains unchanged
+    expect(useSessionStore.getState().transcript.queue.followUp).toEqual(["follow 1", "follow 2"]);
+    // Background tab queue was updated
+    expect(useSessionStore.getState().transcriptsByTab.tab_split?.queue.followUp).toEqual(["bg follow 2"]);
+  });
+
+  it("clears all queued messages for a target background tab without clearing active transcript", async () => {
+    useSessionStore.setState({
+      tabs: [
+        { id: "tab_active", kind: "session", projectId: "p1", title: "Active", pinned: false, isCold: false, activeKey: "session_test" },
+        { id: "tab_split", kind: "session", projectId: "p1", title: "Split", pinned: false, isCold: false, activeKey: "session_split" },
+      ],
+      activeTabId: "tab_active",
+      displayedTabId: "tab_active",
+      compactionHeld: {
+        session_test: [{ text: "active held", message: "active held", images: [] }],
+        session_split: [{ text: "split held", message: "split held", images: [] }],
+      },
+      transcriptsByTab: {
+        tab_split: {
+          ...useSessionStore.getState().transcript,
+          queue: { steering: ["bg steer"], followUp: ["bg follow"] },
+        },
+      },
+    });
+
+    await useSessionStore.getState().clearAllQueued("tab_split");
+
+    // Active transcript queue & compactionHeld remain untouched
+    expect(useSessionStore.getState().transcript.queue.steering).toEqual(["steer 1"]);
+    expect(useSessionStore.getState().compactionHeld.session_test).toHaveLength(1);
+    // Background tab queue & compactionHeld are cleared
+    expect(useSessionStore.getState().transcriptsByTab.tab_split?.queue.steering).toEqual([]);
+    expect(useSessionStore.getState().compactionHeld.session_split).toBeUndefined();
+  });
+
+  it("removes and pops held messages for targetTabId into its tabUi draft", async () => {
+    useSessionStore.setState({
+      tabs: [
+        { id: "tab_active", kind: "session", projectId: "p1", title: "Active", pinned: false, isCold: false, activeKey: "session_test" },
+        { id: "tab_split", kind: "session", projectId: "p1", title: "Split", pinned: false, isCold: false, activeKey: "session_split" },
+      ],
+      activeTabId: "tab_active",
+      displayedTabId: "tab_active",
+      promptText: "active prompt",
+      tabUi: {},
+      compactionHeld: {
+        session_split: [{ text: "held for split", message: "held for split", images: [] }],
+      },
+    });
+
+    useSessionStore.getState().popHeldToEditor(0, "tab_split");
+
+    // Active promptText untouched
+    expect(useSessionStore.getState().promptText).toBe("active prompt");
+    // Background tabUi draft has the popped text
+    expect(useSessionStore.getState().tabUi.tab_split?.promptText).toBe("held for split");
+    expect(useSessionStore.getState().compactionHeld.session_split).toBeUndefined();
+  });
+
+  it("newSessionTab with targetPaneId sets active pane and adds tab to that pane", async () => {
+    const paneState = usePaneLayoutStore.getState();
+    const leafA = paneState.root.type === "leaf" ? paneState.root.id : "paneA";
+    const paneB = "pane_split_target";
+    // Setup 2 panes
+    usePaneLayoutStore.setState({
+      activePaneId: leafA,
+      root: {
+        type: "split",
+        id: "split_root",
+        direction: "horizontal",
+        sizes: [50, 50],
+        children: [
+          { type: "leaf", id: leafA, tabIds: ["t1"], activeTabId: "t1" },
+          { type: "leaf", id: paneB, tabIds: ["t2"], activeTabId: "t2" },
+        ],
+      },
+    });
+
+    useSessionStore.setState({
+      projects: [{ id: "p1", name: "Test Project", path: "/test" } as any],
+      tabs: [
+        { id: "t1", kind: "session", projectId: "p1", title: "Tab 1", pinned: false, isCold: false },
+        { id: "t2", kind: "session", projectId: "p1", title: "Tab 2", pinned: false, isCold: false },
+      ],
+      activeTabId: "t1",
+    });
+
+    await useSessionStore.getState().newSessionTab("p1", paneB);
+
+    // Pane B must be the active pane now
+    expect(usePaneLayoutStore.getState().activePaneId).toBe(paneB);
+    const newActiveTabId = useSessionStore.getState().activeTabId!;
+    // And new tab should be in Pane B's tabIds
+    const root = usePaneLayoutStore.getState().root;
+    if (root.type === "split") {
+      const leafB = root.children.find((c) => c.id === paneB);
+      if (leafB && leafB.type === "leaf") {
+        expect(leafB.tabIds).toContain(newActiveTabId);
+        expect(leafB.activeTabId).toBe(newActiveTabId);
+      }
+    }
+    __test.setDisplayedTab(null);
+  });
 });
 
 describe("agent execution modes store actions", () => {
@@ -231,6 +362,34 @@ describe("agent execution modes store actions", () => {
     expect(rpcCalls[0].message).toBe(
       "[Mode: Ask - Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.]\n\nHow does the cache work?",
     );
+  });
+
+  it("announces a switch from ask to auto-edit so the agent drops the old Ask restrictions", async () => {
+    useSessionStore.getState().setMode("ask");
+    useSessionStore.setState({ promptText: "Explain the cache" });
+    await useSessionStore.getState().sendPrompt();
+
+    useSessionStore.getState().setMode("auto-edit");
+    useSessionStore.setState({ promptText: "Now fix the bug" });
+    await useSessionStore.getState().sendPrompt();
+
+    expect(rpcCalls.length).toBe(2);
+    expect(rpcCalls[1].message).toMatch(/^\[Mode: Auto Edit \(switched from Ask; instructions from the earlier mode no longer apply\) - /);
+    expect(rpcCalls[1].message).toMatch(/\]\n\nNow fix the bug$/);
+  });
+
+  it("does not repeat the switch note once the agent has been steered into the new mode", async () => {
+    useSessionStore.getState().setMode("ask");
+    useSessionStore.setState({ promptText: "Explain the cache" });
+    await useSessionStore.getState().sendPrompt();
+
+    useSessionStore.getState().setMode("auto-edit");
+    useSessionStore.setState({ promptText: "Fix it" });
+    await useSessionStore.getState().sendPrompt();
+
+    useSessionStore.setState({ promptText: "Thanks, next one" });
+    await useSessionStore.getState().sendPrompt();
+    expect(rpcCalls[2].message).toBe("Thanks, next one");
   });
 
   it("does not prefix prompt when in default auto-edit mode", async () => {
@@ -824,6 +983,120 @@ describe("closeTab activeProject preservation", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("scopes next active tab to current project when closing tab with cross-project tabs open", async () => {
+    const p1 = { id: "p1", name: "Project 1", path: "/p1" } as any;
+    const p2 = { id: "p2", name: "Project 2", path: "/p2" } as any;
+    vi.stubGlobal("window", {
+      studio: {
+        stopSession: vi.fn(async () => {}),
+        getProjects: vi.fn(async () => [p1, p2]),
+        listAllSessions: vi.fn(async () => []),
+        setLastOpenedProjectId: vi.fn(),
+      },
+    });
+
+    useSessionStore.setState({
+      projects: [p1, p2],
+      activeProject: p1,
+      tabs: [
+        { id: "p1_tab1", title: "P1 Tab 1", kind: "session", projectId: "p1" } as any,
+        { id: "p1_tab2", title: "P1 Tab 2", kind: "session", projectId: "p1" } as any,
+        { id: "p2_tab1", title: "P2 Tab 1", kind: "session", projectId: "p2" } as any,
+      ],
+      activeTabId: "p1_tab1",
+    });
+
+    await useSessionStore.getState().closeTab("p1_tab1");
+
+    // Must stay in p1 workspace and switch to p1_tab2, NOT jump to p2_tab1
+    expect(useSessionStore.getState().activeProject).toEqual(p1);
+    expect(useSessionStore.getState().activeTabId).toBe("p1_tab2");
+
+    // Close last tab in p1: should set activeTabId to null (showing project hub) and keep p1
+    await useSessionStore.getState().closeTab("p1_tab2");
+    expect(useSessionStore.getState().activeProject).toEqual(p1);
+    expect(useSessionStore.getState().activeTabId).toBeNull();
+    // p2 tab should still remain intact in memory
+    expect(useSessionStore.getState().tabs).toHaveLength(1);
+    expect(useSessionStore.getState().tabs[0]!.id).toBe("p2_tab1");
+
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("scoped workspace project switching", () => {
+  it("restores last active tab for project or falls back to first tab or null", async () => {
+    const p1 = { id: "p1", name: "Project 1", path: "/p1" } as any;
+    const p2 = { id: "p2", name: "Project 2", path: "/p2" } as any;
+    const p3 = { id: "p3", name: "Project 3", path: "/p3" } as any;
+    vi.stubGlobal("window", {
+      studio: {
+        setLastOpenedProjectId: vi.fn(),
+        readSessionFile: vi.fn(async () => ({ entries: [], leafId: null })),
+      },
+    });
+
+    useSessionStore.setState({
+      projects: [p1, p2, p3],
+      activeProject: p1,
+      tabs: [
+        { id: "p1_tab", title: "P1 Tab", kind: "session", projectId: "p1" } as any,
+        { id: "p2_tabA", title: "P2 Tab A", kind: "session", projectId: "p2" } as any,
+        { id: "p2_tabB", title: "P2 Tab B", kind: "session", projectId: "p2" } as any,
+      ],
+      activeTabId: "p1_tab",
+      projectLastActiveTab: { p2: "p2_tabB" },
+    });
+
+    // Switch to p2 -> should restore p2_tabB
+    await useSessionStore.getState().setActiveProject(p2);
+    expect(useSessionStore.getState().activeProject).toEqual(p2);
+    expect(useSessionStore.getState().activeTabId).toBe("p2_tabB");
+
+    // Switch to p3 (no tabs) -> should set activeTabId to null for Project Hub
+    await useSessionStore.getState().setActiveProject(p3);
+    expect(useSessionStore.getState().activeProject).toEqual(p3);
+    expect(useSessionStore.getState().activeTabId).toBeNull();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("does not re-read session file from disk when tab transcript is already cached", async () => {
+    const readSessionFileMock = vi.fn(async () => ({ entries: [], leafId: null }));
+    vi.stubGlobal("window", {
+      studio: {
+        readSessionFile: readSessionFileMock,
+      },
+    });
+
+    const existingTranscript = {
+      ...createTranscript(),
+      byId: { msg_1: { id: "msg_1", type: "message", parentId: null } as any },
+      order: ["msg_1"],
+    };
+
+    useSessionStore.setState({
+      tabs: [
+        { id: "tab_cold", title: "Cold", kind: "session", sessionPath: "/path/cold.jsonl" } as any,
+        { id: "tab_cached", title: "Cached", kind: "session", sessionPath: "/path/cached.jsonl" } as any,
+      ],
+      transcriptsByTab: {
+        tab_cached: existingTranscript,
+      },
+      activeTabId: "tab_cold",
+    });
+
+    // Switch to cached tab
+    await useSessionStore.getState().switchTab("tab_cached");
+    expect(readSessionFileMock).not.toHaveBeenCalled();
+
+    // Switch to cold tab -> should read file
+    await useSessionStore.getState().switchTab("tab_cold");
+    expect(readSessionFileMock).toHaveBeenCalledWith("/path/cold.jsonl");
+
+    vi.unstubAllGlobals();
+  });
 });
 
 
@@ -837,5 +1110,173 @@ describe("projectsLoaded", () => {
     expect(useSessionStore.getState().projectsLoaded).toBe(true);
     expect(useSessionStore.getState().projects).toEqual([]);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("failed sends and session lifecycle", () => {
+  const baseTab = { id: "tab_f", projectId: "p1", title: "T", pinned: false, mode: "auto-edit", activeKey: "k_f" };
+  const reset = () => {
+    __test.setDisplayedTab("tab_f");
+    useSessionStore.setState({
+      activeKey: "k_f",
+      activeTabId: "tab_f",
+      displayedTabId: "tab_f",
+      tabs: [baseTab],
+      selectedMode: "auto-edit",
+      promptText: "",
+      attachments: [],
+      error: null,
+      compactionHeld: {},
+      compactionStates: {},
+      transcript: { ...createTranscript(), running: false },
+    } as never);
+  };
+
+  beforeEach(() => {
+    reset();
+    __resetCompactionStates();
+  });
+
+  it("restores the draft and sets an error when Pi rejects a prompt", async () => {
+    vi.stubGlobal("window", { studio: { rpc: vi.fn(async () => ({ ok: false, error: "nope" })) } });
+    useSessionStore.setState({ promptText: "hello" });
+    await useSessionStore.getState().sendPrompt();
+    expect(useSessionStore.getState().promptText).toBe("hello");
+    expect(useSessionStore.getState().error).toContain("nope");
+    vi.unstubAllGlobals();
+  });
+
+  it("re-queues held messages when the flush is rejected", async () => {
+    vi.stubGlobal("window", { studio: { rpc: vi.fn(async () => ({ ok: false, error: "busy" })) } });
+    useSessionStore.setState({ compactionHeld: { k_f: [{ text: "a", message: "a", images: [] }] } } as never);
+    const { flushHeldMessages } = await import("./session-store.ts");
+    await flushHeldMessages("k_f");
+    expect(useSessionStore.getState().compactionHeld.k_f).toHaveLength(1);
+    expect(useSessionStore.getState().error).toContain("busy");
+    vi.unstubAllGlobals();
+  });
+
+  it("stops Pi and drops the prompt when the tab is closed while Pi is starting", async () => {
+    let resolveStart!: (v: { key: string }) => void;
+    const stopSession = vi.fn(async () => {});
+    const rpc = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal("window", {
+      studio: {
+        startSession: vi.fn(() => new Promise((r) => (resolveStart = r as never))),
+        stopSession,
+        rpc,
+        refreshCatalog: vi.fn(),
+        readSessionFile: vi.fn(async () => ({ entries: [], leafId: null })),
+      },
+    });
+    useSessionStore.setState({
+      activeKey: null,
+      tabs: [{ ...baseTab, activeKey: undefined }],
+      projects: [{ id: "p1", name: "P", path: "/p" }],
+      promptText: "hi",
+    } as never);
+    const sending = useSessionStore.getState().sendPrompt();
+    await Promise.resolve();
+    await Promise.resolve();
+    useSessionStore.setState({ tabs: [] });
+    resolveStart({ key: "k_new" });
+    await sending;
+    expect(stopSession).toHaveBeenCalledWith("k_new");
+    expect(rpc).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("clears running/streaming on the displayed and cached transcript when Pi dies", () => {
+    const running = { ...createTranscript(), running: true };
+    useSessionStore.setState({ transcript: running, transcriptsByTab: { tab_f: running } } as never);
+    __test.dropSessionKey("k_f", true);
+    expect(useSessionStore.getState().transcript.running).toBe(false);
+    expect(useSessionStore.getState().transcriptsByTab.tab_f?.running).toBe(false);
+    expect(useSessionStore.getState().transcript.streaming).toBeNull();
+  });
+
+  it("abort appends restored queue text to the current draft", async () => {
+    vi.stubGlobal("window", {
+      studio: {
+        rpc: vi.fn(async (_k: string, cmd: { type: string }) =>
+          cmd.type === "clear_queue" ? { ok: true, data: { steering: ["queued"], followUp: [] } } : { ok: true },
+        ),
+      },
+    });
+    useSessionStore.setState({ promptText: "typing" });
+    await useSessionStore.getState().abort();
+    expect(useSessionStore.getState().promptText).toBe("typing\n\nqueued");
+    vi.unstubAllGlobals();
+  });
+
+  describe("project tabs", () => {
+    const projA = { id: "pA", name: "Project A", path: "/a", color: "#111" } as any;
+    const projB = { id: "pB", name: "Project B", path: "/b", color: "#222" } as any;
+    const projC = { id: "pC", name: "Project C", path: "/c", color: "#333" } as any;
+
+    beforeEach(() => {
+      vi.stubGlobal("window", {
+        studio: {
+          setLastOpenedProjectId: vi.fn(),
+          addProject: vi.fn(),
+          removeProject: vi.fn(),
+          refreshCatalog: vi.fn(),
+        },
+      });
+      useSessionStore.setState({
+        projects: [projA, projB, projC],
+        openProjectIds: ["pA", "pB"],
+        activeProject: projA,
+        tabs: [],
+        activeTabId: null,
+      });
+    });
+
+    it("opens a new project tab and activates it", async () => {
+      await useSessionStore.getState().openProjectTab("pC");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pA", "pB", "pC"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pC");
+    });
+
+    it("focuses an existing project tab without duplicating it", async () => {
+      await useSessionStore.getState().openProjectTab("pB");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pA", "pB"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pB");
+    });
+
+    it("closes a project tab and switches to the nearest sibling", async () => {
+      useSessionStore.setState({ openProjectIds: ["pA", "pB", "pC"], activeProject: projB });
+      await useSessionStore.getState().closeProjectTab("pB");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pA", "pC"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pC");
+    });
+
+    it("closes the last project tab and resets activeProject to null", async () => {
+      useSessionStore.setState({ openProjectIds: ["pA"], activeProject: projA });
+      await useSessionStore.getState().closeProjectTab("pA");
+      expect(useSessionStore.getState().openProjectIds).toEqual([]);
+      expect(useSessionStore.getState().activeProject).toBeNull();
+      expect(useSessionStore.getState().activeTabId).toBeNull();
+    });
+
+    it("reorders project tabs", () => {
+      useSessionStore.setState({ openProjectIds: ["pA", "pB", "pC"] });
+      useSessionStore.getState().reorderProjectTabs(0, 2);
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pB", "pC", "pA"]);
+    });
+
+    it("closes other project tabs", async () => {
+      useSessionStore.setState({ openProjectIds: ["pA", "pB", "pC"], activeProject: projA });
+      await useSessionStore.getState().closeOtherProjectTabs("pB");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pB"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pB");
+    });
+
+    it("closes project tabs to the right", async () => {
+      useSessionStore.setState({ openProjectIds: ["pA", "pB", "pC"], activeProject: projC });
+      await useSessionStore.getState().closeProjectTabsToRight("pB");
+      expect(useSessionStore.getState().openProjectIds).toEqual(["pA", "pB"]);
+      expect(useSessionStore.getState().activeProject?.id).toBe("pB");
+    });
   });
 });
