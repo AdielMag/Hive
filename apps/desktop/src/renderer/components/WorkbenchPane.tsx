@@ -62,7 +62,12 @@ export const WorkbenchPane: React.FC<WorkbenchPaneProps> = ({
       className={`workbench-pane${isActivePane ? " is-active" : ""}`}
       onPointerDown={(e) => {
         // Tab clicks activate themselves (and pick the right tab); don't pre-empt them.
-        if ((e.target as HTMLElement).closest(".tabstrip")) return;
+        if ((e.target as HTMLElement).closest(".tabstrip")) {
+          if ((e.target as HTMLElement).closest(".tabstrip__new")) {
+            onActivate();
+          }
+          return;
+        }
         onActivate();
       }}
     >

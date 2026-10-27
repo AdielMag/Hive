@@ -56,9 +56,10 @@ function videoExtFromMime(mime: string): string {
 
 interface ComposerProps {
   height?: number;
+  tabId?: string | null;
 }
 
-export const Composer: React.FC<ComposerProps> = ({ height }) => {
+export const Composer: React.FC<ComposerProps> = ({ height, tabId }) => {
   const activeKey = useSessionStore((s) => s.activeKey);
   const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, disabledProviders, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets, pendingUiDialog, respondDialog } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, disabledProviders: s.disabledProviders, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets, pendingUiDialog: s.pendingUiDialog, respondDialog: s.respondDialog })));
 
@@ -485,7 +486,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       <ModelSwitchCacheBar />
 
       {/* Queued messages banner if any */}
-      <QueuedMessagesBar />
+      <QueuedMessagesBar tabId={tabId} />
 
       {/* Pi reload progress / result for this session */}
       <ReloadStatusBar />

@@ -1,25 +1,12 @@
-# Project Tabs in Top Bar
+# Fix Split Window Queued Messages Leak & New Session Pane Targeting
 
-Add Rider-style project tabs to the top bar above session tabs, allowing multiple projects to be open simultaneously, reordered, and switched seamlessly with a companion dropdown picker.
+Fix two split-pane layout defects: prevent queued messages in one pane from displaying in other split panes, and ensure the `+` new session button in a split pane spawns the new tab inside that specific pane.
 
 ## Approach
-- Add `openProjectIds` state to `session-store.ts` (persisted to `localStorage`), tracking open project tabs in order.
-- Create a dedicated `ProjectTabBar` component in `AppTitleBar` with draggable project tabs, active indicator, close buttons, drop indicators, and context menus.
-- Retain the project switcher dropdown next to tabs: selecting an already-open project activates its tab; selecting an unopened project opens a new tab.
-- Add an appearance setting (`projectTabsEnabled`, default `true`) in Settings so users can toggle between project tabs and classic single-project mode.
-- Switching project tabs updates `activeProject`, preserving and restoring each project's session tabs and split-pane layout independently.
-
-## Decisions
-
-> [!CHOICE] Closing the last open project tab
-> **Question**: What should happen when the user clicks close on the only remaining open project tab?
-> - (x) **Show Welcome screen**: Closes the project tab and displays the Welcome / Open screen with the top bar dropdown ready [Recommended]
-> - ( ) **Keep sole tab open**: Disable or hide the close button on the last open project tab so at least one project stays active
-
-> [!CHOICE] Project tab sizing behavior
-> **Question**: How should project tabs size themselves in the top bar?
-> - (x) **Compact auto-sizing**: Fixed maximum width (160–180px) with text ellipsis and horizontal wheel scroll for many tabs [Recommended]
-> - ( ) **Flexible tabs**: Tabs stretch dynamically to occupy available space up to a maximum width
+- Scope `QueuedMessagesList` and `QueuedMessagesBar` to a target `tabId` instead of reading global store active transcript.
+- Update queue store actions (`deleteQueuedMessage`, `editQueuedMessage`, `runQueuedNow`, `steerQueuedNext`, `clearAllQueued`, `popQueuedToEditor`, `removeHeldMessage`, `popHeldToEditor`) to accept an optional `targetTabId`, updating both `transcript` (when active) and `transcriptsByTab[tabId]`.
+- Pass `paneId` from `TabStrip`'s `+` button into `newSessionTab(projectId, paneId)` and activate the target pane in `pane-layout-store`.
+- Add unit tests verifying per-tab queue isolation and split-pane session creation.
 
 <!-- MORE -->
 
@@ -27,25 +14,18 @@ Add Rider-style project tabs to the top bar above session tabs, allowing multipl
 
 | File | Change |
 |---|---|
-| `apps/desktop/src/renderer/store/session-store.ts` | `[MODIFY]` Add `openProjectIds`, `openProjectTab`, `closeProjectTab`, `reorderProjectTabs`, `closeOtherProjectTabs`, and disk persistence |
-| `apps/desktop/src/renderer/store/ui-store.ts` | `[MODIFY]` Add `projectTabsEnabled` preference to UI store |
-| `apps/desktop/src/renderer/components/ProjectTabBar.tsx` | `[NEW]` Project tabs bar with drag-and-drop reordering, active tab styling, close button, drop indicator, and context menu |
-| `apps/desktop/src/renderer/components/ProjectPicker.tsx` | `[MODIFY]` Refactor dropdown menu logic to support open/switch behavior and standalone dropdown trigger |
-| `apps/desktop/src/renderer/components/AppTitleBar.tsx` | `[MODIFY]` Integrate `ProjectTabBar` in titlebar center, respecting `projectTabsEnabled` setting |
-| `apps/desktop/src/renderer/components/AppearanceSettingsContent.tsx` | `[MODIFY]` Add toggle switch for "Show projects as tabs in top bar" under Workbench |
-| `apps/desktop/src/renderer/features/commands/CommandPalette.tsx` | `[MODIFY]` Update project selection in palette to use `openProjectTab` |
-| `apps/desktop/src/renderer/styles/shell.css` | `[MODIFY]` Styling for project tabs, tab drag states, drop indicators, and title bar flex layout |
-| `apps/desktop/src/renderer/store/session-store.test.ts` | `[MODIFY]` Unit tests for `openProjectTab`, `closeProjectTab`, and `reorderProjectTabs` |
-
-## Risks
-- Titlebar window drag: Window dragging (`-webkit-app-region: drag`) must remain functional on empty spaces, while project tabs and buttons must have `no-drag` so tab clicking and drag-reordering work smoothly without moving the window.
-- macOS traffic lights: Top bar layout must preserve the 78px left padding on macOS to prevent overlapping native window controls.
+| `apps/desktop/src/renderer/components/transcript/QueuedMessages.tsx` | `[MODIFY]` Accept `tabId?: string` in `QueuedMessagesList`, `QueuedMessageCard`, and `QueuedMessagesBar`; query per-tab queue and compaction held state. |
+| `apps/desktop/src/renderer/components/Transcript.tsx` | `[MODIFY]` Pass `tabId={targetTabId}` to `<QueuedMessagesList />`. |
+| `apps/desktop/src/renderer/components/Composer.tsx` | `[MODIFY]` Accept `tabId?: string` prop and pass to `<QueuedMessagesBar tabId={tabId} />`. |
+| `apps/desktop/src/renderer/components/SessionView.tsx` | `[MODIFY]` Pass `tabId={targetTabId}` into `<Composer tabId={targetTabId} />`. |
+| `apps/desktop/src/renderer/store/session-store.ts` | `[MODIFY]` Update `newSessionTab` to accept `targetPaneId?: string`; update queue actions to accept `targetTabId?: string` and update `transcriptsByTab[targetTabId]`. |
+| `apps/desktop/src/renderer/store/pane-layout-store.ts` | `[MODIFY]` Add `addTabToPane(tabId, paneId)` helper so new tabs can be placed into the target split pane directly. |
+| `apps/desktop/src/renderer/components/TabStrip.tsx` | `[MODIFY]` Pass `paneId` to `newSessionTab(activeProject.id, paneId)` on `+` click and activate `paneId`. |
+| `apps/desktop/src/renderer/components/WorkbenchPane.tsx` | `[MODIFY]` Ensure clicking on tabstrip `+` or background activates the pane. |
+| `apps/desktop/src/renderer/store/session-store.test.ts` | `[MODIFY]` Add tests for per-tab queued message operations and `newSessionTab` targeting. |
+| `apps/desktop/src/renderer/store/pane-layout-store.test.ts` | `[MODIFY]` Add tests for `addTabToPane`. |
 
 ## Verify
-- `node ../session-bbf066/node_modules/vitest/vitest.mjs run apps/desktop/src/renderer/store/session-store.test.ts`
-- Manual checks:
-  1. Open project from dropdown: if open, activates existing tab; if not open, opens new tab.
-  2. Drag and drop reordering of project tabs with visual drop indicator.
-  3. Close project tab: switches to adjacent tab.
-  4. Session tabs and split pane layouts are retained independently per project tab.
-  5. Toggle setting in Settings > Appearance switches between tabs mode and classic picker mode.
+- `npx vitest run apps/desktop/src/renderer/store/session-store.test.ts apps/desktop/src/renderer/store/pane-layout-store.test.ts`
+- `npm run typecheck`
+- `npm run check:modules`

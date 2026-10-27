@@ -48,7 +48,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
       <div className="resizer resizer--row" onMouseDown={startDrag} title="Drag to resize" />
       <div className="session-view__composer-wrap">
         {isActivePane ? (
-          <Composer height={composerHeight} />
+          <Composer height={composerHeight} tabId={targetTabId} />
         ) : (
           <>
             {parkedDialog && (

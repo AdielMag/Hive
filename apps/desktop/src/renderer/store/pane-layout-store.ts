@@ -46,6 +46,7 @@ export interface PaneLayoutState {
   setActivePaneId: (paneId: string) => void;
   setActiveTabInPane: (paneId: string, tabId: string) => void;
   reorderTab: (paneId: string, fromIndex: number, toIndex: number) => void;
+  addTabToPane: (tabId: string, targetPaneId: string) => void;
   moveTab: (tabId: string, targetPaneId: string, targetIndex?: number) => void;
   splitPane: (
     sourceTabId: string,
@@ -447,6 +448,10 @@ export const usePaneLayoutStore = create<PaneLayoutState>((set, get) => ({
     const updatedLayouts = { ...get().layoutsByProject, [currentKey]: { root: updated, activePaneId: paneId } };
     set({ root: updated, activePaneId: paneId, layoutsByProject: updatedLayouts });
     persistLayout(updated, paneId, get().currentProjectId, updatedLayouts);
+  },
+
+  addTabToPane: (tabId, targetPaneId) => {
+    get().moveTab(tabId, targetPaneId);
   },
 
   moveTab: (tabId, targetPaneId, targetIndex) => {

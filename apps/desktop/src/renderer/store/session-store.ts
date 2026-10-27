@@ -410,10 +410,10 @@ export interface SessionStoreState {
   compactionStates: Record<string, CompactionState>;
   /** Messages sent while a session compacts, per live-session-key; shown as queued, sent when compaction ends. */
   compactionHeld: Record<string, HeldMessage[]>;
-  /** Drop one held (compaction-queued) message of the active session. */
-  removeHeldMessage: (index: number) => void;
+  /** Drop one held (compaction-queued) message of the active session (or target tab). */
+  removeHeldMessage: (index: number, targetTabId?: string) => void;
   /** Move a held message back into the composer. */
-  popHeldToEditor: (index: number) => void;
+  popHeldToEditor: (index: number, targetTabId?: string) => void;
   isInitializing: boolean;
   error: string | null;
 
@@ -451,7 +451,7 @@ export interface SessionStoreState {
   ) => void;
   updateSubagentTab: (identifier: string, view: SubagentView) => void;
   openSessionTab: (sessionPath: string, projectId: string, title?: string) => Promise<void>;
-  newSessionTab: (projectId: string) => Promise<void>;
+  newSessionTab: (projectId: string, targetPaneId?: string) => Promise<void>;
   /** Open (or focus) the singleton Skills & Agents library tab. */
   openLibraryTab: () => void;
   openModuleTab: (spec: OpenTabSpec) => string;
@@ -482,19 +482,19 @@ export interface SessionStoreState {
   stopSubagent: (target: { agentId?: string; type?: string; description?: string }) => Promise<boolean>;
   deleteSessionFile: (sessionPath: string) => Promise<void>;
   /** Delete a specific queued message from steering or follow-up queue. */
-  deleteQueuedMessage: (type: "steering" | "followUp", index: number) => Promise<void>;
+  deleteQueuedMessage: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
   /** Update the text of a specific queued message. */
-  editQueuedMessage: (type: "steering" | "followUp", index: number, newText: string) => Promise<void>;
+  editQueuedMessage: (type: "steering" | "followUp", index: number, newText: string, targetTabId?: string) => Promise<void>;
   /** Interrupt whatever is running and immediately prompt the LLM with this queued message ("Do now"). */
-  runQueuedNow: (type: "steering" | "followUp", index: number) => Promise<void>;
+  runQueuedNow: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
   /** Steer a queued message for the next step without aborting the current step ("Next step"). */
-  steerQueuedNext: (type: "steering" | "followUp", index: number) => Promise<void>;
+  steerQueuedNext: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
   /** Steer/run a queued message immediately ("Do now"). Alias to runQueuedNow. */
-  steerQueuedNow: (type: "steering" | "followUp", index: number) => Promise<void>;
-  /** Clear all queued messages for the active session. */
-  clearAllQueued: () => Promise<void>;
+  steerQueuedNow: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
+  /** Clear all queued messages for the active session (or target tab). */
+  clearAllQueued: (targetTabId?: string) => Promise<void>;
   /** Remove a queued message and put its text back into the composer editor. */
-  popQueuedToEditor: (type: "steering" | "followUp", index: number) => Promise<void>;
+  popQueuedToEditor: (type: "steering" | "followUp", index: number, targetTabId?: string) => Promise<void>;
   /** Set (or clear, with "") the user-facing title of a session. */
   renameSession: (sessionPath: string, title: string) => Promise<void>;
   /** Hide / unhide a session in the sidebar without touching its file. */
@@ -1148,24 +1148,34 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   reloadEpoch: 0,
   compactionStates: {},
   compactionHeld: {},
-  removeHeldMessage: (index) => {
-    const { activeKey } = get();
-    if (!activeKey) return;
-    set((s) => {
-      const list = [...(s.compactionHeld[activeKey] ?? [])];
+  removeHeldMessage: (index, targetTabId) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
+    set((state) => {
+      const list = [...(state.compactionHeld[key] ?? [])];
       list.splice(index, 1);
-      const next = { ...s.compactionHeld };
-      if (list.length) next[activeKey] = list;
-      else delete next[activeKey];
+      const next = { ...state.compactionHeld };
+      if (list.length) next[key] = list;
+      else delete next[key];
       return { compactionHeld: next };
     });
   },
-  popHeldToEditor: (index) => {
-    const { activeKey, compactionHeld, promptText } = get();
-    const item = activeKey ? compactionHeld[activeKey]?.[index] : undefined;
+  popHeldToEditor: (index, targetTabId) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    const item = key ? s.compactionHeld[key]?.[index] : undefined;
     if (!item) return;
-    get().removeHeldMessage(index);
-    set({ promptText: promptText ? `${promptText}\n${item.text}` : item.text });
+    get().removeHeldMessage(index, targetTabId);
+    if (!targetTabId || targetTabId === s.activeTabId || targetTabId === s.displayedTabId) {
+      set({ promptText: s.promptText ? `${s.promptText}\n${item.text}` : item.text });
+    } else {
+      updateTabUi(targetTabId, (ui) => ({
+        promptText: ui.promptText ? `${ui.promptText}\n${item.text}` : item.text,
+      }));
+    }
   },
   isInitializing: true,
   error: null,
@@ -1875,7 +1885,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     void get().ensureActiveSession(tabId);
   },
 
-  newSessionTab: async (projectId: string) => {
+  newSessionTab: async (projectId: string, targetPaneId?: string) => {
     const { tabs, projects } = get();
     const project = projects.find((p) => p.id === projectId) ?? null;
     if (!project) return;
@@ -1895,6 +1905,10 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       thinkingLevel: initialThinking,
       mode: get().selectedMode,
     };
+
+    if (targetPaneId) {
+      usePaneLayoutStore.getState().addTabToPane(tabId, targetPaneId);
+    }
 
     set({ tabs: [...tabs, newTab] });
     set({
@@ -2757,10 +2771,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     await get().refreshCatalog();
   },
 
-  deleteQueuedMessage: async (type: "steering" | "followUp", index: number) => {
-    const { activeKey } = get();
-    if (!activeKey) return;
-    const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
+  deleteQueuedMessage: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
+    const res = await window.studio.rpc(key, { type: "clear_queue" });
     if (!res.ok) return;
     const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
     const steering = [...(current.steering ?? [])];
@@ -2773,28 +2789,34 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
 
     for (const msg of steering) {
-      await window.studio.rpc(activeKey, { type: "steer", message: msg });
+      await window.studio.rpc(key, { type: "steer", message: msg });
     }
     for (const msg of followUp) {
-      await window.studio.rpc(activeKey, { type: "follow_up", message: msg });
+      await window.studio.rpc(key, { type: "follow_up", message: msg });
     }
 
-    set((s) => ({
-      transcript: {
-        ...s.transcript,
-        queue: { steering, followUp },
-      },
+    const latest = get();
+    const curTab = targetTabId ?? latest.displayedTabId ?? latest.activeTabId;
+    const isCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    const prevT = (curTab ? latest.transcriptsByTab[curTab] : undefined) ?? latest.transcript;
+    const nextT = { ...prevT, queue: { steering, followUp } };
+
+    set((state) => ({
+      ...(isCur ? { transcript: nextT } : {}),
+      ...(curTab ? { transcriptsByTab: { ...state.transcriptsByTab, [curTab]: nextT } } : {}),
     }));
   },
 
-  editQueuedMessage: async (type: "steering" | "followUp", index: number, newText: string) => {
+  editQueuedMessage: async (type: "steering" | "followUp", index: number, newText: string, targetTabId?: string) => {
     const trimmed = newText.trim();
     if (!trimmed) {
-      return get().deleteQueuedMessage(type, index);
+      return get().deleteQueuedMessage(type, index, targetTabId);
     }
-    const { activeKey } = get();
-    if (!activeKey) return;
-    const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
+    const res = await window.studio.rpc(key, { type: "clear_queue" });
     if (!res.ok) return;
     const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
     const steering = [...(current.steering ?? [])];
@@ -2807,29 +2829,38 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
 
     for (const msg of steering) {
-      await window.studio.rpc(activeKey, { type: "steer", message: msg });
+      await window.studio.rpc(key, { type: "steer", message: msg });
     }
     for (const msg of followUp) {
-      await window.studio.rpc(activeKey, { type: "follow_up", message: msg });
+      await window.studio.rpc(key, { type: "follow_up", message: msg });
     }
 
-    set((s) => ({
-      transcript: {
-        ...s.transcript,
-        queue: { steering, followUp },
-      },
+    const latest = get();
+    const curTab = targetTabId ?? latest.displayedTabId ?? latest.activeTabId;
+    const isCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    const prevT = (curTab ? latest.transcriptsByTab[curTab] : undefined) ?? latest.transcript;
+    const nextT = { ...prevT, queue: { steering, followUp } };
+
+    set((state) => ({
+      ...(isCur ? { transcript: nextT } : {}),
+      ...(curTab ? { transcriptsByTab: { ...state.transcriptsByTab, [curTab]: nextT } } : {}),
     }));
   },
 
-  runQueuedNow: async (type: "steering" | "followUp", index: number) => {
-    const { activeKey, transcript } = get();
-    if (!activeKey) return;
+  runQueuedNow: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
 
-    const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
+    const curTab = targetTabId ?? s.displayedTabId ?? s.activeTabId;
+    const targetTranscript = (curTab ? s.transcriptsByTab[curTab] : undefined) ?? s.transcript;
+
+    const res = await window.studio.rpc(key, { type: "clear_queue" });
     if (!res.ok) return;
     const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
-    const steering = [...(current.steering ?? transcript.queue.steering ?? [])];
-    const followUp = [...(current.followUp ?? transcript.queue.followUp ?? [])];
+    const steering = [...(current.steering ?? targetTranscript.queue.steering ?? [])];
+    const followUp = [...(current.followUp ?? targetTranscript.queue.followUp ?? [])];
 
     let target: string | undefined;
     if (type === "steering") {
@@ -2842,57 +2873,68 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       }
     }
     if (!target) {
-      const fallbackList = type === "steering" ? transcript.queue.steering : transcript.queue.followUp;
+      const fallbackList = type === "steering" ? targetTranscript.queue.steering : targetTranscript.queue.followUp;
       target = fallbackList[index];
     }
     if (!target) return;
 
-    if (transcript.running) {
+    if (targetTranscript.running) {
       try {
-        await window.studio.rpc(activeKey, { type: "abort" });
+        await window.studio.rpc(key, { type: "abort" });
       } catch (err) {
         console.warn("Abort failed while running queued message now:", err);
       }
     }
 
     try {
-      await window.studio.rpc(activeKey, { type: "prompt", message: target });
+      await window.studio.rpc(key, { type: "prompt", message: target });
     } catch (err) {
       console.error("Prompt failed while running queued message now:", err);
     }
 
     for (const msg of steering) {
-      await window.studio.rpc(activeKey, { type: "steer", message: msg });
+      await window.studio.rpc(key, { type: "steer", message: msg });
     }
     for (const msg of followUp) {
-      await window.studio.rpc(activeKey, { type: "follow_up", message: msg });
+      await window.studio.rpc(key, { type: "follow_up", message: msg });
     }
 
-    set((s) => ({
-      transcript: {
-        ...s.transcript,
-        running: true,
-        queue: {
-          steering,
-          followUp,
-        },
+    const latest = get();
+    const latestCurTab = targetTabId ?? latest.displayedTabId ?? latest.activeTabId;
+    const latestIsCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    const nextT = {
+      ...targetTranscript,
+      running: true,
+      queue: {
+        steering,
+        followUp,
       },
+    };
+
+    set((state) => ({
+      ...(latestIsCur ? { transcript: nextT } : {}),
+      ...(latestCurTab ? { transcriptsByTab: { ...state.transcriptsByTab, [latestCurTab]: nextT } } : {}),
     }));
   },
 
-  steerQueuedNext: async (type: "steering" | "followUp", index: number) => {
-    const { activeKey, transcript } = get();
-    if (!activeKey) return;
+  steerQueuedNext: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
 
-    if (!transcript.running) {
-      return get().runQueuedNow(type, index);
+    const curTab = targetTabId ?? s.displayedTabId ?? s.activeTabId;
+    const targetTranscript = (curTab ? s.transcriptsByTab[curTab] : undefined) ?? s.transcript;
+
+    if (!targetTranscript.running) {
+      return get().runQueuedNow(type, index, targetTabId);
     }
 
-    const res = await window.studio.rpc(activeKey, { type: "clear_queue" });
+    const res = await window.studio.rpc(key, { type: "clear_queue" });
     if (!res.ok) return;
     const current = (res.data ?? {}) as { steering?: string[]; followUp?: string[] };
-    const steering = [...(current.steering ?? transcript.queue.steering ?? [])];
-    const followUp = [...(current.followUp ?? transcript.queue.followUp ?? [])];
+    const steering = [...(current.steering ?? targetTranscript.queue.steering ?? [])];
+    const followUp = [...(current.followUp ?? targetTranscript.queue.followUp ?? [])];
 
     let target: string | undefined;
     if (type === "steering") {
@@ -2906,54 +2948,76 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
     if (!target) return;
 
-    await window.studio.rpc(activeKey, { type: "steer", message: target });
+    await window.studio.rpc(key, { type: "steer", message: target });
     for (const msg of steering) {
-      await window.studio.rpc(activeKey, { type: "steer", message: msg });
+      await window.studio.rpc(key, { type: "steer", message: msg });
     }
     for (const msg of followUp) {
-      await window.studio.rpc(activeKey, { type: "follow_up", message: msg });
+      await window.studio.rpc(key, { type: "follow_up", message: msg });
     }
 
-    set((s) => ({
-      transcript: {
-        ...s.transcript,
-        queue: {
-          steering: [target!, ...steering],
-          followUp,
-        },
+    const latest = get();
+    const latestCurTab = targetTabId ?? latest.displayedTabId ?? latest.activeTabId;
+    const latestIsCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    const nextT = {
+      ...targetTranscript,
+      queue: {
+        steering: [target!, ...steering],
+        followUp,
       },
+    };
+
+    set((state) => ({
+      ...(latestIsCur ? { transcript: nextT } : {}),
+      ...(latestCurTab ? { transcriptsByTab: { ...state.transcriptsByTab, [latestCurTab]: nextT } } : {}),
     }));
   },
 
-  steerQueuedNow: async (type: "steering" | "followUp", index: number) => {
-    return get().runQueuedNow(type, index);
+  steerQueuedNow: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    return get().runQueuedNow(type, index, targetTabId);
   },
 
-  clearAllQueued: async () => {
-    const { activeKey } = get();
-    if (!activeKey) return;
-    await window.studio.rpc(activeKey, { type: "clear_queue" });
-    set((s) => {
-      const compactionHeld = { ...s.compactionHeld };
-      delete compactionHeld[activeKey];
+  clearAllQueued: async (targetTabId?: string) => {
+    const s = get();
+    const tab = targetTabId ? s.tabs.find((t) => t.id === targetTabId) : undefined;
+    const key = tab?.activeKey ?? s.activeKey;
+    if (!key) return;
+    await window.studio.rpc(key, { type: "clear_queue" });
+    set((state) => {
+      const compactionHeld = { ...state.compactionHeld };
+      delete compactionHeld[key];
+      const curTab = targetTabId ?? s.displayedTabId ?? s.activeTabId;
+      const isCur = !targetTabId || targetTabId === s.activeTabId || targetTabId === s.displayedTabId;
+      const prevT = (curTab ? state.transcriptsByTab[curTab] : undefined) ?? state.transcript;
+      const nextT = { ...prevT, queue: { steering: [], followUp: [] } };
       return {
         compactionHeld,
-        transcript: {
-          ...s.transcript,
-          queue: { steering: [], followUp: [] },
-        },
+        ...(isCur ? { transcript: nextT } : {}),
+        ...(curTab ? { transcriptsByTab: { ...state.transcriptsByTab, [curTab]: nextT } } : {}),
       };
     });
   },
 
-  popQueuedToEditor: async (type: "steering" | "followUp", index: number) => {
-    const { transcript, promptText } = get();
-    const list = type === "steering" ? transcript.queue.steering : transcript.queue.followUp;
+  popQueuedToEditor: async (type: "steering" | "followUp", index: number, targetTabId?: string) => {
+    const s = get();
+    const curTab = targetTabId ?? s.displayedTabId ?? s.activeTabId;
+    const targetTranscript = (curTab ? s.transcriptsByTab[curTab] : undefined) ?? s.transcript;
+    const list = type === "steering" ? targetTranscript.queue.steering : targetTranscript.queue.followUp;
     const msg = list[index];
     if (msg === undefined) return;
-    await get().deleteQueuedMessage(type, index);
-    const combined = promptText.trim() ? `${promptText}\n\n${msg}` : msg;
-    set({ promptText: combined });
+    await get().deleteQueuedMessage(type, index, targetTabId);
+
+    const latest = get();
+    const isCur = !targetTabId || targetTabId === latest.activeTabId || targetTabId === latest.displayedTabId;
+    if (isCur) {
+      const { promptText } = latest;
+      const combined = promptText.trim() ? `${promptText}\n\n${msg}` : msg;
+      set({ promptText: combined });
+    } else if (targetTabId) {
+      updateTabUi(targetTabId, (ui) => ({
+        promptText: ui.promptText.trim() ? `${ui.promptText}\n\n${msg}` : msg,
+      }));
+    }
   },
 
   renameSession: async (sessionPath: string, title: string) => {

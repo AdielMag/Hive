@@ -519,7 +519,12 @@ export const TabStrip: React.FC<TabStripProps> = ({
         {activeProject && (
           <button
             className={`tabstrip__new${newSessionInMainTree ? " is-main-tree" : ""}`}
-            onClick={() => void newSessionTab(activeProject.id)}
+            onClick={() => {
+              if (paneId) {
+                usePaneLayoutStore.getState().setActivePaneId(paneId);
+              }
+              void newSessionTab(activeProject.id, paneId);
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               setMenu({
