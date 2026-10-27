@@ -17,12 +17,11 @@ interface LimitsState {
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-export const useLimits = create<LimitsState>((set, get) => ({
-  quota: null,
-  loading: false,
-  error: null,
-  refresh: async (force) => {
-    if (get().loading) return;
+let inflight: Promise<void> | null = null;
+let inflightForced = false;
+
+export const useLimits = create<LimitsState>((set) => {
+  const run = async (force: boolean) => {
     set({ loading: true, error: null });
     try {
       set({ quota: await limitsHost().ipc.invoke<QuotaSnapshot>(LimitsMethods.get, { force }) });
@@ -31,8 +30,24 @@ export const useLimits = create<LimitsState>((set, get) => ({
     } finally {
       set({ loading: false });
     }
-  },
-}));
+  };
+  return {
+    quota: null,
+    loading: false,
+    error: null,
+    refresh: async (force = false) => {
+      // Background polls coalesce; a manual (forced) refresh is never swallowed by one in flight.
+      if (inflight && !(force && !inflightForced)) return inflight;
+      if (inflight) await inflight;
+      inflightForced = force;
+      const p: Promise<void> = run(force).finally(() => {
+        if (inflight === p) inflight = null;
+      });
+      inflight = p;
+      return p;
+    },
+  };
+});
 
 export const POLL_MS = 120_000;
 const STALE_MS = 60_000;

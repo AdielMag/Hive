@@ -25,6 +25,17 @@ describe("limits store", () => {
     expect(useLimits.getState().loading).toBe(false);
   });
 
+  it("a forced refresh is not swallowed by an in-flight background poll", async () => {
+    let release!: () => void;
+    invoke.mockImplementationOnce(() => new Promise((r) => (release = () => r(snap(1)))));
+    const bg = useLimits.getState().refresh();
+    const manual = useLimits.getState().refresh(true);
+    release();
+    await Promise.all([bg, manual]);
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke).toHaveBeenLastCalledWith("get", { force: true });
+  });
+
   it("records errors without throwing", async () => {
     invoke.mockRejectedValueOnce(new Error("offline"));
     await useLimits.getState().refresh();

@@ -7,11 +7,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PiInstallInfo, ProviderQuota, QuotaGroup, QuotaSnapshot } from "@hive/protocol";
 import { resolveCredentials, type ProviderCredential } from "./credentials.ts";
-import { QUOTA_FETCHERS, UnsupportedError } from "./fetchers.ts";
+import { HttpError, QUOTA_FETCHERS, UnsupportedError } from "./fetchers.ts";
 import { parseQuotaStatusCache } from "./parsers.ts";
 
 const CACHE_TTL_MS = 45_000;
-const BACKOFF_MS = 5 * 60_000;
+const BACKOFF_MS = 2 * 60_000;
+const MAX_BACKOFF_MS = 10 * 60_000;
 
 export const PROVIDER_NAMES: Record<string, string> = {
   anthropic: "Anthropic Claude",
@@ -51,6 +52,7 @@ export class QuotaService {
   /** Providers that rate-limited us are not re-queried until this time. */
   private readonly backoffUntil = new Map<string, number>();
   private inflight: Promise<QuotaSnapshot> | null = null;
+  private inflightForced = false;
   private readonly deps: Required<Omit<QuotaServiceDeps, "agentDir" | "helperPath">>;
 
   constructor(
@@ -71,14 +73,21 @@ export class QuotaService {
 
   async getSnapshot(force = false): Promise<QuotaSnapshot> {
     if (!force && this.cached && this.deps.now() - this.cached.fetchedAt < CACHE_TTL_MS) return this.cached;
-    this.inflight ??= this.build().finally(() => {
-      this.inflight = null;
-    });
+    // A forced refresh must never be satisfied by an older non-forced build that may have been
+    // short-circuited by backoff: wait for it, then run a fresh forced build.
+    if (force && this.inflight && !this.inflightForced) await this.inflight.catch(() => undefined);
+    if (!this.inflight) {
+      this.inflightForced = force;
+      this.inflight = this.build(force).finally(() => {
+        this.inflight = null;
+        this.inflightForced = false;
+      });
+    }
     this.cached = await this.inflight;
     return this.cached;
   }
 
-  private async build(): Promise<QuotaSnapshot> {
+  private async build(force: boolean): Promise<QuotaSnapshot> {
     const fetchedAt = this.deps.now();
     const accounts = this.deps.readAccounts();
     const storedAuth = this.deps.readStoredAuth();
@@ -133,6 +142,8 @@ export class QuotaService {
           return { ...base, status: "unsupported", source: "live", error: "Usage-based billing — no subscription windows." };
         }
         try {
+          // A manual refresh bypasses the rate-limit backoff so "Refresh" really hits the provider.
+          if (force) this.backoffUntil.delete(cred.providerId);
           const until = this.backoffUntil.get(cred.providerId) ?? 0;
           if (until > this.deps.now()) throw new Error("Rate limited by provider — retrying shortly");
           if (!cred.apiKey) throw new Error(cred.error || credentialError || "No credential available");
@@ -144,7 +155,10 @@ export class QuotaService {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           if (err instanceof UnsupportedError) return { ...base, status: "unsupported", source: "live", error: message };
-          if (/HTTP 429/.test(message)) this.backoffUntil.set(cred.providerId, this.deps.now() + BACKOFF_MS);
+          if (/HTTP 429/.test(message)) {
+            const wait = err instanceof HttpError && err.retryAfterMs ? Math.min(err.retryAfterMs, MAX_BACKOFF_MS) : BACKOFF_MS;
+            this.backoffUntil.set(cred.providerId, this.deps.now() + wait);
+          }
           const good = this.lastGood.get(cred.providerId);
           const ext = fallback.get(cred.providerId);
           const cachedObs = good && (!ext || good.fetchedAt >= ext.fetchedAt) ? good : ext;

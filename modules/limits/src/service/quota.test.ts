@@ -181,6 +181,32 @@ describe("QuotaService", () => {
     expect(calls).toBe(2);
   });
 
+  it("forced refresh bypasses the 429 backoff", async () => {
+    let calls = 0;
+    const win = { kind: "5h", label: "5h", usedPercent: 10 } as never;
+    const svc = new QuotaService(pi, {
+      resolveCredentials: async () => [{ providerId: "anthropic", type: "oauth", apiKey: "sk-ant-oat-x" }],
+      readAccounts: () => ({}),
+      readCache: () => new Map(),
+      fetchers: {
+        anthropic: async () => {
+          calls++;
+          if (calls === 1) throw new Error("HTTP 429 from api.anthropic.com");
+          return [{ id: "a", label: "Claude", windows: [win] }];
+        },
+      },
+      now: () => NOW,
+    });
+    expect((await svc.getSnapshot(true)).providers[0]!.status).toBe("error");
+    // Non-forced stays in backoff (no new request)...
+    await svc.getSnapshot(false);
+    expect(calls).toBe(1);
+    // ...but a manual refresh hits the provider again.
+    const snap = await svc.getSnapshot(true);
+    expect(calls).toBe(2);
+    expect(snap.providers[0]).toMatchObject({ status: "ok", source: "live" });
+  });
+
   it("falls back to stored auth.json credentials when helper fails", async () => {
     let antigravityApiKey: string | null = null;
     const svc = new QuotaService(pi, {
