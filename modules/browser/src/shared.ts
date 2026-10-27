@@ -31,7 +31,21 @@ export function formatUrlOrSearch(input: string, engine: SearchEngine = "duckduc
   const trimmed = input.trim();
   if (!trimmed) return "https://pi.dev";
 
-  if (/^(https?|file|chrome|edge):\/\//i.test(trimmed)) {
+  // Block internal and local protocols in the in-app browser; route them to search instead
+  if (/^(file|chrome|edge|about|javascript):/i.test(trimmed)) {
+    const query = encodeURIComponent(trimmed);
+    switch (engine) {
+      case "google":
+        return `https://www.google.com/search?q=${query}`;
+      case "bing":
+        return `https://www.bing.com/search?q=${query}`;
+      case "duckduckgo":
+      default:
+        return `https://duckduckgo.com/?q=${query}`;
+    }
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
     return trimmed;
   }
 

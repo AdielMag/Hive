@@ -47,6 +47,8 @@ interface ActiveSession {
   eventBuffer: PiStreamEvent[];
   flushTimer: ReturnType<typeof setTimeout> | null;
   registry?: SessionRegistry;
+  /** Pi session id as reported by the bridge (used as the checkpoint session key). */
+  piSessionId?: string;
 }
 
 export class MainSessionManager {
@@ -65,6 +67,16 @@ export class MainSessionManager {
   }
 
   async startSession(request: StartSessionRequest): Promise<StartSessionResult> {
+    // Already live on this JSONL (e.g. double-click): reuse instead of spawning a second Pi on the same file.
+    if (request.sessionPath) {
+      const norm = (p: string): string => p.replaceAll("\\", "/").toLowerCase();
+      const target = norm(request.sessionPath);
+      for (const live of this.sessions.values()) {
+        if (live.sessionPath && norm(live.sessionPath) === target) {
+          return { key: live.key, projectPath: live.projectPath, ...(live.worktree ? { worktree: live.worktree } : {}) };
+        }
+      }
+    }
     const key = `sess_${++this.nextSessionId}`;
     const progress = (step: SessionStartProgress["step"]): void => {
       if (request.startId) this.sendToWindow(IPC.evtStartProgress, { startId: request.startId, step } satisfies SessionStartProgress);
@@ -157,6 +169,7 @@ export class MainSessionManager {
         const links = this.store?.getProjectByPath?.(session.projectPath)?.links ?? [];
         if (links.length > 0) void bridge.setLinkedProjects(links).catch(() => {});
       } else if (msg.type === "registry") {
+        session.piSessionId = msg.sessionId ?? undefined;
         session.registry = {
           sessionId: msg.sessionId,
           cwd: msg.cwd,
@@ -166,6 +179,7 @@ export class MainSessionManager {
           receivedAt: Date.now(),
         };
       } else if (msg.type === "checkpoint_request") {
+        session.piSessionId = msg.sessionId;
         if (this.checkpoints) {
           void this.checkpoints.onPromptSent(session.cwd, msg.sessionId, msg.userTs).then(() => {
             void bridge.send({ v: BRIDGE_PROTOCOL_VERSION, type: "checkpoint_done", reqId: msg.reqId });
@@ -178,11 +192,17 @@ export class MainSessionManager {
         }
       } else if (msg.type === "checkpoint_bind") {
         if (this.checkpoints) {
-          void this.checkpoints.bindEntryId(session.cwd, msg.sessionId, msg.userTs, msg.leafEntryId);
+          session.piSessionId = msg.sessionId;
+          void this.checkpoints.bindEntryId(session.cwd, msg.sessionId, msg.userTs, msg.leafEntryId).catch((err) => {
+            console.error("[checkpoints] failed to bind entry id", err);
+          });
         }
       } else if (msg.type === "boundary") {
-        if (msg.phase === "agent_settled" && msg.userTs && this.checkpoints) {
-          void this.checkpoints.onTurnSettled(session.cwd, session.key, msg.userTs);
+        const ckptSessionId = session.piSessionId ?? session.registry?.sessionId;
+        if (msg.phase === "agent_settled" && msg.userTs && this.checkpoints && ckptSessionId) {
+          void this.checkpoints.onTurnSettled(session.cwd, ckptSessionId, msg.userTs).catch((err) => {
+            console.error("[checkpoints] failed to capture after-snapshot", err);
+          });
         }
       }
       this.sendToWindow(IPC.evtBridge, { key, message: msg });
@@ -234,7 +254,7 @@ export class MainSessionManager {
       if (response.success) {
         return { ok: true, data: (response as { data?: unknown }).data };
       }
-      return { ok: false, error: response.error };
+      return { ok: false, error: response.error || "RPC command failed" };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }

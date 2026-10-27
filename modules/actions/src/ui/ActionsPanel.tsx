@@ -84,9 +84,19 @@ export const ActionsPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
 
   const repoName = repo ? `${repo.owner}/${repo.repo}` : null;
   const noRepo = error?.code === "not_github" || error?.code === "no_remote";
-  const needsToken = error?.code === "unauthorized" || error?.code === "not_found" || error?.code === "rate_limited" || (repo?.tokenSource === "none" && runs.length > 0);
+  const needsToken =
+    error?.code === "unauthorized" ||
+    error?.code === "not_found" ||
+    error?.code === "rate_limited" ||
+    repo?.tokenSource === "none";
   const tokenHint =
-    error?.code === "rate_limited" ? "Rate limit reached. A token raises it." : error?.code === "not_found" ? "Private repo? A token gives access." : "Add a token for private repos and a higher rate limit.";
+    error?.code === "rate_limited"
+      ? "Rate limit reached. A token raises it."
+      : error?.code === "not_found"
+        ? "Private repo? Install GitHub CLI or add a token."
+        : repo?.tokenSource === "none"
+          ? "Install GitHub CLI or add a token"
+          : "Add a token for private repos and a higher rate limit.";
   const filtered = filters.status !== "all" || filters.workflowId !== null || filters.branch !== "all";
   const firstLoad = loading && runs.length === 0;
 

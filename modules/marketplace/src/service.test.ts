@@ -40,11 +40,10 @@ describe("MarketplaceService", () => {
     fetchSpy.mockRestore();
   });
 
-  it("handles network failure gracefully", async () => {
+  it("throws on network failure", async () => {
     const service = new MarketplaceService();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("network error"));
-    const results = await service.search("", "pi-npm");
-    expect(results).toEqual([]);
+    await expect(service.search("", "pi-npm")).rejects.toThrow("Couldn't reach marketplace");
     fetchSpy.mockRestore();
   });
 });

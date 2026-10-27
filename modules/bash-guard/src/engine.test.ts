@@ -98,7 +98,8 @@ describe("segment extraction (facade)", () => {
 
 const POSITIVES: Case[] = [
   // --- filesystem
-  ["rm -rf /tmp/data", "fs-recursive-delete"],
+  ["rm -r some_folder", "fs-recursive-delete"],
+  ["rm -r /tmp/data", "fs-recursive-delete"],
   ["/bin/rm -rf build", "fs-recursive-delete"],
   ["rm.exe -rf build", "fs-recursive-delete"],
   ["rm -r -f dir", "fs-recursive-delete"],
@@ -195,6 +196,7 @@ const POSITIVES: Case[] = [
   ["git checkout -f main", "git-checkout-discard"],
   ["git checkout -- src/a.ts", "git-checkout-discard"],
   ["git checkout HEAD -- src/a.ts", "git-checkout-discard"],
+  ["git restore src/a.ts", "git-checkout-discard"],
   ["git branch -D feature", "git-branch-force-del"],
   ["git branch -d -f feature", "git-branch-force-del"],
   ["git stash drop", "git-stash-drop"],
@@ -254,6 +256,8 @@ const POSITIVES: Case[] = [
 
   // --- secrets and exfiltration
   ["cat ~/.ssh/id_rsa", "secret-read"],
+  ["cat ~/.pi/agent/auth.json", "secret-read"],
+  ["cat .npmrc", "secret-read"],
   ["cat .env", "secret-read"],
   ["cat .env.production", "secret-read"],
   ["less ~/.aws/credentials", "secret-read"],

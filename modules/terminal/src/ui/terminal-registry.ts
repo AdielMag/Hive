@@ -274,14 +274,14 @@ function addEntry(info: TerminalSessionInfo, replay?: { scrollback: string; seq:
       void restartEntry(e);
       return;
     }
-    void invoke(TerminalMethods.write, { id: e.id, data });
+    void invoke(TerminalMethods.write, { id: e.id, data }).catch(() => {});
   });
   term.onTitleChange((raw) => {
     if (entry.customTitle || !raw.trim()) return;
     const title = prettyTitle(raw);
     entry.info = { ...entry.info, title };
     updateTab(entry.id, { title });
-    void invoke(TerminalMethods.rename, { id: entry.id, title });
+    void invoke(TerminalMethods.rename, { id: entry.id, title }).catch(() => {});
   });
   term.attachCustomKeyEventHandler((e) => handleKey(entry, e));
 
@@ -390,7 +390,7 @@ function fitEntry(e: Entry): void {
   e.sentCols = cols;
   e.sentRows = rows;
   lastDims = { cols, rows };
-  if (e.exitCode === null) void invoke(TerminalMethods.resize, { id: e.id, cols, rows });
+  if (e.exitCode === null) void invoke(TerminalMethods.resize, { id: e.id, cols, rows }).catch(() => {});
 }
 
 /** Re-fit the visible terminal (call on container resize). */
@@ -549,23 +549,31 @@ export function renameTab(id: string, title: string): void {
   e.customTitle = true;
   e.info = { ...e.info, title: next };
   updateTab(id, { title: next });
-  void invoke(TerminalMethods.rename, { id, title: next });
+  void invoke(TerminalMethods.rename, { id, title: next }).catch(() => {});
 }
 
-/** Restart the shell of the active tab: kill it and open a replacement next to it. */
+/** Restart the shell of the active tab: create replacement first, then close old; on failure keep old and show error. */
 export async function restartActive(): Promise<void> {
   const id = state.activeId;
   const e = id ? entries.get(id) : undefined;
   if (!e) return;
   const { cwd, shell } = e.info;
   const idx = state.tabs.findIndex((t) => t.id === e.id);
-  closeTab(e.id);
-  const created = await invoke<TerminalSessionInfo>(TerminalMethods.create, { cwd, shell, cols: lastDims.cols, rows: lastDims.rows }).catch(() => null);
-  if (!created) return;
-  addEntry(created);
-  const tabs = [...state.tabs.filter((t) => t.id !== created.id)];
-  tabs.splice(Math.min(idx, tabs.length), 0, { id: created.id, title: created.title, shellLabel: created.shellLabel, exitCode: null });
-  setState({ tabs, activeId: created.id });
+  try {
+    const created = await invoke<TerminalSessionInfo>(TerminalMethods.create, { cwd, shell, cols: lastDims.cols, rows: lastDims.rows });
+    closeTab(e.id);
+    addEntry(created);
+    const tabs = [...state.tabs.filter((t) => t.id !== created.id)];
+    tabs.splice(Math.min(idx, tabs.length), 0, { id: created.id, title: created.title, shellLabel: created.shellLabel, exitCode: null });
+    setState({ tabs, activeId: created.id });
+  } catch (err) {
+    if (host) {
+      host.toast({
+        message: `Failed to restart terminal: ${err instanceof Error ? err.message : String(err)}`,
+        kind: "error",
+      });
+    }
+  }
 }
 
 /** `terminal.run`: type a command into the active shell (creating one when needed). */
@@ -578,7 +586,7 @@ export async function runCommand(h: ModuleHost, command: string, cwd?: string): 
   setState({ activeId: id });
   if (h?.sound) h.sound.play("terminal_command");
   else window.dispatchEvent(new CustomEvent("hive-sound:play", { detail: { sound: "terminal_command" } }));
-  await invoke(TerminalMethods.write, { id, data: command + "\r" });
+  await invoke(TerminalMethods.write, { id, data: command + "\r" }).catch(() => {});
 }
 
 /** Paste file paths (quoted when they contain spaces) as typed input. */

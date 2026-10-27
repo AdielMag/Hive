@@ -14,7 +14,10 @@ export default defineMainModule({
   activate(ctx) {
     const tokens = createTokenProvider(() => ctx.paths.moduleData());
     const login = createGhLogin(() => tokens.invalidate());
-    const github = createGithubClient({ getToken: async () => (await tokens.resolve()).token });
+    const github = createGithubClient({
+      getToken: async () => (await tokens.resolve()).token,
+      fetchImpl: fetch,
+    });
     const h = ctx.ipc.handle;
 
     h(M.repo, async (cwd: string): Promise<ActionsResult<ActionsRepo>> => {
@@ -42,5 +45,9 @@ export default defineMainModule({
     h(M.login, () => login.start());
     h(M.loginStatus, () => login.status());
     h(M.loginCancel, () => login.cancel());
+
+    return () => {
+      login.cancel();
+    };
   },
 });

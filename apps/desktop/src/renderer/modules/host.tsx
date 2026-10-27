@@ -59,6 +59,7 @@ function useFeatureModel(featureId: string): ResolvedFeatureModelLite {
 }
 
 const useSessionCatalog = (): SessionCatalogLite[] => useSessionStore((s) => s.allSessions);
+const useProjects = () => useSessionStore((s) => s.projects);
 
 function useTheme() {
   const theme = useAppearance((s) => s.theme);
@@ -189,7 +190,7 @@ export function createModuleHost(moduleId: string): ModuleHost {
       loadCatalog: () => useSessionStore.getState().loadModelsCatalog(),
     },
     storage: { get: (key) => getStoredItem(key), set: (key, value) => setStoredItem(key, value) },
-    hooks: { useSessionCatalog, useFeatureModel, useActiveSession, useTheme },
+    hooks: { useSessionCatalog, useFeatureModel, useActiveSession, useProjects, useTheme },
     clipboard: {
       copy: copyText,
       copyImage: copyImageToClipboard,

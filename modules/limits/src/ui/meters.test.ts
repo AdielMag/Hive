@@ -42,6 +42,20 @@ describe("buildMeters", () => {
     expect(m.map((x) => x.active)).toEqual([undefined, undefined]);
   });
 
+  it("handles antigravity with only one group", () => {
+    const onlyGemini: ProviderQuota = { ...agy, groups: [grp("gemini-models", "Gemini Models", 80, 50)] };
+    const m = buildMeters([onlyGemini], { provider: "antigravity", id: "gemini-3-flash" });
+    expect(m).toHaveLength(1);
+    expect(m[0]!.pool).toBe("Gemini");
+    expect(m[0]!.active).toBe(true);
+  });
+
+  it("supports google-antigravity as providerId", () => {
+    const agy2: ProviderQuota = { ...agy, providerId: "google-antigravity" };
+    const m = buildMeters([agy2]);
+    expect(m.map((x) => x.pool)).toEqual(["Gemini", "Claude·GPT"]);
+  });
+
   it("keeps one worst-of meter for other providers and skips non-ok ones", () => {
     const claude: ProviderQuota = { ...agy, providerId: "anthropic", groups: [grp("claude", "Claude subscription", 40, 20)] };
     const bad: ProviderQuota = { ...agy, providerId: "openai-codex", status: "error", groups: [] };

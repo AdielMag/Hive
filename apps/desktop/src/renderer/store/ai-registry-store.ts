@@ -18,6 +18,22 @@ export const useAiRegistryStore = create<AiRegistryState>((set, get) => ({
     if (initStarted) return;
     initStarted = true;
 
+    // Drop registries of sessions whose tab was closed (only keys we once saw on a tab, so early registries survive).
+    let seenKeys = new Set<string>();
+    useSessionStore.subscribe((state) => {
+      const current = new Set<string>();
+      for (const t of state.tabs) if (t.activeKey) current.add(t.activeKey);
+      const gone = [...seenKeys].filter((k) => !current.has(k));
+      seenKeys = current;
+      if (gone.length === 0) return;
+      set((s) => {
+        if (!gone.some((k) => k in s.byKey)) return {};
+        const byKey = { ...s.byKey };
+        for (const k of gone) delete byKey[k];
+        return { byKey };
+      });
+    });
+
     // Listen for live bridge records from active sessions
     if (typeof window !== "undefined" && window.studio?.onBridgeMessage) {
       window.studio.onBridgeMessage((event) => {

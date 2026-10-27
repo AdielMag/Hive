@@ -19,7 +19,7 @@ import "../styles/worktree.css";
 
 const POLL_MS = 15_000;
 
-type Notice = { kind: "ok" | "error"; text: string };
+type Notice = { kind: "ok" | "error" | "info"; text: string };
 
 export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const activeTabId = useSessionStore((s) => s.activeTabId);
@@ -142,7 +142,7 @@ export const WorktreeBar: React.FC<{ tabId?: string }> = ({ tabId }) => {
       setMerged(`Conflicts resolved and merged into ${wt.baseBranch}.`);
       toast({ kind: "success", message: `Merged ${wt.branch} into ${wt.baseBranch}` });
     } else {
-      setNotice({ kind: "error", text: "Merge aborted. Nothing was changed." });
+      setNotice({ kind: "info", text: "Merge aborted. Nothing was changed." });
     }
     void refresh();
   };

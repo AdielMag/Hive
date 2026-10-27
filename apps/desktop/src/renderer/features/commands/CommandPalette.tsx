@@ -10,6 +10,7 @@ import { usePalette } from "./palette-store.ts";
 import { COMMANDS, COMMANDS_BY_ID, useCommandsVersion } from "./registry.ts";
 import { getShortcutLabel } from "./useShortcut.ts";
 import { fuzzyMatch } from "./fuzzy.ts";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../../store/session-store.ts";
 import "./command-palette.css";
 
@@ -54,6 +55,38 @@ const Highlighted: React.FC<{ text: string; ranges: Array<[number, number]> }> =
   return <span>{elements}</span>;
 };
 
+const FILE_CACHE_TTL_MS = 30_000;
+const paletteFilesCache = new Map<string, { files: FlatFile[]; timestamp: number }>();
+const pendingPaletteFiles = new Map<string, Promise<FlatFile[]>>();
+
+function loadPaletteFiles(projectPath: string): Promise<FlatFile[]> {
+  const cached = paletteFilesCache.get(projectPath);
+  if (cached && Date.now() - cached.timestamp < FILE_CACHE_TTL_MS) return Promise.resolve(cached.files);
+  let p = pendingPaletteFiles.get(projectPath);
+  if (!p) {
+    p = window.studio
+      .listFiles(projectPath)
+      .then((tree: any[]) => {
+        const flat: FlatFile[] = [];
+        const walk = (nodes: any[]) => {
+          for (const n of nodes ?? []) {
+            if (n.isDirectory && n.children) walk(n.children);
+            else if (!n.isDirectory) {
+              flat.push({ name: n.name, relativePath: n.relativePath || n.name, path: n.path });
+            }
+          }
+        };
+        walk(tree || []);
+        paletteFilesCache.set(projectPath, { files: flat, timestamp: Date.now() });
+        return flat;
+      })
+      .catch(() => [] as FlatFile[])
+      .finally(() => pendingPaletteFiles.delete(projectPath));
+    pendingPaletteFiles.set(projectPath, p);
+  }
+  return p;
+}
+
 export const CommandPalette: React.FC = () => {
   const commandsVersion = useCommandsVersion((s) => s.version);
   const { open, query, close, setQuery, pushRecent, recents } = usePalette();
@@ -63,36 +96,32 @@ export const CommandPalette: React.FC = () => {
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const { activeProject, projects, allSessions, tabs, activeTabId, openSessionTab, switchTab } =
-    useSessionStore();
+    useSessionStore(
+      useShallow((s) => ({
+        activeProject: s.activeProject,
+        projects: s.projects,
+        allSessions: s.allSessions,
+        tabs: s.tabs,
+        activeTabId: s.activeTabId,
+        openSessionTab: s.openSessionTab,
+        switchTab: s.switchTab,
+      })),
+    );
 
-  // Load project files in background for quick file jump
+  // Load project files lazily only when palette is open
   useEffect(() => {
-    if (!activeProject?.path) {
+    if (!open || !activeProject?.path) {
       setFiles([]);
       return;
     }
     let cancelled = false;
-    window.studio
-      .listFiles(activeProject.path)
-      .then((tree: any[]) => {
-        if (cancelled) return;
-        const flat: FlatFile[] = [];
-        const walk = (nodes: any[]) => {
-          for (const n of nodes) {
-            if (n.isDirectory && n.children) walk(n.children);
-            else if (!n.isDirectory) {
-              flat.push({ name: n.name, relativePath: n.relativePath || n.name, path: n.path });
-            }
-          }
-        };
-        walk(tree || []);
-        setFiles(flat);
-      })
-      .catch(() => {});
+    void loadPaletteFiles(activeProject.path).then((flat) => {
+      if (!cancelled) setFiles(flat);
+    });
     return () => {
       cancelled = true;
     };
-  }, [activeProject?.path]);
+  }, [open, activeProject?.path]);
 
   // Focus and select input on open
   useEffect(() => {
@@ -208,7 +237,7 @@ export const CommandPalette: React.FC = () => {
           score: match.score + 5,
           run: () => {
             close();
-            void useSessionStore.getState().newSessionTab(p.id);
+            void useSessionStore.getState().openProjectTab(p.id);
           },
         });
       }
@@ -283,7 +312,26 @@ export const CommandPalette: React.FC = () => {
   if (!open) return null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
+    if (e.key === "Tab") {
+      // Trap focus inside the dialog.
+      const focusables = Array.from(
+        e.currentTarget.querySelectorAll<HTMLElement>("input, button, [tabindex]:not([tabindex='-1'])"),
+      ).filter((el) => !(el as HTMLButtonElement).disabled);
+      if (focusables.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !e.currentTarget.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !e.currentTarget.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
+    } else if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
       close();
@@ -312,7 +360,7 @@ export const CommandPalette: React.FC = () => {
         if (e.target === e.currentTarget) close();
       }}
     >
-      <div className="pal" role="dialog" aria-modal="true" aria-label="Command Palette">
+      <div className="pal" role="dialog" aria-modal="true" aria-label="Command Palette" onKeyDown={handleKeyDown}>
         <div className="pal__input-wrap">
           <Search size={16} className="pal__input-icon" />
           <input
@@ -321,7 +369,6 @@ export const CommandPalette: React.FC = () => {
             className="pal__input"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
             placeholder={
               isActionsMode
                 ? "Type an action..."

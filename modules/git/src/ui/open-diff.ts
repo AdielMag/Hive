@@ -10,14 +10,17 @@ export async function openDiffTab(
   project: { id: string; path: string },
   filePath: string,
   staged: boolean,
+  untracked = false,
+  cwd?: string,
 ): Promise<void> {
+  const effectiveCwd = cwd || project.path;
   let content = "";
   try {
-    content = await gitApi().getGitDiff(project.path, { staged, filePath });
+    content = await gitApi().getGitDiff(effectiveCwd, { staged, filePath, untracked });
   } catch (err) {
     content = `Failed to load diff: ${err instanceof Error ? err.message : String(err)}`;
   }
-  const data: DiffTabData = { content: content || NO_DIFF_TEXT, staged };
+  const data: DiffTabData = { content: content || NO_DIFF_TEXT, staged, cwd: effectiveCwd, untracked };
   const id = diffTabId(staged, filePath);
   const tabId = host.tabs.open({
     kind: DIFF_TAB_KIND,

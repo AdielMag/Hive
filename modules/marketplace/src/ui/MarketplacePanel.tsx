@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Check, Download, Search } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import { MarketplaceMethods, type MarketplacePackage, type MarketplaceSourceKind } from "../shared.ts";
@@ -8,17 +8,26 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const [query, setQuery] = useState("");
   const [packages, setPackages] = useState<MarketplacePackage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [installedMap, setInstalledMap] = useState<Record<string, boolean>>({});
+  const searchSeqRef = useRef(0);
 
   const search = async (q = query, k = activeKind) => {
+    const seq = ++searchSeqRef.current;
     setLoading(true);
+    setError(null);
     try {
       const items = await host.ipc.invoke<MarketplacePackage[]>(MarketplaceMethods.search, { query: q, kind: k });
+      if (seq !== searchSeqRef.current) return;
       setPackages(items ?? []);
-    } catch {
+    } catch (err: any) {
+      if (seq !== searchSeqRef.current) return;
+      setError(err?.message || "Couldn't reach marketplace — Retry");
       setPackages([]);
     } finally {
-      setLoading(false);
+      if (seq === searchSeqRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -29,7 +38,7 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const handleInstall = (pkg: MarketplacePackage) => {
     setInstalledMap((s) => ({ ...s, [pkg.id]: true }));
     host.sessions.setPrompt(`/install ${pkg.source}`);
-    host.toast({ message: `Staged /install ${pkg.name} in prompt`, kind: "info" });
+    host.toast({ message: "Staged in composer — press Enter to install", kind: "info" });
   };
 
   return (
@@ -129,7 +138,27 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
       {/* Results */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {loading && <div style={{ color: "var(--text-muted)", fontSize: 11 }}>Searching marketplace...</div>}
-        {!loading && packages.length === 0 && (
+        {error && (
+          <div style={{ color: "var(--danger)", fontSize: 11, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>{error.includes("Couldn't reach marketplace") ? error : "Couldn't reach marketplace — Retry"}</span>
+            <button
+              type="button"
+              onClick={() => void search()}
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 4,
+                color: "var(--text-primary)",
+                padding: "2px 8px",
+                fontSize: 10,
+                cursor: "pointer",
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {!loading && !error && packages.length === 0 && (
           <div style={{ color: "var(--text-muted)", fontSize: 11, fontStyle: "italic" }}>No packages found.</div>
         )}
 
@@ -194,7 +223,7 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
               >
                 {installedMap[pkg.id] ? (
                   <>
-                    <Check size={10} /> Added
+                    <Check size={10} /> Staged in composer — press Enter to install
                   </>
                 ) : (
                   <>

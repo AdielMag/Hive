@@ -15,6 +15,8 @@ const PACKAGE = "@earendil-works/pi-coding-agent";
 /** Pi extensions Hive keeps up to date alongside Pi itself. */
 const EXTENSIONS = ["pi-antigravity", "@gotgenes/pi-anthropic-auth"];
 const TIMEOUT_MS = 10_000;
+const NPM_TIMEOUT_MS = 5 * 60 * 1000;
+export const EXT_NAME_REGEX = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 
 const readVersion = (pkgJsonPath: string): string | undefined => {
   try {
@@ -37,21 +39,44 @@ async function latestOnNpm(pkg: string): Promise<string> {
 
 const errMsg = (err: unknown): string => (err instanceof Error ? (err.name === "TimeoutError" ? "request timed out" : err.message) : String(err));
 
-function runNpm(args: string[], cwd?: string): Promise<{ ok: boolean; output: string }> {
+function runNpm(args: string[], cwd?: string, timeoutMs = NPM_TIMEOUT_MS): Promise<{ ok: boolean; output: string }> {
   return new Promise((resolve) => {
     let output = "";
+    let settled = false;
     const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", args, {
       cwd,
       shell: process.platform === "win32",
       windowsHide: true,
     });
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        child.kill();
+      } catch {}
+      resolve({ ok: false, output: `npm timed out after ${Math.round(timeoutMs / 1000)}s` });
+    }, timeoutMs);
+
     const collect = (d: Buffer) => {
       output = (output + d.toString()).slice(-2000);
     };
     child.stdout.on("data", collect);
     child.stderr.on("data", collect);
-    child.on("error", (err) => resolve({ ok: false, output: `Could not run npm: ${err.message}` }));
-    child.on("close", (code) => resolve({ ok: code === 0, output: output.trim().split(/\r?\n/).slice(-3).join("\n") || `npm exited with code ${code}` }));
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok: false, output: `Could not run npm: ${err.message}` });
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        ok: code === 0,
+        output: output.trim().split(/\r?\n/).slice(-3).join("\n") || `npm exited with code ${code}`,
+      });
+    });
   });
 }
 
@@ -76,7 +101,7 @@ export class PiUpdaterService {
       const pkgPath = join(this.extensionsDir(), "package.json");
       if (existsSync(pkgPath)) {
         const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { dependencies?: Record<string, string> };
-        const deps = Object.keys(pkg.dependencies ?? {});
+        const deps = Object.keys(pkg.dependencies ?? {}).filter((d) => EXT_NAME_REGEX.test(d));
         if (deps.length > 0) {
           // Merge detected dependencies with standard ones, keeping order and uniqueness
           return Array.from(new Set([...deps, ...EXTENSIONS]));
@@ -156,6 +181,11 @@ export class PiUpdaterService {
         if (!existsSync(dir)) {
           success = false;
           messages.push(`${ext.name}: ${dir} not found`);
+          continue;
+        }
+        if (!EXT_NAME_REGEX.test(ext.name)) {
+          success = false;
+          messages.push(`Refused to install invalid extension name: ${ext.name}`);
           continue;
         }
         const res = await runNpm(["install", `${ext.name}@latest`], dir);

@@ -51,7 +51,7 @@ export const WorkbenchLayout: React.FC = () => {
   const projectsShortcut = useShortcut("view.projects");
   const settingsShortcut = useShortcut("settings.open");
 
-  const { tabs, activeTabId, error, switchTab, projects, projectsLoaded } = useSessionStore(
+  const { tabs, activeTabId, error, switchTab, projects, projectsLoaded, activeProject } = useSessionStore(
     useShallow((s) => ({
       tabs: s.tabs,
       activeTabId: s.activeTabId,
@@ -59,9 +59,14 @@ export const WorkbenchLayout: React.FC = () => {
       switchTab: s.switchTab,
       projects: s.projects,
       projectsLoaded: s.projectsLoaded,
+      activeProject: s.activeProject,
     })),
   );
-  const tabIdsKey = tabs.map((t) => t.id).join(",");
+  const visibleTabs = useMemo(() => {
+    if (!activeProject) return tabs;
+    return tabs.filter((t) => !t.projectId || t.projectId === activeProject.id);
+  }, [tabs, activeProject]);
+  const tabIdsKey = visibleTabs.map((t) => t.id).join(",");
   const tabIds = useMemo(() => (tabIdsKey ? tabIdsKey.split(",") : []), [tabIdsKey]);
   const root = usePaneLayoutStore((s) => s.root);
   const activePaneId = usePaneLayoutStore((s) => s.activePaneId);
@@ -69,8 +74,8 @@ export const WorkbenchLayout: React.FC = () => {
   const syncWithTabs = usePaneLayoutStore((s) => s.syncWithTabs);
 
   useEffect(() => {
-    syncWithTabs(tabIds, activeTabId);
-  }, [tabIds, activeTabId, syncWithTabs]);
+    syncWithTabs(tabIds, activeTabId, activeProject?.id ?? null);
+  }, [tabIds, activeTabId, activeProject?.id, syncWithTabs]);
   const ui = useUi(
     useShallow((s) => ({
       left: s.left,

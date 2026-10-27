@@ -19,6 +19,7 @@ interface Props {
   onClose: () => void;
   onReanalyze: () => void;
   isLoading: boolean;
+  isHeuristicOnly?: boolean;
   model?: ResolvedFeatureModel;
 }
 
@@ -28,6 +29,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
   onClose,
   onReanalyze,
   isLoading,
+  isHeuristicOnly,
   model,
 }) => {
   if (!isOpen) return null;
@@ -142,6 +144,43 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
 
         {/* Content Body */}
         <div style={{ padding: "18px 20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
+          {isHeuristicOnly && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 12px",
+                background: "rgba(245, 158, 11, 0.12)",
+                border: "1px solid var(--warning)",
+                borderRadius: 8,
+                fontSize: 12,
+                color: "var(--warning)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <AlertTriangle size={14} />
+                <span>Heuristic only — AI analysis failed</span>
+              </div>
+              <button
+                type="button"
+                onClick={onReanalyze}
+                disabled={isLoading}
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--warning)",
+                  borderRadius: 4,
+                  color: "var(--warning)",
+                  padding: "2px 8px",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {isLoading ? (
             <div
               style={{

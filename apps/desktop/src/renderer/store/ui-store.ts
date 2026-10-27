@@ -32,6 +32,8 @@ interface UiState extends Persisted {
   settingsOpen: boolean;
   settingsTab: SettingsTabId;
   settingsFocus: SettingsFocus | null;
+  projectTabsEnabled: boolean;
+  setProjectTabsEnabled(enabled: boolean): void;
   toggleLeft(p: LeftPanel): void;
   toggleRight(p: RightPanel): void;
   toggleBottom(p: string): void;
@@ -49,6 +51,16 @@ interface UiState extends Persisted {
 }
 
 const KEY = "hive.layout.v1";
+const PROJECT_TABS_ENABLED_KEY = "hive.project-tabs-enabled.v1";
+
+function loadProjectTabsEnabled(): boolean {
+  try {
+    const raw = getStoredItem(PROJECT_TABS_ENABLED_KEY);
+    return raw !== null ? raw === "true" : true;
+  } catch {
+    return true;
+  }
+}
 
 function load(): Persisted {
   const fallback: Persisted = { left: "projects", right: null, bottom: null, leftWidth: 268, rightWidth: 360, composerHeight: 150, bottomHeight: 380 };
@@ -75,6 +87,13 @@ export const useUi = create<UiState>((set, get) => ({
   shortcutsOpen: false,
   settingsTab: "appearance",
   settingsFocus: null,
+  projectTabsEnabled: typeof window !== "undefined" ? loadProjectTabsEnabled() : true,
+  setProjectTabsEnabled: (enabled) => {
+    set({ projectTabsEnabled: enabled });
+    try {
+      setStoredItem(PROJECT_TABS_ENABLED_KEY, String(enabled));
+    } catch {}
+  },
   toggleShortcuts: () => set((s) => ({ shortcutsOpen: !s.shortcutsOpen })),
   closeShortcuts: () => set({ shortcutsOpen: false }),
   toggleLeft: (p) => set({ left: get().left === p ? null : p }),

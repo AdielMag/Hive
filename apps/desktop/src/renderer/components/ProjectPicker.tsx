@@ -7,13 +7,17 @@ import { openProjectFolder } from "../features/commands/registry.ts";
 
 const folderName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() || p;
 
-export const ProjectPicker: React.FC = () => {
-  const { projects, activeProject, setActiveProject, newSessionTab, updateProject } = useSessionStore(
+export interface ProjectPickerProps {
+  mode?: "picker" | "dropdown-trigger";
+}
+
+export const ProjectPicker: React.FC<ProjectPickerProps> = ({ mode = "picker" }) => {
+  const { projects, activeProject, openProjectIds, openProjectTab, updateProject } = useSessionStore(
     useShallow((s) => ({
       projects: s.projects,
       activeProject: s.activeProject,
-      setActiveProject: s.setActiveProject,
-      newSessionTab: s.newSessionTab,
+      openProjectIds: s.openProjectIds,
+      openProjectTab: s.openProjectTab,
       updateProject: s.updateProject,
     })),
   );
@@ -32,17 +36,7 @@ export const ProjectPicker: React.FC = () => {
 
   const handleSelect = (p: ProjectEntry) => {
     setOpen(false);
-    if (activeProject?.id !== p.id) {
-      void setActiveProject(p);
-    }
-    const st = useSessionStore.getState();
-    const hasTab = st.tabs.some((t) => t.projectId === p.id);
-    if (!hasTab) {
-      void newSessionTab(p.id);
-    } else {
-      const firstTab = st.tabs.find((t) => t.projectId === p.id);
-      if (firstTab && st.activeTabId !== firstTab.id) void st.switchTab(firstTab.id);
-    }
+    void openProjectTab(p.id);
   };
 
   const handleOpenFolder = () => {
@@ -68,26 +62,43 @@ export const ProjectPicker: React.FC = () => {
   };
 
   return (
-    <div ref={containerRef} className="project-picker no-drag">
-      <button
-        type="button"
-        className={`project-picker__trigger${open ? " is-open" : ""}`}
-        onClick={() => setOpen(!open)}
-        title="Select Project"
-      >
-        {activeProject ? (
-          <>
-            <FolderKanban size={13} className="project-picker__icon" />
-            <span className="project-picker__name">{activeProject.name}</span>
-          </>
-        ) : (
-          <>
-            <FolderKanban size={13} className="project-picker__icon is-muted" />
-            <span className="project-picker__name is-muted">Select Project…</span>
-          </>
-        )}
-        <ChevronDown size={12} className="project-picker__caret" />
-      </button>
+    <div ref={containerRef} className={`project-picker no-drag${mode === "dropdown-trigger" ? " project-picker--compact" : ""}`}>
+      {mode === "dropdown-trigger" ? (
+        <button
+          type="button"
+          className={`project-tab-bar__dropdown-btn${open ? " is-open" : ""}`}
+          onClick={() => setOpen(!open)}
+          title="Switch or open project…"
+          aria-label="Switch or open project…"
+        >
+          <FolderKanban size={13} />
+          <ChevronDown size={11} className="project-tab-bar__caret" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={`project-picker__trigger${open ? " is-open" : ""}`}
+          onClick={() => setOpen(!open)}
+          title="Select Project"
+        >
+          {activeProject ? (
+            <>
+              {activeProject.icon ? (
+                <span className="project-picker__emoji">{activeProject.icon}</span>
+              ) : (
+                <span className="project-picker__dot" style={{ background: activeProject.color }} />
+              )}
+              <span className="project-picker__name">{activeProject.name}</span>
+            </>
+          ) : (
+            <>
+              <FolderKanban size={13} className="project-picker__icon is-muted" />
+              <span className="project-picker__name is-muted">Select Project…</span>
+            </>
+          )}
+          <ChevronDown size={12} className="project-picker__caret" />
+        </button>
+      )}
 
       {open && (
         <div className="project-picker__dropdown" role="menu">
@@ -95,6 +106,7 @@ export const ProjectPicker: React.FC = () => {
           <div className="project-picker__list">
             {projects.map((p) => {
               const isSelected = activeProject?.id === p.id;
+              const isOpenTab = openProjectIds.includes(p.id);
               return (
                 <button
                   key={p.id}
@@ -103,11 +115,19 @@ export const ProjectPicker: React.FC = () => {
                   className={`project-picker__item${isSelected ? " is-selected" : ""}`}
                   onClick={() => handleSelect(p)}
                 >
-                  <span className="project-picker__dot" style={{ background: p.color }} />
+                  {p.icon ? (
+                    <span className="project-picker__emoji">{p.icon}</span>
+                  ) : (
+                    <span className="project-picker__dot" style={{ background: p.color }} />
+                  )}
                   <span className="project-picker__item-name" title={p.path}>
                     {p.name}
                   </span>
-                  {isSelected && <Check size={13} className="project-picker__check" />}
+                  {isSelected ? (
+                    <Check size={13} className="project-picker__check" />
+                  ) : isOpenTab ? (
+                    <span className="project-picker__open-badge">Open</span>
+                  ) : null}
                 </button>
               );
             })}
