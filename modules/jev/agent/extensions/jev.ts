@@ -610,14 +610,18 @@ export async function runReadOnly(command: string, cwd: string, signal?: AbortSi
   });
 }
 
-interface AskQuestionInput {
-  type: "noul" | "choice" | "score";
-  instructions: string;
-  true_means?: string;
-  false_means?: string;
-  options?: Record<string, string>;
-  levels?: string[];
-}
+export type AskQuestionInput =
+  | string
+  | {
+      type?: "noul" | "boolean" | "bool" | "yes_no" | "yesno" | "choice" | "score" | string;
+      instructions?: string;
+      prompt?: string;
+      question?: string;
+      true_means?: string;
+      false_means?: string;
+      options?: Record<string, string>;
+      levels?: string[];
+    };
 
 /** Validates the tool's question map and converts it to the API shape. Throws a readable Error. */
 export function toApiQuestions(input: Record<string, AskQuestionInput>): Record<string, Question> {
@@ -625,20 +629,30 @@ export function toApiQuestions(input: Record<string, AskQuestionInput>): Record<
   if (names.length === 0) throw new Error("questions is empty");
   const out: Record<string, Question> = {};
   for (const name of names) {
-    const q = input[name]!;
-    if (!q || typeof q.instructions !== "string" || !q.instructions.trim()) throw new Error(`question "${name}" needs instructions`);
-    if (q.type === "noul") {
-      const criteria = q.true_means || q.false_means ? { true: q.true_means, false: q.false_means } : undefined;
-      out[name] = { type: "noul", instructions: q.instructions, ...(criteria ? { criteria } : {}) };
-    } else if (q.type === "choice") {
-      const keys = Object.keys(q.options ?? {});
+    const raw = input[name]!;
+    if (typeof raw === "string") {
+      const instructions = raw.trim();
+      if (!instructions) throw new Error(`question "${name}" needs instructions`);
+      out[name] = { type: "noul", instructions };
+      continue;
+    }
+    if (!raw || typeof raw !== "object") throw new Error(`question "${name}" needs instructions`);
+    const instructions = (raw.instructions || raw.prompt || raw.question || "").trim();
+    if (!instructions) throw new Error(`question "${name}" needs instructions`);
+
+    const qType = (raw.type || "noul").toLowerCase();
+    if (qType === "noul" || qType === "boolean" || qType === "bool" || qType === "yes_no" || qType === "yesno") {
+      const criteria = raw.true_means || raw.false_means ? { true: raw.true_means, false: raw.false_means } : undefined;
+      out[name] = { type: "noul", instructions, ...(criteria ? { criteria } : {}) };
+    } else if (qType === "choice") {
+      const keys = Object.keys(raw.options ?? {});
       if (keys.length < 2 || keys.length > 255) throw new Error(`choice question "${name}" needs 2-255 options`);
-      out[name] = { type: "choice", instructions: q.instructions, criteria: q.options! };
-    } else if (q.type === "score") {
-      if (!Array.isArray(q.levels) || q.levels.length < 2 || q.levels.length > 10) throw new Error(`score question "${name}" needs 2-10 levels`);
-      out[name] = { type: "score", instructions: q.instructions, criteria: q.levels };
+      out[name] = { type: "choice", instructions, criteria: raw.options! };
+    } else if (qType === "score") {
+      if (!Array.isArray(raw.levels) || raw.levels.length < 2 || raw.levels.length > 10) throw new Error(`score question "${name}" needs 2-10 levels`);
+      out[name] = { type: "score", instructions, criteria: raw.levels };
     } else {
-      throw new Error(`question "${name}" has unknown type "${String((q as any).type)}"`);
+      throw new Error(`question "${name}" has unknown type "${String(raw.type)}"`);
     }
   }
   return out;
@@ -751,14 +765,18 @@ const questionTypes = (questions: Record<string, Question> | undefined): Record<
 const QUESTION_SCHEMA = {
   type: "object",
   properties: {
-    type: { type: "string", enum: ["noul", "choice", "score"], description: "noul = yes/no probability, choice = pick one option, score = rate on ordered levels" },
-    instructions: { type: "string", description: "The question, or the statement to evaluate" },
-    true_means: { type: "string", description: "noul only: what counts as yes" },
-    false_means: { type: "string", description: "noul only: what counts as no" },
+    type: {
+      type: "string",
+      enum: ["boolean", "yes_no", "noul", "choice", "score"],
+      description: "boolean / yes_no / noul = yes/no probability, choice = pick one option, score = rate on ordered levels. Defaults to boolean if omitted.",
+    },
+    instructions: { type: "string", description: "The question, or statement to evaluate" },
+    true_means: { type: "string", description: "boolean/noul only: what counts as yes/true" },
+    false_means: { type: "string", description: "boolean/noul only: what counts as no/false" },
     options: { type: "object", additionalProperties: { type: "string" }, description: "choice only: option name -> when it applies (2-255 options)" },
     levels: { type: "array", items: { type: "string" }, description: "score only: ordered level descriptions, lowest first (2-10)" },
   },
-  required: ["type", "instructions"],
+  required: ["instructions"],
 } as const;
 
 // ---------------------------------------------------------------------------------------------------------
@@ -913,25 +931,24 @@ export async function runOne(item: AskItem, rc: RunContext): Promise<OneResult> 
 }
 
 const ASK_DESCRIPTION =
-  "Ask Jev, a fast typed classifier, yes/no, pick-one or rate-on-levels questions about content; it returns probabilities, not prose. " +
+  "Ask Jev, an ultra-fast typed classifier, boolean/yes-no, pick-one, or rate-on-levels questions about content; returns probabilities without polluting context window. " +
   "Pass RAW material: `files` (paths, read for you), `command` (read-only, e.g. `git diff -- src/a.ts`) or `state` text. " +
   "Input is capped (~28k tokens, ~100 KB): one file or diff per item. On Windows prefer `rg` or `git grep` over `grep`. " +
   "File and command output goes straight to Jev and never enters your context, so never pass your own summary of it. " +
   "Put all your questions in one call. For many files or commands use `items` (max 40, each counts against the daily cap): the same questions run on every item. " +
-  "Use it for verdicts over large content: classify, rate risk, \"is this X\", sort many files or diffs into groups. " +
-  "Don't ask what you already know; if you must read the content anyway, just read it. " +
-  "Answers are hints: apply your own threshold and open near-50/50 or high-risk items yourself. " +
+  "Use it to triage candidate files, score diff risk before reviews, or verify assertions on large files (logs, schemas, lockfiles). " +
+  "Questions can be simple strings (e.g. questions={ relevant: 'Does this handle authentication?' }) or typed objects (type: 'boolean' | 'choice' | 'score'). " +
   "Example, per-file risk: questions={risk:{type:\"score\",instructions:\"How risky is this diff?\",levels:[\"trivial\",\"moderate\",\"high\"]}}, " +
   "items=[{id:\"a.ts\",command:\"git diff -- src/a.ts\"},{id:\"b.ts\",command:\"git diff -- src/b.ts\"}].";
 
-const ASK_SNIPPET = "ask_jev: typed verdicts (yes/no, pick one, rate) from Jev over RAW files or command output without reading them; `items` batches up to 40";
+const ASK_SNIPPET = "ask_jev: fast typed verdicts (boolean, choice, score) from Jev over files/diffs without polluting context; `items` batches up to 40";
 
 const ASK_GUIDELINES = [
-  "Use ask_jev instead of reading when you only need a verdict on large content: classify, rate risk, check \"is this X\", sort many files or diffs into groups.",
-  "Pass raw material to ask_jev: `files` or `command` (e.g. `git diff -- path`), never your own summary of it.",
-  "Put every question in one ask_jev call; use `items` to run the same questions over many files or commands.",
-  "Don't ask Jev what you already know. If you need to read the content anyway, just read it.",
-  "Treat ask_jev answers as hints: apply your own threshold, and open anything near 50/50 or high risk yourself.",
+  "Triage candidate files with ask_jev: when screening 4+ files found by find/ls/glob, pass them to ask_jev batch `items` with a boolean question to pick which files to read.",
+  "Pre-review diff risk: before finalizing multi-file changes or delegating to reviewer, score modified files using ask_jev batch items with risk levels ['trivial','moderate','high'].",
+  "Large file inspection: for files >300 lines, logs, schemas, or lockfiles, check assertions with ask_jev instead of dumping the file into context.",
+  "Pass raw material: use `files` or read-only `command` (e.g. `git diff -- path`); never pass your own summary.",
+  "Shorthand supported: questions={ is_relevant: 'Does this file define or configure X?' } defaults to boolean yes/no.",
 ];
 
 const ITEM_SCHEMA = {
@@ -947,7 +964,16 @@ const ITEM_SCHEMA = {
 const ASK_PARAMETERS = {
   type: "object",
   properties: {
-    questions: { type: "object", additionalProperties: QUESTION_SCHEMA, description: "Named questions; answers come back under the same names" },
+    questions: {
+      type: "object",
+      additionalProperties: {
+        anyOf: [
+          QUESTION_SCHEMA,
+          { type: "string", description: "Question string shorthand (defaults to boolean yes/no)" },
+        ],
+      },
+      description: "Named questions; simple string prompt or typed question object. Answers come back under the same names",
+    },
     state: { type: "string", description: "Content the questions refer to" },
     files: { type: "array", items: { type: "string" }, description: "File paths (relative to cwd) to include as content" },
     command: { type: "string", description: "Read-only command whose output is included as content (no pipes or redirects)" },
