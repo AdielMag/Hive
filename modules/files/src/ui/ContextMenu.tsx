@@ -133,7 +133,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
             {item.shortcut && (
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   color: "var(--text-muted)",
                   marginLeft: 12,
                   fontFamily: "var(--font-mono, monospace)",

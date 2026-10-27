@@ -91,7 +91,7 @@
 /* ---- Code block chrome ---- */
 .codeblock {
   position: relative;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--code-border);
   background: var(--code-bg);
   overflow: hidden;
@@ -105,7 +105,7 @@
   padding: 0 6px 0 12px;
   background: var(--code-head);
   border-bottom: 1px solid var(--code-border);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   user-select: none;
 }
 .codeblock__lang {
@@ -126,7 +126,7 @@
 }
 .codeblock__meta {
   color: var(--code-ln);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   margin-right: 2px;
 }
 .codeblock__btn {
@@ -136,10 +136,10 @@
   height: 22px;
   padding: 0 7px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--code-ln);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
@@ -177,7 +177,7 @@
   border-top: 1px solid var(--code-border);
   background: var(--code-head);
   color: var(--code-ln);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   cursor: pointer;
 }
 @media (hover: hover) {
@@ -204,7 +204,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--code-border);
   background: var(--code-head);
   color: var(--code-ln);
@@ -224,7 +224,7 @@
 
 /* ---- Markdown ---- */
 .md {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   line-height: 1.65;
   color: var(--text-primary);
   overflow-wrap: anywhere;
@@ -248,16 +248,16 @@
   color: var(--text-primary);
 }
 .md h1 {
-  font-size: 20px;
+  font-size: var(--fs-xl);
 }
 .md h2 {
-  font-size: 17px;
+  font-size: var(--fs-lg);
 }
 .md h3 {
-  font-size: 15px;
+  font-size: var(--fs-lg);
 }
 .md h4 {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
 }
 .md ul,
 .md ol {
@@ -291,7 +291,7 @@
   margin: 0 0 10px;
   padding: 6px 12px;
   border: 1px solid color-mix(in srgb, var(--accent-base) 30%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--accent-base) 10%, var(--bg-card));
   color: var(--text-secondary);
 }
@@ -307,7 +307,7 @@
   font-family: var(--font-mono);
   font-size: 0.88em;
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   background: rgba(var(--fg-rgb), 0.07);
   border: 1px solid var(--border-subtle);
   color: var(--accent-hover);
@@ -346,7 +346,7 @@
 .md table {
   border-collapse: collapse;
   margin: 0 0 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   display: block;
   overflow-x: auto;
   max-width: 100%;
@@ -366,7 +366,7 @@
 }
 .md img {
   max-width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 /* ---- Diff ---- */

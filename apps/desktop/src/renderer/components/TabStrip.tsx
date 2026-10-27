@@ -20,6 +20,7 @@ import { hasDraft, transcriptAwaitsUser, useSessionStore } from "../store/sessio
 import { getFileManagerLabel } from "../lib/platform.ts";
 import { playUiSound } from "../store/sound-store.ts";
 import { isCoreTabKind } from "@hive/protocol";
+import { isTimestampLike, sessionDisplayTitle } from "../lib/session-title.ts";
 import { ModuleTabIcon, Slot, useModuleTabTitle } from "../modules/ModuleViews.tsx";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import { usePaneLayoutStore } from "../store/pane-layout-store.ts";
@@ -593,5 +594,13 @@ const TabIcon: React.FC<{ tab: TabItem }> = ({ tab }) => {
 
 const TabTitle: React.FC<{ tab: TabItem }> = ({ tab }) => {
   const title = useModuleTabTitle(tab);
-  return <span className="tab__title">{isCoreTabKind(tab.kind) ? tab.title : title}</span>;
+  if (!isCoreTabKind(tab.kind)) return <span className="tab__title">{title}</span>;
+  if (isTimestampLike(tab.title)) {
+    const s = useSessionStore.getState().allSessions.find((x) => x.path === tab.sessionPath);
+    if (s) {
+      const clean = sessionDisplayTitle(s, 40);
+      if (clean) return <span className="tab__title">{clean}</span>;
+    }
+  }
+  return <span className="tab__title">{tab.title}</span>;
 };

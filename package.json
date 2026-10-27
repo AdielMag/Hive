@@ -1,7 +1,7 @@
 {
   "name": "hive",
   "private": true,
-  "version": "0.39.0",
+  "version": "0.40.0",
   "author": "Hive Contributors",
   "repository": {
     "type": "git",
@@ -22,7 +22,7 @@
     "build": "npm --prefix apps/desktop run build",
     "typecheck": "node scripts/gen-modules.mjs && tsc -p packages/protocol && tsc -p packages/pi-adapter && tsc -p packages/test-provider && tsc -p packages/theme-engine && tsc -p packages/module-sdk && tsc -p modules && npm run typecheck -w @hive/desktop",
     "lint": "eslint .",
-    "lint:css": "node scripts/check-css-motion.mjs",
+    "lint:css": "node scripts/check-css-motion.mjs && node scripts/check-css-system.mjs",
     "test": "vitest run --project unit",
     "test:contract": "vitest run --project contract",
     "gen:modules": "node scripts/gen-modules.mjs",

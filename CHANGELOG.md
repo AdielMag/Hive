@@ -2,6 +2,34 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.40.0 — 2026-10-27 · [diff](https://github.com/AdielMag/Hive/compare/v0.39.0...v0.40.0)
+
+### ✨ Features
+
+- **jev:** support question shorthands and boolean aliases ([`1d4ed70`](https://github.com/AdielMag/Hive/commit/1d4ed70950eb0eac190fe8285116d2bcc2010d89))
+- **desktop:** announce agent mode switches in prompt steering ([`f268b4f`](https://github.com/AdielMag/Hive/commit/f268b4f843661c35f86d294f252113ddc9d470f0))
+- **bash-guard:** add Jev triage and plain-language descriptions ([`8e6b030`](https://github.com/AdielMag/Hive/commit/8e6b03036c194d3992b336727baf62209ff88c9a))
+- **marketplace:** redesign panel with card grid, metadata, and caching ([`bac5727`](https://github.com/AdielMag/Hive/commit/bac57275a8eca24a9c501f14e1a469d9a5c4fbdd))
+- **desktop:** display pending dialogs in inactive session panes ([`d82e531`](https://github.com/AdielMag/Hive/commit/d82e531644d1a9916587f290e0856fa7ab86cf56))
+- **desktop:** configure AI model for archiving old sessions ([`b553b0e`](https://github.com/AdielMag/Hive/commit/b553b0ecc94050d9021a0742ea3ebdb623efe420))
+
+### 🐛 Fixes
+
+- **desktop:** scope queued messages and new sessions to target pane ([`c865521`](https://github.com/AdielMag/Hive/commit/c865521daedfa0dd016beae5c9aa8c240ad99685))
+- **desktop:** isolate workspace packages in worktree node_modules ([`7880828`](https://github.com/AdielMag/Hive/commit/788082864e5ef13c89f05e0293ab32b46037a0eb))
+- **limits:** honor retry-after and bypass backoff on forced refresh ([`a1ac55f`](https://github.com/AdielMag/Hive/commit/a1ac55f4cf91993d8ff4e7a70b473c118fca2ed0))
+
+### 🧹 Other changes
+
+- **jev:** update prompt guideline assertion in jev-flow test ([`4a94d09`](https://github.com/AdielMag/Hive/commit/4a94d09ebfa75c725685325e40de7bdccf1cb86d))
+- Merge branch 'hive/when-having-multipelk-windows-and-ty-3d2ef2' ([`93c9665`](https://github.com/AdielMag/Hive/commit/93c966570a6135d07e1cc60fe84d13634d1da555))
+- Merge branch 'hive/jev-is-not-being-used-in-ask-jev-and-fb2702' ([`ba56cd6`](https://github.com/AdielMag/Hive/commit/ba56cd6d52f885f3d9ab6e4350d88505d9322f41))
+- Merge branch 'hive/bash-guard-module-is-not-great-it-as-f7c971' ([`453549c`](https://github.com/AdielMag/Hive/commit/453549ce5c413b14024279110f3b48f9995ba6d5))
+- Merge branch 'hive/marketpalce-is-very-lean-and-bad-ext-2b6292' ([`ea3b989`](https://github.com/AdielMag/Hive/commit/ea3b9892d2a5856ce5bda5766f5d7914aafbe2d1))
+- Merge branch 'hive/in-each-worktree-we-cant-run-npm-ans-5befee' ([`4fb1b3c`](https://github.com/AdielMag/Hive/commit/4fb1b3c1ce50dea09b4c5bea422cdb3aa1968a9b))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`53e829a`](https://github.com/AdielMag/Hive/commit/53e829a8d3115f234b919a88122dbade8a8f957e))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`b56424b`](https://github.com/AdielMag/Hive/commit/b56424bc5fb188b72094141f8431981edb53e355))
+
 ## v0.39.0 — 2026-10-26 · [diff](https://github.com/AdielMag/Hive/compare/v0.38.0...v0.39.0)
 
 ### ✨ Features

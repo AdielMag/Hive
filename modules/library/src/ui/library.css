@@ -33,24 +33,24 @@
 .lib-topbar__icon {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: grid;
   place-items: center;
   background: rgba(var(--fg-rgb), 0.06);
   border: 1px solid var(--border-subtle);
-  color: var(--accent-base);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
 .lib-topbar__heading {
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 600;
   margin: 0;
   line-height: 1.2;
 }
 
 .lib-topbar__sub {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -90,7 +90,7 @@
   justify-content: center;
   gap: 12px;
   flex: 1;
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 
 .lib-view__split {
@@ -124,7 +124,7 @@
   gap: 6px;
   padding: 0 8px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: rgba(var(--fg-rgb), 0.04);
 }
@@ -139,7 +139,7 @@
   border: none;
   background: transparent;
   outline: none;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-primary);
   min-width: 0;
 }
@@ -152,7 +152,7 @@
   display: grid;
   place-items: center;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 @media (hover: hover) {
   .lib-sidebar__clear-btn:hover {
@@ -175,11 +175,11 @@
 .lib-sidebar__kind-seg > button {
   flex: 1;
   justify-content: center;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
 }
 
 .lib-sidebar__badge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   opacity: 0.7;
   padding: 1px 4px;
   border-radius: 999px;
@@ -203,7 +203,7 @@
   justify-content: center;
   text-align: center;
   padding: 40px 16px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   gap: 8px;
 }
 .lib-sidebar__empty-icon {
@@ -216,7 +216,7 @@
   align-items: flex-start;
   gap: 9px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: transparent;
   cursor: pointer;
@@ -239,7 +239,7 @@
 .lib-item__kind-icon {
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   background: rgba(var(--fg-rgb), 0.08);
@@ -269,7 +269,7 @@
 }
 
 .lib-item__title {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -278,12 +278,11 @@
 }
 
 .lib-item__scope {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 5px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  border-radius: var(--radius-xs);
   font-weight: 600;
+  text-transform: capitalize;
 }
 .lib-item__scope--project {
   color: #22c55e;
@@ -299,7 +298,7 @@
 }
 
 .lib-item__desc {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -313,20 +312,20 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: rgba(var(--fg-rgb), 0.06);
   color: var(--text-secondary);
 }
 .lib-chip--tool {
   font-family: var(--font-mono, monospace);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 2px 6px;
 }
 .lib-chip--disallowed {
   font-family: var(--font-mono, monospace);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 2px 6px;
   color: var(--danger);
   text-decoration: line-through;
@@ -366,12 +365,12 @@
   opacity: 0.35;
 }
 .lib-view__empty-detail h2 {
-  font-size: 16px;
+  font-size: var(--fs-lg);
   color: var(--text-primary);
   margin: 0;
 }
 .lib-view__empty-detail p {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   max-width: 420px;
   line-height: 1.45;
   margin: 0;
@@ -405,7 +404,7 @@
 .lib-detail__avatar {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -427,19 +426,18 @@
 }
 
 .lib-detail__title {
-  font-size: 18px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   margin: 0;
   line-height: 1.2;
 }
 
 .lib-badge {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   padding: 2px 7px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  text-transform: capitalize;
 }
 .lib-badge--skill {
   color: #f59e0b;
@@ -471,7 +469,7 @@
 }
 
 .lib-detail__handle {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-family: var(--font-mono, monospace);
   margin-top: 2px;
 }
@@ -497,7 +495,7 @@
 }
 
 .lib-detail__desc {
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.5;
   color: var(--text-secondary);
   margin: 0;
@@ -509,8 +507,8 @@
   align-items: flex-start;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
   line-height: 1.45;
 }
 .lib-banner--error {
@@ -541,10 +539,10 @@
 }
 .lib-banner__code {
   font-family: var(--font-mono, monospace);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   background: rgba(var(--fg-rgb), 0.06);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 /* ---------- Cards & Form Fields ---------- */
@@ -571,13 +569,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .lib-card__sub {
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .lib-card__grid {
@@ -593,7 +591,7 @@
 }
 
 .lib-field__label {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-secondary);
   display: flex;
@@ -602,7 +600,7 @@
 }
 
 .lib-field__hint {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: normal;
 }
 
@@ -614,11 +612,11 @@
 .lib-input {
   height: 28px;
   padding: 0 8px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: rgba(var(--fg-rgb), 0.04);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   width: 140px;
 }
 .lib-input:focus {
@@ -633,7 +631,7 @@
   cursor: pointer;
 }
 .lib-toggle-label {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-primary);
 }
 
@@ -648,7 +646,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   margin-top: 6px;
 }
 .lib-cross-ref__chips {
@@ -699,9 +697,9 @@
 }
 
 .lib-model-picker__fuzzy-badge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: rgba(245, 158, 11, 0.15);
   color: #d97706;
 }
@@ -734,7 +732,7 @@
   border: none;
   background: transparent;
   outline: none;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-primary);
 }
 .lib-model-picker__clear-btn {
@@ -756,10 +754,8 @@
   margin-top: 6px;
 }
 .lib-model-picker__group-title {
-  font-size: 10px;
+  font-size: var(--fs-sm);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--text-muted);
   padding: 4px 8px 2px;
 }
@@ -771,7 +767,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   cursor: pointer;
@@ -799,7 +795,7 @@
 
 .lib-model-picker__item-name,
 .lib-thinking-select__item-name {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text-primary);
   overflow: hidden;
@@ -809,7 +805,7 @@
 
 .lib-model-picker__item-sub,
 .lib-thinking-select__item-sub {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -822,17 +818,17 @@
 }
 
 .lib-model-picker__token-badge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: rgba(var(--fg-rgb), 0.06);
   color: var(--text-secondary);
 }
 
 .lib-model-picker__reasoning-badge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: rgba(168, 85, 247, 0.15);
   color: #a855f7;
 }
@@ -846,7 +842,7 @@
 .lib-model-picker__empty {
   padding: 16px;
   text-align: center;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
 }
 
 /* ---------- Sections Container ---------- */
@@ -871,7 +867,7 @@
 }
 
 .lib-sections-toolbar__title {
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 600;
   margin: 0;
   color: var(--text-primary);
@@ -893,7 +889,7 @@
 
 .lib-section-card {
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
   transition: border-color 0.12s ease;
@@ -926,10 +922,10 @@
 }
 
 .lib-section-card__level-badge {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   letter-spacing: 0.04em;
   background: rgba(var(--fg-rgb), 0.08);
   color: var(--text-secondary);
@@ -948,7 +944,7 @@
 }
 
 .lib-section-card__title {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   margin: 0;
   color: var(--text-primary);
@@ -962,18 +958,18 @@
 .lib-section-card__content {
   padding: 14px 18px 18px;
   border-top: 1px solid var(--border-subtle);
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.6;
 }
 
 .lib-section-card__empty-content {
   font-style: italic;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 
 .lib-raw-view {
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 
 /* ======================================================================
@@ -1002,10 +998,10 @@
   height: 22px;
   padding: 0 7px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -1021,7 +1017,7 @@
   font-weight: 550;
 }
 .lib-scope-tabs__n {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   opacity: 0.65;
   font-variant-numeric: tabular-nums;
 }
@@ -1030,7 +1026,7 @@
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   cursor: pointer;
   white-space: nowrap;
@@ -1064,10 +1060,8 @@
   padding: 6px 8px 4px;
   background: var(--bg-app);
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: var(--fs-sm);
   font-weight: 650;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 .lib-group__count {
   display: inline-grid;
@@ -1078,7 +1072,7 @@
   border-radius: 999px;
   background: rgba(var(--fg-rgb), 0.08);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   letter-spacing: 0;
   text-transform: none;
@@ -1128,8 +1122,9 @@
 .lib-item__scope {
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 5px;
+  text-transform: capitalize;
 }
 .lib-item__scope + .lib-item__scope {
   margin-left: 0;
@@ -1147,7 +1142,7 @@
   width: 18px;
   height: 18px;
   padding: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -1174,7 +1169,7 @@
   }
 }
 .lib-item__desc {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1.4;
   color: var(--text-muted);
   -webkit-line-clamp: 1;
@@ -1183,8 +1178,9 @@
   color: var(--text-secondary);
 }
 .lib-item__meta {
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;);
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   opacity: 0.85;
   overflow: hidden;
@@ -1226,8 +1222,9 @@
 }
 .lib-badge {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 2px 6px;
+  text-transform: capitalize;
 }
 .lib-detail__actions {
   gap: 4px;
@@ -1242,7 +1239,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono, monospace);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -1273,29 +1270,29 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 .lib-setting-row__hint {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 button.lib-chip {
   border: 1px solid var(--border-subtle);
   font: inherit;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
 }
 .lib-chip--file {
   font-family: var(--font-mono, monospace);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   padding: 3px 7px;
 }
 
 /* -- Content sections -- */
 .lib-sections-toolbar__title {
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .lib-sections-toolbar__right {
   gap: 4px;
@@ -1340,7 +1337,7 @@ button.lib-chip {
   border: none;
   background: none;
   color: var(--accent-base);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   cursor: pointer;
 }
 @media (hover: hover) {

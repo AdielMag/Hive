@@ -31,10 +31,23 @@ export function pickTitleModel(
   return active ? full(active) : undefined;
 }
 
-/** Preferred title for a catalog session: user rename → LLM title → Pi session name → first prompt. */
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[T_]\d{2}[-_]\d{2}/;
+
+/** Returns true if a string looks like a raw ISO session timestamp (`2026-10-27T17-24-22...`). */
+export function isTimestampLike(s: string | undefined | null): boolean {
+  return !s ? false : ISO_TIMESTAMP.test(s.trim());
+}
+
+/** Preferred title for a catalog session: user rename → LLM title → Pi session name (if not raw date) → first prompt. */
 export function sessionDisplayTitle(
   s: { title?: string; aiTitle?: string; name?: string; firstMessage?: string },
   max = 80,
 ): string {
-  return s.title?.trim() || s.aiTitle?.trim() || s.name?.trim() || titleFromPrompt(s.firstMessage, max) || "";
+  const custom = s.title?.trim();
+  if (custom && !isTimestampLike(custom)) return custom;
+  const ai = s.aiTitle?.trim();
+  if (ai) return ai;
+  const name = s.name?.trim();
+  if (name && !isTimestampLike(name)) return name;
+  return titleFromPrompt(s.firstMessage, max) || (!isTimestampLike(custom) ? custom : "") || (!isTimestampLike(name) ? name : "") || "Session";
 }

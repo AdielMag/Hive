@@ -36,7 +36,7 @@ import { openLink } from "../modules/link-bus.ts";
 import type { OpenTabSpec } from "@hive/module-sdk/renderer";
 import { playUiSound } from "./sound-store.ts";
 import { toast } from "../modules/toast-store.ts";
-import { NEW_SESSION_TITLE, pickTitleModel, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
+import { isTimestampLike, NEW_SESSION_TITLE, pickTitleModel, sessionDisplayTitle, titleFromPrompt } from "../lib/session-title.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { parseAgentResultText, type SubagentView } from "../lib/ai/subagents.ts";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
@@ -1874,9 +1874,13 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     try {
       const { entries, leafId } = await window.studio.readSessionFile(sessionPath);
       const t = applyEntries(createTranscript(), entries, leafId, "replace");
+      const firstUserMsg = t.messages.find((m) => m.role === "user");
+      const cleanTitle =
+        firstUserMsg && isTimestampLike(newTab.title) ? titleFromPrompt(firstUserMsg.text, 40) : undefined;
       set((s) => ({
         transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
         ...(s.displayedTabId === tabId ? { transcript: t } : {}),
+        ...(cleanTitle ? { tabs: s.tabs.map((tab) => (tab.id === tabId ? { ...tab, title: cleanTitle } : tab)) } : {}),
       }));
     } catch (err) {
       console.error("Failed to read cold session", err);

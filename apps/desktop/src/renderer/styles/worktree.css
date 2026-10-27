@@ -10,7 +10,7 @@
   padding: 0 12px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-secondary);
 }
 
@@ -26,11 +26,12 @@
   min-width: 0;
   max-width: 48%;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: rgba(var(--fg-rgb), 0.05);
   border: 1px solid rgba(var(--fg-rgb), 0.08);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
 }
 
 .wt-bar__branch-icon {
@@ -48,7 +49,7 @@
 
 .wt-bar__arrow {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   flex-shrink: 0;
 }
 
@@ -57,6 +58,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Badges list */
@@ -72,8 +74,8 @@
   align-items: center;
   gap: 4px;
   padding: 2px 7px;
-  border-radius: 12px;
-  font-size: 10.5px;
+  border-radius: var(--radius-lg);
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
@@ -122,7 +124,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .wt-bar__msg.is-error {
@@ -151,7 +153,7 @@
 
 /* Discard button styling */
 .wt-bar__btn--discard {
-  color: var(--danger);
+  color: var(--text-muted);
   margin-right: 12px;
   position: relative;
   transition: background 0.12s ease, color 0.12s ease;
@@ -189,15 +191,16 @@
 
 /* Auto commit button styling */
 .wt-bar__btn--autocommit {
-  background: rgba(var(--accent-rgb, 99, 102, 241), 0.1);
-  color: var(--accent-base);
-  border-color: rgba(var(--accent-rgb, 99, 102, 241), 0.25);
+  background: rgba(var(--fg-rgb), 0.04);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
 }
 
 @media (hover: hover) {
   .wt-bar__btn--autocommit:hover:not(:disabled) {
-    background: rgba(var(--accent-rgb, 99, 102, 241), 0.18);
-    border-color: rgba(var(--accent-rgb, 99, 102, 241), 0.4);
+    background: rgba(var(--fg-rgb), 0.08);
+    color: var(--text-primary);
+    border-color: var(--border-prominent);
   }
 }
 
@@ -216,11 +219,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: rgba(var(--fg-rgb), 0.06);
   color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
 }
 
 /* New-session button when "work in main tree" is on */
@@ -235,14 +239,14 @@
   padding: 16px 18px 14px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-prominent);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
   color: var(--text-primary);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   animation: pop-in 0.14s ease;
 }
 .choice-dialog__title {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 600;
   margin-bottom: 8px;
 }
@@ -267,13 +271,14 @@
 .tidy-wt__list { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .tidy-wt__row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 6px 8px; border: 1px solid var(--border-subtle, var(--border-prominent)); border-radius: 8px;
+  padding: 6px 8px; border: 1px solid var(--border-subtle, var(--border-prominent)); border-radius: var(--radius-md);
 }
 .tidy-wt__info { min-width: 0; }
-.tidy-wt__branch { font-family: var(--font-mono, monospace); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tidy-wt__meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--text-secondary); }
+.tidy-wt__branch { font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tidy-wt__meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: var(--fs-xs); color: var(--text-secondary); }
 .tidy-wt__warn { color: var(--warning); }
-.tidy-wt__select { flex: none; font-size: 12px; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-prominent); border-radius: 6px; padding: 3px 6px; }
+.tidy-wt__select { flex: none; font-size: var(--fs-sm); background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-prominent); border-radius: var(--radius-sm); padding: 3px 6px; }
 
 /* Merged: the whole bar becomes a "finished" call to action. */
 .wt-bar--merged {

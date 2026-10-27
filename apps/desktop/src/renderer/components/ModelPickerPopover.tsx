@@ -262,10 +262,8 @@ export const ModelPickerPopover: React.FC<Props> = ({ anchor, feature, onClose }
 
   const sectionLabel: React.CSSProperties = {
     padding: "6px 10px 2px",
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: 600,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
     color: "var(--text-muted)",
   };
 
@@ -344,7 +342,7 @@ export const ModelPickerPopover: React.FC<Props> = ({ anchor, feature, onClose }
             <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
               {r.icon}
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
-              {r.hint && <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{r.hint}</span>}
+              {r.hint && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{r.hint}</span>}
             </span>
             {r.active && <Check size={12} style={{ flexShrink: 0 }} />}
           </div>
@@ -387,7 +385,7 @@ export const ModelPickerPopover: React.FC<Props> = ({ anchor, feature, onClose }
                     <span
                       title={`Context window: ${m.contextWindow?.toLocaleString()} tokens`}
                       style={{
-                        fontSize: 9,
+                        fontSize: 11,
                         padding: "1px 4px",
                         borderRadius: 3,
                         background: "var(--bg-card)",
@@ -420,7 +418,7 @@ export const ModelPickerPopover: React.FC<Props> = ({ anchor, feature, onClose }
           padding: "6px 10px",
           borderTop: "1px solid var(--border-subtle)",
           background: "var(--bg-card)",
-          fontSize: 10,
+          fontSize: 11,
           color: "var(--text-muted)",
         }}
       >
@@ -438,7 +436,7 @@ export const ModelPickerPopover: React.FC<Props> = ({ anchor, feature, onClose }
             background: "transparent",
             border: "none",
             color: "var(--accent-base)",
-            fontSize: 10,
+            fontSize: 11,
             cursor: "pointer",
             padding: 0,
             fontWeight: 500,

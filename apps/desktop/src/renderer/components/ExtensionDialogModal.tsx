@@ -37,7 +37,7 @@ export const ExtensionDialogModal: React.FC = () => {
           width: 440,
           background: "var(--bg-elevated)",
           border: "1px solid var(--border-prominent)",
-          borderRadius: 8,
+          borderRadius: "var(--radius-lg)",
           padding: 20,
           boxShadow: "0 12px 32px rgba(0, 0, 0, 0.4)",
           display: "flex",
@@ -45,12 +45,12 @@ export const ExtensionDialogModal: React.FC = () => {
           gap: 14,
         }}
       >
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+        <div style={{ fontSize: "var(--fs-base)", fontWeight: 600, color: "var(--text-primary)" }}>
           {"title" in pendingUiDialog ? pendingUiDialog.title : "Extension Request"}
         </div>
 
         {"message" in pendingUiDialog && pendingUiDialog.message && (
-          <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+          <div style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)", lineHeight: 1.4 }}>
             {pendingUiDialog.message}
           </div>
         )}
@@ -60,14 +60,16 @@ export const ExtensionDialogModal: React.FC = () => {
             {pendingUiDialog.options?.map((opt) => (
               <button
                 key={opt}
+                className="ui-btn ui-btn--ghost"
                 onClick={() => respondDialog({ type: "extension_ui_response", id, value: opt })}
                 style={{
                   padding: "8px 12px",
-                  borderRadius: 4,
+                  borderRadius: "var(--radius-sm)",
                   border: "1px solid var(--border-subtle)",
                   background: "var(--bg-card)",
                   color: "var(--text-primary)",
                   textAlign: "left",
+                  justifyContent: "flex-start",
                   cursor: "pointer",
                 }}
               >
@@ -80,29 +82,14 @@ export const ExtensionDialogModal: React.FC = () => {
         {method === "confirm" && (
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
             <button
+              className="ui-btn ui-btn--sm ui-btn--ghost"
               onClick={() => respondDialog({ type: "extension_ui_response", id, confirmed: false })}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 4,
-                border: "1px solid var(--border-subtle)",
-                background: "transparent",
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-              }}
             >
               No
             </button>
             <button
+              className="ui-btn ui-btn--sm ui-btn--primary"
               onClick={() => respondDialog({ type: "extension_ui_response", id, confirmed: true })}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 4,
-                border: "none",
-                background: "var(--accent-base)",
-                color: "var(--accent-contrast)",
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
             >
               Yes
             </button>
@@ -119,7 +106,7 @@ export const ExtensionDialogModal: React.FC = () => {
               autoFocus
               style={{
                 padding: "8px 10px",
-                borderRadius: 4,
+                borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--border-prominent)",
                 background: "var(--bg-input)",
                 color: "var(--text-primary)",
@@ -127,28 +114,14 @@ export const ExtensionDialogModal: React.FC = () => {
             />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button
+                className="ui-btn ui-btn--sm ui-btn--ghost"
                 onClick={() => respondDialog({ type: "extension_ui_response", id, cancelled: true })}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 4,
-                  border: "1px solid var(--border-subtle)",
-                  background: "transparent",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                }}
               >
                 Cancel
               </button>
               <button
+                className="ui-btn ui-btn--sm ui-btn--primary"
                 onClick={() => respondDialog({ type: "extension_ui_response", id, value: inputText })}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 4,
-                  border: "none",
-                  background: "var(--accent-base)",
-                  color: "var(--accent-contrast)",
-                  cursor: "pointer",
-                }}
               >
                 Submit
               </button>
@@ -164,38 +137,24 @@ export const ExtensionDialogModal: React.FC = () => {
               rows={8}
               style={{
                 padding: "8px 10px",
-                borderRadius: 4,
+                borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--border-prominent)",
                 background: "var(--bg-input)",
                 color: "var(--text-primary)",
                 fontFamily: "var(--font-mono)",
-                fontSize: 12,
+                fontSize: "var(--fs-sm)",
               }}
             />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button
+                className="ui-btn ui-btn--sm ui-btn--ghost"
                 onClick={() => respondDialog({ type: "extension_ui_response", id, cancelled: true })}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 4,
-                  border: "1px solid var(--border-subtle)",
-                  background: "transparent",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                }}
               >
                 Cancel
               </button>
               <button
+                className="ui-btn ui-btn--sm ui-btn--primary"
                 onClick={() => respondDialog({ type: "extension_ui_response", id, value: inputText })}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 4,
-                  border: "none",
-                  background: "var(--accent-base)",
-                  color: "var(--accent-contrast)",
-                  cursor: "pointer",
-                }}
               >
                 Save
               </button>

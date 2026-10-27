@@ -25,7 +25,7 @@
   max-width: 40%;
 }
 .viewer__name {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -33,14 +33,14 @@
 }
 .viewer__path {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .viewer__meta {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -79,7 +79,7 @@
   max-height: 75vh;
   object-fit: contain;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   transition: transform 0.15s var(--ease-out);
 }
 .viewer__image-error,
@@ -91,7 +91,7 @@
   justify-content: center;
   gap: 12px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-base);
   padding: 32px;
 }
 .viewer__iframe {
