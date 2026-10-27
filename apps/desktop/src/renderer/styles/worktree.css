@@ -148,7 +148,7 @@
 
 /* Discard button styling */
 .wt-bar__btn--discard {
-  color: var(--danger);
+  color: var(--text-muted);
   margin-right: 12px;
   position: relative;
   transition: background 0.12s ease, color 0.12s ease;
@@ -186,15 +186,16 @@
 
 /* Auto commit button styling */
 .wt-bar__btn--autocommit {
-  background: rgba(var(--accent-rgb, 99, 102, 241), 0.1);
-  color: var(--accent-base);
-  border-color: rgba(var(--accent-rgb, 99, 102, 241), 0.25);
+  background: rgba(var(--fg-rgb), 0.04);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
 }
 
 @media (hover: hover) {
   .wt-bar__btn--autocommit:hover:not(:disabled) {
-    background: rgba(var(--accent-rgb, 99, 102, 241), 0.18);
-    border-color: rgba(var(--accent-rgb, 99, 102, 241), 0.4);
+    background: rgba(var(--fg-rgb), 0.08);
+    color: var(--text-primary);
+    border-color: var(--border-prominent);
   }
 }
 

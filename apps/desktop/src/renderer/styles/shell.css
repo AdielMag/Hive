@@ -167,8 +167,12 @@
   transform: rotate(90deg);
 }
 .msg-tool-batch__icon {
-  color: var(--accent-base, #e69740);
+  color: var(--text-muted);
   flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+.msg-tool-batch.is-open .msg-tool-batch__icon {
+  color: var(--text-primary);
 }
 .msg-tool-batch__title {
   font-weight: 600;

@@ -109,25 +109,20 @@ export const ModePicker: React.FC = () => {
           display: "flex",
           alignItems: "center",
           gap: 5,
-          background: open
-            ? "var(--bg-elevated)"
-            : activeMode.writes
-            ? "color-mix(in srgb, var(--warning) 14%, transparent)"
-            : "var(--bg-card)",
-          border: activeMode.writes
-            ? "1px solid color-mix(in srgb, var(--warning) 40%, transparent)"
-            : "1px solid var(--border-subtle)",
-          borderRadius: 4,
-          padding: "3px 8px",
-          fontSize: 11,
-          color: activeMode.writes ? "var(--warning)" : "var(--text-secondary)",
+          height: "var(--control-sm)",
+          background: open ? "var(--bg-elevated)" : "var(--bg-card)",
+          border: "1px solid var(--border-subtle)",
+          borderRadius: "var(--radius-sm)",
+          padding: "0 8px",
+          fontSize: "var(--fs-sm)",
+          color: "var(--text-primary)",
           cursor: "pointer",
           maxWidth: 140,
           minWidth: 0,
           transition: "background-color 150ms ease-out, border-color 150ms ease-out",
         }}
       >
-        <span style={{ display: "inline-flex", flexShrink: 0, color: activeMode.writes ? "var(--warning)" : "var(--text-secondary)" }}>{activeMode.icon}</span>
+        <span style={{ display: "inline-flex", flexShrink: 0, color: "var(--text-secondary)" }}>{activeMode.icon}</span>
         <span
           className="composer-hide-md"
           style={{

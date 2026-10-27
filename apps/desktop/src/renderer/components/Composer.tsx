@@ -533,7 +533,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               ? "Drop files, images or videos to attach..."
               : isRunning
               ? "Type to steer (Ctrl+Enter) or queue (Enter)..."
-              : "Ask Pi or issue a task... (Drag & drop or paste files/images/videos)"
+              : "Ask Pi or give it a task…"
           }
           style={{
             outline: "none",
@@ -563,12 +563,13 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                 flexShrink: 0,
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
-                padding: "3px 8px",
+                gap: 5,
+                height: "var(--control-sm)",
+                padding: "0 8px",
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-subtle)",
-                borderRadius: 4,
-                fontSize: 11,
+                borderRadius: "var(--radius-sm)",
+                fontSize: "var(--fs-sm)",
                 color: "var(--text-secondary)",
                 cursor: "pointer",
               }}
@@ -599,11 +600,12 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
+                  height: "var(--control-sm)",
                   background: modelPickerOpen ? "var(--bg-elevated)" : "var(--bg-card)",
                   border: "1px solid var(--border-subtle)",
-                  borderRadius: 4,
-                  padding: "3px 8px",
-                  fontSize: 11,
+                  borderRadius: "var(--radius-sm)",
+                  padding: "0 8px",
+                  fontSize: "var(--fs-sm)",
                   color: "var(--text-primary)",
                   cursor: "pointer",
                   maxWidth: "100%",
@@ -894,18 +896,19 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                 disabled={!canSend}
                 title="Send"
                 style={{
-                  transition: "transform 120ms cubic-bezier(0.23,1,0.32,1), background-color 0.15s ease, color 0.15s ease",
+                  transition: "transform 120ms var(--ease-out), background-color 0.15s ease, color 0.15s ease",
                   display: "flex",
                   alignItems: "center",
-                  gap: 4,
-                  padding: "6px 14px",
-                  borderRadius: 8,
+                  gap: 5,
+                  height: "var(--control-sm)",
+                  padding: "0 12px",
+                  borderRadius: "var(--radius-sm)",
                   border: "none",
                   background: canSend ? "var(--accent-base)" : "rgba(var(--fg-rgb), 0.06)",
                   color: canSend ? "var(--accent-contrast)" : "var(--text-muted)",
-                  fontWeight: 500,
+                  fontWeight: 600,
                   cursor: canSend ? "pointer" : "default",
-                  fontSize: 12,
+                  fontSize: "var(--fs-sm)",
                 }}
               >
                 <Send size={12} /> <span className="composer-hide-md">Send</span>
