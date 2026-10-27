@@ -442,6 +442,8 @@ export interface SessionStoreState {
   setMode: (mode: AgentMode) => void;
   clearError: () => void;
   respondDialog: (response: RpcExtensionUIResponse) => Promise<void>;
+  /** Answer a pending dialog of any tab, displayed or parked (e.g. an inactive split pane). */
+  respondTabDialog: (tabId: string, response: RpcExtensionUIResponse) => Promise<void>;
   /** Answer (or cancel) the displayed tab's pending question form. */
   respondForm: (result: Omit<StudioFormResult, "kind">) => Promise<void>;
   /** Ask the runner to terminate a running or queued subagent. Failures surface via `error`. */
@@ -2666,6 +2668,17 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     if (!activeKey) return;
     await window.studio.respondUi(activeKey, response);
     set({ pendingUiDialog: null });
+  },
+
+  respondTabDialog: async (tabId, response) => {
+    if (isDisplayed(tabId)) return get().respondDialog(response);
+    const key = get().tabs.find((t) => t.id === tabId)?.activeKey;
+    if (!key) {
+      updateTabUi(tabId, () => ({ pendingUiDialog: null }));
+      return;
+    }
+    await window.studio.respondUi(key, response);
+    updateTabUi(tabId, (ui) => (ui.pendingUiDialog?.id === response.id ? { pendingUiDialog: null } : {}));
   },
 
   respondForm: async (result) => {
