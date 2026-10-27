@@ -7,7 +7,7 @@ export default defineMainModule({
   activate(ctx) {
     const service = new MarketplaceService();
     ctx.ipc.handle(MarketplaceMethods.search, (args?: MarketplaceSearchArgs) =>
-      service.search(args?.query ?? "", args?.kind ?? "pi-npm"),
+      service.search(args?.query ?? "", args?.kind ?? "pi-npm", { force: args?.force }),
     );
   },
 });
