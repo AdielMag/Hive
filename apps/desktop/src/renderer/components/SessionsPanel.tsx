@@ -16,6 +16,7 @@ import type { SessionCatalogItem } from "@hive/protocol";
 import { transcriptAwaitsUser, useSessionStore } from "../store/session-store.ts";
 import { sessionDisplayTitle } from "../lib/session-title.ts";
 import { AiModelChip } from "./AiModelChip.tsx";
+import { ModelPickerPopover, type ModelPickerAnchor } from "./ModelPickerPopover.tsx";
 import { resolveFeatureModel, useFeatureModelStore } from "../store/feature-models-store.ts";
 import { formatAgo, formatAgoShort } from "../lib/format.ts";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu.tsx";
@@ -84,6 +85,7 @@ export const SessionsPanel: React.FC = () => {
   const [editingSessionPath, setEditingSessionPath] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [tidyPicker, setTidyPicker] = useState<ModelPickerAnchor | null>(null);
   const tidyPref = useFeatureModelStore((s) => s.config.sessionTidy);
   const defaultModel = useSessionStore((s) => s.defaultModel);
   const resolvedTidyModel = useMemo(
@@ -392,6 +394,11 @@ export const SessionsPanel: React.FC = () => {
             type="button"
             className="sessions-panel__tidy-btn"
             onClick={archiveOldWithLlm}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setTidyPicker({ x: e.clientX, y: e.clientY });
+            }}
             title={`Let the model pick old sessions and archive them · ${resolvedTidyModel.name || resolvedTidyModel.id} (${resolvedTidyModel.sourceLabel})
 Right-click to change the model`}
           >
@@ -404,10 +411,11 @@ Right-click to change the model`}
               <>
                 <Sparkles size={12} />
                 <span>Archive old</span>
-                <AiModelChip model={resolvedTidyModel} clickable={false} feature="sessionTidy" />
+                <AiModelChip model={resolvedTidyModel} clickable={false} />
               </>
             )}
           </button>
+          <ModelPickerPopover anchor={tidyPicker} feature="sessionTidy" onClose={() => setTidyPicker(null)} />
         </div>
         <label className="sessions-panel__toggle-label">
           <input
