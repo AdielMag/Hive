@@ -5,6 +5,7 @@
  * the renderer slices those buckets with `summarizeUsage` for any range / grouping.
  */
 import type { UsageBucket } from "@hive/protocol";
+import { parseTokenCount } from "./ai/subagents.ts";
 
 export interface UsageTurn {
   timestamp: number;
@@ -29,7 +30,7 @@ export function localDay(ts: number): string {
 
 /**
  * Parses one JSONL line. Returns the session cwd for the header record, a usage turn for assistant
- * messages with usage, or null. Cheap substring checks skip JSON.parse for the vast majority of lines.
+ * messages with usage or subagent runs, or null. Cheap substring checks skip JSON.parse for the vast majority of lines.
  */
 export function parseUsageLine(line: string): { cwd: string } | UsageTurn | null {
   if (line.startsWith('{"type":"session"')) {
@@ -40,16 +41,39 @@ export function parseUsageLine(line: string): { cwd: string } | UsageTurn | null
       return null;
     }
   }
-  if (!line.includes('"usage"') || !line.includes('"role":"assistant"')) return null;
+
+  const isAssistantUsage = line.includes('"usage"') && line.includes('"role":"assistant"');
+  const isSubagentResult = line.includes('"toolName":"Agent"') || line.includes('"toolName":"SubagentWorkflow"');
+  const isSubagentNotif = line.includes('"subagent-notification"');
+
+  if (!isAssistantUsage && !isSubagentResult && !isSubagentNotif) return null;
+
   try {
     const rec = JSON.parse(line) as {
       type?: string;
       timestamp?: string;
+      customType?: string;
+      details?: {
+        totalCost?: number;
+        totalTokens?: number;
+        cost?: number;
+        tokens?: string;
+        modelName?: string;
+        description?: string;
+      };
       message?: {
         role?: string;
+        toolName?: string;
         provider?: string;
         model?: string;
         timestamp?: number;
+        details?: {
+          cost?: number;
+          tokens?: string;
+          totalTokens?: number;
+          modelName?: string;
+          subagentType?: string;
+        };
         usage?: {
           input?: number;
           output?: number;
@@ -59,21 +83,84 @@ export function parseUsageLine(line: string): { cwd: string } | UsageTurn | null
         };
       };
     };
-    const msg = rec.message;
-    if (rec.type !== "message" || msg?.role !== "assistant" || !msg.usage) return null;
-    const u = msg.usage;
-    const timestamp = num(msg.timestamp) || (rec.timestamp ? Date.parse(rec.timestamp) : 0);
-    if (!timestamp) return null;
-    return {
-      timestamp,
-      provider: msg.provider || "unknown",
-      model: msg.model || "unknown",
-      input: num(u.input),
-      output: num(u.output),
-      cacheRead: num(u.cacheRead),
-      cacheWrite: num(u.cacheWrite),
-      cost: num(u.cost?.total),
-    };
+
+    // 1. Regular assistant message usage
+    if (isAssistantUsage && rec.type === "message" && rec.message?.role === "assistant" && rec.message.usage) {
+      const msg = rec.message;
+      const u = msg.usage!;
+      const timestamp = num(msg.timestamp) || (rec.timestamp ? Date.parse(rec.timestamp) : 0);
+      if (!timestamp) return null;
+      return {
+        timestamp,
+        provider: msg.provider || "unknown",
+        model: msg.model || "unknown",
+        input: num(u.input),
+        output: num(u.output),
+        cacheRead: num(u.cacheRead),
+        cacheWrite: num(u.cacheWrite),
+        cost: num(u.cost?.total),
+      };
+    }
+
+    // 2. Subagent tool result with cost / usage
+    if (isSubagentResult && rec.type === "message" && rec.message?.role === "toolResult") {
+      const msg = rec.message;
+      const details = msg.details;
+      const u = msg.usage;
+      const cost = num(details?.cost) || num(u?.cost?.total);
+      if (cost <= 0 && !u) return null;
+      const timestamp = num(msg.timestamp) || (rec.timestamp ? Date.parse(rec.timestamp) : 0);
+      if (!timestamp) return null;
+      const model = details?.modelName || "subagent";
+      const modelLower = model.toLowerCase();
+      const provider = modelLower.includes("gemini")
+        ? "google"
+        : modelLower.includes("claude")
+        ? "anthropic"
+        : modelLower.includes("gpt") || modelLower.includes("o1") || modelLower.includes("o3")
+        ? "openai"
+        : msg.provider || "subagent";
+      const tok = details?.totalTokens ?? parseTokenCount(details?.tokens);
+      return {
+        timestamp,
+        provider,
+        model,
+        input: num(u?.input) || (tok ? Math.round(tok * 0.7) : 0),
+        output: num(u?.output) || (tok ? Math.round(tok * 0.3) : 0),
+        cacheRead: num(u?.cacheRead),
+        cacheWrite: num(u?.cacheWrite),
+        cost,
+      };
+    }
+
+    // 3. Subagent background notification with totalCost
+    if (isSubagentNotif && (rec.type === "custom" || rec.type === "custom_message") && rec.customType === "subagent-notification") {
+      const d = rec.details;
+      const cost = num(d?.totalCost);
+      if (cost <= 0) return null;
+      const timestamp = rec.timestamp ? Date.parse(rec.timestamp) : 0;
+      if (!timestamp) return null;
+      const model = d?.modelName || d?.description || "subagent";
+      const modelLower = model.toLowerCase();
+      const provider = modelLower.includes("gemini")
+        ? "google"
+        : modelLower.includes("claude")
+        ? "anthropic"
+        : "subagent";
+      const tok = d?.totalTokens ?? parseTokenCount(d?.tokens);
+      return {
+        timestamp,
+        provider,
+        model,
+        input: tok ? Math.round(tok * 0.7) : 0,
+        output: tok ? Math.round(tok * 0.3) : 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost,
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -186,6 +273,25 @@ export function filterBucketsBySession(buckets: UsageBucket[], sessionPath: stri
   return buckets.filter((b) => b.session !== undefined && normalizeSessionPath(b.session) === want);
 }
 
+/** If `cwd` is within a session worktree (`<project>/.hive-worktrees/<slug>[/...]`), returns the project root. */
+export function projectRootFromCwd(cwd: string): string {
+  if (!cwd) return "";
+  const m = /^(.*?)[\\/]\.hive-worktrees[\\/][^\\/]+(?:[\\/].*)?$/.exec(cwd);
+  return m ? m[1] ?? cwd : cwd;
+}
+
+/** Buckets that belong to a given project (matched by label or root path). */
+export function filterBucketsByProject(buckets: UsageBucket[], project: string): UsageBucket[] {
+  const want = project.toLowerCase().trim();
+  return buckets.filter((b) => {
+    if (!b.cwd) return false;
+    const label = projectLabel(b.cwd).toLowerCase();
+    if (label === want) return true;
+    const root = projectRootFromCwd(b.cwd).toLowerCase().replace(/\\/g, "/");
+    return root === want || root.endsWith("/" + want);
+  });
+}
+
 /** Inclusive list of local days from `first` to `last` (YYYY-MM-DD). */
 export function daysBetween(first: string, last: string): string[] {
   const out: string[] = [];
@@ -215,8 +321,9 @@ export function lastNDays(days: number, now = Date.now()): string[] {
 
 export function projectLabel(cwd: string): string {
   if (!cwd) return "Unknown";
-  const parts = cwd.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] ?? cwd;
+  const root = projectRootFromCwd(cwd);
+  const parts = root.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] ?? root;
 }
 
 export function summarizeUsage(

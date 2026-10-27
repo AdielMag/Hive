@@ -10,6 +10,15 @@ import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { copyText } from "./lib/clipboard.ts";
 import hiveIcon from "./assets/hive-icon.png";
 
+const GH_SKIP_KEY = "hive.skipGh";
+const readGhSkip = (): boolean => {
+  try {
+    return localStorage.getItem(GH_SKIP_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
 const INSTALL_CMD = "npm install -g @earendil-works/pi-coding-agent";
 
 export const App: React.FC = () => {
@@ -17,11 +26,13 @@ export const App: React.FC = () => {
     useShallow((s) => ({ init: s.init, isInitializing: s.isInitializing, bootstrap: s.bootstrap })),
   );
 
+  const [ghSkipped, setGhSkipped] = useState(readGhSkip);
+
   useEffect(() => {
     void init();
   }, [init]);
 
-  const bootstrapped = !isInitializing && !!bootstrap?.pi?.ok && !!bootstrap?.gh?.ok;
+  const bootstrapped = !isInitializing && !!bootstrap?.pi?.ok && (!!bootstrap?.gh?.ok || ghSkipped);
   useEffect(() => {
     if (bootstrapped) void useModules.getState().init();
   }, [bootstrapped]);
@@ -39,7 +50,23 @@ export const App: React.FC = () => {
   }
 
   if (bootstrap?.pi && !bootstrap.pi.ok) return <PiMissing searched={bootstrap.pi.searched} error={bootstrap.pi.error} />;
-  if (bootstrap?.gh && !bootstrap.gh.ok) return <GhMissing searched={bootstrap.gh.searched} error={bootstrap.gh.error} platform={bootstrap.platform} />;
+  if (bootstrap?.gh && !bootstrap.gh.ok && !ghSkipped) {
+    return (
+      <GhMissing
+        searched={bootstrap.gh.searched}
+        error={bootstrap.gh.error}
+        platform={bootstrap.platform}
+        onSkip={() => {
+          try {
+            localStorage.setItem(GH_SKIP_KEY, "1");
+          } catch {
+            /* ignore */
+          }
+          setGhSkipped(true);
+        }}
+      />
+    );
+  }
 
   return (
     <ErrorBoundary label="Hive">
@@ -53,6 +80,7 @@ const PiMissing: React.FC<{ searched: string[]; error: string }> = (initial) => 
   const [result, setResult] = useState(initial);
   const [busy, setBusy] = useState<null | "check" | "locate">(null);
   const [found, setFound] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
   const nodeProblem = /Node\.js/.test(result.error) && /Pi was found/.test(result.error);
 
   const apply = (r: PiLocateResult | null) => {
@@ -62,8 +90,11 @@ const PiMissing: React.FC<{ searched: string[]; error: string }> = (initial) => 
   };
   const run = async (kind: "check" | "locate") => {
     setBusy(kind);
+    setRunError(null);
     try {
       apply(kind === "check" ? await window.studio.relocatePi() : await window.studio.choosePiLocation());
+    } catch (e) {
+      setRunError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
@@ -87,6 +118,7 @@ const PiMissing: React.FC<{ searched: string[]; error: string }> = (initial) => 
                 <button
                   className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
                   title="Copy"
+                  aria-label="Copy install command"
                   onClick={async () => {
                     if (await copyText(INSTALL_CMD)) {
                       setCopied(true);
@@ -111,6 +143,11 @@ const PiMissing: React.FC<{ searched: string[]; error: string }> = (initial) => 
                 ))}
               </ul>
             </details>
+            {runError && (
+              <p className="boot__text selectable" role="alert" style={{ color: "var(--danger)" }}>
+                {runError}
+              </p>
+            )}
             <div style={{ display: "flex", gap: 8 }}>
               <button className="ui-btn ui-btn--primary" disabled={busy !== null} onClick={() => void run("check")}>
                 <RefreshCw size={13} className={busy === "check" ? "spin" : undefined} /> Check again
@@ -126,10 +163,11 @@ const PiMissing: React.FC<{ searched: string[]; error: string }> = (initial) => 
   );
 };
 
-const GhMissing: React.FC<{ searched: string[]; error: string; platform?: string }> = ({ searched, error, platform }) => {
+const GhMissing: React.FC<{ searched: string[]; error: string; platform?: string; onSkip: () => void }> = ({ searched, error, platform, onSkip }) => {
   const [copied, setCopied] = useState(false);
   const [result, setResult] = useState({ searched, error });
   const [busy, setBusy] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
   const [found, setFound] = useState<string | null>(null);
 
   const isWin = (platform ?? navigator.platform).toLowerCase().startsWith("win");
@@ -138,6 +176,7 @@ const GhMissing: React.FC<{ searched: string[]; error: string; platform?: string
 
   const runCheck = async () => {
     setBusy(true);
+    setRunError(null);
     try {
       const r = await window.studio.relocateGh();
       if (r.ok) {
@@ -148,6 +187,8 @@ const GhMissing: React.FC<{ searched: string[]; error: string; platform?: string
       } else {
         setResult({ searched: r.searched, error: r.error });
       }
+    } catch (e) {
+      setRunError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -165,13 +206,14 @@ const GhMissing: React.FC<{ searched: string[]; error: string; platform?: string
         ) : (
           <>
             <p className="boot__text selectable">
-              Hive requires the GitHub CLI (<code>gh</code>) to run GitHub commands and operate correctly. {result.error}
+              Hive uses the GitHub CLI (<code>gh</code>) for GitHub features such as pull requests. You can continue without it. {result.error}
             </p>
             <div className="boot__cmd">
               <code className="selectable">{installCmd}</code>
               <button
                 className="ui-btn ui-btn--sm ui-btn--ghost ui-btn--icon"
                 title="Copy"
+                aria-label="Copy install command"
                 onClick={async () => {
                   if (await copyText(installCmd)) {
                     setCopied(true);
@@ -195,9 +237,17 @@ const GhMissing: React.FC<{ searched: string[]; error: string; platform?: string
                 </ul>
               </details>
             )}
+            {runError && (
+              <p className="boot__text selectable" role="alert" style={{ color: "var(--danger)" }}>
+                {runError}
+              </p>
+            )}
             <div style={{ display: "flex", gap: 8 }}>
               <button className="ui-btn ui-btn--primary" disabled={busy} onClick={() => void runCheck()}>
                 <RefreshCw size={13} className={busy ? "spin" : undefined} /> Check again
+              </button>
+              <button className="ui-btn" disabled={busy} onClick={onSkip}>
+                Continue without GitHub
               </button>
             </div>
           </>

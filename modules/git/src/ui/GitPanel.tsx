@@ -266,13 +266,14 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         setBranches(b);
         useGitStore.getState().setStatus(
           s?.isRepo
-            ? { ahead: s.ahead ?? 0, behind: s.behind ?? 0, branch: s.branch ?? "", upstream: s.upstream, isRepo: true }
+            ? { ahead: s.ahead ?? 0, behind: s.behind ?? 0, branch: s.branch ?? "", upstream: s.upstream, isRepo: true, error: s.error }
             : null,
         );
+        if (s?.error && !silent) setErrorMessage(s.error);
       } catch (err) {
         if (!silent && id === requestId.current) setErrorMessage(errText(err));
       } finally {
-        if (!silent && id === requestId.current) setLoading(false);
+        if (id === requestId.current) setLoading(false);
       }
     },
     [effectiveCwd],
@@ -378,8 +379,8 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     }
   };
 
-  const handleViewDiff = (filePath: string, staged: boolean) => {
-    if (activeProject && effectiveCwd) void openDiffTab(host, { id: activeProject.id, path: effectiveCwd }, filePath, staged);
+  const handleViewDiff = (filePath: string, staged: boolean, untracked = false) => {
+    if (activeProject && effectiveCwd) void openDiffTab(host, { id: activeProject.id, path: effectiveCwd }, filePath, staged, untracked, effectiveCwd);
   };
 
   const handleSync = async (op: "fetch" | "pull" | "push") => {
@@ -445,7 +446,7 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   };
 
   if (!activeProject) return <div className="gp-msg">No project open.</div>;
-  if (status && !status.isRepo) return <div className="gp-msg">This folder is not a Git repository.</div>;
+  if (status && !status.isRepo) return <div className="gp-msg">{status.error ? `Git error: ${status.error}` : "This folder is not a Git repository."}</div>;
 
   const needle = branchFilter.trim().toLowerCase();
   const filteredBranches = branches.filter((b) => b.toLowerCase().includes(needle));
@@ -718,10 +719,10 @@ export const GitPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
                 <FileRow
                   key={`${f.status === "untracked" ? "u" : "c"}:${f.path}`}
                   file={f}
-                  onOpen={() => handleViewDiff(f.path, false)}
+                  onOpen={() => handleViewDiff(f.path, false, f.status === "untracked")}
                   actions={
                     <>
-                      <IconBtn title="Open diff" tone="accent" onClick={() => handleViewDiff(f.path, false)}>
+                      <IconBtn title="Open diff" tone="accent" onClick={() => handleViewDiff(f.path, false, f.status === "untracked")}>
                         <FileDiff size={13} />
                       </IconBtn>
                       <IconBtn

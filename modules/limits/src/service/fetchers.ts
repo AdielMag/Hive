@@ -18,17 +18,25 @@ export async function fetchAnthropic(token: string): Promise<QuotaGroup[]> {
   return parseAnthropicUsage(json);
 }
 
-const AGY_ENDPOINTS = ["https://cloudcode-pa.googleapis.com", "https://daily-cloudcode-pa.sandbox.googleapis.com"];
+const AGY_ENDPOINTS = [
+  "https://cloudcode-pa.googleapis.com",
+  "https://daily-cloudcode-pa.googleapis.com",
+  "https://daily-cloudcode-pa.sandbox.googleapis.com",
+];
+
+export const AGY_USER_AGENT =
+  "antigravity/cli/1.3.8 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)";
 
 export async function fetchAntigravity(apiKey: string): Promise<QuotaGroup[]> {
   let token = apiKey;
   try {
-    const parsed = JSON.parse(apiKey) as { token?: string };
+    const parsed = JSON.parse(apiKey) as { token?: string; access?: string; apiKey?: string };
     if (parsed.token) token = parsed.token;
+    else if (parsed.access) token = parsed.access;
+    else if (parsed.apiKey) token = parsed.apiKey;
   } catch {
     // plain bearer token
   }
-  const platform = process.platform === "darwin" ? "PLATFORM_MACOS" : process.platform === "win32" ? "PLATFORM_WINDOWS" : "PLATFORM_LINUX";
   let lastError: unknown;
   for (const ep of AGY_ENDPOINTS) {
     try {
@@ -37,8 +45,8 @@ export async function fetchAntigravity(apiKey: string): Promise<QuotaGroup[]> {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
-          "User-Agent": `antigravity/1.15.8 ${process.platform}/${process.arch}`,
-          "Client-Metadata": JSON.stringify({ ideType: "ANTIGRAVITY", platform, pluginType: "GEMINI" }),
+          "User-Agent": AGY_USER_AGENT,
+          Accept: "application/json",
         },
         body: "{}",
       });
@@ -74,5 +82,6 @@ export class UnsupportedError extends Error {}
 export const QUOTA_FETCHERS: Record<string, (apiKey: string) => Promise<QuotaGroup[]>> = {
   anthropic: fetchAnthropic,
   antigravity: fetchAntigravity,
+  "google-antigravity": fetchAntigravity,
   "openai-codex": fetchCodex,
 };

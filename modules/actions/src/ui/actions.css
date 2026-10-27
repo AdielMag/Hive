@@ -187,6 +187,10 @@
   opacity: 0.45;
   cursor: default;
 }
+.ga-ib.is-busy {
+  color: var(--accent-base);
+  cursor: wait;
+}
 
 /* ── summary: stat pills + history strip ── */
 .ga-summary {
@@ -489,6 +493,12 @@
 .ga-btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+.ga-btn.is-busy {
+  color: var(--accent-base);
+  border-color: color-mix(in srgb, var(--accent-base) 40%, transparent);
+  cursor: wait;
+  opacity: 0.9;
 }
 .ga-btn--primary {
   border-color: transparent;
@@ -800,6 +810,11 @@
 .ga-pill--actor {
   padding-left: 2px;
 }
+.ga-pill--fixing {
+  background: color-mix(in srgb, var(--accent-base) 15%, transparent);
+  color: var(--accent-base);
+  font-weight: 500;
+}
 .ga-avatar {
   display: inline-flex;
   align-items: center;
@@ -863,6 +878,20 @@
     opacity: 0;
   }
 }
+.ga-card.is-fixing {
+  border-color: color-mix(in srgb, var(--accent-base) 45%, transparent);
+}
+.ga-card.is-fixing .ga-card__tools,
+.ga-card__tools.is-busy {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: hover) {
+  .ga-card.is-fixing .ga-card__side .ga-card__ago,
+  .ga-card.is-fixing .ga-card__side .ga-card__dur {
+    opacity: 0;
+  }
+}
 
 .ga-progress {
   position: relative;
@@ -886,6 +915,12 @@
   to {
     transform: translateX(300%);
   }
+}
+.ga-progress--fix {
+  background: color-mix(in srgb, var(--accent-base) 18%, transparent);
+}
+.ga-progress--fix::after {
+  background: linear-gradient(90deg, transparent, var(--accent-base), transparent);
 }
 
 /* ── run detail ── */

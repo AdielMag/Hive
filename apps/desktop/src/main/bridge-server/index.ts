@@ -77,13 +77,17 @@ export async function createBridgeServer(
   let activeSocket: Socket | null = null;
   let server: Server | null = null;
   let actionCounter = 0;
-  let isAuthed = false;
-
-  const splitter = new JsonlSplitter();
+  const isReady = () => activeSocket !== null && !activeSocket.destroyed;
 
   server = createServer((socket) => {
-    activeSocket = socket;
+    // Auth + line splitting are per socket; a socket only becomes active once its hello validates.
+    let socketAuthed = false;
+    const splitter = new JsonlSplitter();
     socket.setEncoding("utf8");
+    const helloTimer = setTimeout(() => {
+      if (!socketAuthed) socket.destroy();
+    }, 10_000);
+    helloTimer.unref?.();
 
     socket.on("data", (chunk: string) => {
       for (const line of splitter.push(chunk)) {
@@ -96,10 +100,21 @@ export async function createBridgeServer(
               socket.destroy();
               return;
             }
-            isAuthed = true;
+            if (!socketAuthed) {
+              socketAuthed = true;
+              clearTimeout(helloTimer);
+              if (activeSocket && activeSocket !== socket) activeSocket.destroy();
+              activeSocket = socket;
+            }
           }
 
-          if (!isAuthed) continue;
+          if (!socketAuthed || activeSocket !== socket) {
+            if (!socketAuthed) {
+              socket.destroy();
+              return;
+            }
+            continue;
+          }
 
           if (raw.type === "command_result") {
             if (raw.ok) settleAction(raw.id, true, raw.data);
@@ -127,6 +142,7 @@ export async function createBridgeServer(
     });
 
     socket.on("close", () => {
+      clearTimeout(helloTimer);
       if (activeSocket === socket) activeSocket = null;
     });
 
@@ -162,7 +178,7 @@ export async function createBridgeServer(
     // Actions travel as a hidden slash command; if the extension hasn't connected yet Pi would treat it as a
     // plain prompt (and the action would just time out). Give a freshly started session a moment to connect.
     const readyDeadline = Date.now() + 5_000;
-    while (!(isAuthed && activeSocket !== null && !activeSocket.destroyed)) {
+    while (!isReady()) {
       if (Date.now() > readyDeadline) {
         throw new Error("Hive's Pi bridge isn't connected yet. Wait a moment and try again.");
       }
@@ -227,7 +243,7 @@ export async function createBridgeServer(
       [BRIDGE_ENV.address]: address,
       [BRIDGE_ENV.token]: token,
     },
-    isReady: () => isAuthed && activeSocket !== null && !activeSocket.destroyed,
+    isReady,
     send,
     setLinkedProjects,
     executeAction,

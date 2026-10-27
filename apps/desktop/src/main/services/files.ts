@@ -1,4 +1,4 @@
-import { readdirSync, statSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { readdirSync, statSync, readFileSync, existsSync, mkdirSync, writeFileSync, unlinkSync, promises as fsPromises } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, extname, relative } from "node:path";
 
@@ -10,6 +10,9 @@ export interface FileNode {
   size?: number;
   extension?: string;
   children?: FileNode[];
+  hasChildren?: boolean;
+  lazy?: boolean;
+  truncated?: boolean;
 }
 
 export interface FileContentResult {
@@ -22,24 +25,65 @@ export interface FileContentResult {
   dataUrl?: string;
 }
 
-const IGNORED_DIRS = new Set([".git", "node_modules", "dist", "out", ".pi-node", "build"]);
+const IGNORED_DIRS = new Set([
+  ".git",
+  "node_modules",
+  ".venv",
+  "venv",
+  "__pycache__",
+  "target",
+  "dist",
+  "build",
+  "out",
+  ".next",
+  ".nuxt",
+  ".turbo",
+  ".cache",
+  "vendor",
+  "coverage",
+  ".gradle",
+  ".idea",
+  "Pods",
+  "DerivedData",
+  ".pi-node",
+]);
 
-export function listDirectory(dirPath: string, rootPath: string = dirPath, depth = 0, maxDepth = 4): FileNode[] {
-  if (!existsSync(dirPath) || depth > maxDepth) return [];
+const MAX_ENTRIES = 5000;
+
+interface TraversalState {
+  count: number;
+  truncated: boolean;
+}
+
+export async function listDirectory(
+  dirPath: string,
+  rootPath: string = dirPath,
+  depth = 0,
+  maxDepth = 4,
+  state: TraversalState = { count: 0, truncated: false },
+): Promise<FileNode[]> {
+  if (depth > maxDepth || state.count >= MAX_ENTRIES) return [];
   try {
-    const entries = readdirSync(dirPath, { withFileTypes: true });
+    const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
     const nodes: FileNode[] = [];
 
     // Sort: directories first, then alphabetical
     const sorted = entries.sort((a, b) => {
-      if (a.isDirectory() && !b.isDirectory()) return -1;
-      if (!a.isDirectory() && b.isDirectory()) return 1;
+      const aIsDir = a.isDirectory();
+      const bIsDir = b.isDirectory();
+      if (aIsDir && !bIsDir) return -1;
+      if (!aIsDir && bIsDir) return 1;
       return a.name.localeCompare(b.name);
     });
 
     for (const entry of sorted) {
+      if (state.count >= MAX_ENTRIES) {
+        state.truncated = true;
+        break;
+      }
       if (IGNORED_DIRS.has(entry.name)) continue;
 
+      state.count++;
       const fullPath = join(dirPath, entry.name);
       const isDir = entry.isDirectory();
       const ext = extname(entry.name).toLowerCase();
@@ -54,12 +98,20 @@ export function listDirectory(dirPath: string, rootPath: string = dirPath, depth
 
       if (isDir) {
         if (depth < maxDepth) {
-          node.children = listDirectory(fullPath, rootPath, depth + 1, maxDepth);
+          node.children = await listDirectory(fullPath, rootPath, depth + 1, maxDepth, state);
+          if (state.truncated) node.truncated = true;
+        } else {
+          node.children = undefined;
+          node.hasChildren = true;
+          node.lazy = true;
         }
       } else {
         try {
-          node.size = statSync(fullPath).size;
-        } catch {}
+          const st = await fsPromises.stat(fullPath);
+          node.size = st.size;
+        } catch {
+          // best-effort stat
+        }
       }
 
       nodes.push(node);
@@ -227,6 +279,29 @@ export function readFileContent(filePath: string): FileContentResult {
 }
 
 const MAX_ATTACHMENT_BYTES = 500 * 1024 * 1024;
+const ATTACHMENT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/** Best-effort cleanup of attachment files older than 24 hours. */
+export function cleanOldAttachments(dir = join(tmpdir(), "hive-attachments")): void {
+  try {
+    if (!existsSync(dir)) return;
+    const now = Date.now();
+    const files = readdirSync(dir);
+    for (const file of files) {
+      try {
+        const fullPath = join(dir, file);
+        const st = statSync(fullPath);
+        if (now - st.mtimeMs > ATTACHMENT_MAX_AGE_MS) {
+          unlinkSync(fullPath);
+        }
+      } catch {
+        // best-effort per file
+      }
+    }
+  } catch {
+    // best-effort
+  }
+}
 
 /** Write clipboard/drag bytes (videos have no path) to a temp file and return it, so the prompt can reference it. */
 export function saveAttachmentFile(name: string, data: ArrayBuffer): { path: string; size: number } {
@@ -235,6 +310,7 @@ export function saveAttachmentFile(name: string, data: ArrayBuffer): { path: str
     throw new Error(`File too large (${(buf.length / 1024 / 1024).toFixed(0)}MB) to attach`);
   }
   const dir = join(tmpdir(), "hive-attachments");
+  cleanOldAttachments(dir);
   mkdirSync(dir, { recursive: true });
   const safe = (name.split(/[/\\]/).pop() || "attachment").replace(/[^\w.\- ]+/g, "_").slice(-120);
   const filePath = join(dir, `${Date.now().toString(36)}-${safe}`);

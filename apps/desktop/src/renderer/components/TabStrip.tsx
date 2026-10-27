@@ -23,6 +23,7 @@ import { isCoreTabKind } from "@hive/protocol";
 import { ModuleTabIcon, Slot, useModuleTabTitle } from "../modules/ModuleViews.tsx";
 import { useShortcut } from "../features/commands/useShortcut.ts";
 import { usePaneLayoutStore } from "../store/pane-layout-store.ts";
+import { askChoice } from "./ChoiceDialog.tsx";
 import { ContextMenu, type ContextMenuEntry, type ContextMenuState } from "./ContextMenu.tsx";
 
 const DOT_LABELS: Record<"input" | "done" | "error", string> = {
@@ -55,7 +56,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
     closeTab: storeCloseTab,
     newSessionTab,
     activeProject,
-    running,
+    runningNow,
     sessionActivity,
     tabUi,
     displayedTabId,
@@ -66,6 +67,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
     newSessionInMainTree,
     setNewSessionInMainTree,
     catalog,
+    projects,
   } = useSessionStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -74,7 +76,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
       closeTab: s.closeTab,
       newSessionTab: s.newSessionTab,
       activeProject: s.activeProject,
-      running: s.transcript.running,
+      runningNow: s.transcript.running,
       sessionActivity: s.sessionActivity,
       tabUi: s.tabUi,
       displayedTabId: s.displayedTabId,
@@ -85,14 +87,18 @@ export const TabStrip: React.FC<TabStripProps> = ({
       newSessionInMainTree: s.newSessionInMainTree,
       setNewSessionInMainTree: s.setNewSessionInMainTree,
       catalog: s.allSessions,
+      projects: s.projects,
     })),
   );
 
+  const displayedHasDraft = useSessionStore((s) => s.promptText.trim().length > 0 || s.attachments.length > 0);
   const newSessionShortcut = useShortcut("session.new");
   const tabstripRef = useRef<HTMLDivElement>(null);
   const [dropIndicatorLeft, setDropIndicatorLeft] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
+
+  const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
   const tabs = useMemo(() => {
     if (!tabIds) return allTabs;
@@ -104,6 +110,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
     }
     return list;
   }, [allTabs, tabIds]);
+
 
   const activeTabId = propActiveTabId !== undefined ? propActiveTabId : storeActiveTabId;
 
@@ -118,12 +125,67 @@ export const TabStrip: React.FC<TabStripProps> = ({
     }
   };
 
-  const handleClose = (tabId: string) => {
+  const closeNow = (tabId: string) => {
     if (onCloseTab) {
       onCloseTab(tabId);
     } else {
       void storeCloseTab(tabId);
     }
+  };
+
+  /** Close one or many tabs; confirm first when a session tab has a running agent or an unsent draft. */
+  const requestClose = async (tabIds: string[]) => {
+    const list = tabIds.map((id) => tabs.find((t) => t.id === id)).filter((t): t is TabItem => !!t);
+    let running = 0;
+    let drafts = 0;
+    for (const t of list) {
+      if (t.kind && t.kind !== "session") continue;
+      const isRunning = sessionActivity[t.id] === "running" || (t.id === displayedTabId && runningNow);
+      const isDraft = t.id === displayedTabId ? displayedHasDraft : hasDraft(tabUi[t.id]);
+      if (isRunning) running++;
+      if (isDraft) drafts++;
+    }
+    if (running > 0 || drafts > 0) {
+      const body: string[] = [];
+      if (list.length === 1) {
+        if (running > 0) body.push(`"${list[0]!.title}" is still running. Closing the tab stops the agent.`);
+        if (drafts > 0) body.push("It has an unsent draft that will be lost.");
+      } else {
+        body.push(`You're closing ${list.length} tabs.`);
+        if (running > 0) body.push(`${running} ${running === 1 ? "has an agent that is" : "have agents that are"} still running and will be stopped.`);
+        if (drafts > 0) body.push(`${drafts} ${drafts === 1 ? "has an unsent draft" : "have unsent drafts"} that will be lost.`);
+      }
+      const choice = await askChoice({
+        title: list.length === 1 ? "Close this tab?" : `Close ${list.length} tabs?`,
+        body,
+        choices: [
+          { id: "cancel", label: "Cancel" },
+          { id: "close", label: list.length === 1 ? "Close tab" : `Close ${list.length} tabs`, tone: "danger" },
+        ],
+      });
+      if (choice !== "close") return;
+    }
+    for (const t of list) closeNow(t.id);
+  };
+
+  const handleClose = (tabId: string) => void requestClose([tabId]);
+
+  const onTabKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, tabId: string) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleSelect(tabId);
+      return;
+    }
+    const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+    if (!keys.includes(e.key)) return;
+    const els = Array.from(tabstripRef.current?.querySelectorAll<HTMLElement>('[role="tab"]') ?? []);
+    const i = els.indexOf(e.currentTarget);
+    if (i < 0 || els.length === 0) return;
+    e.preventDefault();
+    const next =
+      e.key === "Home" ? 0 : e.key === "End" ? els.length - 1 : (i + (e.key === "ArrowRight" ? 1 : -1) + els.length) % els.length;
+    els[next]?.focus();
   };
 
   // Drag and drop handlers
@@ -240,8 +302,30 @@ export const TabStrip: React.FC<TabStripProps> = ({
     e.preventDefault();
     e.stopPropagation();
     const tabIndex = tabs.findIndex((t) => t.id === tab.id);
+    const tabProject = tab.projectId ? projectsById.get(tab.projectId) : undefined;
 
     const items: ContextMenuEntry[] = [];
+
+    if (tabProject) {
+      items.push({
+        label: `Project: ${tabProject.name}`,
+        icon: tabProject.icon ? (
+          <span style={{ fontSize: 13, lineHeight: 1 }}>{tabProject.icon}</span>
+        ) : (
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: tabProject.color,
+              display: "inline-block",
+            }}
+          />
+        ),
+        disabled: true,
+      });
+      items.push({ kind: "separator" });
+    }
 
     if (paneId) {
       items.push({
@@ -273,16 +357,14 @@ export const TabStrip: React.FC<TabStripProps> = ({
       items.push({
         label: "Close Others",
         onSelect: () => {
-          const others = tabs.filter((t) => t.id !== tab.id);
-          for (const o of others) handleClose(o.id);
+          void requestClose(tabs.filter((t) => t.id !== tab.id).map((t) => t.id));
         },
       });
       if (tabIndex < tabs.length - 1) {
         items.push({
           label: "Close to the Right",
           onSelect: () => {
-            const rightTabs = tabs.slice(tabIndex + 1);
-            for (const r of rightTabs) handleClose(r.id);
+            void requestClose(tabs.slice(tabIndex + 1).map((t) => t.id));
           },
         });
       }
@@ -307,6 +389,8 @@ export const TabStrip: React.FC<TabStripProps> = ({
   };
 
   if (tabs.length === 0 && !activeProject) return null;
+
+  const focusableTabId = tabs.some((t) => t.id === activeTabId) ? activeTabId : tabs[0]?.id;
 
   return (
     <>
@@ -344,7 +428,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
                 ? "error"
                 : undefined);
           const activity = isSession ? sessionActivity[tab.id] : undefined;
-          const isRunning = (isSession && (activity === "running" || (active && tab.id === displayedTabId && running))) || subagentRunning;
+          const isRunning = (isSession && (activity === "running" || (active && tab.id === displayedTabId && runningNow))) || subagentRunning;
           // Parked (non-displayed) session state: a question waiting for you, or an unsent draft.
           const parked = isSession && tab.id !== displayedTabId ? tabUi[tab.id] : undefined;
           // Waiting on you (question form, or a confirm like the bash-guard approval). The agent is still
@@ -359,6 +443,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
           const unseen = !busy && !needsInput && (activity === "done" || activity === "error" ? activity : subagentUnseen);
           const dotKind = needsInput ? "input" : unseen;
           const draft = hasDraft(isSession && !active ? tabUi[tab.id] : undefined);
+          const tabProject = tab.projectId ? projectsById.get(tab.projectId) : undefined;
           const stateLabel =
             (needsInput
               ? " (waiting for your input)"
@@ -376,11 +461,14 @@ export const TabStrip: React.FC<TabStripProps> = ({
               key={tab.id}
               role="tab"
               aria-selected={active}
+              tabIndex={tab.id === focusableTabId ? 0 : -1}
+              onKeyDown={(e) => onTabKeyDown(e, tab.id)}
               draggable={true}
               onDragStart={(e) => handleDragStart(e, tab)}
               onDragEnd={handleDragEnd}
               onContextMenu={(e) => openContextMenu(e, tab)}
-              className={`tab${active ? " is-active" : ""}${busy ? " is-running" : ""}${unseen ? ` has-unseen is-${unseen}` : ""}${needsInput ? " needs-input" : ""}`}
+              className={`tab${active ? " is-active" : ""}${busy ? " is-running" : ""}${unseen ? ` has-unseen is-${unseen}` : ""}${needsInput ? " needs-input" : ""}${tabProject ? " has-project" : ""}`}
+              style={{ "--tab-pcolor": tabProject?.color } as React.CSSProperties}
               onClick={() => handleSelect(tab.id)}
               onAuxClick={(e) => {
                 if (e.button === 1) handleClose(tab.id);

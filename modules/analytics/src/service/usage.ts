@@ -68,6 +68,8 @@ export class UsageService {
           dirty = true;
         } catch {
           // unreadable / deleted mid-scan: skip
+        } finally {
+          await new Promise((resolve) => setImmediate(resolve));
         }
       }
     };

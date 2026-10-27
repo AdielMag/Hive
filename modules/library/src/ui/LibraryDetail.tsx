@@ -142,11 +142,23 @@ export const LibraryDetail: React.FC<Props> = ({ entry }) => {
     if (entry.readOnly || !entry.path || isDeleting) return;
     const kindLabel = entry.kind === "skill" ? "skill" : "agent";
     const nameLabel = entry.displayName || entry.name;
+    const isDir = entry.path.replace(/\\/g, "/").endsWith("/SKILL.md");
+    const targetDesc = isDir
+      ? `the skill folder "${nameLabel}" and all its files`
+      : "The file";
     const ok = window.confirm(
-      `Delete ${kindLabel} "${nameLabel}"?\n\nThe file will be moved to the system trash.`,
+      `Delete ${kindLabel} "${nameLabel}"?\n\n${isDir ? `The skill folder "${nameLabel}" and all its files` : "The file"} will be moved to the system trash.`,
     );
     if (!ok) return;
-    await deleteEntry(entry, cwd);
+    const success = await deleteEntry(entry, cwd);
+    if (!success) {
+      const permOk = window.confirm(
+        `Moving to trash failed.\n\nDo you want to PERMANENTLY delete ${targetDesc}? This action cannot be undone.`,
+      );
+      if (permOk) {
+        await deleteEntry(entry, cwd, true);
+      }
+    }
   };
 
   // Frontmatter tools

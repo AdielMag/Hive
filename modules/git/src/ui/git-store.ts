@@ -12,6 +12,8 @@ export interface GitSyncInfo {
   branch: string;
   upstream?: string;
   isRepo: boolean;
+  error?: string;
+  fetchError?: string | null;
 }
 
 export interface GitState {
@@ -21,6 +23,8 @@ export interface GitState {
   refreshGit: () => Promise<void>;
   setStatus: (status: GitSyncInfo | null) => void;
 }
+
+const inFlightPaths = new Set<string>();
 
 export const useGitStore = create<GitState>((set, get) => ({
   status: null,
@@ -33,27 +37,42 @@ export const useGitStore = create<GitState>((set, get) => ({
       set({ status: null, loading: false });
       return;
     }
-    if (get().loading) return;
+    const path = project.path;
+    if (inFlightPaths.has(path)) return;
+    inFlightPaths.add(path);
     set({ loading: true });
     try {
-      const res = await gitApi().getGitStatus(project.path);
-      if (res && res.isRepo) {
-        set({
-          status: {
-            ahead: res.ahead ?? 0,
-            behind: res.behind ?? 0,
-            branch: res.branch ?? "",
-            upstream: res.upstream,
-            isRepo: true,
-          },
-          loading: false,
-          lastCheckedAt: Date.now(),
-        });
-      } else {
-        set({ status: null, loading: false, lastCheckedAt: Date.now() });
+      const res = await gitApi().getGitStatus(path);
+      const currentActive = gitHostOrNull()?.sessions.activeProject();
+      if (currentActive?.path === path) {
+        if (res && res.isRepo) {
+          set({
+            status: {
+              ahead: res.ahead ?? 0,
+              behind: res.behind ?? 0,
+              branch: res.branch ?? "",
+              upstream: res.upstream,
+              isRepo: true,
+              error: res.error,
+              fetchError: get().status?.fetchError ?? null,
+            },
+            loading: false,
+            lastCheckedAt: Date.now(),
+          });
+        } else {
+          set({ status: null, loading: false, lastCheckedAt: Date.now() });
+        }
       }
     } catch {
-      set({ status: null, loading: false, lastCheckedAt: Date.now() });
+      const currentActive = gitHostOrNull()?.sessions.activeProject();
+      if (currentActive?.path === path) {
+        set({ status: null, loading: false, lastCheckedAt: Date.now() });
+      }
+    } finally {
+      inFlightPaths.delete(path);
+      if (inFlightPaths.size === 0) {
+        set({ loading: false });
+      }
     }
   },
 }));
@@ -86,9 +105,14 @@ async function backgroundFetch(host: ModuleHost, force = false): Promise<void> {
   try {
     await gitApi().gitFetch(path);
     failCount.delete(path);
+    const curr = useGitStore.getState().status;
+    if (curr) useGitStore.setState({ status: { ...curr, fetchError: null } });
     await useGitStore.getState().refreshGit();
-  } catch {
+  } catch (err) {
     failCount.set(path, fails + 1);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const curr = useGitStore.getState().status;
+    if (curr) useGitStore.setState({ status: { ...curr, fetchError: errMsg } });
   } finally {
     fetching = false;
   }

@@ -540,12 +540,13 @@ export interface StudioApi {
 
   // Projects & Catalog APIs
   getProjects(): Promise<ProjectEntry[]>;
-  addProject(path: string, name?: string, color?: string): Promise<ProjectEntry>;
+  addProject(path: string, name?: string, color?: string, icon?: string | null): Promise<ProjectEntry>;
   updateProject(
     id: string,
     updates: {
       name?: string;
       color?: string;
+      icon?: string | null;
       links?: LinkedProject[];
       defaults?: ProjectDefaults;
       pinned?: boolean;

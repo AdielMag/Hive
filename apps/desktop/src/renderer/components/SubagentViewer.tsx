@@ -22,6 +22,7 @@ import { formatCost, formatDuration } from "../lib/format.ts";
 import { useSubagentOutput } from "../hooks/useSubagentOutput.ts";
 import { Markdown } from "./code/Markdown.tsx";
 import { useSessionStore } from "../store/session-store.ts";
+import { toast } from "../modules/toast-store.ts";
 import { NestedTimeline } from "./Transcript.tsx";
 
 export interface SubagentViewerProps {
@@ -119,13 +120,20 @@ export const SubagentViewer: React.FC<SubagentViewerProps> = ({
                 type="button"
                 className="ui-btn ui-btn--danger subagent-viewer__action-btn"
                 disabled={stopping}
-                onClick={() => {
+                onClick={async () => {
                   setStopping(true);
-                  void stopSubagent({
-                    agentId: view.stopId,
-                    type: view.type,
-                    description: view.description,
-                  });
+                  try {
+                    const ok = await stopSubagent({
+                      agentId: view.stopId,
+                      type: view.type,
+                      description: view.description,
+                    });
+                    if (ok === false) toast({ message: "Couldn't stop the subagent", kind: "error" });
+                  } catch (e) {
+                    toast({ message: `Couldn't stop the subagent: ${e instanceof Error ? e.message : String(e)}`, kind: "error" });
+                  } finally {
+                    setStopping(false);
+                  }
                 }}
                 title={stopping ? "Stopping subagent…" : "Stop this subagent"}
               >

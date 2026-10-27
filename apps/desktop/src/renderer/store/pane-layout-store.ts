@@ -30,9 +30,16 @@ export interface DraggingTabState {
   sourcePaneId: string;
 }
 
+export interface ProjectLayout {
+  root: PaneNode;
+  activePaneId: string;
+}
+
 export interface PaneLayoutState {
   root: PaneNode;
   activePaneId: string;
+  currentProjectId: string | null;
+  layoutsByProject: Record<string, ProjectLayout>;
   draggingTab: DraggingTabState | null;
 
   setDraggingTab: (dragging: DraggingTabState | null) => void;
@@ -47,7 +54,7 @@ export interface PaneLayoutState {
   ) => void;
   closeTab: (tabId: string) => void;
   resizeSplit: (splitId: string, sizes: number[]) => void;
-  syncWithTabs: (validTabIds: string[], activeTabId: string | null) => void;
+  syncWithTabs: (validTabIds: string[], activeTabId: string | null, projectId?: string | null) => void;
   resetLayout: (validTabIds: string[], activeTabId: string | null) => void;
 }
 
@@ -352,24 +359,52 @@ export function syncTreeWithTabs(
   return appendToPane(filtered);
 }
 
-function loadPersistedLayout(): { root: PaneNode; activePaneId: string } | null {
+function loadPersistedLayout(): {
+  root: PaneNode;
+  activePaneId: string;
+  currentProjectId: string | null;
+  layoutsByProject: Record<string, ProjectLayout>;
+} | null {
   try {
     const raw = getStoredItem(STORAGE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as { root: PaneNode; activePaneId: string };
-    if (!data.root || !data.activePaneId) return null;
-    return data;
+    const data = JSON.parse(raw) as any;
+    if (data.layoutsByProject && typeof data.layoutsByProject === "object") {
+      return {
+        root: data.root,
+        activePaneId: data.activePaneId,
+        currentProjectId: data.currentProjectId ?? null,
+        layoutsByProject: data.layoutsByProject,
+      };
+    }
+    if (data.root && data.activePaneId) {
+      return {
+        root: data.root,
+        activePaneId: data.activePaneId,
+        currentProjectId: null,
+        layoutsByProject: { __default__: { root: data.root, activePaneId: data.activePaneId } },
+      };
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
-function persistLayout(root: PaneNode, activePaneId: string) {
+function persistLayout(
+  root: PaneNode,
+  activePaneId: string,
+  currentProjectId: string | null,
+  layoutsByProject: Record<string, ProjectLayout>,
+) {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      setStoredItem(STORAGE_KEY, JSON.stringify({ root, activePaneId }));
+      setStoredItem(
+        STORAGE_KEY,
+        JSON.stringify({ root, activePaneId, currentProjectId, layoutsByProject }),
+      );
     } catch {}
   }, 200);
 }
@@ -377,45 +412,61 @@ function persistLayout(root: PaneNode, activePaneId: string) {
 const initialSaved = typeof window !== "undefined" ? loadPersistedLayout() : null;
 const defaultInitialRoot = initialSaved?.root ?? createDefaultLayout();
 const initialActivePaneId = initialSaved?.activePaneId ?? (defaultInitialRoot.type === "leaf" ? defaultInitialRoot.id : getAllLeaves(defaultInitialRoot)[0]?.id ?? "");
+const initialCurrentProjectId = initialSaved?.currentProjectId ?? null;
+const initialLayoutsByProject: Record<string, ProjectLayout> = initialSaved?.layoutsByProject ?? {
+  [initialCurrentProjectId ?? "__default__"]: { root: defaultInitialRoot, activePaneId: initialActivePaneId },
+};
 
 export const usePaneLayoutStore = create<PaneLayoutState>((set, get) => ({
   root: defaultInitialRoot,
   activePaneId: initialActivePaneId,
+  currentProjectId: initialCurrentProjectId,
+  layoutsByProject: initialLayoutsByProject,
   draggingTab: null,
 
   setDraggingTab: (dragging) => set({ draggingTab: dragging }),
 
   setActivePaneId: (paneId) => {
-    set({ activePaneId: paneId });
-    persistLayout(get().root, paneId);
+    const currentKey = get().currentProjectId ?? "__default__";
+    const updatedLayouts = { ...get().layoutsByProject, [currentKey]: { root: get().root, activePaneId: paneId } };
+    set({ activePaneId: paneId, layoutsByProject: updatedLayouts });
+    persistLayout(get().root, paneId, get().currentProjectId, updatedLayouts);
   },
 
   setActiveTabInPane: (paneId, tabId) => {
     const updated = setActiveTabInPane(get().root, paneId, tabId);
-    set({ root: updated, activePaneId: paneId });
-    persistLayout(updated, paneId);
+    const currentKey = get().currentProjectId ?? "__default__";
+    const updatedLayouts = { ...get().layoutsByProject, [currentKey]: { root: updated, activePaneId: paneId } };
+    set({ root: updated, activePaneId: paneId, layoutsByProject: updatedLayouts });
+    persistLayout(updated, paneId, get().currentProjectId, updatedLayouts);
   },
 
   reorderTab: (paneId, fromIndex, toIndex) => {
     const updated = reorderTabInPane(get().root, paneId, fromIndex, toIndex);
-    set({ root: updated, activePaneId: paneId });
-    persistLayout(updated, paneId);
+    const currentKey = get().currentProjectId ?? "__default__";
+    const updatedLayouts = { ...get().layoutsByProject, [currentKey]: { root: updated, activePaneId: paneId } };
+    set({ root: updated, activePaneId: paneId, layoutsByProject: updatedLayouts });
+    persistLayout(updated, paneId, get().currentProjectId, updatedLayouts);
   },
 
   moveTab: (tabId, targetPaneId, targetIndex) => {
     const updated = moveTabToPane(get().root, tabId, targetPaneId, targetIndex);
     const leaves = getAllLeaves(updated);
     const nextActivePane = leaves.some((l) => l.id === targetPaneId) ? targetPaneId : leaves[0]?.id ?? "";
-    set({ root: updated, activePaneId: nextActivePane });
-    persistLayout(updated, nextActivePane);
+    const currentKey = get().currentProjectId ?? "__default__";
+    const updatedLayouts = { ...get().layoutsByProject, [currentKey]: { root: updated, activePaneId: nextActivePane } };
+    set({ root: updated, activePaneId: nextActivePane, layoutsByProject: updatedLayouts });
+    persistLayout(updated, nextActivePane, get().currentProjectId, updatedLayouts);
   },
 
   splitPane: (sourceTabId, targetPaneId, direction) => {
     const updated = splitPane(get().root, sourceTabId, targetPaneId, direction);
     const newLeaf = findLeafForTab(updated, sourceTabId);
     const nextActivePane = newLeaf?.id ?? targetPaneId;
-    set({ root: updated, activePaneId: nextActivePane });
-    persistLayout(updated, nextActivePane);
+    const currentKey = get().currentProjectId ?? "__default__";
+    const updatedLayouts = { ...get().layoutsByProject, [currentKey]: { root: updated, activePaneId: nextActivePane } };
+    set({ root: updated, activePaneId: nextActivePane, layoutsByProject: updatedLayouts });
+    persistLayout(updated, nextActivePane, get().currentProjectId, updatedLayouts);
   },
 
   closeTab: (tabId) => {
@@ -425,20 +476,52 @@ export const usePaneLayoutStore = create<PaneLayoutState>((set, get) => ({
     if (!leaves.some((l) => l.id === nextActivePane)) {
       nextActivePane = leaves[0]?.id ?? "";
     }
-    set({ root: updated, activePaneId: nextActivePane });
-    persistLayout(updated, nextActivePane);
+    const currentKey = get().currentProjectId ?? "__default__";
+    const updatedLayouts = { ...get().layoutsByProject, [currentKey]: { root: updated, activePaneId: nextActivePane } };
+    set({ root: updated, activePaneId: nextActivePane, layoutsByProject: updatedLayouts });
+    persistLayout(updated, nextActivePane, get().currentProjectId, updatedLayouts);
   },
 
   resizeSplit: (splitId, sizes) => {
     const updated = resizeSplit(get().root, splitId, sizes);
-    set({ root: updated });
-    persistLayout(updated, get().activePaneId);
+    const currentKey = get().currentProjectId ?? "__default__";
+    const updatedLayouts = { ...get().layoutsByProject, [currentKey]: { root: updated, activePaneId: get().activePaneId } };
+    set({ root: updated, layoutsByProject: updatedLayouts });
+    persistLayout(updated, get().activePaneId, get().currentProjectId, updatedLayouts);
   },
 
-  syncWithTabs: (validTabIds, activeTabId) => {
-    const updated = syncTreeWithTabs(get().root, validTabIds, activeTabId, get().activePaneId);
+  syncWithTabs: (validTabIds, activeTabId, projectId) => {
+    const targetProject = projectId !== undefined ? projectId : get().currentProjectId;
+    const projectChanged = targetProject !== get().currentProjectId;
+    const layoutsByProject = { ...get().layoutsByProject };
+
+    let currentRoot = get().root;
+    let currentActivePane = get().activePaneId;
+
+    if (projectChanged) {
+      // Save outgoing project layout
+      const outgoingKey = get().currentProjectId ?? "__default__";
+      layoutsByProject[outgoingKey] = { root: currentRoot, activePaneId: currentActivePane };
+
+      // Restore incoming project layout if available, or inherit from __default__ on first project switch, or create default
+      const incomingKey = targetProject ?? "__default__";
+      let existing = layoutsByProject[incomingKey];
+      if (!existing && outgoingKey === "__default__" && layoutsByProject["__default__"]) {
+        existing = layoutsByProject["__default__"];
+      }
+      if (existing) {
+        currentRoot = existing.root;
+        currentActivePane = existing.activePaneId;
+      } else {
+        const fresh = createDefaultLayout(validTabIds, activeTabId);
+        currentRoot = fresh;
+        currentActivePane = fresh.id;
+      }
+    }
+
+    const updated = syncTreeWithTabs(currentRoot, validTabIds, activeTabId, currentActivePane);
     const leaves = getAllLeaves(updated);
-    let activePaneId = get().activePaneId;
+    let activePaneId = currentActivePane;
     if (!leaves.some((l) => l.id === activePaneId)) {
       activePaneId = leaves[0]?.id ?? "";
     }
@@ -449,15 +532,28 @@ export const usePaneLayoutStore = create<PaneLayoutState>((set, get) => ({
       activePaneId = owner.id;
       if (owner.activeTabId !== activeTabId) root = setActiveTabInPane(updated, owner.id, activeTabId!);
     }
-    // Skip no-op syncs (tabs array churn from unrelated tab updates) to avoid re-rendering the whole tree.
-    if (activePaneId === get().activePaneId && JSON.stringify(root) === JSON.stringify(get().root)) return;
-    set({ root, activePaneId });
-    persistLayout(root, activePaneId);
+
+    const nextProjectKey = targetProject ?? "__default__";
+    layoutsByProject[nextProjectKey] = { root, activePaneId };
+
+    // Skip no-op syncs to avoid re-rendering
+    if (
+      !projectChanged &&
+      activePaneId === get().activePaneId &&
+      JSON.stringify(root) === JSON.stringify(get().root)
+    ) {
+      return;
+    }
+
+    set({ root, activePaneId, currentProjectId: targetProject, layoutsByProject });
+    persistLayout(root, activePaneId, targetProject, layoutsByProject);
   },
 
   resetLayout: (validTabIds, activeTabId) => {
     const root = createDefaultLayout(validTabIds, activeTabId);
-    set({ root, activePaneId: root.id });
-    persistLayout(root, root.id);
+    const currentKey = get().currentProjectId ?? "__default__";
+    const updatedLayouts = { ...get().layoutsByProject, [currentKey]: { root, activePaneId: root.id } };
+    set({ root, activePaneId: root.id, layoutsByProject: updatedLayouts });
+    persistLayout(root, root.id, get().currentProjectId, updatedLayouts);
   },
 }));

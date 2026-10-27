@@ -7,7 +7,7 @@ export type ContextMenuEntry =
       kind?: "item";
       label: string;
       icon?: React.ReactNode;
-      onSelect: () => void;
+      onSelect?: () => void;
       danger?: boolean;
       disabled?: boolean;
       hint?: string;
@@ -84,8 +84,9 @@ export const ContextMenu: React.FC<{ menu: ContextMenuState | null; onClose: () 
             className={`menu-pop__item ctx-menu__item${item.danger ? " is-danger" : ""}`}
             disabled={item.disabled}
             onClick={() => {
+              if (item.disabled) return;
               onClose();
-              item.onSelect();
+              item.onSelect?.();
             }}
           >
             <span className="ctx-menu__label">

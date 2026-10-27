@@ -9,6 +9,7 @@ import {
   Clock,
   GitBranch,
 } from "lucide-react";
+import { toast } from "../modules/toast-store.ts";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { sessionDisplayTitle } from "../lib/session-title.ts";
@@ -33,9 +34,20 @@ export const WelcomeView: React.FC = () => {
   const newSessionShortcut = useShortcut("session.new");
 
   const handleOpenFolder = async () => {
-    const folder = await window.studio.pickFolder();
-    if (folder) {
-      await addProject(folder);
+    try {
+      const folder = await window.studio.pickFolder();
+      if (folder) await addProject(folder);
+    } catch (e) {
+      toast({ message: `Couldn't open folder: ${e instanceof Error ? e.message : String(e)}`, kind: "error" });
+    }
+  };
+
+  const openRecent = async (s: { cwd: string; path: string; name?: string; firstMessage?: string }) => {
+    try {
+      const prj = await addProject(s.cwd);
+      await useSessionStore.getState().openSessionTab(s.path, prj.id, s.name || s.firstMessage);
+    } catch (e) {
+      toast({ message: `Couldn't open session: ${e instanceof Error ? e.message : String(e)}`, kind: "error" });
     }
   };
 
@@ -91,7 +103,7 @@ export const WelcomeView: React.FC = () => {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#fff",
+                  color: "var(--text-on-color)",
                   fontWeight: 700,
                   fontSize: 22,
                   boxShadow: "0 6px 20px rgba(0, 0, 0, 0.35)",
@@ -397,16 +409,11 @@ export const WelcomeView: React.FC = () => {
                       key={s.id}
                       role="button"
                       tabIndex={0}
-                      onClick={async () => {
-                        const prj = await addProject(s.cwd);
-                        const { openSessionTab: openTab } = useSessionStore.getState();
-                        await openTab(s.path, prj.id, s.name || s.firstMessage);
-                      }}
-                      onKeyDown={async (e) => {
+                      onClick={() => void openRecent(s)}
+                      onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
-                          const prj = await addProject(s.cwd);
-                          const { openSessionTab: openTab } = useSessionStore.getState();
-                          await openTab(s.path, prj.id, s.name || s.firstMessage);
+                          e.preventDefault();
+                          void openRecent(s);
                         }
                       }}
                       style={{
@@ -520,7 +527,7 @@ export const WelcomeView: React.FC = () => {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 12, color: "var(--text-primary)" }}>Installed Pi Runtime</div>
                   <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, lineHeight: 1.4 }}>
-                    Pi version {bootstrap?.pi.ok ? bootstrap.pi.info.version : "0.87.1"}. Your extensions and models load
+                    Pi{bootstrap?.pi.ok ? ` version ${bootstrap.pi.info.version}` : ""}. Your extensions and models load
                     directly.
                   </div>
                 </div>

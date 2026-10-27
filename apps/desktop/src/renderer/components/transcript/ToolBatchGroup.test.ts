@@ -182,28 +182,19 @@ describe("tool-batch utilities", () => {
       ];
 
       const grouped = groupTimelineItems(items, results, tools);
-      expect(grouped).toHaveLength(3); // user, toolBatch, assistant text
+      // user, thought, read, thought, [edit+bash batch], text — thoughts break batches
+      expect(grouped.map((g) => g.kind)).toEqual([
+        "timelineRow",
+        "timelineRow",
+        "timelineRow",
+        "timelineRow",
+        "toolBatch",
+        "timelineRow",
+      ]);
 
-      const g0 = grouped[0];
-      expect(g0?.kind).toBe("timelineRow");
-      if (g0?.kind === "timelineRow") {
-        expect(g0.item.kind).toBe("user");
-      }
-
-      const g1 = grouped[1];
-      expect(g1?.kind).toBe("toolBatch");
-      if (g1?.kind === "toolBatch") {
-        expect(g1.items).toHaveLength(3);
-        expect(g1.items[0]?.block.id).toBe("t1");
-        expect(g1.items[0]?.thinking).toBe("Read cart");
-        expect(g1.items[1]?.block.id).toBe("t2");
-        expect(g1.items[2]?.block.id).toBe("t3");
-      }
-
-      const g2 = grouped[2];
-      expect(g2?.kind).toBe("timelineRow");
-      if (g2?.kind === "timelineRow") {
-        expect(g2.item.kind).toBe("assistant");
+      const batch = grouped[4];
+      if (batch?.kind === "toolBatch") {
+        expect(batch.items.map((i) => i.block.id)).toEqual(["t2", "t3"]);
       }
     });
 

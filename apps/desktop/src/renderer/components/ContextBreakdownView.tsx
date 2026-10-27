@@ -12,6 +12,7 @@ import {
   type ContextSystemParts,
 } from "@hive/pi-adapter";
 import type { ContextFileInfo } from "@hive/protocol";
+import { toast } from "../modules/toast-store.ts";
 import { useActiveRegistry } from "../store/ai-registry-store.ts";
 import { ProviderIcon } from "./ProviderIcon.tsx";
 import { getSupportedThinkingLevels } from "../lib/models/thinking.ts";
@@ -127,14 +128,32 @@ export function useContextBreakdown(): ContextBreakdownData {
   }, [registry, contextFiles]);
   const contextTokens = stats?.contextUsage?.tokens ?? transcript.lastUsage?.totalTokens ?? 0;
   const contextWindow = selectedModel?.contextWindow ?? stats?.contextUsage?.contextWindow ?? 0;
-  const breakdown = useMemo(
-    // Only subdivide the system residual once Pi reports an exact total; before that the view stays as it was.
-    () => estimateContextBreakdown(transcript, contextTokens, contextTokens > 0 ? systemParts : null),
-    [transcript, contextTokens, systemParts],
-  );
-  const tokens = contextTokens > 0 ? contextTokens : breakdown.totalTokens;
+  // The breakdown walks every message (O(n)), so: ignore the live streaming message (the key only changes
+  // when persisted/live messages do) and compute lazily, only when a consumer reads `.breakdown`.
+  const { byId, order, leafId, live, revision } = transcript;
+  const lazy = useMemo(() => {
+    let cached: ContextBreakdownResult | null = null;
+    return () => {
+      if (!cached) {
+        const stable = { ...transcript, streaming: null };
+        // Only subdivide the system residual once Pi reports an exact total; before that the view stays as it was.
+        cached = estimateContextBreakdown(stable, contextTokens, contextTokens > 0 ? systemParts : null);
+      }
+      return cached;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the stable parts of `transcript`
+  }, [byId, order, leafId, live, revision, contextTokens, systemParts]);
+  // Unknown total (no usage yet): the estimate itself is the number, so it is needed eagerly.
+  const tokens = contextTokens > 0 ? contextTokens : lazy().totalTokens;
   const percent = contextWindow > 0 ? (tokens / contextWindow) * 100 : 0;
-  return { breakdown, contextTokens: tokens, contextWindow, percent };
+  return {
+    get breakdown() {
+      return lazy();
+    },
+    contextTokens: tokens,
+    contextWindow,
+    percent,
+  };
 }
 
 function colorFor(key: string, category: ContextCategory, toolIndex: Map<string, number>): string {
@@ -426,6 +445,7 @@ export const ContextBreakdownView: React.FC<{ data: ContextBreakdownData }> = ({
       }
     } catch (err) {
       console.error("Compaction failed:", err);
+      toast({ kind: "error", message: `Compaction failed: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
       setCompacting(false);
     }

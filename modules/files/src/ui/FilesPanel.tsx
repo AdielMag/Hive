@@ -88,14 +88,49 @@ export const FilesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
       void loadGitStatus();
     } catch (e) {
       console.error("Failed to load files", e);
+      host.toast({ message: `Failed to load files: ${e instanceof Error ? e.message : String(e)}`, kind: "error" });
     } finally {
       setLoading(false);
     }
-  }, [activeProject?.path, host.files, loadGitStatus]);
+  }, [activeProject?.path, host.files, host.toast, loadGitStatus]);
 
   useEffect(() => {
     void loadFiles();
   }, [loadFiles]);
+
+  // Keep tree fresh on window focus and when agent settles (debounced)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const debouncedRefresh = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        void loadFiles();
+      }, 300);
+    };
+
+    const onFocus = () => debouncedRefresh();
+    window.addEventListener("focus", onFocus);
+
+    let unsubEvents: (() => void) | undefined;
+    if (typeof host.sessions?.onEvent === "function") {
+      unsubEvents = host.sessions.onEvent(({ event }) => {
+        if (
+          event?.type === "agent_end" ||
+          event?.type === "turn_end" ||
+          event?.type === "response_end" ||
+          event?.type === "tool_result"
+        ) {
+          debouncedRefresh();
+        }
+      });
+    }
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("focus", onFocus);
+      unsubEvents?.();
+    };
+  }, [host.sessions, loadFiles]);
 
   // Track active tab
   useEffect(() => {
@@ -196,14 +231,16 @@ export const FilesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           await loadFiles();
         } else {
           console.error("Create failed:", res.error);
+          host.toast({ message: `Create failed: ${res.error || "Unknown error"}`, kind: "error" });
         }
       } catch (err) {
         console.error("Failed to create item", err);
+        host.toast({ message: `Failed to create item: ${err instanceof Error ? err.message : String(err)}`, kind: "error" });
       } finally {
         setCreating(null);
       }
     },
-    [activeProject, creating, host.commands, host.ipc, loadFiles],
+    [activeProject, creating, host.commands, host.ipc, host.toast, loadFiles],
   );
 
   // Rename item submission
@@ -224,14 +261,16 @@ export const FilesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           await loadFiles();
         } else {
           console.error("Rename failed:", res.error);
+          host.toast({ message: `Rename failed: ${res.error || "Unknown error"}`, kind: "error" });
         }
       } catch (err) {
         console.error("Failed to rename item", err);
+        host.toast({ message: `Failed to rename item: ${err instanceof Error ? err.message : String(err)}`, kind: "error" });
       } finally {
         setRenamingPath(null);
       }
     },
-    [activeProject, host.ipc, loadFiles],
+    [activeProject, host.ipc, host.toast, loadFiles],
   );
 
   // Delete item submission
@@ -248,13 +287,15 @@ export const FilesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
         await loadFiles();
       } else {
         console.error("Delete failed:", res.error);
+        host.toast({ message: `Delete failed: ${res.error || "Unknown error"}`, kind: "error" });
       }
     } catch (err) {
       console.error("Failed to delete item", err);
+      host.toast({ message: `Failed to delete item: ${err instanceof Error ? err.message : String(err)}`, kind: "error" });
     } finally {
       setDeletingNode(null);
     }
-  }, [activeProject, deletingNode, host.ipc, loadFiles]);
+  }, [activeProject, deletingNode, host.ipc, host.toast, loadFiles]);
 
   // Context Menu handlers
   const handleContextMenu = useCallback((e: React.MouseEvent, node: TreeNode | null) => {
@@ -275,14 +316,37 @@ export const FilesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     return host.commands.has("terminal.run") && [".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".sh", ".bash", ".ps1"].includes(ext);
   };
 
+  const quoteForShell = (filePath: string, shellKind: "bash" | "powershell" | "cmd"): string => {
+    if (shellKind === "bash") {
+      return `'${filePath.replace(/'/g, `'\\''`)}'`;
+    }
+    if (shellKind === "powershell") {
+      return `'${filePath.replace(/'/g, "''")}'`;
+    }
+    return `"${filePath.replace(/%/g, "%%").replace(/"/g, '""')}"`;
+  };
+
   const handleRunFile = async (node: TreeNode) => {
     const ext = node.name.slice(node.name.lastIndexOf(".")).toLowerCase();
+    const isWin = typeof navigator !== "undefined" && (/Win/i.test(navigator.platform) || /Windows/i.test(navigator.userAgent));
+    let shellKind: "bash" | "powershell" | "cmd" = isWin ? "powershell" : "bash";
+    try {
+      const shells = await host.ipc.invoke<{ id: string; isDefault: boolean }[]>("mod:terminal:shells");
+      const defaultShell = shells?.find((s) => s.isDefault)?.id;
+      if (defaultShell === "pwsh" || defaultShell === "powershell") shellKind = "powershell";
+      else if (defaultShell === "cmd") shellKind = "cmd";
+      else if (defaultShell === "git-bash" || defaultShell === "bash" || defaultShell === "zsh" || defaultShell === "fish") shellKind = "bash";
+    } catch {
+      // fallback
+    }
+
+    const quoted = quoteForShell(node.path, shellKind);
     let cmd = "";
-    if (ext === ".py") cmd = `python "${node.path}"`;
-    else if ([".js", ".mjs", ".cjs"].includes(ext)) cmd = `node "${node.path}"`;
-    else if ([".ts", ".tsx"].includes(ext)) cmd = `npx tsx "${node.path}"`;
-    else if ([".sh", ".bash"].includes(ext)) cmd = `bash "${node.path}"`;
-    else if (ext === ".ps1") cmd = `powershell -NoProfile -File "${node.path}"`;
+    if (ext === ".py") cmd = `python ${quoted}`;
+    else if ([".js", ".mjs", ".cjs"].includes(ext)) cmd = `node ${quoted}`;
+    else if ([".ts", ".tsx"].includes(ext)) cmd = `npx tsx ${quoted}`;
+    else if ([".sh", ".bash"].includes(ext)) cmd = `bash ${quoted}`;
+    else if (ext === ".ps1") cmd = shellKind === "powershell" ? `& ${quoted}` : `powershell -NoProfile -File ${quoted}`;
     if (!cmd) return;
 
     const cwd = getFileParentPath(node.path);

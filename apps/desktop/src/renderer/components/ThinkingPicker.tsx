@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Brain, Check, ChevronDown, Sparkles } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 
@@ -22,7 +23,14 @@ const THINKING_META: Record<string, ThinkingLevelMeta> = {
 };
 
 export const ThinkingPicker: React.FC = () => {
-  const { thinkingLevels, selectedThinkingLevel, setThinkingLevel, selectedModel } = useSessionStore();
+  const { thinkingLevels, selectedThinkingLevel, setThinkingLevel, selectedModel } = useSessionStore(
+    useShallow((s) => ({
+      thinkingLevels: s.thinkingLevels,
+      selectedThinkingLevel: s.selectedThinkingLevel,
+      setThinkingLevel: s.setThinkingLevel,
+      selectedModel: s.selectedModel,
+    })),
+  );
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 

@@ -17,7 +17,10 @@ export async function openProjectFolder(): Promise<void> {
   if (!folder) return;
   const s = useSessionStore.getState();
   const p = await s.addProject(folder);
-  await s.newSessionTab(p.id);
+  await s.openProjectTab(p.id);
+  if (s.tabs.filter((t) => t.projectId === p.id).length === 0) {
+    await s.newSessionTab(p.id);
+  }
 }
 
 function cycleTab(dir: 1 | -1): void {

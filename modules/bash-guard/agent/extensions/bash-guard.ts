@@ -1136,6 +1136,8 @@ var SECRET_RES = [
   /\.(pem|key|p12|pfx|ppk|jks|keystore)$/i,
   /(^|\/)id_(rsa|dsa|ecdsa|ed25519)/,
   /(^|\/)\.(netrc|git-credentials|pypirc)$/,
+  /(^|\/)\.npmrc$/,
+  /(^|\/)\.pi\/agent\/auth\.json$/,
   /(^|\/)\.docker\/config\.json$/,
   /(^|\/)\.kube\/config$/,
   /^\/etc\/(shadow|sudoers|gshadow)/,
@@ -1373,14 +1375,13 @@ rule(
   "fs-recursive-delete",
   "Recursive Directory Deletion",
   "critical",
-  "Recursively removes directories and files (`rm -rf`) without confirmation.",
+  "Recursively removes directories and files (`rm -r` / `rm -rf`).",
   ({ seg }) => {
     if (seg.program !== "rm") return false;
     const f = shortFlags(seg.args);
     const recursive = /r/i.test(f) || hasLong(seg.args, "recursive") || psHas(seg.args, "recurse", 2);
     if (!recursive) return false;
-    const force = /f/i.test(f) || hasLong(seg.args, "force") || psHas(seg.args, "force", 2);
-    return force || hasLong(seg.args, "recursive") || hasLong(seg.args, "no-preserve-root") || positional(seg.args).some(isDangerousRmTarget);
+    return true;
   }
 );
 rule("fs-force-delete", "Forced File Deletion", "moderate", "Deletes files without prompting or errors (`rm -f`).", ({ seg }) => {
@@ -1460,12 +1461,21 @@ rule("git-restore-all", "Discard Working Tree Changes", "high", "Overwrites all 
   }
   return positional(g.rest).some((a) => a === "." || a === "*" || a === ":/" || a === ":/*" || a === ":(top)");
 });
-rule("git-checkout-discard", "Discard Path Changes", "high", "Overwrites local modifications (`git checkout -f`, `git checkout -- <path>`).", ({ seg }) => {
+rule("git-checkout-discard", "Discard Path Changes", "high", "Overwrites local modifications (`git checkout -f`, `git checkout -- <path>`, `git restore <path>`).", ({ seg }) => {
   const g = gitCommand(seg);
-  if (!g || g.sub !== "checkout") return false;
-  if (hasLong(g.rest, "force") || /f/.test(shortFlags(g.rest))) return true;
-  const dd = g.rest.indexOf("--");
-  return dd >= 0 && g.rest.length > dd + 1;
+  if (!g) return false;
+  if (g.sub === "checkout") {
+    if (hasLong(g.rest, "force") || /f/.test(shortFlags(g.rest))) return true;
+    const dd = g.rest.indexOf("--");
+    return dd >= 0 && g.rest.length > dd + 1;
+  }
+  if (g.sub === "restore") {
+    const staged = g.rest.includes("--staged") || /S/.test(shortFlags(g.rest));
+    const worktree = g.rest.includes("--worktree") || /W/.test(shortFlags(g.rest));
+    if (staged && !worktree) return false;
+    return positional(g.rest).length > 0;
+  }
+  return false;
 });
 rule("git-branch-force-del", "Force Delete Git Branch", "moderate", "Force-deletes a git branch regardless of merge status (`git branch -D`).", ({ seg }) => {
   const g = gitCommand(seg);

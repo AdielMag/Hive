@@ -90,13 +90,21 @@ export class AppUpdaterService {
     onProgress({ phase: "downloading", received: 0 });
     let tempDir: string | undefined;
     let fileStream: ReturnType<typeof createWriteStream> | undefined;
+    const abortController = new AbortController();
+    const overallTimer = setTimeout(() => abortController.abort(new Error("Download timed out (overall limit)")), 10 * 60 * 1000);
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => abortController.abort(new Error("Download stalled (idle timeout)")), 60_000);
+    };
     try {
       const expected = await this.fetchExpectedHash(downloadUrl);
       if (!expected) {
         return openInBrowser("This release has no checksum to verify against. Opened the download in your browser instead");
       }
 
-      const res = await fetch(downloadUrl);
+      resetIdleTimer();
+      const res = await fetch(downloadUrl, { signal: abortController.signal });
       if (!res.ok || !res.body) return openInBrowser("Opened download link in browser");
 
       // Fresh private dir per attempt + exclusive create: nothing else can pre-plant or reuse the path.
@@ -119,6 +127,7 @@ export class AppUpdaterService {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        resetIdleTimer();
         received += value.byteLength;
         hash.update(value);
         if (!out.write(value)) await new Promise<void>((r) => out.once("drain", () => r()));
@@ -153,6 +162,9 @@ export class AppUpdaterService {
       onProgress({ phase: "error", received: 0, message: "Download failed — opening in browser instead" });
       await shell.openExternal(downloadUrl);
       return { success: true, message: "Opened download in browser" };
+    } finally {
+      clearTimeout(overallTimer);
+      if (idleTimer) clearTimeout(idleTimer);
     }
   }
 

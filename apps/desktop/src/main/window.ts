@@ -4,6 +4,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { IPC } from "@hive/protocol";
+import { installBrowserPermissionGuards } from "./browser-permissions.ts";
 import { isSafeExternalUrl } from "./safe-url.ts";
 
 /**
@@ -20,6 +21,7 @@ export function createMainWindow(): BrowserWindow {
   const preloadPath = existsSync(preloadCjs) ? preloadCjs : join(mainDir, "../preload/index.js");
 
   Menu.setApplicationMenu(null);
+  installBrowserPermissionGuards();
 
   const win = new BrowserWindow({
     width: 1360,

@@ -82,7 +82,7 @@ describe("PlanPreviewerService", () => {
     service.start(0);
     await new Promise((r) => setTimeout(r, 50));
     await fetch(`http://127.0.0.1:${service.getPort()}/api/notify`, {
-      method: "POST",
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filePath: planFile, context: "ctx" }),
     });
     expect(events).toEqual([["openPlanTab", { filePath: path.resolve(planFile), context: "ctx" }]]);
@@ -131,7 +131,7 @@ describe("PlanPreviewerService isolation between concurrent plans", () => {
     await new Promise((r) => setTimeout(r, 50));
     const base = `http://127.0.0.1:${service.getPort()}`;
     for (const f of [a, b]) {
-      await fetch(`${base}/api/notify`, { method: "POST", body: JSON.stringify({ filePath: f, context: "ctx" }) });
+      await fetch(`${base}/api/notify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filePath: f, context: "ctx" }) });
     }
 
     const waitA = fetch(`${base}/api/wait-feedback?planFile=${encodeURIComponent(a)}&timeout=5`).then((r) => r.json());
@@ -149,6 +149,51 @@ describe("PlanPreviewerService isolation between concurrent plans", () => {
     expect(resB.timeout).toBe(true);
     expect(resB.feedback).toBeUndefined();
     expect(service.getPlanData(b)?.planApproved).toBe(false);
+  });
+
+  it("rejects requests carrying an Origin header and non-JSON POSTs", async () => {
+    const a = makePlan("sec");
+    service = new PlanPreviewerService();
+    service.start(0);
+    await new Promise((r) => setTimeout(r, 50));
+    const base = `http://127.0.0.1:${service.getPort()}`;
+    const json = { "Content-Type": "application/json" };
+    await fetch(`${base}/api/notify`, { method: "POST", headers: json, body: JSON.stringify({ filePath: a }) });
+    const http = await import("node:http");
+    const status = (path: string, headers: Record<string, string>, method = "GET", body?: string) =>
+      new Promise<number>((resolve) => {
+        const req = http.request(`${base}${path}`, { method, headers }, (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        });
+        if (body) req.write(body);
+        req.end();
+      });
+    expect(await status(`/api/plan?planFile=${encodeURIComponent(a)}`, { Origin: "http://evil.test" })).toBe(403);
+    expect(await status(`/api/plan?planFile=${encodeURIComponent(a)}`, {})).toBe(200);
+    expect(await status(`/api/plan?planFile=${encodeURIComponent(path.join(os.tmpdir(), "nope.md"))}`, {})).toBe(404);
+    expect(await status("/api/feedback", { "Content-Type": "text/plain" }, "POST", JSON.stringify({ filePath: a, content: "x" }))).toBe(415);
+  });
+
+  it("keeps feedback submitted with no waiter and returns it on the next wait, even after re-notify", async () => {
+    const a = makePlan("pending");
+    service = new PlanPreviewerService();
+    service.start(0);
+    await new Promise((r) => setTimeout(r, 50));
+    const base = `http://127.0.0.1:${service.getPort()}`;
+    const json = { "Content-Type": "application/json" };
+    await fetch(`${base}/api/notify`, { method: "POST", headers: json, body: JSON.stringify({ filePath: a }) });
+    expect(approve(service, a).success).toBe(true);
+    await fetch(`${base}/api/notify`, { method: "POST", headers: json, body: JSON.stringify({ filePath: a }) });
+    const res = await fetch(`${base}/api/wait-feedback?planFile=${encodeURIComponent(a)}&timeout=1`).then((r) => r.json());
+    expect(res.timeout).toBe(false);
+    expect(res.feedback?.status).toBe("approved");
+    expect(service.getPlanData(a)?.planApproved).toBe(true);
+  });
+
+  it("rejects feedback with an empty file path", () => {
+    service = new PlanPreviewerService();
+    expect(service.submitFeedback({ filePath: "", status: "approved" } as any).success).toBe(false);
   });
 });
 

@@ -74,6 +74,7 @@ export class SessionScanService {
           next[file] = { mtimeMs: st.mtimeMs, size: st.size, entry };
           entries.push(entry);
           dirty = true;
+          await new Promise((r) => setImmediate(r));
         } catch {
           // unreadable / deleted mid-scan: skip
         }

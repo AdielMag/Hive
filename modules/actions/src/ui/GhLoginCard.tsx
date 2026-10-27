@@ -13,7 +13,7 @@ export const GhLoginCard: React.FC<{ host: ModuleHost }> = ({ host }) => {
     <div className="ga-token ga-login" role="status">
       <div className="ga-token__head">
         <AlertCircle size={14} />
-        <span>Not signed in to GitHub. Private repos and a higher rate limit need it.</span>
+        <span>Not signed in to GitHub. Install GitHub CLI or add a token.</span>
       </div>
       {running ? (
         <>

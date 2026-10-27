@@ -67,6 +67,7 @@ describe("ShadowRepo", () => {
     writeFileSync(join(testCwd, "main.ts"), "const a = 2;\n", "utf8");
     writeFileSync(join(testCwd, "generated.ts"), "export const b = 2;\n", "utf8");
 
+    await repo.snapshot("after"); // agent turn settles: new file captured
     // Undo: restore back to snapBefore tree
     const res = await repo.restore(snapBefore.tree);
     expect(res.restored).toContain("main.ts");
@@ -94,5 +95,32 @@ describe("ShadowRepo", () => {
     expect(snap.fileCount).toBe(1); // only index.ts counted
     expect(snap.partial).toBe(true); // skipped bundle.zip
     expect(snap.skippedFiles).toContain("bundle.zip");
+  });
+
+  it("rewind keeps never-snapshotted files but deletes snapshotted new files", async () => {
+    writeFileSync(join(testCwd, "a.txt"), "a", "utf8");
+    const base = await repo.snapshot("base");
+    // user-owned big/binary files never captured
+    writeFileSync(join(testCwd, "demo.mp4"), "video", "utf8");
+    writeFileSync(join(testCwd, "new.txt"), "new", "utf8");
+    await repo.snapshot("later");
+    const plan = await repo.planRestore(base.tree);
+    expect(plan.filesToDelete).toContain("new.txt");
+    expect(plan.filesToDelete).not.toContain("demo.mp4");
+    expect(plan.filesKept).toContain("demo.mp4");
+    const res = await repo.restore(base.tree);
+    expect(existsSync(join(testCwd, "demo.mp4"))).toBe(true);
+    expect(existsSync(join(testCwd, "new.txt"))).toBe(false);
+    expect(res.deleted).toContain("new.txt");
+  });
+
+  it("keeps files over the size cap even if untracked by shadow", async () => {
+    const small = new ShadowRepo({ cwd: testCwd, storageDir: testStorage, maxFileSizeBytes: 10 });
+    writeFileSync(join(testCwd, "a.txt"), "a", "utf8");
+    const base = await small.snapshot("base");
+    writeFileSync(join(testCwd, "data.csv"), "x".repeat(100), "utf8");
+    await small.snapshot("later");
+    const plan = await small.planRestore(base.tree);
+    expect(plan.filesToDelete).not.toContain("data.csv");
   });
 });

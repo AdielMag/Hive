@@ -67,7 +67,7 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   z-index: 1000;
   transform-origin: bottom left;
-  animation: mention-pop 120ms cubic-bezier(0.23, 1, 0.32, 1);
+  animation: mention-pop 120ms var(--ease-out);
 }
 @keyframes mention-pop {
   from { opacity: 0; transform: translateY(4px) scale(0.985); }

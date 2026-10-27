@@ -70,7 +70,8 @@ export const MODES: ModeMeta[] = [
 ];
 
 export const ModePicker: React.FC = () => {
-  const { selectedMode, setMode } = useSessionStore();
+  const selectedMode = useSessionStore((s) => s.selectedMode);
+  const setMode = useSessionStore((s) => s.setMode);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hintSeen, setHintSeen] = useState(() => getStoredItem(AUTO_EDIT_HINT_KEY) === "seen");

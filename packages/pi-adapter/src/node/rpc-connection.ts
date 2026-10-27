@@ -7,7 +7,6 @@
  * - Shutdown closes stdin (Pi's orderly path), then kills the process tree after a grace period.
  */
 import { type ChildProcess, spawn } from "node:child_process";
-import { once } from "node:events";
 import type { RpcExtensionUIRequest, RpcExtensionUIResponse, RpcResponse } from "@earendil-works/pi-coding-agent";
 import type { PiStreamEvent, StudioRpcCommand } from "@hive/protocol";
 import { JsonlSplitter, serializeRecord } from "../jsonl.ts";
@@ -31,7 +30,7 @@ export interface PiExit {
 }
 
 export interface SendOptions {
-  /** Reject if no response arrives in time (default: no timeout). */
+  /** Reject if no response arrives in time (default: 60s for standard commands, none for long-running). */
   timeoutMs?: number;
 }
 
@@ -53,6 +52,18 @@ export class PiRpcError extends Error {
   }
 }
 
+/** RPC commands that can legitimately take longer than the 60s default timeout. */
+const LONG_RUNNING_COMMANDS = new Set<string>([
+  "compact",
+  "prompt",
+  "steer",
+  "follow_up",
+  "bash",
+  "login",
+]);
+
+const DEFAULT_RPC_TIMEOUT_MS = 60_000;
+
 export class PiRpcConnection {
   private child: ChildProcess | null = null;
   private readonly splitter = new JsonlSplitter();
@@ -66,6 +77,8 @@ export class PiRpcConnection {
   private readonly uiListeners = new Set<Listener<RpcExtensionUIRequest>>();
   private readonly exitListeners = new Set<Listener<PiExit>>();
   private readonly protocolErrorListeners = new Set<Listener<string>>();
+  private lastProtocolErrorWarn = 0;
+  private suppressedProtocolErrors = 0;
 
   constructor(private readonly options: PiRpcConnectionOptions) {}
 
@@ -109,7 +122,7 @@ export class PiRpcConnection {
     child.stdin?.on("error", () => {
       // EPIPE after the child exits; the exit handler reports it.
     });
-    child.on("exit", (code, signal) => this.handleExit({ code, signal }));
+    child.once("close", (code, signal) => this.handleExit({ code, signal }));
 
     await new Promise<void>((resolve, reject) => {
       child.once("spawn", () => resolve());
@@ -126,13 +139,17 @@ export class PiRpcConnection {
       return Promise.reject(new PiRpcError("Pi process is not running", command.type));
     }
     const id = `s${++this.nextId}`;
+    let timeoutMs = options.timeoutMs;
+    if (timeoutMs === undefined && !LONG_RUNNING_COMMANDS.has(command.type)) {
+      timeoutMs = DEFAULT_RPC_TIMEOUT_MS;
+    }
     return new Promise<RpcResponse>((resolve, reject) => {
       const pending: Pending = { resolve, reject };
-      if (options.timeoutMs) {
+      if (timeoutMs !== undefined && timeoutMs > 0) {
         pending.timer = setTimeout(() => {
           this.pending.delete(id);
-          reject(new PiRpcError(`Timed out after ${options.timeoutMs} ms waiting for ${command.type}`, command.type));
-        }, options.timeoutMs);
+          reject(new PiRpcError(`Timed out after ${timeoutMs} ms waiting for ${command.type}`, command.type));
+        }, timeoutMs);
       }
       this.pending.set(id, pending);
       this.write({ ...command, id }).catch((error: unknown) => {
@@ -181,10 +198,14 @@ export class PiRpcConnection {
   }
 
   /** Orderly shutdown: close stdin, wait `graceMs`, then kill the process tree. */
-  async stop(graceMs = 3000): Promise<PiExit> {
+  async stop(graceMs = 500): Promise<PiExit> {
     const child = this.child;
     if (!child || this.exitInfo) return this.exitInfo ?? { code: null, signal: null };
-    child.stdin?.end();
+    try {
+      child.stdin?.end();
+    } catch {
+      // stdin already closed
+    }
     const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), graceMs));
     const result = await Promise.race([this.waitForExit(), timeout]);
     if (result === "timeout" && child.pid !== undefined) {
@@ -202,19 +223,49 @@ export class PiRpcConnection {
     const data = serializeRecord(record);
     this.writeChain = this.writeChain.then(async () => {
       if (!stdin || stdin.destroyed || this.exitInfo) throw new PiRpcError("Pi process is not running", "write");
-      if (!stdin.write(data)) await once(stdin, "drain");
+      if (!stdin.write(data)) {
+        await new Promise<void>((resolve, reject) => {
+          const cleanup = () => {
+            stdin.removeListener("drain", onDrain);
+            stdin.removeListener("close", onClose);
+            stdin.removeListener("error", onError);
+            this.child?.removeListener("close", onClose);
+          };
+          const onDrain = () => {
+            cleanup();
+            resolve();
+          };
+          const onClose = () => {
+            cleanup();
+            reject(new PiRpcError("Pi stdin closed before drain", "write"));
+          };
+          const onError = (err: Error) => {
+            cleanup();
+            reject(err);
+          };
+          stdin.once("drain", onDrain);
+          stdin.once("close", onClose);
+          stdin.once("error", onError);
+          this.child?.once("close", onClose);
+        });
+      }
     });
     return this.writeChain;
   }
 
   private handleLine(line: string): void {
-    let record: { type?: string; id?: string; command?: string; error?: string };
+    let raw: unknown;
     try {
-      record = JSON.parse(line) as typeof record;
+      raw = JSON.parse(line);
     } catch {
-      this.emit(this.protocolErrorListeners, `Unparseable stdout record: ${line.slice(0, 200)}`);
+      this.reportProtocolError(`Unparseable stdout record: ${line.slice(0, 200)}`);
       return;
     }
+    if (!raw || typeof raw !== "object") {
+      this.reportProtocolError(`Non-object stdout record: ${line.slice(0, 200)}`);
+      return;
+    }
+    const record = raw as { type?: string; id?: string; command?: string; error?: string };
     if (record.type === "response") {
       const pending = record.id ? this.pending.get(record.id) : undefined;
       if (pending && record.id) {
@@ -222,7 +273,7 @@ export class PiRpcConnection {
         if (pending.timer) clearTimeout(pending.timer);
         pending.resolve(record as RpcResponse);
       } else if (record.command === "parse") {
-        this.emit(this.protocolErrorListeners, `Pi could not parse a command: ${record.error ?? "unknown error"}`);
+        this.reportProtocolError(`Pi could not parse a command: ${record.error ?? "unknown error"}`);
       }
       return;
     }
@@ -231,6 +282,19 @@ export class PiRpcConnection {
       return;
     }
     this.emit(this.eventListeners, record as PiStreamEvent);
+  }
+
+  private reportProtocolError(message: string): void {
+    const now = Date.now();
+    if (now - this.lastProtocolErrorWarn > 2000) {
+      const extra = this.suppressedProtocolErrors > 0 ? ` (${this.suppressedProtocolErrors} similar suppressed)` : "";
+      console.warn(`[pi-adapter] protocol error: ${message}${extra}`);
+      this.lastProtocolErrorWarn = now;
+      this.suppressedProtocolErrors = 0;
+    } else {
+      this.suppressedProtocolErrors++;
+    }
+    this.emit(this.protocolErrorListeners, message);
   }
 
   private handleExit(exit: PiExit): void {
