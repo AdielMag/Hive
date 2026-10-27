@@ -181,7 +181,7 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
 
       {/* Status line */}
       {!error && !loading && packages.length > 0 && (
-        <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
           {packages.length} {packages.length === 1 ? "result" : "results"} · {SOURCE_LABEL[activeKind]}
         </div>
       )}
@@ -279,12 +279,12 @@ const retryButtonStyle: React.CSSProperties = {
   borderRadius: 4,
   color: "var(--text-primary)",
   padding: "2px 8px",
-  fontSize: 10,
+  fontSize: 11,
   cursor: "pointer",
 };
 
 const chipStyle: React.CSSProperties = {
-  fontSize: 9,
+  fontSize: 11,
   padding: "1px 5px",
   borderRadius: 3,
   background: "rgba(var(--fg-rgb), 0.06)",
@@ -368,7 +368,7 @@ const MarketplaceCard = memo(function MarketplaceCard({
           >
             {pkg.name}
           </div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 10, color: "var(--text-muted)", minWidth: 0 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11, color: "var(--text-muted)", minWidth: 0 }}>
             <span style={{ fontFamily: "var(--font-mono)" }}>v{pkg.version}</span>
             {pkg.author && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {pkg.author}</span>}
           </div>
@@ -403,7 +403,7 @@ const MarketplaceCard = memo(function MarketplaceCard({
       )}
 
       {/* Metadata row */}
-      <div style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 10, color: "var(--text-muted)", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 11, color: "var(--text-muted)", flexWrap: "wrap" }}>
         {ago && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title={pkg.updatedAt}>
             <Clock size={10} aria-hidden /> {ago}
@@ -418,7 +418,7 @@ const MarketplaceCard = memo(function MarketplaceCard({
       </div>
 
       {scorePct !== null && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--text-muted)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
           <span>Score {scorePct}</span>
           <div style={{ flex: 1, height: 3, borderRadius: 2, background: "var(--bg-elevated)", overflow: "hidden" }}>
             <div style={{ width: `${scorePct}%`, height: "100%", background: "var(--accent-base)" }} />
@@ -430,7 +430,7 @@ const MarketplaceCard = memo(function MarketplaceCard({
       <div style={{ marginTop: "auto", display: "flex", gap: 6, alignItems: "center", paddingTop: 4 }}>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", minWidth: 0, flex: 1 }}>
           {pkg.capabilities?.slice(0, 2).map((cap) => (
-            <span key={cap} style={{ ...chipStyle, textTransform: "uppercase", color: "var(--accent-hover)", fontWeight: 600 }}>
+            <span key={cap} style={{ ...chipStyle, color: "var(--accent-hover)", fontWeight: 600 }}>
               {cap}
             </span>
           ))}
@@ -466,7 +466,7 @@ const MarketplaceCard = memo(function MarketplaceCard({
             border: "none",
             background: staged ? "var(--bg-elevated)" : "var(--accent-base)",
             color: staged ? "var(--success)" : "#fff",
-            fontSize: 10,
+            fontSize: 11,
             cursor: "pointer",
             fontWeight: 500,
             flexShrink: 0,
