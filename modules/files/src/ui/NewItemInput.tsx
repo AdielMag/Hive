@@ -106,7 +106,7 @@ export const NewItemInput: React.FC<NewItemInputProps> = ({
       {error && (
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: "#ef4444",
             paddingLeft: 20,
             marginTop: 2,

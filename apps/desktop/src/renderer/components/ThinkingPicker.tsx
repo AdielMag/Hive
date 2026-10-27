@@ -160,11 +160,11 @@ export const ThinkingPicker: React.FC = () => {
               background: "var(--bg-card)",
             }}
           >
-            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>
               Reasoning Level
             </span>
             {supportsReasoning && (
-              <span style={{ fontSize: 9, color: "var(--accent-base)", display: "flex", alignItems: "center", gap: 3 }}>
+              <span style={{ fontSize: 11, color: "var(--accent-base)", display: "flex", alignItems: "center", gap: 3 }}>
                 <Sparkles size={10} /> {availableLevels.length} level{availableLevels.length === 1 ? "" : "s"} supported
               </span>
             )}
@@ -209,7 +209,7 @@ export const ThinkingPicker: React.FC = () => {
                         {meta.badge && (
                           <span
                             style={{
-                              fontSize: 9,
+                              fontSize: 11,
                               fontWeight: 700,
                               background: "rgba(var(--accent-rgb), 0.2)",
                               color: "var(--accent-base)",
@@ -222,7 +222,7 @@ export const ThinkingPicker: React.FC = () => {
                         )}
                       </div>
                       {meta.desc && (
-                        <span style={{ fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {meta.desc}
                         </span>
                       )}

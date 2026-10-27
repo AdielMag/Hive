@@ -742,7 +742,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                                 <span style={{ fontWeight: isSelected ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {m.name || m.id}
                                 </span>
-                                <span style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "capitalize" }}>
+                                <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "capitalize" }}>
                                   {m.provider}
                                 </span>
                               </div>
@@ -752,7 +752,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                                 <span
                                   title={`Context window: ${m.contextWindow?.toLocaleString()} tokens`}
                                   style={{
-                                    fontSize: 9,
+                                    fontSize: 11,
                                     padding: "1px 4px",
                                     borderRadius: 3,
                                     background: "var(--bg-card)",
@@ -793,7 +793,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                       padding: "6px 10px",
                       borderTop: "1px solid var(--border-subtle)",
                       background: "var(--bg-card)",
-                      fontSize: 10,
+                      fontSize: 11,
                       color: "var(--text-muted)",
                     }}
                   >
@@ -813,7 +813,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                         background: "transparent",
                         border: "none",
                         color: "var(--accent-base)",
-                        fontSize: 10,
+                        fontSize: 11,
                         cursor: "pointer",
                         padding: 0,
                         fontWeight: 500,

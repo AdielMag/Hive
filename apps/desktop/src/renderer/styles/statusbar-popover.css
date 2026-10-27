@@ -41,13 +41,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .quota-popover__pin-hint {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   margin-left: 6px;
 }
@@ -62,7 +62,7 @@
 
 .quota-popover__foot {
   padding: 8px 12px;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   border-top: 1px solid var(--border-prominent);
   text-align: center;
@@ -87,7 +87,7 @@
 .quota-popover--cost .quota-popover__foot { display: flex; justify-content: center; }
 
 .sb-cost__total {
-  font-size: 26px;
+  font-size: var(--fs-2xl);
   font-weight: 600;
   color: var(--text-primary);
   text-align: center;
@@ -98,7 +98,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-secondary);
 }
 .sb-cost__row dt, .sb-cost__row dd { margin: 0; }
@@ -113,7 +113,7 @@
 .sb-cost__hero { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 0 2px; }
 .sb-cost__session {
   max-width: 100%;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -121,7 +121,7 @@
 }
 .sb-cost__chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 4px; }
 .sb-cost__chip {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   padding: 2px 8px;
   border-radius: 999px;
   color: var(--text-secondary);
@@ -133,17 +133,15 @@
   flex-direction: column;
   gap: 6px;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-base, #000) 28%, transparent);
   border: 1px solid var(--border-subtle);
 }
 .sb-cost__section-title {
   display: flex;
   justify-content: space-between;
-  font-size: 10.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 .sb-cost__bar, .sb-cost__meter {
@@ -161,4 +159,4 @@
 .sb-cost__dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; }
 .sb-cost__pct { display: inline-block; min-width: 34px; margin-left: 8px; text-align: right; color: var(--text-muted); }
 .sb-cost__meter span { display: block; height: 100%; background: var(--accent-base); transition: width 0.3s ease; }
-.sb-cost__hint { font-size: 11px; color: var(--text-muted); text-align: right; }
+.sb-cost__hint { font-size: var(--fs-xs); color: var(--text-muted); text-align: right; }

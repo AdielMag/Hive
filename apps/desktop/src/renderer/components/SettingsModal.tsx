@@ -576,7 +576,7 @@ const AboutTab: React.FC = () => {
             <span className="ui-row__hint" style={{ margin: 0 }}>
               {k}
             </span>
-            <span className="selectable mono" style={{ fontSize: 11.5, color: "var(--text-primary)", textAlign: "right", overflowWrap: "anywhere" }}>
+            <span className="selectable mono" style={{ fontSize: 12, color: "var(--text-primary)", textAlign: "right", overflowWrap: "anywhere" }}>
               {v}
             </span>
           </div>

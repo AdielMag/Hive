@@ -14,7 +14,7 @@
   gap: 10px;
 }
 .insight-panel__foot {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   text-align: center;
   padding-top: 4px;
@@ -34,7 +34,7 @@
 .quota-card__logo {
   width: 30px;
   height: 30px;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   display: grid;
   place-items: center;
   background: rgba(var(--fg-rgb), 0.06);
@@ -46,19 +46,19 @@
   min-width: 0;
 }
 .quota-card__name {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 .quota-card__account {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .quota-card__error {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--danger);
   padding-bottom: 8px;
 }
@@ -72,10 +72,8 @@
   padding-top: 6px;
 }
 .quota-group__label {
-  font-size: 10.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-muted);
   margin: 2px 0 2px;
 }
@@ -89,17 +87,17 @@
   margin-bottom: 6px;
 }
 .quota-meter__label {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text-secondary);
 }
 .quota-meter__pct {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
 .quota-meter__pct span {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--text-muted);
 }
@@ -137,7 +135,7 @@
   justify-content: space-between;
   gap: 8px;
   margin-top: 6px;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 .quota-meter__reset {
@@ -160,12 +158,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-secondary);
 }
 .quota-payg__hint {
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
@@ -180,7 +178,7 @@
   background: transparent;
   color: inherit;
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
 }
 .sb-quota.is-active {
   background: var(--frame-hover);
@@ -202,7 +200,7 @@
   border-left: 1px solid rgba(var(--fg-rgb), 0.14);
 }
 .sb-quota__pool {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.02em;
   opacity: 0.75;
 }
@@ -266,8 +264,8 @@
   margin: 0 10px 8px;
   padding: 8px 10px;
   border: 1px solid var(--danger);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }

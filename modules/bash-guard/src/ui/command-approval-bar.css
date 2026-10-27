@@ -6,7 +6,7 @@
   gap: 8px;
   min-width: 0;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: linear-gradient(90deg, rgba(var(--cab-warning-rgb), 0.12), rgba(var(--cab-warning-rgb), 0.03) 75%);
   border: 1px solid rgba(var(--cab-warning-rgb), 0.35);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
@@ -37,20 +37,20 @@
 }
 
 .command-approval-bar__title {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .command-approval-bar__severity {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  text-transform: uppercase;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: rgba(var(--cab-warning-rgb), 0.2);
   color: #f59e0b;
   border: 1px solid rgba(var(--cab-warning-rgb), 0.4);
+  text-transform: capitalize;
 }
 
 .command-approval-bar--critical .command-approval-bar__severity {
@@ -61,19 +61,19 @@
 
 .command-approval-bar__shortcuts-hint {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 
 .command-approval-bar__reason {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-secondary);
   line-height: 1.4;
 }
 
 .command-approval-bar__code-wrap {
   position: relative;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
   overflow: hidden;
@@ -83,7 +83,7 @@
   margin: 0;
   padding: 8px 36px 8px 10px;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   line-height: 1.45;
   color: var(--text-primary);
   white-space: pre-wrap;
@@ -102,7 +102,7 @@
   width: 24px;
   height: 24px;
   padding: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
   color: var(--text-muted);
@@ -131,11 +131,11 @@
   gap: 5px;
   height: 26px;
   padding: 0 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
@@ -155,11 +155,11 @@
   gap: 5px;
   height: 26px;
   padding: 0 12px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   border: 1px solid rgba(var(--cab-warning-rgb), 0.45);
   background: rgba(var(--cab-warning-rgb), 0.18);
   color: #f59e0b;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease, filter 0.12s ease;

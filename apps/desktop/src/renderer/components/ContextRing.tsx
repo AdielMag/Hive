@@ -89,7 +89,7 @@ export const ContextRing: React.FC<ContextRingProps> = ({
           style={{ transition: "stroke-dashoffset 0.3s ease" }}
         />
       </svg>
-      <span style={{ fontSize: 11, color: labelColor, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: labelColor, fontVariantNumeric: "tabular-nums" }}>
         {known ? `${formattedTokens}/${formattedTotal}` : "—/—"}
       </span>
     </button>

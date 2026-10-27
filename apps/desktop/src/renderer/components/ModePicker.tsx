@@ -186,11 +186,9 @@ export const ModePicker: React.FC = () => {
               padding: "6px 10px",
               borderBottom: "1px solid var(--border-subtle)",
               background: "var(--bg-card)",
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 700,
               color: "var(--text-muted)",
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
             }}
           >
             Agent Execution Mode
@@ -228,7 +226,7 @@ export const ModePicker: React.FC = () => {
                       <span style={{ fontWeight: isSelected ? 600 : 500, color: isSelected ? m.color : "var(--text-primary)" }}>
                         {m.label}
                       </span>
-                      <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.3 }}>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.3 }}>
                         {m.desc}
                       </span>
                     </div>

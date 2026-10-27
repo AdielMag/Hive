@@ -38,6 +38,26 @@
   --info: #39c5cf;
   --project-color: var(--accent-base);
 
+  /* Type scale. Seven steps; nothing in the UI is set outside them (checked by `npm run lint:css`). */
+  --fs-xs: 11px; /* meta, badges, captions */
+  --fs-sm: 12px; /* secondary text, section labels, controls */
+  --fs-base: 13px; /* body, rows, inputs */
+  --fs-md: 14px; /* reading text (messages, markdown), dialog titles */
+  --fs-lg: 16px; /* panel / view titles */
+  --fs-xl: 20px; /* page titles, headline figures */
+  --fs-2xl: 24px; /* hero figures only */
+
+  /* Radius scale. Nested radii step down. */
+  --radius-xs: 4px; /* badges, kbd, tiny marks */
+  --radius-sm: 6px; /* buttons, inputs, rows */
+  --radius-md: 8px; /* menus, cards, chips groups */
+  --radius-lg: 12px; /* panels, dialogs, composer */
+
+  /* Control heights. One height per context. */
+  --control-sm: 24px;
+  --control-md: 28px;
+  --control-lg: 32px;
+
   /* Motion tokens (emil): strong curves; built-in CSS easings are too weak. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);

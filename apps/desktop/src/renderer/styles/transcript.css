@@ -31,7 +31,7 @@
 .transcript__empty-icon {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   display: grid;
   place-items: center;
   color: var(--text-muted);
@@ -40,12 +40,12 @@
   margin-bottom: 6px;
 }
 .transcript__empty-title {
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 650;
   color: var(--text-primary);
 }
 .transcript__empty-sub {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   color: var(--text-muted);
 }
 .transcript__empty-section {
@@ -57,7 +57,7 @@
   text-align: left;
 }
 .transcript__empty-label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   padding: 0 10px 4px;
 }
@@ -68,11 +68,11 @@
   gap: 12px;
   padding: 6px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   cursor: pointer;
   text-align: left;
 }
@@ -89,7 +89,7 @@
 }
 .transcript__empty-recent-time {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -108,7 +108,7 @@
   background: var(--bg-card);
   color: var(--text-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   cursor: pointer;
 }
 @media (hover: hover){
@@ -126,7 +126,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
 }
 .transcript__jump {
@@ -164,7 +164,7 @@
   border: 1px solid rgba(var(--accent-rgb), 0.22);
   border-radius: 14px 14px 4px 14px;
   padding: 9px 13px;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   line-height: 1.55;
   display: flex;
   flex-direction: column;
@@ -179,7 +179,7 @@
   opacity: 0.75;
 }
 .msg-user__pending-files {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
@@ -191,7 +191,7 @@
 .msg-user__images img {
   max-height: 110px;
   max-width: 160px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   object-fit: contain;
 }
@@ -200,7 +200,7 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -236,9 +236,10 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
   min-height: 20px;
 }
 .msg-error {
@@ -246,11 +247,11 @@
   align-items: flex-start;
   gap: 8px;
   padding: 9px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(229, 83, 75, 0.45);
   background: rgba(229, 83, 75, 0.08);
   color: var(--danger);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .msg-chevron {
   transition: transform 0.15s ease;
@@ -262,7 +263,7 @@
 }
 
 .msg-thinking {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: rgba(var(--fg-rgb), 0.02);
 }
@@ -275,7 +276,7 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   cursor: pointer;
   text-align: left;
 }
@@ -286,14 +287,15 @@
 }
 .msg-thinking__len {
   margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
 }
 .msg-thinking__body {
   padding: 8px 14px 12px 32px;
   border-top: 1px solid var(--border-subtle);
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.6;
   white-space: pre-wrap;
   max-height: 340px;
@@ -301,7 +303,7 @@
 }
 
 .msg-tool {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
   overflow: hidden;
@@ -316,7 +318,7 @@
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   cursor: pointer;
   text-align: left;
 }
@@ -339,7 +341,7 @@ div.msg-tool__head {
 .msg-tool__arg {
   flex: 1;
   min-width: 0;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -387,7 +389,7 @@ div.msg-tool__head {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 .msg-marker::before,
@@ -398,7 +400,7 @@ div.msg-tool__head {
   background: var(--border-subtle);
 }
 .msg-summary {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px dashed var(--border-prominent);
   padding: 10px 14px;
   background: rgba(var(--fg-rgb), 0.02);
@@ -413,11 +415,9 @@ div.msg-tool__head {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--accent-base);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   margin-bottom: 0;
 }
 .msg-summary__icon {
@@ -426,14 +426,14 @@ div.msg-tool__head {
 }
 .msg-summary__meta {
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   font-weight: 500;
   text-transform: none;
   letter-spacing: normal;
 }
 .msg-summary__content {
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.5;
   color: var(--text-secondary);
   position: relative;
@@ -456,11 +456,11 @@ div.msg-tool__head {
   gap: 4px;
   margin-top: 8px;
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface-raised, rgba(var(--fg-rgb), 0.03));
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   cursor: pointer;
   user-select: none;
@@ -520,11 +520,11 @@ div.msg-tool__head {
   gap: 4px;
   height: 22px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   cursor: pointer;
   transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
@@ -556,7 +556,7 @@ div.msg-tool__head {
   border: 1px dashed rgba(var(--accent-rgb), 0.35);
   border-radius: 14px 14px 4px 14px;
   padding: 10px 14px;
-  font-size: 13px;
+  font-size: var(--fs-base);
   line-height: 1.5;
   display: flex;
   flex-direction: column;
@@ -576,7 +576,7 @@ div.msg-tool__head {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .msg-queued__badge {
@@ -584,7 +584,7 @@ div.msg-tool__head {
   align-items: center;
   gap: 4px;
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--accent-base);
   letter-spacing: 0.02em;
 }
@@ -606,11 +606,11 @@ div.msg-tool__head {
   gap: 4px;
   height: 22px;
   padding: 0 7px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border-subtle);
   background: rgba(var(--fg-rgb), 0.04);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   cursor: pointer;
   white-space: nowrap;
   transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
@@ -670,12 +670,12 @@ div.msg-tool__head {
   width: 100%;
   min-height: 64px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--accent-base);
   background: var(--bg-input);
   color: var(--text-primary);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: 1.45;
   resize: vertical;
   outline: none;
@@ -689,7 +689,7 @@ div.msg-tool__head {
 }
 
 .msg-queued__hint {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   margin-left: auto;
 }
@@ -700,10 +700,10 @@ div.msg-tool__head {
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(var(--accent-rgb), 0.08);
   border: 1px dashed rgba(var(--accent-rgb), 0.28);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-primary);
   animation: fade-up 0.15s ease;
 }
@@ -720,7 +720,7 @@ div.msg-tool__head {
 
 .composer-queue-bar__hint {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .composer-queue-bar__btn {
@@ -729,11 +729,11 @@ div.msg-tool__head {
   gap: 3px;
   height: 20px;
   padding: 0 7px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1px solid rgba(var(--accent-rgb), 0.3);
   background: var(--accent-subtle);
   color: var(--accent-hover);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
@@ -775,7 +775,7 @@ div.msg-tool__head {
   width: 56px;
   height: 56px;
   flex-shrink: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: rgba(var(--fg-rgb), 0.04);
   box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.08);
   animation: fade-up 0.15s ease;
@@ -793,7 +793,7 @@ div.msg-tool__head {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   pointer-events: none;
 }
 
@@ -803,7 +803,7 @@ div.msg-tool__head {
   bottom: 4px;
   display: flex;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
   pointer-events: none;
@@ -814,7 +814,7 @@ div.msg-tool__head {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: zoom-in;
 }
 
@@ -830,10 +830,8 @@ div.msg-tool__head {
 }
 
 .attach-tile__ext {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-muted);
   line-height: 1;
 }
@@ -893,11 +891,11 @@ div.msg-tool__head {
   margin-left: auto;
   flex-shrink: 0;
   padding: 3px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--danger);
   background: var(--danger);
   color: #fff;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -917,7 +915,7 @@ div.msg-tool__head {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }

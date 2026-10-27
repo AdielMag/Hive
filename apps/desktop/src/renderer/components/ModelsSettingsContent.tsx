@@ -567,7 +567,7 @@ export const ModelsSettingsContent: React.FC = () => {
                 >
                   <ProviderIcon provider={p} size={12} />
                   <span>{getProviderDisplayName(p)}</span>
-                  <span style={{ opacity: 0.7, fontSize: 10 }}>({count})</span>
+                  <span style={{ opacity: 0.7, fontSize: 11 }}>({count})</span>
                 </button>
               );
             })}
@@ -720,7 +720,7 @@ export const ModelsSettingsContent: React.FC = () => {
                             </div>
                             <span
                               style={{
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: "var(--text-muted)",
                                 fontFamily: "var(--font-mono)",
                                 overflow: "hidden",
@@ -742,7 +742,7 @@ export const ModelsSettingsContent: React.FC = () => {
                                 borderRadius: 4,
                                 background: "var(--bg-elevated)",
                                 border: "1px solid var(--border-subtle)",
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: "var(--text-muted)",
                                 fontFamily: "var(--font-mono)",
                               }}
@@ -762,7 +762,7 @@ export const ModelsSettingsContent: React.FC = () => {
                                 borderRadius: 4,
                                 background: "rgba(187, 128, 255, 0.12)",
                                 border: "1px solid rgba(187, 128, 255, 0.3)",
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: "#d2a8ff",
                               }}
                               title="Supports reasoning / thinking mode"
@@ -782,7 +782,7 @@ export const ModelsSettingsContent: React.FC = () => {
                                 borderRadius: 4,
                                 background: "rgba(87, 171, 90, 0.12)",
                                 border: "1px solid rgba(87, 171, 90, 0.3)",
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: "var(--success)",
                               }}
                               title="Supports image / multimodal input"

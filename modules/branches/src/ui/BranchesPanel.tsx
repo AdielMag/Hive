@@ -534,9 +534,9 @@ export const BranchesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
                         {refs.slice(0, 4).map((r) => (
                           <RefChip key={`${r.kind}:${r.label}`} {...r} />
                         ))}
-                        {refs.length > 4 && <span style={{ fontSize: 9.5, color: "var(--text-muted)", flexShrink: 0 }}>+{refs.length - 4}</span>}
+                        {refs.length > 4 && <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>+{refs.length - 4}</span>}
                         <span className="bw__msg">{c.message}</span>
-                        {c.parents.length > 1 && <span style={{ fontSize: 9.5, color: laneColor(row.col), flexShrink: 0 }}>merge</span>}
+                        {c.parents.length > 1 && <span style={{ fontSize: 11, color: laneColor(row.col), flexShrink: 0 }}>merge</span>}
                       </div>
                       <span className="bw__author" style={{ width: 150 }}>
                         <Avatar name={c.author} />

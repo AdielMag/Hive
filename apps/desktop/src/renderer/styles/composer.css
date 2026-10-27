@@ -69,8 +69,8 @@
   padding: 8px 10px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-prominent);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
   line-height: 1.4;
   color: var(--text-primary);
   z-index: 50;
@@ -89,9 +89,9 @@
 }
 .auto-edit-hint__btn {
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   border: 1px solid var(--border-prominent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;

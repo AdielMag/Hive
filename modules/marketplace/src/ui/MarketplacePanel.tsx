@@ -148,7 +148,7 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 12 }}>{pkg.name}</div>
-              <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 v{pkg.version}
               </span>
             </div>
@@ -161,8 +161,7 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
                 <span
                   key={cap}
                   style={{
-                    fontSize: 9,
-                    textTransform: "uppercase",
+                    fontSize: 11,
                     padding: "1px 5px",
                     borderRadius: 3,
                     background: "rgba(var(--fg-rgb), 0.06)",
@@ -187,7 +186,7 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
                   border: "none",
                   background: installedMap[pkg.id] ? "var(--bg-elevated)" : "var(--accent-base)",
                   color: installedMap[pkg.id] ? "var(--success)" : "#fff",
-                  fontSize: 10,
+                  fontSize: 11,
                   cursor: "pointer",
                   fontWeight: 500,
                 }}

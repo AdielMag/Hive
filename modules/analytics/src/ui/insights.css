@@ -22,12 +22,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 20px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 .usage__subtitle {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   margin-top: 3px;
 }
@@ -52,7 +52,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -61,13 +61,13 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent-subtle);
   color: var(--accent-base);
 }
 .usage-kpi__delta {
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -79,7 +79,7 @@
   color: var(--success);
 }
 .usage-kpi__value {
-  font-size: 24px;
+  font-size: var(--fs-2xl);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -89,11 +89,11 @@
   text-overflow: ellipsis;
 }
 .usage-kpi__value--small {
-  font-size: 17px;
+  font-size: var(--fs-lg);
   line-height: 33px;
 }
 .usage-kpi__hint {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -110,7 +110,7 @@
   gap: 8px;
 }
 .usage__card-title {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -124,7 +124,7 @@
   flex-wrap: wrap;
   gap: 6px 16px;
   margin-top: 10px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-secondary);
 }
 .usage__legend span {
@@ -137,7 +137,7 @@
 .usage-chart__tip-row i {
   width: 9px;
   height: 9px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   display: inline-block;
   flex-shrink: 0;
 }
@@ -195,7 +195,7 @@ g.is-hover .usage-chart__hit {
   position: absolute;
   right: 0;
   transform: translateY(-50%);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -208,7 +208,7 @@ g.is-hover .usage-chart__hit {
 .usage-chart__xaxis span {
   position: absolute;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   white-space: nowrap;
   bottom: 2px;
@@ -223,19 +223,19 @@ g.is-hover .usage-chart__hit {
   z-index: 3;
   min-width: 170px;
   padding: 9px 11px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border-prominent);
   box-shadow: var(--shadow-pop);
   pointer-events: none;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
 }
 .usage-chart__tip-title {
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
 }
 .usage-chart__tip-total {
-  font-size: 15px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   color: var(--text-primary);
   margin: 1px 0 6px;
@@ -276,7 +276,7 @@ g.is-hover .usage-chart__hit {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-secondary);
 }
 .token-mix__item b {
@@ -288,7 +288,7 @@ g.is-hover .usage-chart__hit {
 .token-mix__item em {
   font-style: normal;
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   width: 30px;
   text-align: right;
 }
@@ -302,7 +302,7 @@ g.is-hover .usage-chart__hit {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .usage__provider-name {
   width: 92px;
@@ -338,14 +338,12 @@ g.is-hover .usage-chart__hit {
 .usage-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .usage-table th {
   text-align: left;
-  font-size: 10.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-muted);
   padding: 6px 8px;
   border-bottom: 1px solid var(--border-subtle);
@@ -405,7 +403,7 @@ g.is-hover .usage-chart__hit {
   width: 36px;
   text-align: right;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 @media (max-width: 900px) {
@@ -439,7 +437,7 @@ g.is-hover .usage-chart__hit {
   border-radius: 999px;
   background: rgba(var(--accent-rgb), 0.1);
   color: var(--accent-base);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
 }
 .usage__focus-name {
@@ -472,11 +470,11 @@ g.is-hover .usage-chart__hit {
 .usage-table__sub {
   margin-left: 8px;
   color: var(--text-muted, #8b909a);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-style: normal;
 }
 .usage-table__more {
   padding: 8px 10px;
   color: var(--text-muted, #8b909a);
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }

@@ -84,9 +84,8 @@ export const DiffViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
                 style={{
                   padding: "1px 5px",
                   borderRadius: 3,
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: 700,
-                  textTransform: "uppercase",
                   background: isStaged ? "rgba(16, 185, 129, 0.15)" : "rgba(var(--accent-rgb), 0.15)",
                   color: isStaged ? "var(--success)" : "var(--accent-base)",
                   flexShrink: 0,
@@ -97,7 +96,7 @@ export const DiffViewerTab: React.FC<{ tab: ModuleTab; host: ModuleHost }> = ({ 
             </div>
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: "var(--text-muted)",
                 fontFamily: "var(--font-mono)",
                 overflow: "hidden",

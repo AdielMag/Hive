@@ -90,7 +90,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
               <Sparkles size={18} />
             </div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 7 }}>
                 <span>AI Usage Insights & Optimization</span>
                 {model && React.createElement(analyticsHost().ui.AiModelChip, { model, clickable: true, feature: "usageAnalysis" })}
               </div>
@@ -182,7 +182,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
                 }}
               >
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-base)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-base)" }}>
                     Telemetry Health Score
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45, maxWidth: 440 }}>
@@ -206,7 +206,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
                   <div style={{ fontSize: 24, fontWeight: 700, color: "var(--accent-base)", lineHeight: 1 }}>
                     {analysis.score}
                   </div>
-                  <div style={{ fontSize: 9.5, fontWeight: 600, color: "var(--text-muted)", marginTop: 3 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginTop: 3 }}>
                     {analysis.scoreLabel}
                   </div>
                 </div>
@@ -228,7 +228,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
                 >
                   <TrendingUp size={16} color="var(--accent-base)" />
                   <div>
-                    <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700 }}>
                       Projected 30-Day Run Rate
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
@@ -240,7 +240,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
 
               {/* Key Insights Section */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 8 }}>
                   Key Telemetry Findings
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -286,7 +286,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
                             {item.metric && (
                               <span
                                 style={{
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   fontWeight: 600,
                                   color: iconColor,
                                   background: "rgba(var(--fg-rgb), 0.05)",
@@ -298,7 +298,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: 11.5, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                          <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
                             {item.description}
                           </div>
                         </div>
@@ -311,7 +311,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
               {/* Actionable Recommendations */}
               {analysis.recommendations.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 8 }}>
                     Actionable Recommendations
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -338,7 +338,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
                           {rec.estimatedSavings && (
                             <span
                               style={{
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontWeight: 700,
                                 color: "var(--success)",
                                 background: "rgba(63, 185, 80, 0.12)",
@@ -350,7 +350,7 @@ export const AiUsageInsightsModal: React.FC<Props> = ({
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize: 11.5, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                        <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
                           {rec.action}
                         </div>
                       </div>

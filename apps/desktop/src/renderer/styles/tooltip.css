@@ -8,11 +8,11 @@
   max-width: 280px;
   padding: 4px 8px;
   border: 1px solid var(--border-prominent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg-elevated);
   color: var(--text-primary);
   font-family: var(--font-sans, inherit);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   line-height: 1.35;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
   pointer-events: none;
@@ -23,7 +23,7 @@
 }
 .tooltip__kbd {
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
 }

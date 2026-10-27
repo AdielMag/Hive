@@ -1,17 +1,15 @@
 /* Shared UI primitives. Components compose these classes instead of duplicating inline style objects. */
 
 .ui-section-label {
-  font-size: 10.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .ui-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .ui-btn {
@@ -21,11 +19,11 @@
   gap: 6px;
   height: 28px;
   padding: 0 10px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: rgba(var(--fg-rgb), 0.04);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -77,8 +75,8 @@ button.ui-chip:active:not(:disabled) {
 .ui-btn--sm {
   height: 24px;
   padding: 0 8px;
-  font-size: 11px;
-  border-radius: 6px;
+  font-size: var(--fs-xs);
+  border-radius: var(--radius-sm);
 }
 .ui-btn--icon {
   width: 28px;
@@ -92,7 +90,7 @@ button.ui-chip:active:not(:disabled) {
   display: inline-flex;
   padding: 2px;
   gap: 2px;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: rgba(var(--fg-rgb), 0.05);
   border: 1px solid var(--border-subtle);
 }
@@ -103,10 +101,10 @@ button.ui-chip:active:not(:disabled) {
   height: 26px;
   padding: 0 11px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
@@ -189,7 +187,7 @@ button.ui-chip:active:not(:disabled) {
   height: 20px;
   padding: 0 7px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   background: rgba(var(--fg-rgb), 0.07);
   color: var(--text-secondary);
@@ -225,18 +223,18 @@ button.ui-chip:active:not(:disabled) {
   border-bottom: none;
 }
 .ui-row__title {
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 500;
   color: var(--text-primary);
 }
 .ui-row__hint {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   margin-top: 1px;
 }
 
 .ui-skeleton {
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(90deg, rgba(var(--fg-rgb), 0.05), rgba(var(--fg-rgb), 0.1), rgba(var(--fg-rgb), 0.05));
   background-size: 200% 100%;
   animation: ui-shimmer 1.4s ease-in-out infinite;
@@ -259,7 +257,7 @@ button.ui-chip:active:not(:disabled) {
   padding: 28px 16px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 
 .ui-panel-header {
@@ -275,7 +273,7 @@ button.ui-chip:active:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--frame-text, var(--text-primary));
@@ -287,10 +285,11 @@ button.ui-chip:active:not(:disabled) {
 }
 
 .ui-kbd {
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border-prominent);
   color: var(--text-secondary);
 }

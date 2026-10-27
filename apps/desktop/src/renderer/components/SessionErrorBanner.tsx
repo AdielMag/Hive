@@ -72,7 +72,7 @@ export const SessionErrorBanner: React.FC<{ error: string }> = ({ error }) => {
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
           <AlertCircle size={15} style={{ flexShrink: 0, color: "var(--danger)" }} />
           <div
-            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12.5, fontWeight: 500, userSelect: "text" }}
+            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 500, userSelect: "text" }}
           >
             {headline}
           </div>

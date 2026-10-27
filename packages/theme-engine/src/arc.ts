@@ -33,8 +33,8 @@ export const MAX_ARC_COLORS = 3;
 export const DEFAULT_ARC_THEME: ArcTheme = {
   colors: [{ hue: 65, sat: 0.65 }],
   mode: "dark",
-  intensity: 0.45,
-  grain: 0.25,
+  intensity: 0.25,
+  grain: 0.1,
 };
 
 export interface ArcPreset {
