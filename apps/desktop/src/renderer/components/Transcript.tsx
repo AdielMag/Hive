@@ -316,7 +316,7 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
                 <Loader2 size={13} className="spin" /> Working…
               </div>
             )}
-            <QueuedMessagesList />
+            <QueuedMessagesList tabId={targetTabId} />
           </div>
         </div>
         {showJump && (
