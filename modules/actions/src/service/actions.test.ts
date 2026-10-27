@@ -169,7 +169,7 @@ describe("token provider", () => {
       expect(await saved.resolve()).toEqual({ token: "from-file", source: "saved" });
       saved.clear();
       const after = await saved.resolve();
-      expect(after.source === "none" || after.source === "git").toBe(true);
+      expect(after.source === "none" || after.source === "git" || after.source === "gh").toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

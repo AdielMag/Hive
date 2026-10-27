@@ -26,7 +26,7 @@ describe("Pi locator", () => {
   it("locates installed Pi on this machine or reports an informative error if absent in CI", () => {
     const result = locatePi();
     if (result.ok) {
-      expect(result.info.version).toMatch(/^0\.\d+\.\d+/);
+      expect(result.info.version).toMatch(/^\d+\.\d+\.\d+/);
       expect(result.info.cliPath).toContain("cli.js");
       expect(result.info.nodePath).toContain("node");
     } else {

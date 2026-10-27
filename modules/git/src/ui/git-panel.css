@@ -20,11 +20,11 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-width: 22px;
-  height: 22px;
+  min-width: var(--control-sm);
+  height: var(--control-sm);
   padding: 0 4px;
   border: none;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;

@@ -147,9 +147,12 @@ h3,
 }
 
 code,
-pre,
-kbd {
+pre {
   font-family: var(--font-mono);
+}
+kbd {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
 }
 
 ::selection {
