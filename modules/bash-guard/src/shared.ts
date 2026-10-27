@@ -15,6 +15,12 @@ export interface DangerousBashPayload {
   ruleTitle: string;
   reason: string;
   matchedSegment?: string;
+  /** "rule" = a deterministic rule matched; "jev" = only Jev's risk assessment flagged it. */
+  source?: "rule" | "jev";
+  /** Plain-language explanation written by a cheap model (display-only; absent when unavailable). */
+  description?: { summary: string; impact: string };
+  /** Jev's opinion when it was consulted: risk on a 0-3 scale, approval as a probability. */
+  jev?: { risk?: number; approval?: number };
 }
 
 export function isDangerousBashPayload(val: unknown): val is DangerousBashPayload {

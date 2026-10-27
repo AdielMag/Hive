@@ -202,3 +202,40 @@ describe("askJev (mocked client)", () => {
     await expect(askJev("x", { env: ENABLED, fetchImpl, log: () => {} })).resolves.toBeNull();
   });
 });
+
+describe("readJevConfig from the Jev module's config.json", () => {
+  const file = (obj: unknown) => () => JSON.stringify(obj);
+  const env = { HIVE_JEV_CONFIG: "/x/config.json" };
+
+  it("is enabled with an API key and a recorded consent", () => {
+    const cfg = readJevConfig(env, file({ apiKey: " k ", consentAt: 1, model: "jev-fast" }));
+    expect(cfg).toMatchObject({ enabled: true, apiKey: "k", model: "jev-fast", source: "jev-module", url: "https://api.typesafe.ai/v1/systemone" });
+  });
+
+  it("stays off without a key, without consent, or with an unreadable file", () => {
+    expect(readJevConfig(env, file({ consentAt: 1 })).enabled).toBe(false);
+    expect(readJevConfig(env, file({ apiKey: "k" })).enabled).toBe(false);
+    expect(readJevConfig(env, file({ apiKey: "k", consentAt: 0 })).enabled).toBe(false);
+    expect(readJevConfig(env, () => "{not json").enabled).toBe(false);
+    expect(
+      readJevConfig(env, () => {
+        throw new Error("ENOENT");
+      }).enabled,
+    ).toBe(false);
+    expect(readJevConfig({}, file({ apiKey: "k", consentAt: 1 })).enabled).toBe(false);
+  });
+
+  it("JEV_GUARD_ENABLED=0 switches it off", () => {
+    expect(readJevConfig({ ...env, JEV_GUARD_ENABLED: "0" }, file({ apiKey: "k", consentAt: 1 })).enabled).toBe(false);
+  });
+
+  it("explicit env credentials take precedence over the module config", () => {
+    const cfg = readJevConfig({ ...env, JEV_GUARD_ENABLED: "1", JEV_API_KEY: "env-key" }, file({ apiKey: "mod", consentAt: 1 }));
+    expect(cfg).toMatchObject({ apiKey: "env-key", source: "env" });
+  });
+
+  it("never sends the module's key to a custom JEV_BASE_URL", () => {
+    const cfg = readJevConfig({ ...env, JEV_GUARD_ENABLED: "1", JEV_BASE_URL: "https://jev.internal" }, file({ apiKey: "mod", consentAt: 1 }));
+    expect(cfg.apiKey).toBeUndefined();
+  });
+});
