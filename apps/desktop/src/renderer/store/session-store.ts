@@ -24,6 +24,7 @@ import {
   type TabItem,
 } from "@hive/protocol";
 import {
+  activePath,
   applyEntries,
   applyEvent,
   createTranscript,
@@ -1877,9 +1878,21 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     try {
       const { entries, leafId } = await window.studio.readSessionFile(sessionPath);
       const t = applyEntries(createTranscript(), entries, leafId, "replace");
-      const firstUserMsg = t.messages.find((m) => m.role === "user");
+      const firstUserMsg = activePath(t)
+        .filter((e) => e.type === "message")
+        .map((e) => e.message as unknown as { role?: string; content?: unknown })
+        .find((m) => m.role === "user");
+      const firstUserText =
+        typeof firstUserMsg?.content === "string"
+          ? firstUserMsg.content
+          : Array.isArray(firstUserMsg?.content)
+            ? (firstUserMsg.content as Array<Record<string, unknown>>)
+                .filter((p) => p.type === "text")
+                .map((p) => String(p.text ?? ""))
+                .join("\n")
+            : "";
       const cleanTitle =
-        firstUserMsg && isTimestampLike(newTab.title) ? titleFromPrompt(firstUserMsg.text, 40) : undefined;
+        firstUserMsg && isTimestampLike(newTab.title) ? titleFromPrompt(firstUserText, 40) : undefined;
       set((s) => ({
         transcriptsByTab: { ...s.transcriptsByTab, [tabId]: t },
         ...(s.displayedTabId === tabId ? { transcript: t } : {}),
