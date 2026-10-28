@@ -2,6 +2,38 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.41.0 — 2026-10-28 · [diff](https://github.com/AdielMag/Hive/compare/v0.40.0...v0.41.0)
+
+### ✨ Features
+
+- **marketplace:** support direct package installation ([`97fe17a`](https://github.com/AdielMag/Hive/commit/97fe17ae3f49272d85a9e940d7055312a145df89))
+- **desktop:** redesign project tab bar with browser-style tabs ([`438fc73`](https://github.com/AdielMag/Hive/commit/438fc734d881a7dff822daea4121746949d703db))
+- **transcript:** group skill loads into dedicated batch rows ([`8ba2146`](https://github.com/AdielMag/Hive/commit/8ba21469a7e124ea2b7e311ba83f953684bf78e9))
+
+### 🐛 Fixes
+
+- **desktop:** derive session title from active path user message ([`34b3ae9`](https://github.com/AdielMag/Hive/commit/34b3ae994f7e1304b8fbd76a01be1714f27c2b5a))
+- **desktop:** keep boot screen visible until initialization completes ([`4684bc9`](https://github.com/AdielMag/Hive/commit/4684bc961ed2e873a4fb453c50d61e661fd3e438))
+
+### 📝 Documentation
+
+- **design:** add DESIGN.md source of truth and finalize layout micro-alignments ([`882f54d`](https://github.com/AdielMag/Hive/commit/882f54d973c99b11788e5dac8f2145a852bebc82))
+
+### 🧹 Other changes
+
+- Merge origin/main into hive branch ([`1d9283c`](https://github.com/AdielMag/Hive/commit/1d9283c6224e1250ff7b98d83a3771fdb59ad011))
+- Merge branch 'hive/when-wanting-to-add-stuff-from-the-m-5c85bb' ([`bf10e0b`](https://github.com/AdielMag/Hive/commit/bf10e0b702675080a9ceed09ef307a6ed33a1af1))
+- Merge branch 'hive/the-tabs-at-the-top-for-each-project-4b9c13' ([`72a3a5a`](https://github.com/AdielMag/Hive/commit/72a3a5a760b93b297a28f43b2f71fd0fe86eab4e))
+- Merge branch 'hive/hive-still-feels-really-vibe-coded-a-d1b0fd' ([`ebce9f3`](https://github.com/AdielMag/Hive/commit/ebce9f311c52f8a84ef175ea1f61cf88c161435e))
+- Merge branch 'hive/curretnyl-when-a-skill-is-being-adde-c728c0' ([`dccc49b`](https://github.com/AdielMag/Hive/commit/dccc49b4a9c2a810fd2587a22a8d753e7a300a7f))
+- **ui:** polish side panels and overlays ([`7dfffbd`](https://github.com/AdielMag/Hive/commit/7dfffbd8d4992b4db4417955d6a9c0f5fb381c9b))
+- **ui:** adapt newly merged main surfaces to design tokens ([`0723995`](https://github.com/AdielMag/Hive/commit/072399550351621c871ae5927e09e4a9b3b507d9))
+- Merge branch 'main' into hive/hive-still-feels-really-vibe-coded-a-d1b0fd ([`c920508`](https://github.com/AdielMag/Hive/commit/c920508a9da4553b3bd84dde12b0ec1865eba308))
+- **ui:** session view polish — neutral bubble, clean empty state, calm composer toolbar, quiet worktree bar ([`11fb862`](https://github.com/AdielMag/Hive/commit/11fb862346e8eb2bf8b95088999a701a108feb1d))
+- **ui:** shell polish — tabs, status bar quotas, titlebar alignment, side panel header baseline ([`d5c1ddd`](https://github.com/AdielMag/Hive/commit/d5c1dddf3d590b95caa125ae6018bcaf2595869e))
+- **ui:** shared primitives — ui-btn, ui-chip, quiet model suffix, button motion ([`81db4f2`](https://github.com/AdielMag/Hive/commit/81db4f21989f7a5c4eca32459f53a841d901f3ec))
+- **ui:** design-system foundations — type/radius/control tokens, sentence-case labels, sans numerals ([`ae78fed`](https://github.com/AdielMag/Hive/commit/ae78fedcc83023e1d942e3fdd04f33db0432ad2c))
+
 ## v0.40.0 — 2026-10-27 · [diff](https://github.com/AdielMag/Hive/compare/v0.39.0...v0.40.0)
 
 ### ✨ Features
