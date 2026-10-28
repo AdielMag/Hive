@@ -1,7 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, Download, Search } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
-import { MarketplaceMethods, type MarketplacePackage, type MarketplaceSourceKind } from "../shared.ts";
+import {
+  MarketplaceMethods,
+  normalizeSource,
+  type MarketplaceInstallResult,
+  type MarketplacePackage,
+  type MarketplaceSourceKind,
+} from "../shared.ts";
+
+type InstallStatus = { state: "installing" } | { state: "failed"; message: string };
 
 export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const [activeKind, setActiveKind] = useState<MarketplaceSourceKind>("pi-npm");
@@ -9,8 +17,20 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const [packages, setPackages] = useState<MarketplacePackage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [installedMap, setInstalledMap] = useState<Record<string, boolean>>({});
+  const [installedSources, setInstalledSources] = useState<string[] | null>(null);
+  const [installStatus, setInstallStatus] = useState<Record<string, InstallStatus>>({});
   const searchSeqRef = useRef(0);
+
+  const refreshInstalled = async () => {
+    try {
+      setInstalledSources(await host.ipc.invoke<string[]>(MarketplaceMethods.installed));
+    } catch {
+      setInstalledSources((prev) => prev ?? []);
+    }
+  };
+
+  const isInstalled = (pkg: MarketplacePackage) =>
+    !!installedSources?.includes(normalizeSource(pkg.source));
 
   const search = async (q = query, k = activeKind) => {
     const seq = ++searchSeqRef.current;
@@ -35,10 +55,29 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     void search();
   }, [activeKind]);
 
-  const handleInstall = (pkg: MarketplacePackage) => {
-    setInstalledMap((s) => ({ ...s, [pkg.id]: true }));
-    host.sessions.setPrompt(`/install ${pkg.source}`);
-    host.toast({ message: "Staged in composer — press Enter to install", kind: "info" });
+  useEffect(() => {
+    void refreshInstalled();
+  }, []);
+
+  const handleInstall = async (pkg: MarketplacePackage) => {
+    setInstallStatus((s) => ({ ...s, [pkg.source]: { state: "installing" } }));
+    let result: MarketplaceInstallResult;
+    try {
+      result = await host.ipc.invoke<MarketplaceInstallResult>(MarketplaceMethods.install, { source: pkg.source });
+    } catch (err: any) {
+      result = { ok: false, message: err?.message || "Install failed" };
+    }
+    if (result.ok) {
+      setInstallStatus((s) => {
+        const { [pkg.source]: _done, ...rest } = s;
+        return rest;
+      });
+      host.toast({ message: `Installed ${pkg.name}`, kind: "success" });
+      await refreshInstalled();
+    } else {
+      setInstallStatus((s) => ({ ...s, [pkg.source]: { state: "failed", message: result.message } }));
+      host.toast({ message: `Couldn't install ${pkg.name}`, kind: "error" });
+    }
   };
 
   return (
@@ -176,7 +215,24 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 12 }}>{pkg.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 12 }}>{pkg.name}</div>
+                {isInstalled(pkg) && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      padding: "1px 5px",
+                      borderRadius: 3,
+                      background: "var(--bg-elevated)",
+                      color: "var(--success)",
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Installed
+                  </span>
+                )}
+              </div>
               <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 v{pkg.version}
               </span>
@@ -205,33 +261,43 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
 
               <div style={{ flex: 1 }} />
 
-              <button
-                onClick={() => handleInstall(pkg)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  padding: "3px 8px",
-                  borderRadius: 4,
-                  border: "none",
-                  background: installedMap[pkg.id] ? "var(--bg-elevated)" : "var(--accent-base)",
-                  color: installedMap[pkg.id] ? "var(--success)" : "#fff",
-                  fontSize: 10,
-                  cursor: "pointer",
-                  fontWeight: 500,
-                }}
-              >
-                {installedMap[pkg.id] ? (
-                  <>
-                    <Check size={10} /> Staged in composer — press Enter to install
-                  </>
-                ) : (
-                  <>
-                    <Download size={10} /> Install
-                  </>
-                )}
-              </button>
+              {(() => {
+                const status = installStatus[pkg.source];
+                const installed = isInstalled(pkg);
+                const busy = status?.state === "installing";
+                const disabled = busy || installed || installedSources === null;
+                const label = busy ? "Installing..." : installed ? "Installed" : status ? "Retry" : "Install";
+                return (
+                  <button
+                    type="button"
+                    onClick={() => void handleInstall(pkg)}
+                    disabled={disabled}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "3px 8px",
+                      borderRadius: 4,
+                      border: "none",
+                      background: installed ? "var(--bg-elevated)" : "var(--accent-base)",
+                      color: installed ? "var(--success)" : "#fff",
+                      fontSize: 10,
+                      cursor: disabled ? "default" : "pointer",
+                      opacity: busy ? 0.7 : 1,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {installed ? <Check size={10} /> : <Download size={10} />} {label}
+                  </button>
+                );
+              })()}
             </div>
+
+            {installStatus[pkg.source]?.state === "failed" && (
+              <div style={{ fontSize: 10, color: "var(--danger)", lineHeight: 1.4 }}>
+                {(installStatus[pkg.source] as { state: "failed"; message: string }).message}
+              </div>
+            )}
           </div>
         ))}
       </div>
