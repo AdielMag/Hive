@@ -35,6 +35,7 @@ import { getTimeline } from "../lib/transcript-timeline.ts";
 import { indexSkills, parseSkillBlock, type SkillIndex } from "../lib/ai/skills.ts";
 import { indexSubagents, parseGetResultText, resolveSubagentView, type NotificationDetails, type SubagentIndex } from "../lib/ai/subagents.ts";
 import { SkillLoadCard } from "./transcript/SkillLoadCard.tsx";
+import { SkillBatchRow } from "./transcript/SkillBatchRow.tsx";
 import { SubagentCard } from "./transcript/SubagentCard.tsx";
 import { SummaryMessage } from "./transcript/SummaryMessage.tsx";
 import { Markdown } from "./code/Markdown.tsx";
@@ -135,13 +136,12 @@ export const TranscriptEmptyState: React.FC<{ projectId?: string; currentSession
     requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus());
   };
 
+  const activeProject = useSessionStore((s) => s.activeProject);
+
   return (
     <div className="transcript__empty">
-      <div className="transcript__empty-icon">
-        <Sparkles size={20} />
-      </div>
-      <div className="transcript__empty-title">What are we building?</div>
-      <div className="transcript__empty-sub">Ask Pi a question or hand it a task in this project. Press <kbd style={{ padding: "1px 4px", fontSize: 11, borderRadius: 3, border: "1px solid var(--border-prominent)", background: "var(--bg-elevated)", color: "var(--text-secondary)" }}>?</kbd> for shortcuts.</div>
+      <div className="transcript__empty-title">{activeProject?.name || "New session"}</div>
+      <div className="transcript__empty-sub">Ask Pi or hand it a task. Press <kbd className="ui-kbd">?</kbd> for shortcuts.</div>
       {recent.length > 0 && projectId && (
         <div className="transcript__empty-section">
           <div className="transcript__empty-label">Recent</div>
@@ -210,14 +210,6 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
     [toolCards]
   );
 
-  const groupedItems = useMemo(
-    () => groupTimelineItems(timeline.items, timeline.toolResults, transcript.tools, isCustomCard),
-    [timeline.items, timeline.toolResults, transcript.tools, isCustomCard]
-  );
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const pinned = useRef(true);
-  const [showJump, setShowJump] = useState(false);
-
   // Every row reads this through context, which bypasses TimelineRow's memo. Keep its identity stable
   // while streaming (the timeline object changes on every token) so settled rows don't all re-render.
   const annotationsRef = useRef<{ sig: string; value: TranscriptAnnotations } | null>(null);
@@ -232,6 +224,14 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
     annotationsRef.current = { sig, value };
     return value;
   }, [timeline, registry, activeProject?.path]);
+
+  const groupedItems = useMemo(
+    () => groupTimelineItems(timeline.items, timeline.toolResults, transcript.tools, isCustomCard, annotations.skills.loads),
+    [timeline.items, timeline.toolResults, transcript.tools, isCustomCard, annotations.skills.loads]
+  );
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pinned = useRef(true);
+  const [showJump, setShowJump] = useState(false);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -287,6 +287,9 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
               if (groupItem.kind === "toolBatch") {
                 return <ToolBatchGroup key={groupItem.key} items={groupItem.items} />;
               }
+              if (groupItem.kind === "skillBatch") {
+                return <SkillBatchRow key={groupItem.key} items={groupItem.items} />;
+              }
               return (
                 <TimelineRow
                   key={groupItem.item.key}
@@ -316,7 +319,7 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
                 <Loader2 size={13} className="spin" /> Working…
               </div>
             )}
-            <QueuedMessagesList />
+            <QueuedMessagesList tabId={targetTabId} />
           </div>
         </div>
         {showJump && (
@@ -347,8 +350,8 @@ export const NestedTimeline: React.FC<{ timeline: Timeline; sessionRunning?: boo
     [toolCards]
   );
   const groupedItems = useMemo(
-    () => groupTimelineItems(timeline.items, timeline.toolResults, {}, isCustomCard),
-    [timeline.items, timeline.toolResults, isCustomCard]
+    () => groupTimelineItems(timeline.items, timeline.toolResults, {}, isCustomCard, effectiveCtx.annotations.skills.loads),
+    [timeline.items, timeline.toolResults, isCustomCard, effectiveCtx.annotations.skills.loads]
   );
 
   return (
@@ -357,6 +360,9 @@ export const NestedTimeline: React.FC<{ timeline: Timeline; sessionRunning?: boo
         {groupedItems.map((groupItem) => {
           if (groupItem.kind === "toolBatch") {
             return <ToolBatchGroup key={groupItem.key} items={groupItem.items} />;
+          }
+          if (groupItem.kind === "skillBatch") {
+            return <SkillBatchRow key={groupItem.key} items={groupItem.items} />;
           }
           return (
             <TimelineRow
@@ -561,6 +567,7 @@ const UserMessage: React.FC<{ text: string; images: Array<{ mimeType: string; da
 };
 
 const ToolBatchGroup: React.FC<{ items: ToolBatchItem[] }> = ({ items }) => {
+  const ctx = useContext(TranscriptContext);
   const [open, setOpen] = useState(false);
 
   // Summarize tools in batch
@@ -576,8 +583,8 @@ const ToolBatchGroup: React.FC<{ items: ToolBatchItem[] }> = ({ items }) => {
   const hasError = items.some((i) => i.result?.isError);
 
   const pills = useMemo(
-    () => items.map((i) => extractToolPill(i.block, i.result, i.running)),
-    [items]
+    () => items.map((i) => extractToolPill(i.block, i.result, i.running, ctx?.annotations.skills.loads)),
+    [items, ctx?.annotations.skills.loads]
   );
 
   const maxVisible = 5;
@@ -610,7 +617,7 @@ const ToolBatchGroup: React.FC<{ items: ToolBatchItem[] }> = ({ items }) => {
           {visiblePills.map((pill, idx) => (
             <span
               key={idx}
-              className={`msg-tool-batch__pill${pill.isError ? " is-error" : ""}${pill.isRunning ? " is-running" : ""}${pill.filePath ? " is-clickable" : ""}`}
+              className={`msg-tool-batch__pill${pill.isError ? " is-error" : ""}${pill.isRunning ? " is-running" : ""}${pill.filePath ? " is-clickable" : ""}${pill.opCategory === "skill" ? " is-skill" : ""}`}
               title={pill.filePath ? `Open ${pill.filePath} in tab · ${pill.tooltip}` : pill.tooltip}
               onClick={
                 pill.filePath
@@ -621,6 +628,7 @@ const ToolBatchGroup: React.FC<{ items: ToolBatchItem[] }> = ({ items }) => {
                   : undefined
               }
             >
+              {pill.opCategory === "skill" && <Sparkles size={10} className="msg-tool-batch__pill-sparkle" />}
               <span className={`msg-tool-batch__pill-op is-${pill.opCategory}`}>{pill.op}</span>
               <span className="msg-tool-batch__pill-target">{pill.target}</span>
             </span>

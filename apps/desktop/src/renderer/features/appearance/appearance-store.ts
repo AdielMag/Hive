@@ -27,7 +27,11 @@ export interface AppearanceState {
 const STORAGE_KEY = "hive.appearance.v2";
 const DEFAULT_EDITOR: EditorPrefs = { codeFontSize: 12.5, ligatures: true, wrapCode: false };
 
+/** Earlier shipped defaults: a user who never touched them follows the current default. */
 function isLegacyDefaultTheme(theme: ArcTheme): boolean {
+  const one = theme.colors.length === 1 ? theme.colors[0] : undefined;
+  // v0.34 honey default (louder wash and grain).
+  if (one?.hue === 65 && one.sat === 0.65 && theme.mode === "dark" && theme.intensity === 0.45 && theme.grain === 0.25) return true;
   return (
     theme.colors.length === 1 &&
     theme.colors[0]?.hue === 265 &&

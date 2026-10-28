@@ -16,14 +16,42 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../../store/session-store.ts";
 
+const EMPTY_QUEUE = { steering: [] as string[], followUp: [] as string[] };
 const EMPTY_HELD: never[] = [];
 
-export const QueuedMessagesList: React.FC = () => {
-  const { queue, clearAllQueued, held, removeHeldMessage, popHeldToEditor } = useSessionStore(
+export interface QueuedMessagesListProps {
+  tabId?: string | null;
+}
+
+function useQueuedMessagesState(tabId?: string | null) {
+  return useSessionStore(
+    useShallow((s) => {
+      const effectiveTabId = tabId ?? s.displayedTabId ?? s.activeTabId;
+      const isDisplayed = !effectiveTabId || effectiveTabId === s.displayedTabId;
+      const queue = !effectiveTabId || isDisplayed ? s.transcript.queue : (s.transcriptsByTab[effectiveTabId]?.queue ?? EMPTY_QUEUE);
+      const targetKey = effectiveTabId
+        ? s.tabs.find((t) => t.id === effectiveTabId)?.activeKey ?? (isDisplayed ? s.activeKey : null)
+        : s.activeKey;
+      const held = (targetKey ? s.compactionHeld[targetKey] : undefined) ?? EMPTY_HELD;
+      const running = !effectiveTabId || isDisplayed ? s.transcript.running : (s.transcriptsByTab[effectiveTabId]?.running ?? false);
+
+      return {
+        effectiveTabId,
+        isDisplayed,
+        queue,
+        held,
+        running,
+      };
+    }),
+  );
+}
+
+export const QueuedMessagesList: React.FC<QueuedMessagesListProps> = ({ tabId }) => {
+  const { effectiveTabId, queue, held, running } = useQueuedMessagesState(tabId);
+
+  const { clearAllQueued, removeHeldMessage, popHeldToEditor } = useSessionStore(
     useShallow((s) => ({
-      queue: s.transcript.queue,
       clearAllQueued: s.clearAllQueued,
-      held: (s.activeKey ? s.compactionHeld[s.activeKey] : undefined) ?? EMPTY_HELD,
       removeHeldMessage: s.removeHeldMessage,
       popHeldToEditor: s.popHeldToEditor,
     })),
@@ -47,7 +75,7 @@ export const QueuedMessagesList: React.FC = () => {
         {total > 1 && (
           <button
             className="transcript__queue-clear-btn"
-            onClick={() => void clearAllQueued()}
+            onClick={() => void clearAllQueued(effectiveTabId ?? undefined)}
             title="Clear all queued messages"
           >
             <Trash2 size={11} /> Clear all
@@ -62,6 +90,8 @@ export const QueuedMessagesList: React.FC = () => {
             message={msg}
             type="steering"
             index={idx}
+            tabId={effectiveTabId ?? undefined}
+            running={running}
           />
         ))}
         {followUp.map((msg, idx) => (
@@ -70,6 +100,8 @@ export const QueuedMessagesList: React.FC = () => {
             message={msg}
             type="followUp"
             index={idx}
+            tabId={effectiveTabId ?? undefined}
+            running={running}
           />
         ))}
         {held.map((h, idx) => (
@@ -82,12 +114,12 @@ export const QueuedMessagesList: React.FC = () => {
                 <div className="msg-queued__actions">
                   <button
                     className="msg-queued__btn"
-                    onClick={() => popHeldToEditor(idx)}
+                    onClick={() => popHeldToEditor(idx, effectiveTabId ?? undefined)}
                     title="Move back to the composer"
                   >
                     <CornerDownLeft size={11} />
                   </button>
-                  <button className="msg-queued__btn" onClick={() => removeHeldMessage(idx)} title="Remove from queue">
+                  <button className="msg-queued__btn" onClick={() => removeHeldMessage(idx, effectiveTabId ?? undefined)} title="Remove from queue">
                     <Trash2 size={11} />
                   </button>
                 </div>
@@ -105,16 +137,23 @@ interface CardProps {
   message: string;
   type: "steering" | "followUp";
   index: number;
+  tabId?: string;
+  running?: boolean;
 }
 
-const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
+const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index, tabId, running: propRunning }) => {
+  const storeRunning = useSessionStore((s) => {
+    if (propRunning !== undefined) return propRunning;
+    if (!tabId || tabId === s.displayedTabId) return s.transcript.running;
+    return s.transcriptsByTab[tabId]?.running ?? false;
+  });
+  const running = propRunning ?? storeRunning;
   const {
     deleteQueuedMessage,
     editQueuedMessage,
     runQueuedNow,
     steerQueuedNext,
     popQueuedToEditor,
-    running,
   } = useSessionStore(
     useShallow((s) => ({
       deleteQueuedMessage: s.deleteQueuedMessage,
@@ -122,7 +161,6 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
       runQueuedNow: s.runQueuedNow,
       steerQueuedNext: s.steerQueuedNext,
       popQueuedToEditor: s.popQueuedToEditor,
-      running: s.transcript.running,
     })),
   );
 
@@ -132,7 +170,7 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
   const isSteering = type === "steering";
 
   const handleSave = async () => {
-    await editQueuedMessage(type, index, editText);
+    await editQueuedMessage(type, index, editText, tabId);
     setIsEditing(false);
   };
 
@@ -145,7 +183,7 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
     if (busy) return;
     setBusy(true);
     try {
-      await runQueuedNow(type, index);
+      await runQueuedNow(type, index, tabId);
     } finally {
       setBusy(false);
     }
@@ -155,7 +193,7 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
     if (busy) return;
     setBusy(true);
     try {
-      await steerQueuedNext(type, index);
+      await steerQueuedNext(type, index, tabId);
     } finally {
       setBusy(false);
     }
@@ -216,7 +254,7 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
               </button>
               <button
                 className="msg-queued__btn"
-                onClick={() => void popQueuedToEditor(type, index)}
+                onClick={() => void popQueuedToEditor(type, index, tabId)}
                 disabled={busy}
                 title="Move back to composer input"
               >
@@ -224,7 +262,7 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
               </button>
               <button
                 className="msg-queued__btn msg-queued__btn--danger"
-                onClick={() => void deleteQueuedMessage(type, index)}
+                onClick={() => void deleteQueuedMessage(type, index, tabId)}
                 disabled={busy}
                 title="Cancel and remove from queue"
               >
@@ -269,18 +307,17 @@ const QueuedMessageCard: React.FC<CardProps> = ({ message, type, index }) => {
   );
 };
 
+export interface QueuedMessagesBarProps {
+  tabId?: string | null;
+}
+
 /** Compact banner rendered above composer textarea when messages are queued. */
-export const QueuedMessagesBar: React.FC = () => {
-  const { queue, clearAllQueued, heldCount } = useSessionStore(
-    useShallow((s) => ({
-      queue: s.transcript.queue,
-      clearAllQueued: s.clearAllQueued,
-      heldCount: (s.activeKey ? s.compactionHeld[s.activeKey]?.length : 0) ?? 0,
-    })),
-  );
+export const QueuedMessagesBar: React.FC<QueuedMessagesBarProps> = ({ tabId }) => {
+  const { effectiveTabId, queue, held } = useQueuedMessagesState(tabId);
+  const clearAllQueued = useSessionStore((s) => s.clearAllQueued);
 
   const steeringCount = queue.steering?.length ?? 0;
-  const followUpCount = (queue.followUp?.length ?? 0) + heldCount;
+  const followUpCount = (queue.followUp?.length ?? 0) + held.length;
   const total = steeringCount + followUpCount;
 
   if (total === 0) return null;
@@ -307,7 +344,7 @@ export const QueuedMessagesBar: React.FC = () => {
       </button>
       <button
         className="composer-queue-bar__btn composer-queue-bar__btn--ghost"
-        onClick={() => void clearAllQueued()}
+        onClick={() => void clearAllQueued(effectiveTabId ?? undefined)}
         title="Clear all queued messages"
       >
         <X size={11} /> Clear

@@ -150,7 +150,7 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
       return (
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             color,
             fontFamily: "var(--font-mono, monospace)",
@@ -410,7 +410,7 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
               display: "flex",
               alignItems: "center",
               gap: 2,
-              fontSize: 10,
+              fontSize: 11,
             }}
           >
             <Play size={10} fill="currentColor" />

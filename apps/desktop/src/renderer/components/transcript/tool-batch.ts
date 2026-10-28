@@ -1,4 +1,4 @@
-import type { AssistantBlock, TimelineItem, ToolResultView, ToolRun } from "@hive/pi-adapter";
+import type { AssistantBlock, SkillLoad, TimelineItem, ToolResultView, ToolRun } from "@hive/pi-adapter";
 
 export type ToolCallBlockT = Extract<AssistantBlock, { type: "toolCall" }>;
 
@@ -12,19 +12,30 @@ export interface ToolBatchItem {
   sourceItem?: Extract<TimelineItem, { kind: "assistant" }>;
 }
 
+export interface SkillBatchItem {
+  block: ToolCallBlockT;
+  load: SkillLoad;
+  result?: ToolResultView;
+  run?: ToolRun;
+  running: boolean;
+  itemKey: string;
+}
+
 export interface ToolPillData {
   op: string;
-  opCategory: "read" | "edit" | "write" | "bash" | "search" | "default";
+  opCategory: "read" | "edit" | "write" | "bash" | "search" | "skill" | "default";
   target: string;
   tooltip: string;
   filePath?: string;
   isError: boolean;
   isRunning: boolean;
+  skillName?: string;
 }
 
 export type TimelineGroupItem =
   | { kind: "timelineRow"; item: TimelineItem }
-  | { kind: "toolBatch"; key: string; items: ToolBatchItem[] };
+  | { kind: "toolBatch"; key: string; items: ToolBatchItem[] }
+  | { kind: "skillBatch"; key: string; items: SkillBatchItem[] };
 
 /** Extract filename / basename from a Unix or Windows path. */
 export function extractBasename(filePath: string): string {
@@ -47,15 +58,68 @@ export function cleanBashCommand(command: string): string {
   return cmd;
 }
 
+/** Check whether a tool call represents a skill load. */
+export function isSkillToolCall(
+  block: ToolCallBlockT,
+  skillLoads?: Map<string, SkillLoad>
+): boolean {
+  if (skillLoads?.has(block.id)) return true;
+  if (block.name === "read") {
+    const rawPath = typeof block.arguments?.path === "string" ? block.arguments.path : "";
+    if (/(?:^|[\\/])skill\.md$/i.test(rawPath)) return true;
+  }
+  return false;
+}
+
+/** Resolve a SkillLoad object for a tool call. */
+export function resolveSkillLoad(
+  block: ToolCallBlockT,
+  result?: ToolResultView,
+  skillLoads?: Map<string, SkillLoad>
+): SkillLoad {
+  const fromMap = skillLoads?.get(block.id);
+  if (fromMap) return fromMap;
+
+  const rawPath = typeof block.arguments?.path === "string" ? block.arguments.path : "";
+  const parts = rawPath.replace(/\\/g, "/").split("/").filter(Boolean);
+  const fallbackName = parts.length > 1 ? parts[parts.length - 2]! : "skill";
+
+  return {
+    name: fallbackName,
+    body: result?.text ?? "",
+    baseDir: "",
+    filePath: rawPath,
+    source: "read",
+  };
+}
+
 /** Extract concise pill metadata for unexpanded batch display. */
 export function extractToolPill(
   block: ToolCallBlockT,
   result?: ToolResultView,
-  running?: boolean
+  running?: boolean,
+  skillLoads?: Map<string, SkillLoad>
 ): ToolPillData {
   const args = block.arguments ?? {};
   const isError = Boolean(result?.isError);
   const isRunning = Boolean(running);
+
+  const rawPath = typeof args.path === "string" ? args.path : typeof args.file_path === "string" ? args.file_path : "";
+
+  // Skill load detection (either from annotations map or read targeting SKILL.md)
+  if (isSkillToolCall(block, skillLoads)) {
+    const load = resolveSkillLoad(block, result, skillLoads);
+    return {
+      op: "skill",
+      opCategory: "skill",
+      target: load.name,
+      tooltip: `Skill loaded: ${load.name}${rawPath ? ` (${rawPath})` : ""}`,
+      filePath: rawPath || undefined,
+      isError,
+      isRunning,
+      skillName: load.name,
+    };
+  }
 
   switch (block.name) {
     case "read":
@@ -133,15 +197,12 @@ export function extractToolPill(
 /** Check if a tool call should be batched into the compact row. */
 export function isBatchableTool(
   block: ToolCallBlockT,
-  customMatches?: (name: string, args: Record<string, unknown>) => boolean,
-  hasSkillLoad?: boolean
+  customMatches?: (name: string, args: Record<string, unknown>) => boolean
 ): boolean {
   // Subagent cards and workflows have rich nested viewers / interactive tabs
   if (block.name === "Agent" || block.name === "SubagentWorkflow") return false;
   // Subagent action rows
   if (block.name === "get_subagent_result" || block.name === "steer_subagent") return false;
-  // Skill load notifications
-  if (hasSkillLoad) return false;
   // Module-owned custom cards (e.g. plan previewer review approval)
   if (customMatches && customMatches(block.name, (block.arguments as Record<string, unknown>) ?? {})) {
     return false;
@@ -157,13 +218,32 @@ export function groupTimelineItems(
   items: TimelineItem[],
   toolResults: Record<string, ToolResultView>,
   tools: Record<string, ToolRun | undefined>,
-  isCustomCard?: (block: ToolCallBlockT) => boolean
+  isCustomCard?: (block: ToolCallBlockT) => boolean,
+  skillLoads?: Map<string, SkillLoad>
 ): TimelineGroupItem[] {
   const out: TimelineGroupItem[] = [];
   let pendingBatch: ToolBatchItem[] = [];
 
   const flushBatch = () => {
-    if (pendingBatch.length >= 2) {
+    if (pendingBatch.length === 0) return;
+
+    // Smart hybrid: if all queued calls are skill loads, flush as dedicated skill row!
+    const allSkills = pendingBatch.every((i) => isSkillToolCall(i.block, skillLoads));
+
+    if (allSkills) {
+      out.push({
+        kind: "skillBatch",
+        key: `skills-${pendingBatch[0]!.block.id || pendingBatch[0]!.itemKey}`,
+        items: pendingBatch.map((item) => ({
+          block: item.block,
+          load: resolveSkillLoad(item.block, item.result, skillLoads),
+          result: item.result,
+          run: item.run,
+          running: item.running,
+          itemKey: item.itemKey,
+        })),
+      });
+    } else if (pendingBatch.length >= 2) {
       out.push({
         kind: "toolBatch",
         // Anchor on the first call only: the key must stay stable as more calls
@@ -171,7 +251,7 @@ export function groupTimelineItems(
         key: `batch-${pendingBatch[0]!.block.id || pendingBatch[0]!.itemKey}`,
         items: [...pendingBatch],
       });
-    } else if (pendingBatch.length === 1) {
+    } else {
       const single = pendingBatch[0]!;
       const blocks: AssistantBlock[] = [];
       if (single.thinking) {
@@ -191,6 +271,30 @@ export function groupTimelineItems(
       });
     }
     pendingBatch = [];
+  };
+
+  const queueToolCall = (
+    block: ToolCallBlockT,
+    thinking: string | undefined,
+    item: Extract<TimelineItem, { kind: "assistant" }>
+  ) => {
+    const isCurrSkill = isSkillToolCall(block, skillLoads);
+    // If pending batch has 2+ skills and next call is regular tool, split them so skills stay in their own row
+    if (!isCurrSkill && pendingBatch.length >= 2 && pendingBatch.every((i) => isSkillToolCall(i.block, skillLoads))) {
+      flushBatch();
+    } else if (isCurrSkill && pendingBatch.length >= 2 && pendingBatch.every((i) => !isSkillToolCall(i.block, skillLoads))) {
+      flushBatch();
+    }
+
+    pendingBatch.push({
+      block,
+      result: toolResults[block.id],
+      run: tools[block.id],
+      running: tools[block.id]?.status === "running" || (!block.complete && !toolResults[block.id]),
+      thinking,
+      itemKey: item.key,
+      sourceItem: item,
+    });
   };
 
   for (const item of items) {
@@ -232,15 +336,7 @@ export function groupTimelineItems(
           );
 
           if (batchable) {
-            pendingBatch.push({
-              block,
-              result: toolResults[block.id],
-              run: tools[block.id],
-              running: tools[block.id]?.status === "running" || (!block.complete && !toolResults[block.id]),
-              thinking: currentThinking,
-              itemKey: item.key,
-              sourceItem: item,
-            });
+            queueToolCall(block, currentThinking, item);
             currentThinking = undefined;
           } else {
             flushBatch();
@@ -282,15 +378,7 @@ export function groupTimelineItems(
         );
 
         if (batchable) {
-          pendingBatch.push({
-            block,
-            result: toolResults[block.id],
-            run: tools[block.id],
-            running: tools[block.id]?.status === "running" || (!block.complete && !toolResults[block.id]),
-            thinking: currentThinking,
-            itemKey: item.key,
-            sourceItem: item,
-          });
+          queueToolCall(block, currentThinking, item);
           currentThinking = undefined;
         } else {
           flushBatch();

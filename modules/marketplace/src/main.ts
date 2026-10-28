@@ -14,7 +14,7 @@ export default defineMainModule({
   activate(ctx) {
     const service = new MarketplaceService();
     ctx.ipc.handle(MarketplaceMethods.search, (args?: MarketplaceSearchArgs) =>
-      service.search(args?.query ?? "", args?.kind ?? "pi-npm"),
+      service.search(args?.query ?? "", args?.kind ?? "pi-npm", { force: args?.force }),
     );
     ctx.ipc.handle(MarketplaceMethods.installed, () => readInstalledSources(ctx.paths.piAgentDir));
     ctx.ipc.handle(MarketplaceMethods.install, async (args?: MarketplaceInstallArgs): Promise<MarketplaceInstallResult> => {

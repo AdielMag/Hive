@@ -105,7 +105,7 @@ export const WelcomeView: React.FC = () => {
                   justifyContent: "center",
                   color: "var(--text-on-color)",
                   fontWeight: 700,
-                  fontSize: 22,
+                  fontSize: 20,
                   boxShadow: "0 6px 20px rgba(0, 0, 0, 0.35)",
                 }}
               >
@@ -158,7 +158,7 @@ export const WelcomeView: React.FC = () => {
               {newSessionShortcut && (
                 <kbd
                   style={{
-                    fontSize: 10.5,
+                    fontSize: 11,
                     fontFamily: "var(--font-mono, monospace)",
                     padding: "2px 6px",
                     borderRadius: 4,
@@ -180,8 +180,6 @@ export const WelcomeView: React.FC = () => {
                       fontSize: 11,
                       fontWeight: 600,
                       color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
                     }}
                   >
                     Previous Sessions in this Project
@@ -246,7 +244,7 @@ export const WelcomeView: React.FC = () => {
                               style={{
                                 fontWeight: 600,
                                 color: "var(--text-primary)",
-                                fontSize: 12.5,
+                                fontSize: 13,
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
@@ -345,7 +343,7 @@ export const WelcomeView: React.FC = () => {
             <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
               <img src={hiveIcon} alt="Hive" draggable={false} style={{ width: 64, height: 64, objectFit: "contain" }} />
 
-              <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
+              <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
                 Hive
               </h1>
               <p style={{ fontSize: 13, color: "var(--text-secondary)", maxWidth: 440, lineHeight: 1.5 }}>
@@ -388,8 +386,6 @@ export const WelcomeView: React.FC = () => {
                     fontSize: 11,
                     fontWeight: 600,
                     color: "var(--text-muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
                   }}
                 >
                   Resume Recent Pi CLI Sessions

@@ -110,25 +110,20 @@ export const ModePicker: React.FC = () => {
           display: "flex",
           alignItems: "center",
           gap: 5,
-          background: open
-            ? "var(--bg-elevated)"
-            : activeMode.writes
-            ? "color-mix(in srgb, var(--warning) 14%, transparent)"
-            : "var(--bg-card)",
-          border: activeMode.writes
-            ? "1px solid color-mix(in srgb, var(--warning) 40%, transparent)"
-            : "1px solid var(--border-subtle)",
-          borderRadius: 4,
-          padding: "3px 8px",
-          fontSize: 11,
-          color: activeMode.writes ? "var(--warning)" : "var(--text-secondary)",
+          height: "var(--control-sm)",
+          background: open ? "var(--bg-elevated)" : "var(--bg-card)",
+          border: "1px solid var(--border-subtle)",
+          borderRadius: "var(--radius-sm)",
+          padding: "0 8px",
+          fontSize: "var(--fs-sm)",
+          color: "var(--text-primary)",
           cursor: "pointer",
           maxWidth: 140,
           minWidth: 0,
           transition: "background-color 150ms ease-out, border-color 150ms ease-out",
         }}
       >
-        <span style={{ display: "inline-flex", flexShrink: 0, color: activeMode.writes ? "var(--warning)" : "var(--text-secondary)" }}>{activeMode.icon}</span>
+        <span style={{ display: "inline-flex", flexShrink: 0, color: "var(--text-secondary)" }}>{activeMode.icon}</span>
         <span
           className="composer-hide-md"
           style={{
@@ -187,11 +182,9 @@ export const ModePicker: React.FC = () => {
               padding: "6px 10px",
               borderBottom: "1px solid var(--border-subtle)",
               background: "var(--bg-card)",
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 700,
               color: "var(--text-muted)",
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
             }}
           >
             Agent Execution Mode
@@ -229,7 +222,7 @@ export const ModePicker: React.FC = () => {
                       <span style={{ fontWeight: isSelected ? 600 : 500, color: isSelected ? m.color : "var(--text-primary)" }}>
                         {m.label}
                       </span>
-                      <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.3 }}>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.3 }}>
                         {m.desc}
                       </span>
                     </div>

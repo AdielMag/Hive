@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, appendFileSync, realpathSync } from "node:fs";
-import { join, normalize, resolve, sep } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, unlinkSync, appendFileSync, realpathSync } from "node:fs";
+import { dirname, join, normalize, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import type {
   SessionWorktree,
@@ -145,30 +145,147 @@ async function ensureExcluded(projectPath: string): Promise<void> {
   appendFileSync(file, `${prefix}# Hive session worktrees\n${entry}\n`, "utf8");
 }
 
-/** Best effort: link the root node_modules into the worktree. Never throws. */
-function linkNodeModules(projectPath: string, worktreePath: string): void {
+interface WorkspaceEntry {
+  name: string;
+  /** Path relative to the repo root, forward slashes (e.g. `packages/protocol`). */
+  rel: string;
+}
+
+/** Workspace packages declared by the worktree's root package.json (`dir/*` globs only). Never throws. */
+function readWorkspaces(root: string): WorkspaceEntry[] {
+  const out: WorkspaceEntry[] = [];
+  try {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { workspaces?: unknown };
+    const globs = Array.isArray(pkg.workspaces) ? pkg.workspaces.filter((g): g is string => typeof g === "string") : [];
+    for (const glob of globs) {
+      const m = /^(.+)\/\*$/.exec(glob);
+      const base = m?.[1];
+      if (!base) continue;
+      let dirents;
+      try {
+        dirents = readdirSync(join(root, base), { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const dirent of dirents) {
+        if (!dirent.isDirectory()) continue;
+        try {
+          const wp = JSON.parse(readFileSync(join(root, base, dirent.name, "package.json"), "utf8")) as { name?: unknown };
+          if (typeof wp.name === "string" && wp.name) out.push({ name: wp.name, rel: `${base}/${dirent.name}` });
+        } catch {
+          // no package.json in this folder
+        }
+      }
+    }
+  } catch {
+    // no/invalid root package.json
+  }
+  return out;
+}
+
+/** True when `p` exists as any filesystem entry, even a dangling link. */
+function entryExists(p: string): boolean {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Junction `dst` -> `target` unless `dst` already exists or `target` is not a directory. */
+function junction(target: string, dst: string): void {
+  try {
+    if (entryExists(dst) || !statSync(target).isDirectory()) return;
+    mkdirSync(dirname(dst), { recursive: true });
+    symlinkSync(target, dst, "junction");
+  } catch (err) {
+    console.warn("[worktrees] link failed", dst, err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Best effort: give the worktree a working `node_modules`. Never throws.
+ *
+ * A single junction to the root `node_modules` is wrong for a monorepo: its `@hive/*` workspace links point at the
+ * main tree, so the worktree would build and test against main's sources. Instead the worktree gets a real
+ * `node_modules` whose entries are junctions to the root's, except workspace packages, which point at the worktree's
+ * own folders. Workspace `node_modules` (e.g. `apps/desktop/node_modules`) are junctioned from the root tree too.
+ * Idempotent: safe to call again to repair or top up an existing worktree.
+ */
+export function linkNodeModules(projectPath: string, worktreePath: string): void {
   try {
     const src = join(projectPath, "node_modules");
     const dst = join(worktreePath, "node_modules");
-    if (!existsSync(src) || existsSync(dst)) return;
-    symlinkSync(src, dst, "junction");
+    if (!existsSync(src)) return;
+    // Legacy layout: the whole folder was one junction into the root. Replace it with a real folder.
+    if (entryExists(dst) && lstatSync(dst).isSymbolicLink()) unlinkSync(dst);
+    mkdirSync(dst, { recursive: true });
+
+    const workspaces = readWorkspaces(worktreePath);
+    for (const ws of workspaces) junction(join(worktreePath, ...ws.rel.split("/")), join(dst, ...ws.name.split("/")));
+
+    // Scopes that hold workspace links (e.g. `@hive`) are real folders, so the root's other packages in them still link.
+    const ownScopes = new Set(workspaces.filter((w) => w.name.startsWith("@")).map((w) => w.name.split("/")[0]!));
+    for (const entry of readdirSync(src)) {
+      const from = join(src, entry);
+      const to = join(dst, entry);
+      if (ownScopes.has(entry)) {
+        mkdirSync(to, { recursive: true });
+        for (const inner of readdirSync(from)) junction(join(from, inner), join(to, inner));
+      } else {
+        junction(from, to);
+      }
+    }
+
+    for (const ws of workspaces) {
+      const rel = ws.rel.split("/");
+      const wsModules = join(projectPath, ...rel, "node_modules");
+      if (existsSync(wsModules)) junction(wsModules, join(worktreePath, ...rel, "node_modules"));
+    }
   } catch (err) {
     console.warn("[worktrees] node_modules link failed", err instanceof Error ? err.message : err);
   }
 }
 
-/** Remove our node_modules link (only if it is a link) so recursive deletes never touch the real folder. */
-function unlinkNodeModules(worktreePath: string): void {
+/** Remove one link without ever following it (a recursive delete would wipe the root's real folder). */
+function unlinkIfLink(p: string): void {
   try {
-    const dst = join(worktreePath, "node_modules");
-    if (lstatSync(dst).isSymbolicLink()) unlinkSync(dst);
+    if (lstatSync(p).isSymbolicLink()) unlinkSync(p);
   } catch {
     // missing or not a link
   }
 }
 
+/**
+ * Remove our node_modules links (only links, never real content) so recursive deletes never touch the root's folder.
+ * Handles both the legacy single junction and the per-entry layout.
+ */
+function unlinkNodeModules(worktreePath: string): void {
+  try {
+    const dst = join(worktreePath, "node_modules");
+    if (entryExists(dst) && lstatSync(dst).isSymbolicLink()) {
+      unlinkSync(dst);
+    } else if (entryExists(dst)) {
+      for (const entry of readdirSync(dst)) {
+        const p = join(dst, entry);
+        if (lstatSync(p).isSymbolicLink()) unlinkSync(p);
+        else if (entry.startsWith("@")) for (const inner of readdirSync(p)) unlinkIfLink(join(p, inner));
+      }
+    }
+    for (const ws of readWorkspaces(worktreePath)) unlinkIfLink(join(worktreePath, ...ws.rel.split("/"), "node_modules"));
+  } catch {
+    // missing or unreadable; git worktree remove --force handles the rest
+  }
+}
+
+/** Fix up an existing worktree (legacy single junction, or packages added to the root since it was created). */
+export function repairNodeModules(projectPath: string, worktreePath: string): void {
+  if (projectPath && worktreePath && existsSync(worktreePath)) linkNodeModules(projectPath, worktreePath);
+}
+
 function isOurNodeModulesLine(line: string): boolean {
-  return /^\?\? node_modules\/?$/.test(line.trim());
+  return /^\?\? (?:.+\/)?node_modules\/?$/.test(line.trim());
 }
 
 async function countDirty(worktreePath: string): Promise<number> {

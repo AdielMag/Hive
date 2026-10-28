@@ -546,14 +546,13 @@ export const FilesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
               fontSize: 11,
               fontWeight: 700,
               color: "var(--text-muted)",
-              letterSpacing: "0.05em",
             }}
           >
             FILES
           </span>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               padding: "1px 5px",
               borderRadius: 3,
               backgroundColor: "var(--bg-surface)",
@@ -724,7 +723,7 @@ export const FilesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
           />
           {searchQuery && (
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{matchCount}</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{matchCount}</span>
               <button
                 onClick={() => setSearchQuery("")}
                 title="Clear filter"
@@ -807,7 +806,7 @@ export const FilesPanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
                 borderRadius: 4,
                 color: "var(--accent-base)",
                 padding: "2px 8px",
-                fontSize: 10,
+                fontSize: 11,
                 cursor: "pointer",
               }}
             >

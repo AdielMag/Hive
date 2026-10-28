@@ -352,7 +352,7 @@ export const CompactionSettingsContent: React.FC = () => {
             </div>
           );
         })}
-        <div style={{ fontSize: 10.5, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}>
           <Info size={11} />
           <span>
             Applied to every model in your catalog using its own context window. "After" = system prompt &amp; tools (~9K) +

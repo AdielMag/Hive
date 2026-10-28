@@ -15,8 +15,8 @@ export const ContextRing: React.FC<ContextRingProps> = ({
   tokens,
   total,
   percent,
-  size = 28,
-  strokeWidth = 3,
+  size = 16,
+  strokeWidth = 2.5,
   onClick,
 }) => {
   const known = total > 0;
@@ -56,14 +56,15 @@ export const ContextRing: React.FC<ContextRingProps> = ({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
+        gap: 5,
+        height: "var(--control-sm)",
         cursor: onClick ? "pointer" : "default",
-        padding: "2px 6px",
-        borderRadius: 4,
-        border: "none",
+        padding: "0 6px",
+        borderRadius: "var(--radius-sm)",
+        border: "1px solid var(--border-subtle)",
         font: "inherit",
         color: "inherit",
-        background: "rgba(var(--fg-rgb), 0.04)",
+        background: "var(--bg-card)",
         opacity: known ? 1 : 0.5,
       }}
     >
@@ -89,7 +90,7 @@ export const ContextRing: React.FC<ContextRingProps> = ({
           style={{ transition: "stroke-dashoffset 0.3s ease" }}
         />
       </svg>
-      <span style={{ fontSize: 11, color: labelColor, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: labelColor, fontVariantNumeric: "tabular-nums" }}>
         {known ? `${formattedTokens}/${formattedTotal}` : "—/—"}
       </span>
     </button>

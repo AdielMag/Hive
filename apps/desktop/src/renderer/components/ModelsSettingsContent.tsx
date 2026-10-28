@@ -10,6 +10,7 @@ import {
   Sparkles,
   GitCommit,
   BarChart3,
+  Archive,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useSessionStore } from "../store/session-store.ts";
@@ -48,11 +49,12 @@ export const ModelsSettingsContent: React.FC = () => {
       })),
     );
 
-  const { config, setGitCommitConfig, setUsageAnalysisConfig } = useFeatureModelStore(
+  const { config, setGitCommitConfig, setUsageAnalysisConfig, setSessionTidyConfig } = useFeatureModelStore(
     useShallow((s) => ({
       config: s.config,
       setGitCommitConfig: s.setGitCommitConfig,
       setUsageAnalysisConfig: s.setUsageAnalysisConfig,
+      setSessionTidyConfig: s.setSessionTidyConfig,
     })),
   );
 
@@ -197,6 +199,11 @@ export const ModelsSettingsContent: React.FC = () => {
     [config.usageAnalysis, selectedModel, defaultModel, combinedModels, defaultProvider],
   );
 
+  const resolvedTidyModel = useMemo(
+    () => resolveFeatureModel(config.sessionTidy, selectedModel, defaultModel, combinedModels, defaultProvider),
+    [config.sessionTidy, selectedModel, defaultModel, combinedModels, defaultProvider],
+  );
+
   // Count active models
   const totalModelsCount = selectableModels.length;
   const activeModelsCount = useMemo(() => {
@@ -287,8 +294,7 @@ export const ModelsSettingsContent: React.FC = () => {
         </div>
       </div>
 
-      {/* Dedicated Auxiliary AI Models Card: one row per `aiFeatures` contribution of an enabled module. */}
-      {(hasGitCommit || hasUsageAnalysis) && (
+      {/* Dedicated Auxiliary AI Models Card: git/analytics rows come from module `aiFeatures`; Archive old is core. */}
       <div
         style={{
           background: "var(--bg-card)",
@@ -466,8 +472,82 @@ export const ModelsSettingsContent: React.FC = () => {
           </div>
         </div>
         )}
+
+        {/* Archive old sessions (core sessions panel, always available) */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            padding: "10px 12px",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 6,
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 220 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Archive size={14} color="var(--accent-base)" />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                Archive Old Sessions
+              </span>
+              <AiModelChip model={resolvedTidyModel} clickable={false} />
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              Used when clicking "Archive old" in the Sessions panel (right-click it to change)
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <select
+              value={config.sessionTidy.source}
+              onChange={(e) => {
+                const nextSource = e.target.value as any;
+                setSessionTidyConfig({
+                  source: nextSource,
+                  modelId: nextSource === "custom" ? (config.sessionTidy.modelId || defaultCustomKey) : config.sessionTidy.modelId,
+                });
+              }}
+              style={{
+                background: "var(--bg-input)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 5,
+                padding: "4px 8px",
+                fontSize: 11,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="session">Active Session Model (Dynamic)</option>
+              <option value="pi-default">Pi CLI Default ({defaultModel || "Default"})</option>
+              <option value="custom">Specific Model...</option>
+            </select>
+
+            {config.sessionTidy.source === "custom" && (
+              <select
+                value={config.sessionTidy.modelId || defaultCustomKey}
+                onChange={(e) => setSessionTidyConfig({ modelId: e.target.value })}
+                style={{
+                  background: "var(--bg-input)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 5,
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  maxWidth: 200,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                {renderModelOptions(config.sessionTidy.modelId || defaultCustomKey)}
+              </select>
+            )}
+          </div>
+        </div>
       </div>
-      )}
 
       {/* Search and Provider Filters */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -599,7 +679,7 @@ export const ModelsSettingsContent: React.FC = () => {
                 >
                   <ProviderIcon provider={p} size={12} />
                   <span>{getProviderDisplayName(p)}</span>
-                  <span style={{ opacity: 0.7, fontSize: 10 }}>({count})</span>
+                  <span style={{ opacity: 0.7, fontSize: 11 }}>({count})</span>
                 </button>
               );
             })}
@@ -761,7 +841,7 @@ export const ModelsSettingsContent: React.FC = () => {
                             </div>
                             <span
                               style={{
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: "var(--text-muted)",
                                 fontFamily: "var(--font-mono)",
                                 overflow: "hidden",
@@ -783,7 +863,7 @@ export const ModelsSettingsContent: React.FC = () => {
                                 borderRadius: 4,
                                 background: "var(--bg-elevated)",
                                 border: "1px solid var(--border-subtle)",
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: "var(--text-muted)",
                                 fontFamily: "var(--font-mono)",
                               }}
@@ -803,7 +883,7 @@ export const ModelsSettingsContent: React.FC = () => {
                                 borderRadius: 4,
                                 background: "rgba(187, 128, 255, 0.12)",
                                 border: "1px solid rgba(187, 128, 255, 0.3)",
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: "#d2a8ff",
                               }}
                               title="Supports reasoning / thinking mode"
@@ -823,7 +903,7 @@ export const ModelsSettingsContent: React.FC = () => {
                                 borderRadius: 4,
                                 background: "rgba(87, 171, 90, 0.12)",
                                 border: "1px solid rgba(87, 171, 90, 0.3)",
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: "var(--success)",
                               }}
                               title="Supports image / multimodal input"

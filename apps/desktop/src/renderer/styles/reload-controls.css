@@ -8,7 +8,7 @@
   height: 24px;
   padding: 0;
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--bg-card);
   color: var(--text-secondary);
   cursor: pointer;
@@ -41,11 +41,11 @@
   gap: 8px;
   min-width: 0;
   padding: 7px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: color-mix(in srgb, var(--rb) 10%, var(--bg-card));
   border: 1px solid color-mix(in srgb, var(--rb) 30%, transparent);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-primary);
   animation: fade-up 0.18s ease;
 }
@@ -100,9 +100,9 @@
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 .reload-bar__action {
   color: var(--rb);

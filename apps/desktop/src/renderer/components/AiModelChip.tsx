@@ -32,10 +32,8 @@ export const AiModelChip: React.FC<AiModelChipProps> = ({
   feature,
 }) => {
   const defaultModel = useSessionStore((s) => s.defaultModel);
-  // Accent only when this model differs from the store default.
+  // Slightly brighter when this feature uses a model other than the session default.
   const isCustom = Boolean(defaultModel) && model.id !== defaultModel;
-  const baseBg = isCustom ? "rgba(var(--accent-rgb), 0.12)" : "transparent";
-  const baseBorder = isCustom ? "rgba(var(--accent-rgb), 0.22)" : "var(--border-subtle)";
   const [picker, setPicker] = useState<ModelPickerAnchor | null>(null);
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -52,61 +50,24 @@ export const AiModelChip: React.FC<AiModelChipProps> = ({
     useUi.getState().openSettings("models");
   };
 
-  const defaultTitle = `AI Model: ${model.name || model.id} (${model.sourceLabel})${
-    clickable ? "\nClick to configure in Settings > Models" : ""
+  const defaultTitle = `${model.name || model.id} (${model.sourceLabel})${
+    clickable ? " · Click to change in Settings › Models" : feature ? " · Right-click to change" : ""
   }`;
+
+  const classes = ["ai-model-chip", isCustom && "is-custom", clickable && "is-clickable", className].filter(Boolean).join(" ");
 
   return (
     <>
     <span
-      className={`ai-model-chip ${className || ""}`}
+      className={classes}
       onClick={clickable ? handleClick : undefined}
       onContextMenu={feature ? handleContextMenu : undefined}
       title={title ?? defaultTitle}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        fontSize: "9px",
-        fontWeight: 600,
-        lineHeight: 1.1,
-        letterSpacing: "0.02em",
-        padding: "1.5px 5px",
-        borderRadius: "3.5px",
-        background: baseBg,
-        color: isCustom ? "var(--accent-base)" : "var(--text-secondary)",
-        border: `1px solid ${baseBorder}`,
-        userSelect: "none",
-        cursor: clickable ? "pointer" : "inherit",
-        verticalAlign: "middle",
-        transition: "background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease",
-        ...style,
-      }}
-      onMouseEnter={(e) => {
-        if (clickable) {
-          e.currentTarget.style.background = isCustom ? "rgba(var(--accent-rgb), 0.22)" : "rgba(var(--fg-rgb), 0.05)";
-          e.currentTarget.style.borderColor = isCustom ? "rgba(var(--accent-rgb), 0.4)" : "var(--border-prominent)";
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (clickable) {
-          e.currentTarget.style.background = style?.background?.toString() || baseBg;
-          e.currentTarget.style.borderColor = style?.borderColor?.toString() || baseBorder;
-        }
-      }}
+      style={style}
     >
-      <span
-        style={{
-          maxWidth: 96,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          display: "inline-block",
-        }}
-      >
-        {model.shortName}
-      </span>
+      {model.shortName}
     </span>
     {feature && (
       // React portals bubble events to the parent button; keep menu clicks from triggering it.

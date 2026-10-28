@@ -6,8 +6,22 @@ const TIMEOUT_MS = 10_000;
 
 async function getJson(url: string, init: RequestInit): Promise<unknown> {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${new URL(url).host}`);
+  if (!res.ok) {
+    const retryAfter = Number(res.headers.get("retry-after"));
+    throw new HttpError(res.status, new URL(url).host, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined);
+  }
   return res.json();
+}
+
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    host: string,
+    /** Server-suggested wait (Retry-After header) in ms. */
+    readonly retryAfterMs?: number,
+  ) {
+    super(`HTTP ${status} from ${host}`);
+  }
 }
 
 export async function fetchAnthropic(token: string): Promise<QuotaGroup[]> {

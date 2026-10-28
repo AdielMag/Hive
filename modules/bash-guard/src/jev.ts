@@ -7,8 +7,13 @@
  *
  * Never throws: every failure (no key, timeout, HTTP error, bad JSON) resolves to `null` and the
  * caller fails open. Nothing is sent unless `readJevConfig(env).enabled`.
+ *
+ * Credentials come from, in order: the env switches below (`JEV_GUARD_ENABLED=1` + `JEV_API_KEY`), or the Jev
+ * module's config.json (`HIVE_JEV_CONFIG`, set by Hive) once it holds an API key AND the user accepted the Jev
+ * privacy notice (`consentAt`). `JEV_GUARD_ENABLED=0` switches the tier off even when Jev is configured.
  */
 
+import { readFileSync } from "node:fs";
 import type { JevAnswers } from "./engine/judge.ts";
 import { redactSecrets } from "./engine/judge.ts";
 
@@ -27,7 +32,11 @@ export interface JevConfig {
   timeoutMs: number;
   /** Why the tier is inactive (for logs). */
   inactiveReason?: string;
+  /** Where the credentials came from. */
+  source?: "env" | "jev-module";
 }
+
+export type ReadText = (path: string) => string;
 
 export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
@@ -47,21 +56,42 @@ export function systemOneUrl(base: string): string | null {
   return u.href.replace(/\/+$/, "") + "/v1/systemone";
 }
 
+/** Reads the Jev module's config.json. Null unless it has an API key and a recorded privacy consent. */
+function readModuleConfig(env: EnvLike, readText: ReadText): JevConfig | null {
+  const file = env.HIVE_JEV_CONFIG;
+  if (!file) return null;
+  try {
+    const raw = JSON.parse(readText(file)) as { apiKey?: unknown; consentAt?: unknown; model?: unknown };
+    const apiKey = typeof raw.apiKey === "string" ? raw.apiKey.trim() : "";
+    if (!apiKey) return null;
+    if (typeof raw.consentAt !== "number" || !(raw.consentAt > 0)) return null;
+    const model = typeof raw.model === "string" && raw.model.trim() ? raw.model.trim() : JEV_MODEL;
+    return { enabled: true, url: systemOneUrl(DEFAULT_JEV_BASE_URL) as string, apiKey, model: env.JEV_MODEL || model, timeoutMs: JEV_TIMEOUT_MS, source: "jev-module" };
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Enabled only with `JEV_GUARD_ENABLED=1` AND a credential. `JEV_API_KEY` is only ever sent to the default
- * TypeSafe host; a custom `JEV_BASE_URL` gets only its own optional `JEV_BASE_API_KEY` (mirrors jev-guard).
+ * Enabled with `JEV_GUARD_ENABLED=1` AND a credential (`JEV_API_KEY` is only ever sent to the default TypeSafe
+ * host; a custom `JEV_BASE_URL` gets only its own optional `JEV_BASE_API_KEY`, mirroring jev-guard), or through the
+ * Jev module's config (see file header). An explicit `JEV_GUARD_ENABLED=0` always wins.
  */
-export function readJevConfig(env: EnvLike = process.env): JevConfig {
+export function readJevConfig(env: EnvLike = process.env, readText: ReadText = (p) => readFileSync(p, "utf8")): JevConfig {
   const base: JevConfig = { enabled: false, model: env.JEV_MODEL || JEV_MODEL, timeoutMs: JEV_TIMEOUT_MS };
-  if (!/^(1|true|yes|on)$/i.test(env.JEV_GUARD_ENABLED ?? "")) return { ...base, inactiveReason: "JEV_GUARD_ENABLED not set" };
+  const flag = env.JEV_GUARD_ENABLED ?? "";
+  if (/^(0|false|no|off)$/i.test(flag)) return { ...base, inactiveReason: "JEV_GUARD_ENABLED is off" };
+  if (!/^(1|true|yes|on)$/i.test(flag)) {
+    return readModuleConfig(env, readText) ?? { ...base, inactiveReason: "JEV_GUARD_ENABLED not set and the Jev module has no key/consent" };
+  }
   if (env.JEV_BASE_URL) {
     const url = systemOneUrl(env.JEV_BASE_URL);
     if (!url) return { ...base, inactiveReason: "JEV_BASE_URL must be https (or http on localhost/private address)" };
-    return { ...base, enabled: true, url, ...(env.JEV_BASE_API_KEY ? { apiKey: env.JEV_BASE_API_KEY } : {}) };
+    return { ...base, enabled: true, url, source: "env", ...(env.JEV_BASE_API_KEY ? { apiKey: env.JEV_BASE_API_KEY } : {}) };
   }
-  if (!env.JEV_API_KEY) return { ...base, inactiveReason: "JEV_API_KEY not set" };
+  if (!env.JEV_API_KEY) return readModuleConfig(env, readText) ?? { ...base, inactiveReason: "JEV_API_KEY not set" };
   const url = systemOneUrl(DEFAULT_JEV_BASE_URL) as string;
-  return { ...base, enabled: true, url, apiKey: env.JEV_API_KEY };
+  return { ...base, enabled: true, url, apiKey: env.JEV_API_KEY, source: "env" };
 }
 
 /** Two typed questions: `risk` (score, 0-3) and `approval` (noul, probability). Copied from jev-guard's ACTION_QUESTIONS. */
@@ -105,6 +135,7 @@ export function parseAnswers(body: unknown): JevAnswers | null {
 
 export interface AskOptions {
   env?: EnvLike;
+  readText?: ReadText;
   fetchImpl?: FetchLike;
   log?: (msg: string) => void;
 }
@@ -117,7 +148,7 @@ export async function askJev(command: string, opts: AskOptions = {}): Promise<Je
   const log = opts.log ?? (() => {});
   let cfg: JevConfig;
   try {
-    cfg = readJevConfig(opts.env ?? process.env);
+    cfg = readJevConfig(opts.env ?? process.env, opts.readText);
   } catch {
     return null;
   }

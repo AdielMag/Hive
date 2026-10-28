@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildExtensionSource, OUTPUT } from "../scripts/build-extension.mjs";
+import { clearDescribeCache } from "./describe.ts";
 import bashGuard from "./extension/hook.ts";
 import { parseDangerousBashMessage } from "./shared.ts";
 
@@ -15,9 +16,9 @@ describe("generated extension", () => {
     expect(committed.startsWith("/**\n * GENERATED - do not edit.")).toBe(true);
   });
 
-  it("is self-contained: no relative imports, only a type import from Pi (erased)", () => {
-    const imports = [...committed.matchAll(/^\s*import\s[^;]*?from\s+["']([^"']+)["']/gm)].map((m) => m[1]);
-    expect(imports).toEqual([]);
+  it("is self-contained: no relative imports, only node builtins (a type import from Pi is erased)", () => {
+    const imports = [...committed.matchAll(/^\s*import\s[^;]*?from\s+["']([^"']+)["']/gm)].map((m) => m[1] as string);
+    expect(imports.filter((i) => !i.startsWith("node:"))).toEqual([]);
     expect(committed).not.toMatch(/from\s+["']\.\.?\//);
     expect(committed).not.toMatch(/require\(["']\./);
     expect(committed).toMatch(/export \{\s*bashGuard as default\s*\}|export default/);
@@ -29,7 +30,14 @@ describe("generated extension", () => {
   });
 });
 
-type Handler = (event: { toolName: string; input: unknown }, ctx: { hasUI: boolean; ui: { confirm: (title: string, body: string) => Promise<boolean> } }) => Promise<{ block: true; reason: string } | undefined>;
+interface TestCtx {
+  hasUI: boolean;
+  ui: { confirm: (title: string, body: string) => Promise<boolean> };
+  cwd?: string;
+  model?: { provider: string };
+  modelRegistry?: unknown;
+}
+type Handler = (event: { toolName: string; input: unknown }, ctx: TestCtx) => Promise<{ block: true; reason: string } | undefined>;
 
 function register(): Handler {
   let handler: Handler | undefined;
@@ -43,9 +51,14 @@ function register(): Handler {
 }
 
 const savedEnv = { ...process.env };
+// A developer machine running Hive has a real Jev config in the environment: tests must not see it.
+beforeEach(() => {
+  for (const k of ["HIVE_JEV_CONFIG", "HIVE_JEV_USAGE", "JEV_GUARD_ENABLED", "JEV_API_KEY", "JEV_BASE_URL", "JEV_BASE_API_KEY", "JEV_MODEL", "BASH_GUARD_DESCRIBE", "BASH_GUARD_DESCRIBE_MODEL", "BASH_GUARD_TRIAGE"]) delete process.env[k];
+});
 afterEach(() => {
   process.env = { ...savedEnv };
   vi.unstubAllGlobals();
+  clearDescribeCache();
 });
 
 describe("extension hook", () => {
@@ -131,15 +144,15 @@ describe("extension hook", () => {
       err.mockRestore();
     });
 
-    it("never consults Jev for rule hits or allowlisted commands", async () => {
+    it("never consults Jev for critical rule hits or allowlisted commands", async () => {
       process.env.JEV_API_KEY = "k";
       process.env.JEV_GUARD_ENABLED = "1";
       const fetchMock = answersFor({ risk: { score: 0 }, approval: { noul: 0 } });
       vi.stubGlobal("fetch", fetchMock);
       const h = register();
-      // rule hit still prompts even though Jev would say "safe"
+      // critical rule hit still prompts even though Jev would say "safe"
       const confirm = vi.fn(async () => true);
-      await h({ toolName: "bash", input: { command: "rm -rf build" } }, { hasUI: true, ui: { confirm } });
+      await h({ toolName: "bash", input: { command: "sudo ls" } }, { hasUI: true, ui: { confirm } });
       expect(confirm).toHaveBeenCalledTimes(1);
       await h({ toolName: "bash", input: { command: "git status" } }, { hasUI: true, ui: { confirm } });
       expect(fetchMock).not.toHaveBeenCalled();

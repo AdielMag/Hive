@@ -56,9 +56,10 @@ function videoExtFromMime(mime: string): string {
 
 interface ComposerProps {
   height?: number;
+  tabId?: string | null;
 }
 
-export const Composer: React.FC<ComposerProps> = ({ height }) => {
+export const Composer: React.FC<ComposerProps> = ({ height, tabId }) => {
   const activeKey = useSessionStore((s) => s.activeKey);
   const { promptText, setPromptText, sendPrompt, abort, running, models, allCatalogModels, enabledModelKeys, disabledProviders, selectedModel, setModel, isLoadingModels, attachments, addAttachments, removeAttachment, extensionWidgets, pendingUiDialog, respondDialog } = useSessionStore(useShallow((s) => ({ promptText: s.promptText, setPromptText: s.setPromptText, sendPrompt: s.sendPrompt, abort: s.abort, running: s.transcript.running, models: s.models, allCatalogModels: s.allCatalogModels, enabledModelKeys: s.enabledModelKeys, disabledProviders: s.disabledProviders, selectedModel: s.selectedModel, setModel: s.setModel, isLoadingModels: s.isLoadingModels, attachments: s.attachments, addAttachments: s.addAttachments, removeAttachment: s.removeAttachment, extensionWidgets: s.extensionWidgets, pendingUiDialog: s.pendingUiDialog, respondDialog: s.respondDialog })));
 
@@ -485,7 +486,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
       <ModelSwitchCacheBar />
 
       {/* Queued messages banner if any */}
-      <QueuedMessagesBar />
+      <QueuedMessagesBar tabId={tabId} />
 
       {/* Pi reload progress / result for this session */}
       <ReloadStatusBar />
@@ -539,7 +540,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
               ? "Drop files, images or videos to attach..."
               : isRunning
               ? "Type to steer (Ctrl+Enter) or queue (Enter)..."
-              : "Ask Pi or issue a task... (Drag & drop or paste files/images/videos)"
+              : "Ask Pi or give it a task…"
           }
           style={{
             outline: "none",
@@ -569,12 +570,13 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                 flexShrink: 0,
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
-                padding: "3px 8px",
+                gap: 5,
+                height: "var(--control-sm)",
+                padding: "0 8px",
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-subtle)",
-                borderRadius: 4,
-                fontSize: 11,
+                borderRadius: "var(--radius-sm)",
+                fontSize: "var(--fs-sm)",
                 color: "var(--text-secondary)",
                 cursor: "pointer",
               }}
@@ -605,11 +607,12 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
+                  height: "var(--control-sm)",
                   background: modelPickerOpen ? "var(--bg-elevated)" : "var(--bg-card)",
                   border: "1px solid var(--border-subtle)",
-                  borderRadius: 4,
-                  padding: "3px 8px",
-                  fontSize: 11,
+                  borderRadius: "var(--radius-sm)",
+                  padding: "0 8px",
+                  fontSize: "var(--fs-sm)",
                   color: "var(--text-primary)",
                   cursor: "pointer",
                   maxWidth: "100%",
@@ -797,7 +800,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                                 <span style={{ fontWeight: isSelected ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {m.name || m.id}
                                 </span>
-                                <span style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "capitalize" }}>
+                                <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "capitalize" }}>
                                   {m.provider}
                                 </span>
                               </div>
@@ -807,7 +810,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                                 <span
                                   title={`Context window: ${m.contextWindow?.toLocaleString()} tokens`}
                                   style={{
-                                    fontSize: 9,
+                                    fontSize: 11,
                                     padding: "1px 4px",
                                     borderRadius: 3,
                                     background: "var(--bg-card)",
@@ -848,7 +851,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                       padding: "6px 10px",
                       borderTop: "1px solid var(--border-subtle)",
                       background: "var(--bg-card)",
-                      fontSize: 10,
+                      fontSize: 11,
                       color: "var(--text-muted)",
                     }}
                   >
@@ -868,7 +871,7 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                         background: "transparent",
                         border: "none",
                         color: "var(--accent-base)",
-                        fontSize: 10,
+                        fontSize: 11,
                         cursor: "pointer",
                         padding: 0,
                         fontWeight: 500,
@@ -949,18 +952,19 @@ export const Composer: React.FC<ComposerProps> = ({ height }) => {
                 disabled={!canSend || isReloading}
                 title={isReloading ? "Pi is reloading…" : "Send"}
                 style={{
-                  transition: "transform 120ms cubic-bezier(0.23,1,0.32,1), background-color 0.15s ease, color 0.15s ease",
+                  transition: "transform 120ms var(--ease-out), background-color 0.15s ease, color 0.15s ease",
                   display: "flex",
                   alignItems: "center",
-                  gap: 4,
-                  padding: "6px 14px",
-                  borderRadius: 8,
+                  gap: 5,
+                  height: "var(--control-sm)",
+                  padding: "0 12px",
+                  borderRadius: "var(--radius-sm)",
                   border: "none",
                   background: canSend ? "var(--accent-base)" : "rgba(var(--fg-rgb), 0.06)",
                   color: canSend ? "var(--accent-contrast)" : "var(--text-muted)",
-                  fontWeight: 500,
+                  fontWeight: 600,
                   cursor: canSend ? "pointer" : "default",
-                  fontSize: 12,
+                  fontSize: "var(--fs-sm)",
                 }}
               >
                 <Send size={12} /> <span className="composer-hide-md">Send</span>

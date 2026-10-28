@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sessionDisplayTitle, titleFromPrompt } from "./session-title.ts";
+import { isTimestampLike, sessionDisplayTitle, titleFromPrompt } from "./session-title.ts";
 
 describe("titleFromPrompt", () => {
   it("strips the Studio mode prefix and collapses whitespace", () => {
@@ -33,5 +33,12 @@ describe("sessionDisplayTitle", () => {
     expect(sessionDisplayTitle({ title: "Mine", name: "Pi", firstMessage: "hello" })).toBe("Mine");
     expect(sessionDisplayTitle({ name: "Pi", firstMessage: "hello" })).toBe("Pi");
     expect(sessionDisplayTitle({ firstMessage: "[Mode: Debug - x]\n\nhello" })).toBe("hello");
+  });
+
+  it("ignores raw timestamp filenames and falls back to first prompt", () => {
+    expect(sessionDisplayTitle({ name: "2026-10-27T17-24-22-700Z", firstMessage: "Write a parser" })).toBe("Write a parser");
+    expect(sessionDisplayTitle({ title: "2026-10-27T17-24-22", firstMessage: "Refactor shell" })).toBe("Refactor shell");
+    expect(isTimestampLike("2026-10-27T17-24-22-700Z")).toBe(true);
+    expect(isTimestampLike("My feature session")).toBe(false);
   });
 });

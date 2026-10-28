@@ -1,6 +1,7 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { createTranscript } from "@hive/pi-adapter";
 import { setUserWaitResolver } from "../modules/session-bus.ts";
+import { usePaneLayoutStore } from "./pane-layout-store.ts";
 import {
   applyCompactionResult,
   handleCompactionEvent,
@@ -70,18 +71,24 @@ describe("hasDraft", () => {
 describe("queued messages store actions", () => {
   const rpcCalls: any[] = [];
 
+  afterEach(() => {
+    __test.setDisplayedTab(null);
+  });
+
   beforeEach(() => {
     rpcCalls.length = 0;
     (globalThis as any).window = {
       studio: {
-        rpc: async (_key: string, cmd: any) => {
+        rpc: async (key: string, cmd: any) => {
           rpcCalls.push(cmd);
           if (cmd.type === "clear_queue") {
+            const targetTab = useSessionStore.getState().tabs.find((t) => t.activeKey === key);
+            const t = (targetTab ? useSessionStore.getState().transcriptsByTab[targetTab.id] : undefined) ?? useSessionStore.getState().transcript;
             return {
               ok: true,
               data: {
-                steering: [...useSessionStore.getState().transcript.queue.steering],
-                followUp: [...useSessionStore.getState().transcript.queue.followUp],
+                steering: [...(t.queue.steering ?? [])],
+                followUp: [...(t.queue.followUp ?? [])],
               },
             };
           }
@@ -171,6 +178,129 @@ describe("queued messages store actions", () => {
     expect(q.steering).toEqual([]);
     expect(q.followUp).toEqual([]);
   });
+
+  it("deletes a queued message for a target background tab without modifying active transcript", async () => {
+    useSessionStore.setState({
+      tabs: [
+        { id: "tab_active", kind: "session", projectId: "p1", title: "Active", pinned: false, isCold: false, activeKey: "session_test" },
+        { id: "tab_split", kind: "session", projectId: "p1", title: "Split", pinned: false, isCold: false, activeKey: "session_split" },
+      ],
+      activeTabId: "tab_active",
+      displayedTabId: "tab_active",
+      transcriptsByTab: {
+        tab_split: {
+          ...useSessionStore.getState().transcript,
+          queue: { steering: ["bg steer"], followUp: ["bg follow 1", "bg follow 2"] },
+        },
+      },
+    });
+
+    await useSessionStore.getState().deleteQueuedMessage("followUp", 0, "tab_split");
+
+    // Active transcript queue remains unchanged
+    expect(useSessionStore.getState().transcript.queue.followUp).toEqual(["follow 1", "follow 2"]);
+    // Background tab queue was updated
+    expect(useSessionStore.getState().transcriptsByTab.tab_split?.queue.followUp).toEqual(["bg follow 2"]);
+  });
+
+  it("clears all queued messages for a target background tab without clearing active transcript", async () => {
+    useSessionStore.setState({
+      tabs: [
+        { id: "tab_active", kind: "session", projectId: "p1", title: "Active", pinned: false, isCold: false, activeKey: "session_test" },
+        { id: "tab_split", kind: "session", projectId: "p1", title: "Split", pinned: false, isCold: false, activeKey: "session_split" },
+      ],
+      activeTabId: "tab_active",
+      displayedTabId: "tab_active",
+      compactionHeld: {
+        session_test: [{ text: "active held", message: "active held", images: [] }],
+        session_split: [{ text: "split held", message: "split held", images: [] }],
+      },
+      transcriptsByTab: {
+        tab_split: {
+          ...useSessionStore.getState().transcript,
+          queue: { steering: ["bg steer"], followUp: ["bg follow"] },
+        },
+      },
+    });
+
+    await useSessionStore.getState().clearAllQueued("tab_split");
+
+    // Active transcript queue & compactionHeld remain untouched
+    expect(useSessionStore.getState().transcript.queue.steering).toEqual(["steer 1"]);
+    expect(useSessionStore.getState().compactionHeld.session_test).toHaveLength(1);
+    // Background tab queue & compactionHeld are cleared
+    expect(useSessionStore.getState().transcriptsByTab.tab_split?.queue.steering).toEqual([]);
+    expect(useSessionStore.getState().compactionHeld.session_split).toBeUndefined();
+  });
+
+  it("removes and pops held messages for targetTabId into its tabUi draft", async () => {
+    useSessionStore.setState({
+      tabs: [
+        { id: "tab_active", kind: "session", projectId: "p1", title: "Active", pinned: false, isCold: false, activeKey: "session_test" },
+        { id: "tab_split", kind: "session", projectId: "p1", title: "Split", pinned: false, isCold: false, activeKey: "session_split" },
+      ],
+      activeTabId: "tab_active",
+      displayedTabId: "tab_active",
+      promptText: "active prompt",
+      tabUi: {},
+      compactionHeld: {
+        session_split: [{ text: "held for split", message: "held for split", images: [] }],
+      },
+    });
+
+    useSessionStore.getState().popHeldToEditor(0, "tab_split");
+
+    // Active promptText untouched
+    expect(useSessionStore.getState().promptText).toBe("active prompt");
+    // Background tabUi draft has the popped text
+    expect(useSessionStore.getState().tabUi.tab_split?.promptText).toBe("held for split");
+    expect(useSessionStore.getState().compactionHeld.session_split).toBeUndefined();
+  });
+
+  it("newSessionTab with targetPaneId sets active pane and adds tab to that pane", async () => {
+    const paneState = usePaneLayoutStore.getState();
+    const leafA = paneState.root.type === "leaf" ? paneState.root.id : "paneA";
+    const paneB = "pane_split_target";
+    // Setup 2 panes
+    usePaneLayoutStore.setState({
+      activePaneId: leafA,
+      root: {
+        type: "split",
+        id: "split_root",
+        direction: "horizontal",
+        sizes: [50, 50],
+        children: [
+          { type: "leaf", id: leafA, tabIds: ["t1"], activeTabId: "t1" },
+          { type: "leaf", id: paneB, tabIds: ["t2"], activeTabId: "t2" },
+        ],
+      },
+    });
+
+    useSessionStore.setState({
+      projects: [{ id: "p1", name: "Test Project", path: "/test" } as any],
+      tabs: [
+        { id: "t1", kind: "session", projectId: "p1", title: "Tab 1", pinned: false, isCold: false },
+        { id: "t2", kind: "session", projectId: "p1", title: "Tab 2", pinned: false, isCold: false },
+      ],
+      activeTabId: "t1",
+    });
+
+    await useSessionStore.getState().newSessionTab("p1", paneB);
+
+    // Pane B must be the active pane now
+    expect(usePaneLayoutStore.getState().activePaneId).toBe(paneB);
+    const newActiveTabId = useSessionStore.getState().activeTabId!;
+    // And new tab should be in Pane B's tabIds
+    const root = usePaneLayoutStore.getState().root;
+    if (root.type === "split") {
+      const leafB = root.children.find((c) => c.id === paneB);
+      if (leafB && leafB.type === "leaf") {
+        expect(leafB.tabIds).toContain(newActiveTabId);
+        expect(leafB.activeTabId).toBe(newActiveTabId);
+      }
+    }
+    __test.setDisplayedTab(null);
+  });
 });
 
 describe("agent execution modes store actions", () => {
@@ -232,6 +362,34 @@ describe("agent execution modes store actions", () => {
     expect(rpcCalls[0].message).toBe(
       "[Mode: Ask - Answer questions, explain concepts, and analyze code. Do not edit files or execute destructive actions.]\n\nHow does the cache work?",
     );
+  });
+
+  it("announces a switch from ask to auto-edit so the agent drops the old Ask restrictions", async () => {
+    useSessionStore.getState().setMode("ask");
+    useSessionStore.setState({ promptText: "Explain the cache" });
+    await useSessionStore.getState().sendPrompt();
+
+    useSessionStore.getState().setMode("auto-edit");
+    useSessionStore.setState({ promptText: "Now fix the bug" });
+    await useSessionStore.getState().sendPrompt();
+
+    expect(rpcCalls.length).toBe(2);
+    expect(rpcCalls[1].message).toMatch(/^\[Mode: Auto Edit \(switched from Ask; instructions from the earlier mode no longer apply\) - /);
+    expect(rpcCalls[1].message).toMatch(/\]\n\nNow fix the bug$/);
+  });
+
+  it("does not repeat the switch note once the agent has been steered into the new mode", async () => {
+    useSessionStore.getState().setMode("ask");
+    useSessionStore.setState({ promptText: "Explain the cache" });
+    await useSessionStore.getState().sendPrompt();
+
+    useSessionStore.getState().setMode("auto-edit");
+    useSessionStore.setState({ promptText: "Fix it" });
+    await useSessionStore.getState().sendPrompt();
+
+    useSessionStore.setState({ promptText: "Thanks, next one" });
+    await useSessionStore.getState().sendPrompt();
+    expect(rpcCalls[2].message).toBe("Thanks, next one");
   });
 
   it("does not prefix prompt when in default auto-edit mode", async () => {

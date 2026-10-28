@@ -1,51 +1,35 @@
-# Project Tabs in Top Bar
+# Batch and Highlight Skill Loads in Transcript
 
-Add Rider-style project tabs to the top bar above session tabs, allowing multiple projects to be open simultaneously, reordered, and switched seamlessly with a companion dropdown picker.
+When skills enter context (via agent `read` on `SKILL.md` or user `/skill`), they currently get buried as generic `read SKILL.md` pills inside standard tool batches or stack vertically as bulky cards. This change implements smart hybrid batching: consecutive skill loads group into a dedicated horizontal bar with interactive chips, while mixed tool runs display a glowing skill pill instead of a generic file read.
 
 ## Approach
-- Add `openProjectIds` state to `session-store.ts` (persisted to `localStorage`), tracking open project tabs in order.
-- Create a dedicated `ProjectTabBar` component in `AppTitleBar` with draggable project tabs, active indicator, close buttons, drop indicators, and context menus.
-- Retain the project switcher dropdown next to tabs: selecting an already-open project activates its tab; selecting an unopened project opens a new tab.
-- Add an appearance setting (`projectTabsEnabled`, default `true`) in Settings so users can toggle between project tabs and classic single-project mode.
-- Switching project tabs updates `activeProject`, preserving and restoring each project's session tabs and split-pane layout independently.
+- Pass active skill load annotations into timeline grouping in `Transcript.tsx` so grouping knows which calls load skills.
+- Group consecutive skill loads into a dedicated `skillBatch` timeline row rendered by `SkillBatchRow` with interactive chips.
+- Update `extractToolPill` in `tool-batch.ts` to tag skill loads with `opCategory: "skill"` and target `skill: <name>` when mixed in tool batches.
+- Add CSS highlighting for skill batches, pills, and cards with glowing borders and distinct badge styling.
+- Add unit test coverage in `ToolBatchGroup.test.ts` for skill pill extraction and batch grouping.
 
 ## Decisions
 
-> [!CHOICE] Closing the last open project tab
-> **Question**: What should happen when the user clicks close on the only remaining open project tab?
-> - (x) **Show Welcome screen**: Closes the project tab and displays the Welcome / Open screen with the top bar dropdown ready [Recommended]
-> - ( ) **Keep sole tab open**: Disable or hide the close button on the last open project tab so at least one project stays active
-
-> [!CHOICE] Project tab sizing behavior
-> **Question**: How should project tabs size themselves in the top bar?
-> - (x) **Compact auto-sizing**: Fixed maximum width (160–180px) with text ellipsis and horizontal wheel scroll for many tabs [Recommended]
-> - ( ) **Flexible tabs**: Tabs stretch dynamically to occupy available space up to a maximum width
+> [!CHOICE] Highlight Palette
+> **Question**: Which color theme should highlight loaded skills?
+> - (x) **Amber Gold**: matches Hive's Library module (#f59e0b) for consistency [Recommended]
+> - ( ) **Violet Sparkle**: distinct magical purple (#a855f7) with high-contrast glow
 
 <!-- MORE -->
 
 ## Changes
-
 | File | Change |
 |---|---|
-| `apps/desktop/src/renderer/store/session-store.ts` | `[MODIFY]` Add `openProjectIds`, `openProjectTab`, `closeProjectTab`, `reorderProjectTabs`, `closeOtherProjectTabs`, and disk persistence |
-| `apps/desktop/src/renderer/store/ui-store.ts` | `[MODIFY]` Add `projectTabsEnabled` preference to UI store |
-| `apps/desktop/src/renderer/components/ProjectTabBar.tsx` | `[NEW]` Project tabs bar with drag-and-drop reordering, active tab styling, close button, drop indicator, and context menu |
-| `apps/desktop/src/renderer/components/ProjectPicker.tsx` | `[MODIFY]` Refactor dropdown menu logic to support open/switch behavior and standalone dropdown trigger |
-| `apps/desktop/src/renderer/components/AppTitleBar.tsx` | `[MODIFY]` Integrate `ProjectTabBar` in titlebar center, respecting `projectTabsEnabled` setting |
-| `apps/desktop/src/renderer/components/AppearanceSettingsContent.tsx` | `[MODIFY]` Add toggle switch for "Show projects as tabs in top bar" under Workbench |
-| `apps/desktop/src/renderer/features/commands/CommandPalette.tsx` | `[MODIFY]` Update project selection in palette to use `openProjectTab` |
-| `apps/desktop/src/renderer/styles/shell.css` | `[MODIFY]` Styling for project tabs, tab drag states, drop indicators, and title bar flex layout |
-| `apps/desktop/src/renderer/store/session-store.test.ts` | `[MODIFY]` Unit tests for `openProjectTab`, `closeProjectTab`, and `reorderProjectTabs` |
+| `apps/desktop/src/renderer/components/transcript/tool-batch.ts` | `[MODIFY]` Add skill load detection to `extractToolPill`, add `skillBatch` group item type, and group consecutive skill loads |
+| `apps/desktop/src/renderer/components/transcript/SkillBatchRow.tsx` | `[NEW]` Horizontal banner displaying loaded skills in a row with expandable detail drawers |
+| `apps/desktop/src/renderer/components/Transcript.tsx` | `[MODIFY]` Provide skill load annotations to grouping and render `SkillBatchRow` |
+| `apps/desktop/src/renderer/styles/transcript-ai.css` | `[MODIFY]` Add styling for `.msg-skill-batch`, `.msg-tool-batch__pill-op.is-skill`, and enhanced skill card borders |
+| `apps/desktop/src/renderer/components/transcript/ToolBatchGroup.test.ts` | `[MODIFY]` Add tests for skill pill extraction and consecutive skill load grouping |
 
 ## Risks
-- Titlebar window drag: Window dragging (`-webkit-app-region: drag`) must remain functional on empty spaces, while project tabs and buttons must have `no-drag` so tab clicking and drag-reordering work smoothly without moving the window.
-- macOS traffic lights: Top bar layout must preserve the 78px left padding on macOS to prevent overlapping native window controls.
+- Tool batch regression: existing non-skill tool batch grouping must remain unchanged. Mitigated by comprehensive unit tests in `ToolBatchGroup.test.ts`.
 
 ## Verify
-- `node ../session-bbf066/node_modules/vitest/vitest.mjs run apps/desktop/src/renderer/store/session-store.test.ts`
-- Manual checks:
-  1. Open project from dropdown: if open, activates existing tab; if not open, opens new tab.
-  2. Drag and drop reordering of project tabs with visual drop indicator.
-  3. Close project tab: switches to adjacent tab.
-  4. Session tabs and split pane layouts are retained independently per project tab.
-  5. Toggle setting in Settings > Appearance switches between tabs mode and classic picker mode.
+- `npm test -- apps/desktop/src/renderer/components/transcript/ToolBatchGroup.test.ts`
+- `npm run typecheck`

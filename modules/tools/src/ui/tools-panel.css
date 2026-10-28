@@ -35,7 +35,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm, 6px);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .tools-panel__input:focus {
   outline: none;
@@ -49,7 +49,7 @@
   width: 18px;
   height: 18px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -72,11 +72,11 @@
   min-width: 0;
   padding: 6px 8px;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
 }
 .tools-stat__value {
-  font-size: 16px;
+  font-size: var(--fs-lg);
   font-weight: 650;
   line-height: 1.2;
   color: var(--text-primary);
@@ -86,7 +86,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 .tools-stat.is-zero .tools-stat__value {
@@ -113,10 +113,10 @@
   height: 26px;
   padding: 0 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: rgba(var(--fg-rgb), 0.03);
   color: var(--text-primary);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   text-align: left;
   cursor: pointer;
   overflow: hidden;
@@ -137,7 +137,7 @@
   top: 0;
   bottom: 0;
   background: rgba(var(--accent-rgb), 0.16);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   pointer-events: none;
 }
 .tools-bar.has-errors .tools-bar__fill {
@@ -150,7 +150,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
 }
 .tools-bar__err {
   position: relative;
@@ -158,7 +159,7 @@
   align-items: center;
   gap: 3px;
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--danger);
   font-variant-numeric: tabular-nums;
@@ -168,7 +169,7 @@
   flex-shrink: 0;
   width: 30px;
   text-align: right;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -177,7 +178,7 @@
   flex-shrink: 0;
   min-width: 24px;
   text-align: right;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   font-weight: 650;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
@@ -212,7 +213,7 @@
   height: 32px;
   padding: 0 6px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -238,10 +239,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   white-space: nowrap;
 }
 .tools-section.is-open .tools-section__title {
@@ -256,7 +255,7 @@
   border-radius: 999px;
   background: rgba(var(--fg-rgb), 0.08);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -266,7 +265,7 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   white-space: nowrap;
 }
 .tools-section__hint {
@@ -275,7 +274,7 @@
 }
 .tools-section__cost {
   color: var(--text-secondary);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
 }
 .tools-section__body {
   display: flex;
@@ -325,7 +324,7 @@
   min-width: 0;
   padding: 8px 10px 8px 9px;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   color: inherit;
   text-align: left;
@@ -391,13 +390,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 .tools-agent__cost {
   flex-shrink: 0;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-secondary);
 }
 .tools-agent__desc,
@@ -407,11 +406,11 @@
   white-space: nowrap;
 }
 .tools-agent__desc {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-secondary);
 }
 .tools-agent__meta {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 .tools-agent__meta.is-activity {
@@ -426,10 +425,10 @@
   align-self: flex-start;
   padding: 3px 6px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--accent-base);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   cursor: pointer;
 }
 @media (hover: hover) {
@@ -452,7 +451,7 @@
   min-width: 0;
   padding: 6px 8px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
   text-align: left;
@@ -479,7 +478,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -487,7 +486,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 .tools-row--available {
@@ -502,7 +501,7 @@
 .tools-count {
   flex-shrink: 0;
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -523,11 +522,12 @@
   height: 24px;
   padding: 0 4px 0 9px;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
   cursor: pointer;
   transition:
     background 0.12s ease,
@@ -552,10 +552,10 @@
   flex-shrink: 0;
   min-width: 18px;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: rgba(var(--fg-rgb), 0.07);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -576,7 +576,7 @@
   gap: 6px;
   padding: 8px 10px;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   min-width: 0;
 }
@@ -614,10 +614,10 @@
   gap: 4px;
   padding: 3px 6px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: none;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   cursor: pointer;
 }
 @media (hover: hover) {
