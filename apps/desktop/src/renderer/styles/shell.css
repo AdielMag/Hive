@@ -1381,11 +1381,17 @@
   }
 }
 
-/* Project Tab Bar */
+/* Project Tab Bar — browser-style tabs that sit on the title bar's bottom edge.
+   The active tab takes the content surface colour so it reads as attached to the page. */
+.titlebar__center {
+  align-self: stretch;
+  align-items: center;
+}
 .project-tab-bar {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 6px;
+  height: 100%;
   min-width: 0;
   max-width: 100%;
   pointer-events: auto;
@@ -1394,21 +1400,21 @@
 .project-tab-bar__scroll {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 3px;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
   min-width: 0;
-  max-width: calc(100vw - 420px);
+  max-width: calc(100vw - 460px);
   overflow-x: auto;
   scrollbar-width: none;
-  padding: 2px 0;
 }
 .project-tab-bar__scroll::-webkit-scrollbar {
   display: none;
 }
 .project-tab-bar__drop-indicator {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
+  top: 7px;
+  bottom: 7px;
   width: 2px;
   background: var(--accent-color, #60a5fa);
   border-radius: 1px;
@@ -1416,37 +1422,52 @@
   pointer-events: none;
 }
 .project-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 6px 0 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  gap: 7px;
+  height: 30px;
+  padding: 0 5px 0 10px;
+  border-radius: 9px 9px 0 0;
   color: var(--frame-text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   user-select: none;
-  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
-  max-width: 170px;
-  min-width: 60px;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  max-width: 190px;
+  min-width: 110px;
   flex-shrink: 1;
   white-space: nowrap;
 }
+/* Thin divider between inactive tabs */
+.project-tab::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.project-tab:first-child::before,
+.project-tab.is-active::before,
+.project-tab.is-active + .project-tab::before {
+  display: none;
+}
 .project-tab.is-active {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: var(--bg-app);
   color: var(--frame-text);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 @media (hover: hover) {
-  .project-tab:hover {
-    background: var(--frame-hover);
-    border-color: rgba(255, 255, 255, 0.16);
+  .project-tab:not(.is-active):hover {
+    background: rgba(255, 255, 255, 0.06);
     color: var(--frame-text);
+  }
+  .project-tab:not(.is-active):hover::before,
+  .project-tab:not(.is-active) + .project-tab:hover::before {
+    display: none;
   }
 }
 .project-tab__dot {
@@ -1473,18 +1494,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: none;
-  border-radius: 3px;
+  border-radius: 5px;
   background: transparent;
   color: inherit;
-  opacity: 0.45;
+  opacity: 0;
   cursor: pointer;
   transition: opacity 0.1s ease, background-color 0.1s ease;
   flex-shrink: 0;
-  margin-left: 2px;
+}
+.project-tab.is-active .project-tab__close {
+  opacity: 0.55;
 }
 @media (hover: hover) {
   .project-tab:hover .project-tab__close {
@@ -1492,41 +1515,36 @@
   }
   .project-tab__close:hover {
     opacity: 1 !important;
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.12);
   }
 }
+/* "+" button that opens the project switcher */
 .project-tab-bar__dropdown-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
   color: var(--frame-text-muted);
   cursor: pointer;
-  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition: background-color 0.12s ease, color 0.12s ease;
   flex-shrink: 0;
   pointer-events: auto;
   -webkit-app-region: no-drag;
 }
 .project-tab-bar__dropdown-btn.is-open {
   background: var(--frame-hover);
-  border-color: rgba(255, 255, 255, 0.16);
   color: var(--frame-text);
 }
 @media (hover: hover) {
   .project-tab-bar__dropdown-btn:hover {
     background: var(--frame-hover);
-    border-color: rgba(255, 255, 255, 0.16);
     color: var(--frame-text);
   }
-}
-.project-tab-bar__caret {
-  color: var(--frame-text-muted);
-  opacity: 0.8;
 }
 
 .titlebar__dot {
