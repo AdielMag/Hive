@@ -1281,122 +1281,144 @@
   color: var(--frame-text-muted);
   margin-left: 2px;
 }
+/* "+" switcher popover: search, project rows with a settings gear, and a footer action. */
 .project-picker__dropdown {
   position: absolute;
-  top: calc(100% + 5px);
+  top: calc(100% + 6px);
   left: 0;
-  min-width: 220px;
-  max-width: 320px;
-  background: var(--bg-surface, #1e1e24);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  padding: 5px;
-  z-index: 1000;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  max-height: min(480px, calc(100vh - 80px));
   display: flex;
   flex-direction: column;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-prominent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  z-index: 1000;
   pointer-events: auto;
   -webkit-app-region: no-drag;
+  animation: pop-in 0.12s ease;
 }
-.project-picker__section-title {
+.project-picker__search {
+  flex-shrink: 0;
+  height: 30px;
+  margin: 0 0 4px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
   font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--frame-text-muted);
-  padding: 4px 8px 2px;
-  letter-spacing: 0.5px;
+  outline: none;
+}
+.project-picker__search:focus {
+  border-color: var(--accent-base);
 }
 .project-picker__list {
-  max-height: 240px;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
+.project-picker__empty {
+  padding: 10px 8px;
+  color: var(--text-muted);
+}
+.project-picker__row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+.project-picker__row.is-highlighted {
+  background: rgba(255, 255, 255, 0.07);
+}
 .project-picker__item {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: var(--radius-xs);
+  height: 32px;
+  padding: 0 8px;
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
   font-size: var(--fs-sm);
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s ease;
-}
-@media (hover: hover) {
-  .project-picker__item:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
 }
 .project-picker__item.is-selected {
-  background: rgba(255, 255, 255, 0.12);
-  font-weight: 500;
+  font-weight: 600;
 }
 .project-picker__item-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .project-picker__check {
-  color: var(--accent-color, #60a5fa);
+  color: var(--accent-base);
   flex-shrink: 0;
 }
 .project-picker__open-badge {
   font-size: var(--fs-xs);
   font-weight: 500;
-  letter-spacing: 0.4px;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: var(--radius-xs);
   background: rgba(255, 255, 255, 0.08);
-  color: var(--frame-text-muted);
+  color: var(--text-muted);
   flex-shrink: 0;
 }
-.project-picker__divider {
-  height: 1px;
-  background: var(--border-subtle, rgba(255, 255, 255, 0.08));
-  margin: 4px 0;
-}
-.project-picker__item--action {
-  color: var(--frame-text-muted);
-}
-@media (hover: hover) {
-  .project-picker__item--action:hover {
-    color: var(--frame-text);
-  }
-}
-.project-picker__link {
-  color: var(--frame-text-muted);
-  cursor: default;
-}
-.project-picker__unlink {
-  display: inline-flex;
-  padding: 2px;
+.project-picker__gear {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 2px;
+  padding: 0;
+  flex-shrink: 0;
   border: none;
   border-radius: var(--radius-xs);
   background: transparent;
-  color: inherit;
+  color: var(--text-muted);
   cursor: pointer;
   opacity: 0;
 }
-@media (hover: hover) {
-  .project-picker__link:hover .project-picker__unlink {
-    opacity: 1;
-  }
+.project-picker__row.is-highlighted .project-picker__gear,
+.project-picker__gear:focus-visible {
+  opacity: 1;
 }
 @media (hover: hover) {
-  .project-picker__unlink:hover {
+  .project-picker__gear:hover {
     background: rgba(255, 255, 255, 0.12);
-    color: var(--frame-text);
+    color: var(--text-primary);
+  }
+}
+.project-picker__divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 2px;
+}
+.project-picker__item--action {
+  height: 30px;
+  color: var(--text-secondary);
+}
+@media (hover: hover) {
+  .project-picker__item--action:hover {
+    color: var(--text-primary);
   }
 }
 
-/* Project Tab Bar — browser-style tabs that sit on the title bar's bottom edge.
-   The active tab takes the content surface colour so it reads as attached to the page. */
+/* Project Tab Bar: browser-style tabs hanging off the title bar's bottom edge.
+   The active tab takes the page colour and flares into the card below with concave corners. */
 .titlebar__center {
   align-self: stretch;
   align-items: center;
@@ -1404,7 +1426,7 @@
 .project-tab-bar {
   display: flex;
   align-items: stretch;
-  gap: 6px;
+  gap: 2px;
   height: 100%;
   min-width: 0;
   max-width: 100%;
@@ -1415,10 +1437,11 @@
   position: relative;
   display: flex;
   align-items: flex-end;
-  gap: 2px;
   height: 100%;
   min-width: 0;
   max-width: calc(100vw - 460px);
+  /* Side room so the flares on the first and last tab aren't clipped by the scrollport. */
+  padding: 0 10px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1427,10 +1450,10 @@
 }
 .project-tab-bar__drop-indicator {
   position: absolute;
-  top: 7px;
-  bottom: 7px;
+  top: 8px;
+  bottom: 8px;
   width: 2px;
-  background: var(--accent-color, #60a5fa);
+  background: var(--accent-base);
   border-radius: var(--radius-xs);
   z-index: 10;
   pointer-events: none;
@@ -1440,50 +1463,64 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
-  padding: 0 6px 0 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  height: 30px;
+  min-width: 120px;
+  max-width: 200px;
+  flex-shrink: 1;
+  padding: 0 6px 0 10px;
+  border-radius: 8px 8px 0 0;
   color: var(--frame-text-muted);
   font-size: var(--fs-sm);
   font-weight: 500;
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.12s ease, color 0.12s ease;
-  max-width: 190px;
-  min-width: 110px;
-  flex-shrink: 1;
   white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
-/* Thin divider between inactive tabs */
-.project-tab::before {
+/* Divider between two inactive tabs. Hidden next to the active tab and next to a hovered tab. */
+.project-tab + .project-tab:not(.is-active)::before {
   content: "";
   position: absolute;
-  left: -2px;
-  top: 8px;
-  bottom: 8px;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
   width: 1px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
 }
-.project-tab:first-child::before,
-.project-tab.is-active::before,
-.project-tab.is-active + .project-tab::before {
+.project-tab.is-active + .project-tab:not(.is-active)::before,
+.project-tab:not(.is-active):hover::before,
+.project-tab:hover + .project-tab:not(.is-active)::before {
   display: none;
 }
 .project-tab.is-active {
+  z-index: 1; /* paint the flares above the neighbouring tab's hover tint */
   background: var(--bg-app);
   color: var(--frame-text);
-  font-weight: 600;
+}
+/* Concave flares: 10px squares whose outer quarter-circle is cut away, so the active tab
+   melts into the card's top edge instead of ending in a visible corner. */
+.project-tab.is-active::before,
+.project-tab.is-active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.project-tab.is-active::before {
+  left: -10px;
+  background: radial-gradient(circle at 0 0, transparent 9.5px, var(--bg-app) 10px);
+}
+.project-tab.is-active::after {
+  right: -10px;
+  background: radial-gradient(circle at 100% 0, transparent 9.5px, var(--bg-app) 10px);
 }
 @media (hover: hover) {
   .project-tab:not(.is-active):hover {
     background: rgba(255, 255, 255, 0.06);
     color: var(--frame-text);
-  }
-  .project-tab:not(.is-active):hover::before,
-  .project-tab:not(.is-active) + .project-tab:hover::before {
-    display: none;
   }
 }
 .project-tab__dot {
@@ -1523,7 +1560,7 @@
   flex-shrink: 0;
 }
 .project-tab.is-active .project-tab__close {
-  opacity: 0.55;
+  opacity: 0.6;
 }
 @media (hover: hover) {
   .project-tab:hover .project-tab__close {
@@ -1534,17 +1571,20 @@
     background: rgba(255, 255, 255, 0.12);
   }
 }
-/* "+" button that opens the project switcher */
+/* The "+" sits on the strip's baseline, centred on the tab row. */
+.project-picker--compact {
+  align-self: flex-end;
+  margin-bottom: 2px;
+}
 .project-tab-bar__dropdown-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  height: 24px;
-  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: none;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
   color: var(--frame-text-muted);
   cursor: pointer;
   transition: background-color 0.12s ease, color 0.12s ease;
@@ -1553,7 +1593,7 @@
   -webkit-app-region: no-drag;
 }
 .project-tab-bar__dropdown-btn.is-open {
-  background: var(--frame-hover);
+  background: var(--frame-active);
   color: var(--frame-text);
 }
 @media (hover: hover) {

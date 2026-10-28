@@ -461,9 +461,9 @@
   }
 }
 
-/* ---- Project settings modal ---- */
+/* ---- Project settings dialog: section nav on the left, one pane at a time on the right ---- */
 .prj-settings {
-  width: 520px;
+  width: 640px;
   max-width: calc(100vw - 48px);
   max-height: calc(100vh - 64px);
   display: flex;
@@ -487,8 +487,8 @@
 .prj-settings__avatar {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-md);
   flex-shrink: 0;
   font-size: var(--fs-lg);
@@ -513,28 +513,96 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.prj-settings__body {
-  overflow-y: auto;
-  padding: 6px 18px 18px;
+
+.prj-settings__main {
+  display: flex;
+  flex: 1 1 380px;
+  min-height: 0;
 }
-.prj-settings__section {
-  padding: 14px 0;
+.prj-settings__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 172px;
+  flex-shrink: 0;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border-subtle);
+  background: rgba(0, 0, 0, 0.14);
 }
-.prj-settings__section + .prj-settings__section {
-  border-top: 1px solid var(--border-subtle);
-}
-.prj-settings__section-head {
+.prj-settings__nav-item {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 10px;
+  gap: 9px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .prj-settings__nav-item:hover {
+    background: rgba(var(--fg-rgb), 0.06);
+    color: var(--text-primary);
+  }
+}
+.prj-settings__nav-item.is-active {
+  background: rgba(var(--fg-rgb), 0.1);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.prj-settings__nav-item.is-danger {
   color: var(--text-muted);
+}
+.prj-settings__nav-item.is-danger.is-active {
+  color: var(--danger);
+}
+.prj-settings__nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prj-settings__nav-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(var(--fg-rgb), 0.1);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 16px;
+}
+.prj-settings__body {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 18px 22px 22px;
+}
+.prj-settings__pane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.prj-settings__pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.prj-settings__pane-title {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text-primary);
 }
 .prj-settings__field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 12px;
 }
 .prj-settings__label {
   font-size: var(--fs-sm);
@@ -542,10 +610,30 @@
   color: var(--text-secondary);
 }
 .prj-settings__hint {
-  margin: -4px 0 10px;
+  margin: 0;
   font-size: var(--fs-sm);
   color: var(--text-muted);
   line-height: 1.45;
+}
+.prj-settings__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.prj-settings__code {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .prj-settings__swatches {
   display: flex;
@@ -553,38 +641,43 @@
   gap: 8px;
 }
 .prj-swatch {
-  width: 22px;
-  height: 22px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border-radius: 50%;
   border: none;
+  color: rgba(0, 0, 0, 0.7);
   cursor: pointer;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
   transition: transform 0.1s ease;
 }
 @media (hover: hover) {
   .prj-swatch:hover {
-    transform: scale(1.1);
+    transform: scale(1.08);
   }
 }
 .prj-swatch.is-selected {
   box-shadow: 0 0 0 2px var(--bg-elevated), 0 0 0 4px var(--text-primary);
 }
-.prj-settings__icon-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.prj-settings__icon-presets {
+.prj-settings__icon-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
+.prj-settings__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
 .prj-icon-btn {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
@@ -594,7 +687,6 @@
 }
 @media (hover: hover) {
   .prj-icon-btn:hover {
-    transform: scale(1.1);
     border-color: var(--border-prominent);
   }
 }
@@ -603,13 +695,9 @@
   background: color-mix(in srgb, var(--accent-base) 15%, var(--bg-card));
   box-shadow: 0 0 0 1px var(--accent-base);
 }
-.prj-settings__icon-custom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .prj-settings__input--icon {
-  max-width: 180px;
+  flex: 0 0 180px;
+  width: 180px;
 }
 .prj-settings__empty {
   display: flex;
@@ -633,7 +721,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 8px 8px 12px;
+  padding: 8px 6px 8px 12px;
   border-radius: var(--radius-md);
   background: rgba(var(--fg-rgb), 0.035);
   border: 1px solid var(--border-subtle);
@@ -668,19 +756,18 @@
   padding: 0 8px;
   font-size: var(--fs-xs);
 }
-.prj-settings__danger {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.prj-settings__danger-text {
-  flex: 1;
+.prj-settings__danger-card {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(229, 83, 75, 0.3);
+  background: rgba(229, 83, 75, 0.06);
 }
-.prj-settings__danger-text .prj-settings__hint {
-  margin: 0;
+.prj-settings__danger-card .prj-settings__hint {
+  color: var(--text-secondary);
 }
 .prj-settings__danger-btn {
   color: var(--danger);

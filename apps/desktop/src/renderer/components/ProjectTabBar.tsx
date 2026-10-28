@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search, Settings2, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { ProjectEntry } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
+import { useProjectSettings } from "../store/project-settings-store.ts";
 import { ProjectPicker } from "./ProjectPicker.tsx";
 import { usePalette } from "../features/commands/palette-store.ts";
 import { useShortcut } from "../features/commands/useShortcut.ts";
@@ -128,6 +129,12 @@ export const ProjectTabBar: React.FC = () => {
   const handleContextMenu = (e: React.MouseEvent, project: ProjectEntry, index: number) => {
     e.preventDefault();
     const items: ContextMenuEntry[] = [
+      {
+        label: "Project Settings…",
+        icon: <Settings2 size={13} />,
+        onSelect: () => useProjectSettings.getState().open(project.id, "general"),
+      },
+      { kind: "separator" },
       {
         label: "Close Project Tab",
         icon: <X size={13} />,

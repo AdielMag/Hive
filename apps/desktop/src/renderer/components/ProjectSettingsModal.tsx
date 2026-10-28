@@ -1,25 +1,31 @@
-/** Per-project settings: name, color, linked folders, and removal. Opened from the sidebar project row. */
+/** Per-project settings: general (name, location), appearance (colour, icon), linked folders and removal. Opened from the project tab menu or the "+" switcher. */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { FolderOpen, Link2, Plus, Settings2, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, FolderOpen, Link2, Palette, Plus, Settings2, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { DEFAULT_PROJECT_HUES, type LinkedProject } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
+import { useProjectSettings, type ProjectSettingsSection } from "../store/project-settings-store.ts";
 import { askChoice } from "./ChoiceDialog.tsx";
 import { toast } from "../modules/toast-store.ts";
 
-export type ProjectSettingsSection = "general" | "links";
-
 interface Props {
   projectId: string;
-  initialSection?: ProjectSettingsSection;
+  section: ProjectSettingsSection;
   onClose: () => void;
 }
 
 const folderName = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() || p;
 const PROJECT_ICON_PRESETS = ["🐝", "⚡", "🚀", "📦", "💻", "🌐", "🎯", "🔥", "🛠️", "📱", "🧠", "🎨"];
 
-export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSection = "general", onClose }) => {
+const NAV: { id: ProjectSettingsSection; label: string; icon: React.ReactNode }[] = [
+  { id: "general", label: "General", icon: <Settings2 size={14} /> },
+  { id: "appearance", label: "Appearance", icon: <Palette size={14} /> },
+  { id: "folders", label: "Linked folders", icon: <Link2 size={14} /> },
+  { id: "remove", label: "Remove", icon: <Trash2 size={14} /> },
+];
+
+export const ProjectSettingsModal: React.FC<Props> = ({ projectId, section: initialSection, onClose }) => {
   const { project, updateProject, removeProject, tabs, closeTab } = useSessionStore(
     useShallow((s) => ({
       project: s.projects.find((p) => p.id === projectId),
@@ -29,11 +35,20 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
       closeTab: s.closeTab,
     })),
   );
+  const [section, setSection] = useState<ProjectSettingsSection>(initialSection);
   const [name, setName] = useState(project?.name ?? "");
-  const [customIcon, setCustomIcon] = useState(project?.icon ?? "");
-  const linksRef = useRef<HTMLElement>(null);
+  const [iconDraft, setIconDraft] = useState(project?.icon ?? "");
   const nameRef = useRef(name);
   nameRef.current = name;
+
+  useEffect(() => setSection(initialSection), [initialSection]);
+
+  useEffect(() => {
+    if (project) {
+      setName(project.name);
+      setIconDraft(project.icon ?? "");
+    }
+  }, [project?.name, project?.icon]);
 
   const commitName = useCallback(() => {
     if (!project) return;
@@ -51,26 +66,31 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
   }, [commitName, onClose]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && handleClose();
+    // Escape belongs to a confirm dialog opened on top of this one (e.g. Remove), not to the settings.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector(".choice-dialog")) return;
+      handleClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [handleClose]);
-
-  useEffect(() => {
-    if (initialSection === "links") linksRef.current?.scrollIntoView({ block: "start" });
-  }, [initialSection]);
-
-  useEffect(() => {
-    if (project) {
-      setName(project.name);
-      setCustomIcon(project.icon ?? "");
-    }
-  }, [project?.name, project?.icon]);
 
   if (!project) return null;
   const links = project.links ?? [];
 
   const setLinks = (next: LinkedProject[]) => updateProject(project.id, { links: next });
+
+  const setIcon = (icon: string | null) => {
+    setIconDraft(icon ?? "");
+    if ((project.icon ?? null) !== icon) void updateProject(project.id, { icon });
+  };
+
+  /** Commit the typed icon on blur / Enter. Keeps only the first grapheme so ZWJ and variation-selector emoji stay whole. */
+  const commitIconDraft = () => {
+    const typed = iconDraft.trim();
+    const first = typed ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(typed)][0]?.segment : undefined;
+    setIcon(first ?? null);
+  };
 
   const addLink = async () => {
     const folder = await window.studio.pickFolder();
@@ -132,152 +152,221 @@ export const ProjectSettingsModal: React.FC<Props> = ({ projectId, initialSectio
           </button>
         </header>
 
-        <div className="prj-settings__body">
-          <section className="prj-settings__section">
-            <div className="prj-settings__section-head">
-              <Settings2 size={13} />
-              <span className="ui-section-label">General</span>
-            </div>
-            <label className="prj-settings__field">
-              <span className="prj-settings__label">Name</span>
-              <input
-                className="prj-settings__input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={commitName}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                }}
-              />
-            </label>
-            <div className="prj-settings__field">
-              <span className="prj-settings__label">Color</span>
-              <div className="prj-settings__swatches">
-                {DEFAULT_PROJECT_HUES.map((c) => (
-                  <button
-                    key={c}
-                    className={`prj-swatch${project.color === c ? " is-selected" : ""}`}
-                    style={{ background: c }}
-                    aria-label={`Use color ${c}`}
-                    onClick={() => void updateProject(project.id, { color: c })}
-                  />
-                ))}
-              </div>
-            </div>
+        <div className="prj-settings__main">
+          <nav className="prj-settings__nav" aria-label="Project settings sections">
+            {NAV.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`prj-settings__nav-item${section === item.id ? " is-active" : ""}${item.id === "remove" ? " is-danger" : ""}`}
+                aria-current={section === item.id ? "page" : undefined}
+                onClick={() => setSection(item.id)}
+              >
+                {item.icon}
+                <span className="prj-settings__nav-label">{item.label}</span>
+                {item.id === "folders" && links.length > 0 && <span className="prj-settings__nav-count">{links.length}</span>}
+              </button>
+            ))}
+          </nav>
 
-            <div className="prj-settings__field">
-              <span className="prj-settings__label">Icon / Emoji</span>
-              <div className="prj-settings__icon-row">
-                <div className="prj-settings__icon-presets">
-                  {PROJECT_ICON_PRESETS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      className={`prj-icon-btn${project.icon === emoji ? " is-selected" : ""}`}
-                      onClick={() => void updateProject(project.id, { icon: project.icon === emoji ? null : emoji })}
-                      aria-label={`Use icon ${emoji}`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-                <div className="prj-settings__icon-custom">
+          <div className="prj-settings__body">
+            {section === "general" && (
+              <div className="prj-settings__pane">
+                <h3 className="prj-settings__pane-title">General</h3>
+                <label className="prj-settings__field">
+                  <span className="prj-settings__label">Name</span>
                   <input
-                    type="text"
-                    className="prj-settings__input prj-settings__input--icon"
-                    placeholder="Custom emoji or symbol"
-                    maxLength={4}
-                    value={customIcon}
-                    onChange={(e) => {
-                      const val = e.target.value.trim();
-                      setCustomIcon(val);
-                      void updateProject(project.id, { icon: val || null });
+                    className="prj-settings__input"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onBlur={commitName}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                     }}
                   />
-                  {project.icon && (
-                    <button
-                      type="button"
-                      className="ui-btn ui-btn--ghost ui-btn--sm"
-                      onClick={() => {
-                        setCustomIcon("");
-                        void updateProject(project.id, { icon: null });
-                      }}
-                      title="Clear icon"
-                    >
-                      Clear
+                </label>
+                <div className="prj-settings__field">
+                  <span className="prj-settings__label">Location</span>
+                  <div className="prj-settings__row">
+                    <code className="prj-settings__code" title={project.path}>
+                      {project.path}
+                    </code>
+                    <button type="button" className="ui-btn ui-btn--sm" onClick={() => void window.studio.showItemInFolder(project.path)}>
+                      <ExternalLink size={12} /> Show in folder
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
-
-          <section className="prj-settings__section" ref={linksRef}>
-            <div className="prj-settings__section-head">
-              <Link2 size={13} />
-              <span className="ui-section-label">Linked folders</span>
-              {links.length > 0 && <span className="ui-chip ui-chip--accent">{links.length}</span>}
-              <span style={{ flex: 1 }} />
-              <button className="ui-btn ui-btn--sm" onClick={() => void addLink()}>
-                <Plus size={12} /> Link folder
-              </button>
-            </div>
-            <p className="prj-settings__hint">
-              Related repositories or folders that Pi can reference while working in this project.
-            </p>
-
-            {links.length === 0 ? (
-              <div className="prj-settings__empty">
-                <FolderOpen size={16} />
-                <span>No linked folders yet.</span>
-              </div>
-            ) : (
-              <ul className="prj-links">
-                {links.map((lnk) => (
-                  <li key={lnk.path} className="prj-link">
-                    <FolderOpen size={14} className="prj-link__icon" />
-                    <div className="prj-link__text">
-                      <span className="prj-link__alias">{lnk.alias || folderName(lnk.path)}</span>
-                      <span className="prj-link__path" title={lnk.path}>
-                        {lnk.path}
-                      </span>
-                    </div>
-                    <div className="ui-seg prj-link__access" role="group" aria-label="Access">
-                      {(["read-only", "read-write"] as const).map((a) => (
-                        <button
-                          key={a}
-                          aria-pressed={lnk.access === a}
-                          onClick={() => void setLinks(links.map((l) => (l.path === lnk.path ? { ...l, access: a } : l)))}
-                        >
-                          {a === "read-only" ? "Read" : "Read/Write"}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon"
-                      title="Unlink folder"
-                      onClick={() => void setLinks(links.filter((l) => l.path !== lnk.path))}
-                    >
-                      <X size={13} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
             )}
-          </section>
 
-          <section className="prj-settings__section prj-settings__danger">
-            <div className="prj-settings__danger-text">
-              <span className="prj-settings__label">Remove project</span>
-              <span className="prj-settings__hint">Hides it from Hive. Files and sessions stay on disk.</span>
-            </div>
-            <button className="ui-btn ui-btn--sm prj-settings__danger-btn" onClick={() => void remove()}>
-              <Trash2 size={12} /> Remove
-            </button>
-          </section>
+            {section === "appearance" && (
+              <div className="prj-settings__pane">
+                <h3 className="prj-settings__pane-title">Appearance</h3>
+                <div className="prj-settings__field">
+                  <span className="prj-settings__label">Colour</span>
+                  <div className="prj-settings__swatches" role="radiogroup" aria-label="Project colour">
+                    {DEFAULT_PROJECT_HUES.map((c) => {
+                      const selected = project.color === c;
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          className={`prj-swatch${selected ? " is-selected" : ""}`}
+                          style={{ background: c }}
+                          title={c}
+                          aria-label={`Colour ${c}`}
+                          onClick={() => void updateProject(project.id, { color: c })}
+                        >
+                          {selected && <Check size={12} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="prj-settings__hint">Tints this project's tab and its session tabs.</span>
+                </div>
+
+                <div className="prj-settings__field">
+                  <span className="prj-settings__label">Icon</span>
+                  <div className="prj-settings__icon-grid" role="radiogroup" aria-label="Project icon">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={!project.icon}
+                      className={`prj-icon-btn${!project.icon ? " is-selected" : ""}`}
+                      title="Colour dot"
+                      aria-label="Use colour dot"
+                      onClick={() => setIcon(null)}
+                    >
+                      <span className="prj-settings__dot" style={{ background: project.color }} />
+                    </button>
+                    {PROJECT_ICON_PRESETS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        role="radio"
+                        aria-checked={project.icon === emoji}
+                        className={`prj-icon-btn${project.icon === emoji ? " is-selected" : ""}`}
+                        onClick={() => setIcon(emoji)}
+                        aria-label={`Use icon ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="prj-settings__row">
+                    <input
+                      type="text"
+                      className="prj-settings__input prj-settings__input--icon"
+                      placeholder="Or type any emoji"
+                      value={iconDraft}
+                      onChange={(e) => setIconDraft(e.target.value)}
+                      onBlur={commitIconDraft}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                    />
+                    {project.icon && (
+                      <button type="button" className="ui-btn ui-btn--ghost ui-btn--sm" onClick={() => setIcon(null)}>
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {section === "folders" && (
+              <div className="prj-settings__pane">
+                <div className="prj-settings__pane-head">
+                  <h3 className="prj-settings__pane-title">Linked folders</h3>
+                  <button className="ui-btn ui-btn--sm" onClick={() => void addLink()}>
+                    <Plus size={12} /> Link folder
+                  </button>
+                </div>
+                <p className="prj-settings__hint">
+                  Related repositories Pi can reference while working here. Read-only folders can't be changed by Pi.
+                </p>
+
+                {links.length === 0 ? (
+                  <div className="prj-settings__empty">
+                    <FolderOpen size={16} />
+                    <span>No linked folders yet.</span>
+                  </div>
+                ) : (
+                  <ul className="prj-links">
+                    {links.map((lnk) => (
+                      <li key={lnk.path} className="prj-link">
+                        <FolderOpen size={14} className="prj-link__icon" />
+                        <div className="prj-link__text">
+                          <span className="prj-link__alias">{lnk.alias || folderName(lnk.path)}</span>
+                          <span className="prj-link__path" title={lnk.path}>
+                            {lnk.path}
+                          </span>
+                        </div>
+                        <div className="ui-seg prj-link__access" role="group" aria-label="Access">
+                          {(["read-only", "read-write"] as const).map((a) => (
+                            <button
+                              key={a}
+                              aria-pressed={lnk.access === a}
+                              onClick={() => void setLinks(links.map((l) => (l.path === lnk.path ? { ...l, access: a } : l)))}
+                            >
+                              {a === "read-only" ? "Read" : "Read/Write"}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon"
+                          title="Show in folder"
+                          aria-label={`Show ${lnk.alias || folderName(lnk.path)} in folder`}
+                          onClick={() => void window.studio.showItemInFolder(lnk.path)}
+                        >
+                          <ExternalLink size={13} />
+                        </button>
+                        <button
+                          className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon"
+                          title="Unlink folder"
+                          aria-label={`Unlink ${lnk.alias || folderName(lnk.path)}`}
+                          onClick={() => void setLinks(links.filter((l) => l.path !== lnk.path))}
+                        >
+                          <X size={13} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {section === "remove" && (
+              <div className="prj-settings__pane">
+                <h3 className="prj-settings__pane-title">Remove project</h3>
+                <div className="prj-settings__danger-card">
+                  <p className="prj-settings__hint">
+                    Hides "{project.name}" from Hive. Files and Pi sessions stay on disk. Open tabs for this project close, and running
+                    sessions stop.
+                  </p>
+                  <button className="ui-btn ui-btn--sm prj-settings__danger-btn" onClick={() => void remove()}>
+                    <Trash2 size={12} /> Remove project
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>,
     document.body,
   );
+};
+
+/** Mounted once in the workbench. Renders the dialog for whichever project the store points at. */
+export const ProjectSettingsHost: React.FC = () => {
+  const projectId = useProjectSettings((s) => s.projectId);
+  const section = useProjectSettings((s) => s.section);
+  const close = useProjectSettings((s) => s.close);
+  const exists = useSessionStore((s) => (projectId ? s.projects.some((p) => p.id === projectId) : false));
+  if (!projectId || !exists) return null;
+  return <ProjectSettingsModal key={projectId} projectId={projectId} section={section} onClose={close} />;
 };

@@ -13,6 +13,7 @@ import { StatusBar } from "./StatusBar.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
 import { QuestionFormModal } from "./QuestionFormModal.tsx";
 import { ImagePreviewModal } from "./ImagePreviewModal.tsx";
+import { ProjectSettingsHost } from "./ProjectSettingsModal.tsx";
 import { ChoiceDialogHost } from "./ChoiceDialog.tsx";
 import { SubagentDetailModal } from "./SubagentDetailModal.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
@@ -290,6 +291,7 @@ export const WorkbenchLayout: React.FC = () => {
       <ExtensionDialogModal />
       <QuestionFormModal />
       <ImagePreviewModal />
+      <ProjectSettingsHost />
       <ChoiceDialogHost />
       <SubagentDetailModal />
       <CommandPalette />
