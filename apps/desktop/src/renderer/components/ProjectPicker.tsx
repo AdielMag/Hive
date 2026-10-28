@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, FolderPlus, FolderKanban, Link2, X } from "lucide-react";
+import { Check, ChevronDown, FolderPlus, FolderKanban, Link2, Plus, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { ProjectEntry } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
@@ -68,11 +68,10 @@ export const ProjectPicker: React.FC<ProjectPickerProps> = ({ mode = "picker" })
           type="button"
           className={`project-tab-bar__dropdown-btn${open ? " is-open" : ""}`}
           onClick={() => setOpen(!open)}
-          title="Switch or open project…"
-          aria-label="Switch or open project…"
+          title="Open or switch project…"
+          aria-label="Open or switch project…"
         >
-          <FolderKanban size={13} />
-          <ChevronDown size={11} className="project-tab-bar__caret" />
+          <Plus size={15} />
         </button>
       ) : (
         <button
