@@ -1215,7 +1215,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     try {
       const bootstrap = await window.studio.bootstrap();
       document.documentElement.dataset.platform = bootstrap.platform;
-      set({ bootstrap, isInitializing: false });
+      // Keep isInitializing true until projects and the open-tab restore below are done, so the
+      // boot screen covers the whole startup instead of an empty workbench that accepts input.
+      set({ bootstrap });
 
       // Listen for session streaming events
       window.studio.onSessionEvents((batch) => {
@@ -1394,6 +1396,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           await get().newSessionTab(targetProject.id);
         }
       }
+      set({ isInitializing: false });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err), isInitializing: false, projectsLoaded: true });
     }
