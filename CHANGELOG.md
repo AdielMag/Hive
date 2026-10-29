@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.43.0 — 2026-10-29 · [diff](https://github.com/AdielMag/Hive/compare/v0.42.0...v0.43.0)
+
+### ✨ Features
+
+- **desktop:** align project tabs with content card and move search ([`c10628b`](https://github.com/AdielMag/Hive/commit/c10628ba4490ad05940129b54c5f186a33bef672))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`c208256`](https://github.com/AdielMag/Hive/commit/c208256b2209174ac934a9c053df38b114a719da))
+
 ## v0.42.0 — 2026-10-28 · [diff](https://github.com/AdielMag/Hive/compare/v0.41.0...v0.42.0)
 
 ### ✨ Features
