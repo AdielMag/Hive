@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.42.0 — 2026-10-28 · [diff](https://github.com/AdielMag/Hive/compare/v0.41.0...v0.42.0)
+
+### ✨ Features
+
+- **desktop:** add tabbed project settings dialog and searchable picker ([`19a8f94`](https://github.com/AdielMag/Hive/commit/19a8f94688f7cdb43daddf6047bc164adf6ba499))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`eb42658`](https://github.com/AdielMag/Hive/commit/eb42658add6b25ffc9142953288d499ce2cc21f4))
+
 ## v0.41.0 — 2026-10-28 · [diff](https://github.com/AdielMag/Hive/compare/v0.40.0...v0.41.0)
 
 ### ✨ Features
