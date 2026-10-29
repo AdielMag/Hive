@@ -173,7 +173,16 @@ export const WorkbenchLayout: React.FC = () => {
   const leftBottomPanels = bottomModulePanels.filter((p) => p.id !== "terminal");
 
   return (
-    <div className="shell">
+    <div
+      className="shell"
+      // Title-bar slots mirror the left/right chrome so the project tab strip sits exactly above the content card.
+      style={
+        {
+          "--chrome-left": `${RAIL_WIDTH + (ui.left ? ui.leftWidth : 0)}px`,
+          "--chrome-right": `${RAIL_WIDTH + (rightDocked ? rightPanelWidth : 0)}px`,
+        } as React.CSSProperties
+      }
+    >
       {projectsLoaded && projects.length === 0 && <OnboardingGate />}
       <div className="shell__grain grain-overlay-bg" />
       <AppTitleBar />

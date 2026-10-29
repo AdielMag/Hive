@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Settings2, X } from "lucide-react";
+import { Settings2, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import type { ProjectEntry } from "@hive/protocol";
 import { useSessionStore } from "../store/session-store.ts";
 import { useProjectSettings } from "../store/project-settings-store.ts";
 import { ProjectPicker } from "./ProjectPicker.tsx";
-import { usePalette } from "../features/commands/palette-store.ts";
-import { useShortcut } from "../features/commands/useShortcut.ts";
 import { ContextMenu, type ContextMenuEntry, type ContextMenuState } from "./ContextMenu.tsx";
 import { getFileManagerLabel } from "../lib/platform.ts";
 import { playUiSound } from "../store/sound-store.ts";
@@ -34,7 +32,6 @@ export const ProjectTabBar: React.FC = () => {
     })),
   );
 
-  const kbdPalette = useShortcut("palette.open");
   const scrollRef = useRef<HTMLDivElement>(null);
   const [dropIndicatorLeft, setDropIndicatorLeft] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
@@ -236,17 +233,6 @@ export const ProjectTabBar: React.FC = () => {
       </div>
 
       <ProjectPicker mode="dropdown-trigger" />
-
-      <button
-        type="button"
-        className="titlebar__search-trigger no-drag"
-        onClick={() => usePalette.getState().openPalette()}
-        title={`Quick search & commands (${kbdPalette ?? "Ctrl+K"})`}
-      >
-        <Search size={11} />
-        <span>Search</span>
-        <kbd>{kbdPalette ?? "Ctrl+K"}</kbd>
-      </button>
 
       {contextMenu && (
         <ContextMenu

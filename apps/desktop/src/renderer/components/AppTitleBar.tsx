@@ -128,7 +128,7 @@ export const AppTitleBar: React.FC = () => {
   }
 
   return (
-    <div ref={barRef} className="titlebar">
+    <div ref={barRef} className={`titlebar${ui.projectTabsEnabled ? " titlebar--tabs" : ""}`}>
       <div className="titlebar__menus no-drag">
         {Object.entries(menus).map(([name, items]) => (
           <div key={name} className="titlebar__menu">
@@ -178,6 +178,18 @@ export const AppTitleBar: React.FC = () => {
       </div>
 
       <div className="titlebar__right no-drag">
+        {ui.projectTabsEnabled && (
+          <button
+            type="button"
+            className="titlebar__search-trigger titlebar__search-trigger--bar no-drag"
+            onClick={() => usePalette.getState().openPalette()}
+            title={`Quick search & commands (${kbdPalette ?? "Ctrl+K"})`}
+          >
+            <Search size={12} />
+            <span>Search</span>
+            <kbd>{kbdPalette ?? "Ctrl+K"}</kbd>
+          </button>
+        )}
         {update?.hasUpdate && (
           <button
             className={`titlebar__update${installing ? " is-installing" : ""}`}

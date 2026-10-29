@@ -36,7 +36,6 @@
   align-items: center;
   height: 38px;
   flex-shrink: 0;
-  padding-left: 8px;
   -webkit-app-region: drag;
   font-size: var(--fs-sm);
   z-index: 50 !important;
@@ -48,6 +47,9 @@
   display: flex;
   align-items: center;
   gap: 1px;
+  flex-shrink: 0;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 .titlebar__menu {
   position: relative;
@@ -1423,6 +1425,35 @@
   align-self: stretch;
   align-items: center;
 }
+/* Tabs mode: the left and right title-bar slots are as wide as the rails + docked panels below them
+   (--chrome-left / --chrome-right, set on .shell). The strip in between therefore starts and ends
+   exactly at the content card's edges, so the active tab always joins the card whatever panels are open. */
+.titlebar--tabs .titlebar__menus {
+  min-width: var(--chrome-left, 0px);
+}
+.titlebar--tabs .titlebar__center {
+  justify-content: flex-start;
+}
+.titlebar--tabs .titlebar__right {
+  flex-shrink: 0;
+  justify-content: flex-end;
+  min-width: var(--chrome-right, 0px);
+}
+.titlebar__search-trigger--bar {
+  margin-left: 0;
+  margin-right: 10px;
+  height: 24px;
+  padding: 0 9px;
+}
+@media (max-width: 1000px) {
+  .titlebar__search-trigger--bar span,
+  .titlebar__search-trigger--bar kbd {
+    display: none;
+  }
+  .titlebar__search-trigger--bar {
+    padding: 0 7px;
+  }
+}
 .project-tab-bar {
   display: flex;
   align-items: stretch;
@@ -1439,9 +1470,10 @@
   align-items: flex-end;
   height: 100%;
   min-width: 0;
-  max-width: calc(100vw - 460px);
-  /* Side room so the flares on the first and last tab aren't clipped by the scrollport. */
-  padding: 0 10px;
+  max-width: 100%;
+  /* Side room so the flares aren't clipped by the scrollport. The left gap also clears the card's
+     12px top-left corner radius, so the first tab's flare meets a flat card edge. */
+  padding: 0 10px 0 22px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -2414,7 +2446,7 @@
 :root[data-platform="darwin"] .caption-btn {
   display: none;
 }
-:root[data-platform="darwin"] .titlebar {
+:root[data-platform="darwin"] .titlebar__menus {
   padding-left: 78px;
 }
 :root[data-platform="darwin"] .titlebar__right {
