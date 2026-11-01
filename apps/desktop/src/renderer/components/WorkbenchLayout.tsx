@@ -13,6 +13,7 @@ import { StatusBar } from "./StatusBar.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
 import { QuestionFormModal } from "./QuestionFormModal.tsx";
 import { ImagePreviewModal } from "./ImagePreviewModal.tsx";
+import { ProjectSettingsHost } from "./ProjectSettingsModal.tsx";
 import { ChoiceDialogHost } from "./ChoiceDialog.tsx";
 import { SubagentDetailModal } from "./SubagentDetailModal.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
@@ -172,7 +173,16 @@ export const WorkbenchLayout: React.FC = () => {
   const leftBottomPanels = bottomModulePanels.filter((p) => p.id !== "terminal");
 
   return (
-    <div className="shell">
+    <div
+      className="shell"
+      // Title-bar slots mirror the left/right chrome so the project tab strip sits exactly above the content card.
+      style={
+        {
+          "--chrome-left": `${RAIL_WIDTH + (ui.left ? ui.leftWidth : 0)}px`,
+          "--chrome-right": `${RAIL_WIDTH + (rightDocked ? rightPanelWidth : 0)}px`,
+        } as React.CSSProperties
+      }
+    >
       {projectsLoaded && projects.length === 0 && <OnboardingGate />}
       <div className="shell__grain grain-overlay-bg" />
       <AppTitleBar />
@@ -290,6 +300,7 @@ export const WorkbenchLayout: React.FC = () => {
       <ExtensionDialogModal />
       <QuestionFormModal />
       <ImagePreviewModal />
+      <ProjectSettingsHost />
       <ChoiceDialogHost />
       <SubagentDetailModal />
       <CommandPalette />

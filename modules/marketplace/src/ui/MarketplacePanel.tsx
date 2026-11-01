@@ -1,7 +1,13 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Check, Clock, Download, ExternalLink, Search, Users, X } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
-import { MarketplaceMethods, type MarketplacePackage, type MarketplaceSourceKind } from "../shared.ts";
+import {
+  MarketplaceMethods,
+  normalizeSource,
+  type MarketplaceInstallResult,
+  type MarketplacePackage,
+  type MarketplaceSourceKind,
+} from "../shared.ts";
 
 const PAGE_SIZE = 24;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -19,6 +25,8 @@ const SOURCE_LABEL: Record<MarketplaceSourceKind, string> = {
   mcp: "MCP",
 };
 
+type InstallStatus = { state: "installing" } | { state: "failed"; message: string };
+
 export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const [activeKind, setActiveKind] = useState<MarketplaceSourceKind>("pi-npm");
   const [query, setQuery] = useState("");
@@ -28,7 +36,8 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
-  const [stagedMap, setStagedMap] = useState<Record<string, boolean>>({});
+  const [installedSources, setInstalledSources] = useState<string[] | null>(null);
+  const [installStatus, setInstallStatus] = useState<Record<string, InstallStatus>>({});
   const searchSeqRef = useRef(0);
 
   const load = useCallback(
@@ -68,14 +77,43 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
     void load(committed, activeKind);
   }, [committed, activeKind, load]);
 
+  const refreshInstalled = useCallback(async () => {
+    try {
+      setInstalledSources(await host.ipc.invoke<string[]>(MarketplaceMethods.installed));
+    } catch {
+      setInstalledSources((prev) => prev ?? []);
+    }
+  }, [host]);
+
+  const isInstalled = (pkg: MarketplacePackage) =>
+    !!installedSources?.includes(normalizeSource(pkg.source));
+
+  useEffect(() => {
+    void refreshInstalled();
+  }, [refreshInstalled]);
+
   const handleInstall = useCallback(
-    (pkg: MarketplacePackage) => {
-      const key = pkg.source;
-      setStagedMap((s) => ({ ...s, [key]: true }));
-      host.sessions.setPrompt(`/install ${pkg.source}`);
-      host.toast({ message: "Staged in composer — press Enter to install", kind: "info" });
+    async (pkg: MarketplacePackage) => {
+      setInstallStatus((s) => ({ ...s, [pkg.source]: { state: "installing" } }));
+      let result: MarketplaceInstallResult;
+      try {
+        result = await host.ipc.invoke<MarketplaceInstallResult>(MarketplaceMethods.install, { source: pkg.source });
+      } catch (err: any) {
+        result = { ok: false, message: err?.message || "Install failed" };
+      }
+      if (result.ok) {
+        setInstallStatus((s) => {
+          const { [pkg.source]: _done, ...rest } = s;
+          return rest;
+        });
+        host.toast({ message: `Installed ${pkg.name}`, kind: "success" });
+        await refreshInstalled();
+      } else {
+        setInstallStatus((s) => ({ ...s, [pkg.source]: { state: "failed", message: result.message } }));
+        host.toast({ message: `Couldn't install ${pkg.name}`, kind: "error" });
+      }
     },
-    [host],
+    [host, refreshInstalled],
   );
 
   const handleOpen = useCallback((url: string) => void host.openExternal(url), [host]);
@@ -234,7 +272,9 @@ export const MarketplacePanel: React.FC<{ host: ModuleHost }> = ({ host }) => {
             <MarketplaceCard
               key={`${pkg.sourceKind}:${pkg.id}`}
               pkg={pkg}
-              staged={!!stagedMap[pkg.source]}
+              installed={isInstalled(pkg)}
+              installsReady={installedSources !== null}
+              status={installStatus[pkg.source]}
               onInstall={handleInstall}
               onOpen={handleOpen}
             />
@@ -317,13 +357,17 @@ function timeAgo(iso?: string): string | null {
 
 const MarketplaceCard = memo(function MarketplaceCard({
   pkg,
-  staged,
+  installed,
+  installsReady,
+  status,
   onInstall,
   onOpen,
 }: {
   pkg: MarketplacePackage;
-  staged: boolean;
-  onInstall: (pkg: MarketplacePackage) => void;
+  installed: boolean;
+  installsReady: boolean;
+  status: InstallStatus | undefined;
+  onInstall: (pkg: MarketplacePackage) => void | Promise<void>;
   onOpen: (url: string) => void;
 }) {
   const hue = hueOf(pkg.name);
@@ -453,36 +497,40 @@ const MarketplaceCard = memo(function MarketplaceCard({
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={() => onInstall(pkg)}
-          title={staged ? "Staged in composer — press Enter to install" : `Install ${pkg.name}`}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            padding: "3px 8px",
-            borderRadius: 4,
-            border: "none",
-            background: staged ? "var(--bg-elevated)" : "var(--accent-base)",
-            color: staged ? "var(--success)" : "#fff",
-            fontSize: 11,
-            cursor: "pointer",
-            fontWeight: 500,
-            flexShrink: 0,
-          }}
-        >
-          {staged ? (
-            <>
-              <Check size={10} /> Staged
-            </>
-          ) : (
-            <>
-              <Download size={10} /> Install
-            </>
-          )}
-        </button>
+        {(() => {
+          const busy = status?.state === "installing";
+          const disabled = busy || installed || !installsReady;
+          return (
+            <button
+              type="button"
+              onClick={() => void onInstall(pkg)}
+              disabled={disabled}
+              title={installed ? "Installed" : status?.state === "failed" ? status.message : `Install ${pkg.name}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "3px 8px",
+                borderRadius: 4,
+                border: "none",
+                background: installed ? "var(--bg-elevated)" : "var(--accent-base)",
+                color: installed ? "var(--success)" : "#fff",
+                fontSize: 11,
+                cursor: disabled ? "default" : "pointer",
+                opacity: busy ? 0.7 : 1,
+                fontWeight: 500,
+                flexShrink: 0,
+              }}
+            >
+              {installed ? <Check size={10} /> : <Download size={10} />}{" "}
+              {busy ? "Installing..." : installed ? "Installed" : status ? "Retry" : "Install"}
+            </button>
+          );
+        })()}
       </div>
+      {status?.state === "failed" && (
+        <div style={{ fontSize: 11, color: "var(--danger)", lineHeight: 1.4 }}>{status.message}</div>
+      )}
     </article>
   );
 });
