@@ -121,17 +121,24 @@ export class AuthService {
    * Silently refreshes a provider's OAuth token using its stored refresh token (no browser). Resolving the
    * provider's auth makes Pi refresh an expired access token and persist the new one to auth.json.
    */
-  async refreshOAuth(providerId: string, cwd = process.cwd()): Promise<{ success: boolean; error?: string }> {
-    const entry = this.readAuth()[providerId];
-    if (!entry || entry.type === "api_key" || !(entry.refresh || entry.access)) {
+  async refreshOAuth(
+    providerId: string,
+    cwd = process.cwd(),
+  ): Promise<{ success: boolean; refreshed?: boolean; error?: string }> {
+    const before = this.readAuth()[providerId];
+    if (!before || before.type === "api_key" || !(before.refresh || before.access)) {
       return { success: false, error: "Not signed in with OAuth — use Reconnect." };
     }
     try {
       const rt = await this.loadModelRuntime(cwd);
       if (!rt || typeof rt.getAuth !== "function") throw new Error("Pi ModelRuntime.getAuth is not available in installed Pi SDK");
+      // Pi only refreshes when the access token is within ~5 min of expiry; otherwise it returns it unchanged.
       const resolved = await rt.getAuth(providerId);
-      if (!resolved) return { success: false, error: "Token could not be refreshed — please reconnect." };
-      return { success: true };
+      if (!resolved?.auth) return { success: false, error: "Token could not be refreshed — please reconnect." };
+      // Report whether Pi actually rotated the stored token, so the UI never claims a refresh that didn't happen.
+      const after = this.readAuth()[providerId];
+      const refreshed = !!after && (after.access !== before.access || after.expires !== before.expires);
+      return { success: true, refreshed };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
