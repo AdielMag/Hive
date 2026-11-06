@@ -2,6 +2,36 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.44.0 — 2026-11-06 · [diff](https://github.com/AdielMag/Hive/compare/v0.43.0...v0.44.0)
+
+### ✨ Features
+
+- **desktop:** support unified subagents and multi-task execution ([`734dd6d`](https://github.com/AdielMag/Hive/commit/734dd6dd80d945c138f79a7b5bf6d6cbc2a99b87))
+- add LearningHarness submodule ([`7739906`](https://github.com/AdielMag/Hive/commit/77399064659f897ccadb016789f4f288ec932cc9))
+
+### 🐛 Fixes
+
+- **auth:** accurately report whether oauth token was rotated ([`660eece`](https://github.com/AdielMag/Hive/commit/660eeceb80a52084d6182ad8bc2c4c970916be43))
+- **desktop:** derive session title from active transcript path ([`0574683`](https://github.com/AdielMag/Hive/commit/057468359b5bcb144b1edcd901c67d4c8786b37d))
+
+### 📝 Documentation
+
+- **readme:** expand feature guide and add animated tour gifs ([`4c2c6b4`](https://github.com/AdielMag/Hive/commit/4c2c6b4be7b3ea45491c7f51132cefcc9276d48a))
+- **plan:** outline subagent inspection for unified subagent tool ([`125d472`](https://github.com/AdielMag/Hive/commit/125d472af80a0e4dda3c6554487908ccead6e266))
+- **plan:** add implementation plan for system prompt inspection ([`253df5d`](https://github.com/AdielMag/Hive/commit/253df5ded0c8214379d5ce8884f47469029e2ec3))
+- add cache and prompt optimization plan ([`464f9c8`](https://github.com/AdielMag/Hive/commit/464f9c81d6247b9e22e44fad1ba9a942bf8550b3))
+
+### 🧹 Other changes
+
+- Merge branch 'hive/update-readme-with-al-featuers-aingl-31e131' ([`3a5e3e0`](https://github.com/AdielMag/Hive/commit/3a5e3e05f36d9b66209a8e7ebe7893de51da3cbd))
+- Merge branch 'hive/the-reconenct-or-refresh-of-anthrpic-bae3e4' ([`f28b909`](https://github.com/AdielMag/Hive/commit/f28b909aa33920759458af632ae6f90daf8db291))
+- Merge branch 'hive/something-broke-and-now-when-a-suage-b74841' ([`d091919`](https://github.com/AdielMag/Hive/commit/d09191957b0ad351be117e57733f4a1388262e6e))
+- Merge branch 'hive/a-github-actions-workflow-failed-fin-23219b' ([`1bf35df`](https://github.com/AdielMag/Hive/commit/1bf35df6b68b7ecc72e820bfe5ee7d63bfc9251f))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`71f6bdc`](https://github.com/AdielMag/Hive/commit/71f6bdc3a9d654673b82ac2226395d96b15b96b4))
+- Merge branch 'hive/be-able-to-inspect-the-system-7f6aa9' ([`f6546a0`](https://github.com/AdielMag/Hive/commit/f6546a02ae1775aee9743e502ca3d9778a3b2339))
+- more ([`9cea4d8`](https://github.com/AdielMag/Hive/commit/9cea4d8644ddbf66734cf96597f161dc1bf4f46c))
+- Merge branch 'hive/question-here-in-hive-and-pi-cli-usi-772b1b' ([`eae8a02`](https://github.com/AdielMag/Hive/commit/eae8a0255899619a41e5af962ac22d0d9cbc23da))
+
 ## v0.43.0 — 2026-10-29 · [diff](https://github.com/AdielMag/Hive/compare/v0.42.0...v0.43.0)
 
 ### ✨ Features
