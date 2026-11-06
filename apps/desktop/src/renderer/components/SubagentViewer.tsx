@@ -17,7 +17,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import type { SubagentView } from "../lib/ai/subagents.ts";
+import { getSubagentDetails, type SubagentView } from "../lib/ai/subagents.ts";
 import { formatCost, formatDuration } from "../lib/format.ts";
 import { useSubagentOutput } from "../hooks/useSubagentOutput.ts";
 import { Markdown } from "./code/Markdown.tsx";
@@ -44,10 +44,27 @@ export const SubagentViewer: React.FC<SubagentViewerProps> = ({
   onClose,
   isModal = false,
 }) => {
+  const liveTool = useSessionStore((s) => (view.toolCallId ? s.transcript.tools[view.toolCallId] : undefined));
+
+  const liveDetails =
+    getSubagentDetails((liveTool?.result as { details?: unknown } | undefined)?.details) ||
+    getSubagentDetails((liveTool?.partial as { details?: unknown } | undefined)?.details) ||
+    view.subagentDetails;
+
+  const results = liveDetails?.results ?? [];
+  const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+  // A reused viewer must not keep the previous call's task pill.
+  useEffect(() => {
+    setSelectedTaskIndex(0);
+  }, [view.toolCallId]);
+  const effectiveIndex = selectedTaskIndex < results.length ? selectedTaskIndex : 0;
+  const activeResult = results[effectiveIndex];
+
   const { timeline, prompt: outputPrompt, loading, error: transcriptError } = useSubagentOutput(
     view,
     true,
     { sessionPath, key: activeKey },
+    effectiveIndex,
   );
 
   const [activeSection, setActiveSection] = useState<"transcript" | "prompt" | "result">("transcript");
@@ -55,14 +72,41 @@ export const SubagentViewer: React.FC<SubagentViewerProps> = ({
   const stopSubagent = useSessionStore((s) => s.stopSubagent);
 
   const isRunning =
-    view.status === "running" || view.status === "queued" || view.status === "background";
+    view.status === "running" || view.status === "queued" || view.status === "background" || liveTool?.status === "running";
 
   useEffect(() => {
     if (!isRunning) setStopping(false);
   }, [isRunning]);
 
-  const promptText = view.prompt || outputPrompt;
+  const finalAssistantText = React.useMemo(() => {
+    // Mid-run assistant chatter is not a final answer.
+    if (!activeResult?.messages || activeResult.exitCode === -1) return undefined;
+    for (let i = activeResult.messages.length - 1; i >= 0; i--) {
+      const msg = activeResult.messages[i];
+      if (msg?.role === "assistant") {
+        if (typeof msg.content === "string" && msg.content.trim()) return msg.content;
+        if (Array.isArray(msg.content)) {
+          const textParts = msg.content
+            .filter((p) => p && typeof p === "object" && (p as { type?: string }).type === "text")
+            .map((p) => (p as { text?: string }).text ?? "")
+            .join("\n")
+            .trim();
+          if (textParts) return textParts;
+        }
+      }
+    }
+    return undefined;
+  }, [activeResult?.messages, activeResult?.exitCode]);
+
+  const promptText = activeResult?.task || view.prompt || outputPrompt;
+  const resultText =
+    activeResult?.errorMessage ||
+    finalAssistantText ||
+    view.resultText ||
+    activeResult?.stderr;
   const effectiveDuration = view.durationMs ? formatDuration(view.durationMs) : undefined;
+  const displayModel = activeResult?.model || view.model;
+  const displayType = activeResult?.agent || view.type;
 
   // Auto-scroll logic for the transcript section
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -103,7 +147,7 @@ export const SubagentViewer: React.FC<SubagentViewerProps> = ({
             <div className="subagent-viewer__icon">
               <Bot size={16} />
             </div>
-            <span className="subagent-viewer__type-pill">{view.type}</span>
+            <span className="subagent-viewer__type-pill">{displayType}</span>
             <h2 className="subagent-viewer__title" title={view.description}>
               {view.description || "Subagent Execution"}
             </h2>
@@ -115,7 +159,7 @@ export const SubagentViewer: React.FC<SubagentViewerProps> = ({
               {view.status}
             </span>
 
-            {isRunning && (
+            {isRunning && !view.unified && (
               <button
                 type="button"
                 className="ui-btn ui-btn--danger subagent-viewer__action-btn"
@@ -193,9 +237,9 @@ export const SubagentViewer: React.FC<SubagentViewerProps> = ({
 
         {/* Stats & Meta row */}
         <div className="subagent-viewer__meta-row">
-          {view.model && (
+          {displayModel && (
             <span className="subagent-viewer__stat" title="Model">
-              <Cpu size={12} /> {view.model}
+              <Cpu size={12} /> {displayModel}
             </span>
           )}
           {view.thinking && (
@@ -229,12 +273,45 @@ export const SubagentViewer: React.FC<SubagentViewerProps> = ({
               <Clock size={12} /> {effectiveDuration}
             </span>
           )}
-          {view.agentId && (
+          {view.agentId && !view.unified && (
             <span className="subagent-viewer__stat mono" title={`Agent ID: ${view.agentId}`}>
               id: {view.agentId.slice(0, 8)}
             </span>
           )}
         </div>
+
+        {/* Multi-Task / Multi-Step selector */}
+        {results.length > 1 && (
+          <div className="subagent-viewer__task-bar">
+            <span className="subagent-viewer__task-bar-label">
+              {liveDetails?.mode === "chain" ? "Chain Steps:" : "Tasks:"}
+            </span>
+            <div className="subagent-viewer__task-pills">
+              {results.map((res, idx) => {
+                const isItemRunning = res.exitCode === -1;
+                const isItemError = !!res.errorMessage || (res.exitCode !== 0 && res.exitCode !== -1);
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`subagent-viewer__task-pill ${effectiveIndex === idx ? "is-active" : ""}`}
+                    onClick={() => setSelectedTaskIndex(idx)}
+                  >
+                    <span className="subagent-viewer__task-pill-idx">{idx + 1}</span>
+                    <span className="subagent-viewer__task-pill-agent">{res.agent}</span>
+                    {isItemRunning ? (
+                      <Loader2 size={10} className="spin" />
+                    ) : isItemError ? (
+                      <AlertCircle size={10} className="text-rose-500" />
+                    ) : (
+                      <CheckCircle2 size={10} className="text-emerald-500" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Navigation Bar */}
@@ -262,7 +339,7 @@ export const SubagentViewer: React.FC<SubagentViewerProps> = ({
           </button>
         )}
 
-        {view.resultText && (
+        {resultText && (
           <button
             type="button"
             className={`subagent-viewer__tab-btn ${activeSection === "result" ? "is-active" : ""}`}
@@ -308,9 +385,9 @@ export const SubagentViewer: React.FC<SubagentViewerProps> = ({
           </div>
         )}
 
-        {activeSection === "result" && view.resultText && (
+        {activeSection === "result" && resultText && (
           <div className="subagent-viewer__markdown-pane">
-            <Markdown text={view.resultText} />
+            <Markdown text={resultText} />
           </div>
         )}
 

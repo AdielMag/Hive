@@ -15,7 +15,7 @@ export interface ClassifyContext {
 }
 
 const BUILTIN_NAMES = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
-const SUBAGENT_NAMES = new Set(["Agent", "get_subagent_result", "steer_subagent", "SubagentWorkflow"]);
+const SUBAGENT_NAMES = new Set(["Agent", "get_subagent_result", "steer_subagent", "SubagentWorkflow", "subagent"]);
 
 /**
  * Classifies a tool call by category (skill, mcp, subagent, builtin, extension),

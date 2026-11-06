@@ -200,7 +200,7 @@ export function isBatchableTool(
   customMatches?: (name: string, args: Record<string, unknown>) => boolean
 ): boolean {
   // Subagent cards and workflows have rich nested viewers / interactive tabs
-  if (block.name === "Agent" || block.name === "SubagentWorkflow") return false;
+  if (block.name === "Agent" || block.name === "SubagentWorkflow" || block.name === "subagent") return false;
   // Subagent action rows
   if (block.name === "get_subagent_result" || block.name === "steer_subagent") return false;
   // Module-owned custom cards (e.g. plan previewer review approval)

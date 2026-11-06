@@ -85,6 +85,34 @@ describe("usage parsing", () => {
       model: "claude-3-5-sonnet",
       cost: 0.035,
     });
+
+    const unifiedSubagentResult = JSON.stringify({
+      type: "message",
+      timestamp: "2026-10-15T19:10:00.000Z",
+      message: {
+        role: "toolResult",
+        toolName: "subagent",
+        details: {
+          mode: "single",
+          results: [
+            {
+              agent: "scout",
+              model: "antigravity/gemini-3.8-flash",
+              exitCode: 0,
+              usage: { input: 5000, output: 1200, cacheRead: 8000, cost: 0.0042, turns: 3 },
+            },
+          ],
+        },
+      },
+    });
+    const parsedUnified = parseUsageLine(unifiedSubagentResult);
+    expect(parsedUnified).toMatchObject({
+      provider: "google",
+      model: "antigravity/gemini-3.8-flash",
+      cost: 0.0042,
+      input: 5000,
+      output: 1200,
+    });
   });
 
   it("aggregates a session into day buckets", () => {

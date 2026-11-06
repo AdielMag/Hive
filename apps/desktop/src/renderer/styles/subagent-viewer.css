@@ -327,3 +327,69 @@
     background: var(--accent-hover, #68a5f7);
   }
 }
+
+/* Multi-Task / Multi-Step Strip */
+.subagent-viewer__task-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.subagent-viewer__task-bar-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.subagent-viewer__task-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.subagent-viewer__task-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-card, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
+  white-space: nowrap;
+}
+
+.subagent-viewer__task-pill:hover {
+  background: var(--bg-active, rgba(255, 255, 255, 0.08));
+  color: var(--text-base);
+}
+
+.subagent-viewer__task-pill.is-active {
+  background: var(--accent-subtle, rgba(83, 155, 245, 0.15));
+  border-color: var(--accent-base, #539bf5);
+  color: var(--accent-base, #539bf5);
+  font-weight: 600;
+}
+
+.subagent-viewer__task-pill-idx {
+  opacity: 0.7;
+}
+
+.subagent-viewer__task-pill-agent {
+  font-family: var(--font-mono, monospace);
+}
+
