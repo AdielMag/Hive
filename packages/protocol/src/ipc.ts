@@ -613,7 +613,7 @@ export interface StudioApi {
   logoutAccount(providerId: string): Promise<void>;
   loginOAuth(providerId: string): Promise<{ success: boolean; error?: string }>;
   /** Silently refresh an OAuth token (no browser). `success: false` means the user must reconnect. */
-  refreshOAuth(providerId: string): Promise<{ success: boolean; error?: string }>;
+  refreshOAuth(providerId: string): Promise<{ success: boolean; refreshed?: boolean; error?: string }>;
 
   // Updater
   checkForUpdates(): Promise<any>;

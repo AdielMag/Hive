@@ -245,8 +245,13 @@ const AccountsTab: React.FC = () => {
     try {
       const res = await window.studio.refreshOAuth(acc.providerId);
       if (res.success) {
-        setNotes((n) => ({ ...n, [acc.providerId]: "Token refreshed. If you still see errors, use Reconnect." }));
-        reconnected(acc.name, "token refreshed");
+        if (res.refreshed) {
+          setNotes((n) => ({ ...n, [acc.providerId]: "Token refreshed. If you still see errors, use Reconnect." }));
+          reconnected(acc.name, "token refreshed");
+        } else {
+          // Token is still valid, so nothing was rotated. Don't claim a refresh happened.
+          setNotes((n) => ({ ...n, [acc.providerId]: "Token is still valid, no refresh was needed. If you still see errors, use Reconnect." }));
+        }
       } else {
         setNotes((n) => ({ ...n, [acc.providerId]: "" }));
         fail(`Couldn't refresh ${acc.name}`, `${res.error || "unknown error"}. Use Reconnect to sign in again.`);
