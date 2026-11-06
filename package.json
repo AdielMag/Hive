@@ -29,6 +29,7 @@
     "check:modules": "node scripts/gen-modules.mjs --check && node scripts/check-module-boundaries.mjs",
     "dist": "npm --prefix apps/desktop run dist",
     "screenshots": "node scripts/capture-screenshots.mjs",
+    "gifs": "node scripts/capture-gifs.mjs",
     "release:preview": "node scripts/release/prepare.mjs --dry-run"
   },
   "devDependencies": {
