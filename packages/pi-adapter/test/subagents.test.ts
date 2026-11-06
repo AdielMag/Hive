@@ -7,6 +7,7 @@ import {
   parseGetResultText,
   parseOutputLines,
   parseTokenCount,
+  getSubagentDetails,
   resolveSubagentView,
   summarizeSubagents,
 } from "../src/ai/subagents.ts";
@@ -366,5 +367,193 @@ Execution summary here...`;
     expect(summary.totalTokens).toBe(45000);
     expect(summary.totalToolUses).toBe(13);
     expect(summary.totalTurns).toBe(10);
+  });
+});
+
+describe("unified subagent tool (pi extension `subagent`)", () => {
+  const sub = (id: string, args: Record<string, unknown>): AssistantBlock & { type: "toolCall" } => ({
+    type: "toolCall",
+    id,
+    name: "subagent",
+    arguments: args,
+    complete: true,
+  });
+
+  it("resolves single-mode details into agent, task, usage and tool-use counts", () => {
+    const block = sub("call_single", { agent: "scout", task: "Find the router" });
+    const timeline: Timeline = {
+      items: [
+        { kind: "assistant", key: "a1", streaming: false, blocks: [block] },
+      ],
+      toolResults: {
+        call_single: {
+          toolCallId: "call_single",
+          toolName: "subagent",
+          isError: false,
+          text: "done",
+          images: [],
+          details: {
+            mode: "single",
+            results: [
+              {
+                agent: "scout",
+                task: "Find the router",
+                exitCode: 0,
+                model: "antigravity/gemini-3.8-flash",
+                usage: { input: 1000, output: 200, cacheRead: 0, cacheWrite: 0, cost: 0.004, turns: 2 },
+                messages: [
+                  { role: "assistant", content: [{ type: "toolCall", id: "t1", name: "read", arguments: {} }] },
+                  { role: "toolResult", toolCallId: "t1", toolName: "read", content: [{ type: "text", text: "ok" }] },
+                  { role: "assistant", content: [{ type: "text", text: "Router is in src/router.ts" }] },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const [view] = collectSubagents(timeline, false);
+    expect(view?.type).toBe("scout");
+    expect(view?.description).toBe("Find the router");
+    expect(view?.model).toBe("antigravity/gemini-3.8-flash");
+    expect(view?.status).toBe("completed");
+    expect(view?.cost).toBeCloseTo(0.004, 6);
+    expect(view?.totalTokens).toBe(1200);
+    expect(view?.toolUses).toBe(1);
+    expect(view?.turns).toBe(2);
+    expect(view?.messages).toHaveLength(3);
+    expect(hasActiveSubagents(timeline)).toBe(false);
+  });
+
+  it("treats a parallel call with a live partial as active and keeps every task", () => {
+    const block = sub("call_par", {
+      tasks: [
+        { agent: "scout", task: "A" },
+        { agent: "worker", task: "B" },
+      ],
+    });
+    const timeline: Timeline = {
+      items: [{ kind: "assistant", key: "a1", streaming: false, blocks: [block] }],
+      toolResults: {},
+    };
+    const run = {
+      status: "running",
+      partial: {
+        details: {
+          mode: "parallel",
+          results: [
+            { agent: "scout", task: "A", exitCode: 0, messages: [] },
+            { agent: "worker", task: "B", exitCode: -1, messages: [] },
+          ],
+        },
+      },
+    } as unknown as Parameters<typeof resolveSubagentView>[0]["run"];
+
+    const view = resolveSubagentView({ block, run, subagentIndex: indexSubagents(timeline), sessionRunning: true });
+    expect(view.type).toBe("scout, worker");
+    expect(view.description).toBe("2 parallel tasks");
+    expect(view.status).toBe("running");
+    expect(view.subagentDetails?.results).toHaveLength(2);
+    expect(hasActiveSubagents(timeline)).toBe(true);
+  });
+
+  it("shows a chain call as aborted when the session is idle and the result never arrived", () => {
+    const block = sub("call_chain", {
+      chain: [
+        { agent: "scout", task: "Find" },
+        { agent: "worker", task: "Fix" },
+      ],
+    });
+    const timeline: Timeline = {
+      items: [{ kind: "assistant", key: "a1", streaming: false, blocks: [block] }],
+      toolResults: {},
+    };
+
+    const [view] = collectSubagents(timeline, false);
+    expect(view?.type).toBe("scout → worker");
+    expect(view?.description).toBe("2 chain steps");
+    expect(view?.prompt).toContain("Step 2 [worker]: Fix");
+    expect(view?.status).toBe("aborted");
+  });
+});
+
+describe("subagent tool regressions", () => {
+  it("rejects legacy Agent details as unified subagent details", () => {
+    expect(getSubagentDetails({ subagentType: "scout", status: "completed", cost: 0.01 })).toBeUndefined();
+    expect(getSubagentDetails(undefined)).toBeUndefined();
+    expect(getSubagentDetails({ results: "nope" })).toBeUndefined();
+    expect(getSubagentDetails({ results: [] })).toEqual({ results: [] });
+  });
+
+  it("gives two calls to the same agent distinct ids, so they never share a card or tab", () => {
+    const mk = (id: string): AssistantBlock & { type: "toolCall" } => ({
+      type: "toolCall",
+      id,
+      name: "subagent",
+      arguments: { agent: "scout", task: "look" },
+      complete: true,
+    });
+    const timeline: Timeline = {
+      items: [{ kind: "assistant", key: "a1", streaming: false, blocks: [mk("c1"), mk("c2")] }],
+      toolResults: {
+        c1: { toolCallId: "c1", toolName: "subagent", isError: false, text: "", images: [], details: { mode: "single", results: [{ agent: "scout", task: "look", exitCode: 0, messages: [] }] } },
+        c2: { toolCallId: "c2", toolName: "subagent", isError: false, text: "", images: [], details: { mode: "single", results: [{ agent: "scout", task: "look", exitCode: 0, messages: [] }] } },
+      },
+    };
+    const views = collectSubagents(timeline, false);
+    expect(views.map((v) => v.agentId)).toEqual(["c1", "c2"]);
+    expect(views.every((v) => v.stopId === undefined)).toBe(true);
+  });
+
+  it("never treats a synchronous subagent answer as background work", () => {
+    const block: AssistantBlock & { type: "toolCall" } = {
+      type: "toolCall",
+      id: "c3",
+      name: "subagent",
+      arguments: { agent: "scout", task: "check" },
+      complete: true,
+    };
+    const timeline: Timeline = {
+      items: [{ kind: "assistant", key: "a1", streaming: false, blocks: [block] }],
+      toolResults: {
+        c3: {
+          toolCallId: "c3",
+          toolName: "subagent",
+          isError: false,
+          text: "Job will finish in background later",
+          images: [],
+          details: { mode: "single", results: [{ agent: "scout", task: "check", exitCode: 0, messages: [] }] },
+        },
+      },
+    };
+    const [view] = collectSubagents(timeline, false);
+    expect(view?.background).toBe(false);
+    expect(view?.status).toBe("completed");
+  });
+
+  it("does not keep a finished call spinning on a leftover exitCode -1", () => {
+    const block: AssistantBlock & { type: "toolCall" } = {
+      type: "toolCall",
+      id: "c4",
+      name: "subagent",
+      arguments: { agent: "scout", task: "x" },
+      complete: true,
+    };
+    const timeline: Timeline = {
+      items: [{ kind: "assistant", key: "a1", streaming: false, blocks: [block] }],
+      toolResults: {
+        c4: {
+          toolCallId: "c4",
+          toolName: "subagent",
+          isError: false,
+          text: "",
+          images: [],
+          details: { mode: "single", results: [{ agent: "scout", task: "x", exitCode: -1, messages: [] }] },
+        },
+      },
+    };
+    const [view] = collectSubagents(timeline, true);
+    expect(view?.status).not.toBe("running");
   });
 });

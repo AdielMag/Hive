@@ -119,7 +119,7 @@ export function collectToolUsage(timeline: Timeline, ctx: ToolUsageContext): Too
       }
 
       // Check subagent
-      if (toolName === "Agent" || toolName === "SubagentWorkflow") {
+      if (toolName === "Agent" || toolName === "SubagentWorkflow" || toolName === "subagent") {
         const view = resolveSubagentView({ block, result: res, subagentIndex });
         subagentsList.push(view);
         continue;

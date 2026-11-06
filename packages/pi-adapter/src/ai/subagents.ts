@@ -1,5 +1,59 @@
 import type { AnyMessage, AssistantBlock, Timeline, ToolResultView, ToolRun } from "../transcript.ts";
 
+export const SUBAGENT_TOOL_NAMES = new Set(["Agent", "SubagentWorkflow", "subagent"]);
+
+export function isSubagentTool(name?: string | null): boolean {
+  return typeof name === "string" && SUBAGENT_TOOL_NAMES.has(name);
+}
+
+/**
+ * Returns the unified `subagent` tool details only when `results` is a real array.
+ * Legacy `Agent` details are plain objects and must not be mistaken for this shape.
+ */
+export function getSubagentDetails(raw: unknown): SubagentDetails | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const results = (raw as { results?: unknown }).results;
+  if (!Array.isArray(results)) return undefined;
+  return raw as SubagentDetails;
+}
+
+/** First non-empty line, capped so multi-paragraph task text doesn't become a card title. */
+function firstLine(text: string, max = 80): string {
+  const line = text.split(/\r?\n/).find((l) => l.trim().length > 0)?.trim() ?? "";
+  return line.length > max ? `${line.slice(0, max - 1)}\u2026` : line;
+}
+
+export interface SingleSubagentResult {
+  agent: string;
+  agentSource?: "user" | "project" | "unknown";
+  task: string;
+  exitCode: number;
+  messages: AnyMessage[];
+  stderr?: string;
+  usage?: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+    cost?: number;
+    contextTokens?: number;
+    turns?: number;
+  };
+  model?: string;
+  stopReason?: string;
+  errorMessage?: string;
+  step?: number;
+  retriedWith?: string;
+  firstError?: string;
+}
+
+export interface SubagentDetails {
+  mode: "single" | "parallel" | "chain";
+  agentScope?: string;
+  projectAgentsDir?: string | null;
+  results: SingleSubagentResult[];
+}
+
 export interface AgentDetails {
   displayName?: string;
   description: string;
@@ -38,6 +92,8 @@ export interface NotificationDetails {
 
 export interface SubagentView {
   toolCallId: string;
+  /** True for the pi `subagent` tool: synchronous, no stop RPC, `agentId` is the call id. */
+  unified?: boolean;
   agentId?: string;
   /** Real runner id (never the `name` arg fallback); required to stop the agent. */
   stopId?: string;
@@ -60,6 +116,8 @@ export interface SubagentView {
   durationMs?: number;
   error?: string;
   resultText?: string;
+  subagentDetails?: SubagentDetails;
+  messages?: AnyMessage[];
 }
 
 /**
@@ -144,7 +202,12 @@ export function indexSubagents(timeline: Timeline): SubagentIndex {
       for (const block of item.blocks) {
         if (block.type === "toolCall") {
           const res = timeline.toolResults[block.id];
-          if (block.name === "Agent" || block.name === "SubagentWorkflow") {
+          if (isSubagentTool(block.name)) {
+            if (block.name === "subagent") {
+              // Keyed by call id: agent names repeat across calls, so they can't identify a run.
+              cards.set(block.id, block.id);
+              continue;
+            }
             const parsed = parseAgentResultText(res?.text ?? "");
             const details = res?.details as AgentDetails | { taskId?: string } | undefined;
             const agentId =
@@ -170,6 +233,38 @@ export function indexSubagents(timeline: Timeline): SubagentIndex {
   return { notifications, results, cards };
 }
 
+/** Counts tool calls made by the subagent (one per assistant toolCall part; results are not double-counted). */
+function countToolUsesInMessages(messages?: AnyMessage[]): number {
+  if (!messages || !Array.isArray(messages)) return 0;
+  let count = 0;
+  for (const msg of messages) {
+    if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue;
+    for (const part of msg.content) {
+      if (part && typeof part === "object" && (part as { type?: string }).type === "toolCall") count++;
+    }
+  }
+  return count;
+}
+
+function countTurnsInMessages(messages?: AnyMessage[]): number {
+  if (!messages || !Array.isArray(messages)) return 0;
+  return messages.filter((m) => m.role === "assistant").length;
+}
+
+/** Describes the latest step of a running subagent, looking only at the most recent assistant message. */
+function describeSubagentActivity(result?: SingleSubagentResult): string | undefined {
+  if (!result) return undefined;
+  const fallback = result.agent ? `Running ${result.agent}...` : undefined;
+  const last = [...(result.messages ?? [])].reverse().find((m) => m?.role === "assistant");
+  if (!last || !Array.isArray(last.content)) return fallback;
+  const toolCalls = last.content.filter(
+    (p): p is { type: "toolCall"; name?: string } =>
+      Boolean(p) && typeof p === "object" && (p as { type?: string }).type === "toolCall",
+  );
+  const lastTool = toolCalls[toolCalls.length - 1];
+  return lastTool?.name ? `Using ${lastTool.name}...` : fallback;
+}
+
 /**
  * Resolves all metadata and live updates for a subagent tool call into a SubagentView.
  */
@@ -184,34 +279,80 @@ export function resolveSubagentView(params: {
   const { block, run, result, subagentIndex, sessionRunning } = params;
   const args = block.arguments ?? {};
 
-  // Extract details from first available source
-  const details =
-    (result?.details as AgentDetails | undefined) ||
-    ((run?.result as { details?: AgentDetails } | undefined)?.details) ||
-    ((run?.partial as { details?: AgentDetails } | undefined)?.details);
+  // Extract raw details from first available source
+  const rawDetails =
+    result?.details ||
+    (run?.result as { details?: unknown } | undefined)?.details ||
+    (run?.partial as { details?: unknown } | undefined)?.details;
+
+  const subagentDetails = getSubagentDetails(rawDetails);
+  const legacyDetails = subagentDetails ? undefined : (rawDetails as AgentDetails | undefined);
 
   const parsed = parseAgentResultText(result?.text ?? "");
   const taskId = typeof (result?.details as { taskId?: unknown } | undefined)?.taskId === "string"
     ? (result?.details as { taskId: string }).taskId
     : undefined;
-  const stopId = details?.agentId || taskId || parsed.agentId;
-  const agentId = stopId || (typeof args.name === "string" ? args.name : undefined);
+
+  const isSubagentToolCall = block.name === "subagent";
+  // The pi `subagent` tool runs synchronously and has no stop RPC, so it gets no stopId.
+  const stopId = isSubagentToolCall ? undefined : legacyDetails?.agentId || taskId || parsed.agentId;
+  // Unique per call: agent names repeat across calls and would collide in tab/card indexes.
+  const agentId = isSubagentToolCall ? block.id : stopId || (typeof args.name === "string" ? args.name : undefined);
   const outputFile = parsed.outputFile;
 
-  const subagentType = (details?.subagentType || args.subagent_type || block.name) as string;
-  const description = (details?.description || args.description || (block.name === "SubagentWorkflow" ? "Workflow" : "Subagent")) as string;
-  const prompt = (args.prompt as string) || (typeof args.script === "string" ? args.script : "");
+  let subagentType = (legacyDetails?.subagentType || args.subagent_type || block.name) as string;
+  let description = (legacyDetails?.description || args.description || (block.name === "SubagentWorkflow" ? "Workflow" : "Subagent")) as string;
+  let prompt = (args.prompt as string) || (typeof args.script === "string" ? args.script : "");
+
+  if (isSubagentToolCall || subagentDetails) {
+    if (args.chain || subagentDetails?.mode === "chain") {
+      const chainItems = (Array.isArray(args.chain) ? args.chain : []) as Array<{ agent?: string; task?: string }>;
+      subagentType =
+        subagentDetails?.results?.map((r) => r.agent).filter(Boolean).join(" → ") ||
+        (chainItems.length > 0 ? chainItems.map((c) => c.agent).filter(Boolean).join(" → ") : "chain");
+      description = subagentDetails?.results?.length
+        ? `${subagentDetails.results.length} chain steps`
+        : chainItems.length
+        ? `${chainItems.length} chain steps`
+        : "Chain";
+      prompt = chainItems.length
+        ? chainItems.map((c, i) => `Step ${i + 1} [${c.agent}]: ${c.task}`).join("\n\n")
+        : "";
+    } else if (args.tasks || subagentDetails?.mode === "parallel") {
+      const taskItems = (Array.isArray(args.tasks) ? args.tasks : []) as Array<{ agent?: string; task?: string }>;
+      subagentType =
+        subagentDetails?.results?.map((r) => r.agent).filter(Boolean).join(", ") ||
+        (taskItems.length > 0 ? taskItems.map((t) => t.agent).filter(Boolean).join(", ") : "parallel");
+      description = subagentDetails?.results?.length
+        ? `${subagentDetails.results.length} parallel tasks`
+        : taskItems.length
+        ? `${taskItems.length} parallel tasks`
+        : "Parallel";
+      prompt = taskItems.length
+        ? taskItems.map((t) => `[${t.agent}]: ${t.task}`).join("\n\n")
+        : "";
+    } else {
+      const firstResult = subagentDetails?.results?.[0];
+      subagentType = firstResult?.agent || (typeof args.agent === "string" ? args.agent : subagentType);
+      description = firstLine(firstResult?.task || (typeof args.task === "string" ? args.task : description));
+      prompt = (typeof args.task === "string" ? args.task : firstResult?.task) || prompt;
+    }
+  }
+
   const isWorkflow = block.name === "SubagentWorkflow";
+  // `subagent` is synchronous: its result text is the agent's answer, so never infer background from it.
   const isBackgroundSpawn =
-    isWorkflow ||
-    args.run_in_background === true ||
-    (args.run_in_background === undefined && (details?.status === "background" || /in background/i.test(result?.text ?? "")));
+    !isSubagentToolCall && (
+      isWorkflow ||
+      args.run_in_background === true ||
+      (args.run_in_background === undefined && (legacyDetails?.status === "background" || /in background/i.test(result?.text ?? "")))
+    );
   const background = isBackgroundSpawn;
 
   // Model & thinking
-  const model = details?.modelName || (args.model as string | undefined);
+  const model = subagentDetails?.results?.find((r) => r.model)?.model || legacyDetails?.modelName || (args.model as string | undefined);
   let thinking = args.thinking as string | undefined;
-  const allTags: string[] = [...(details?.tags ?? [])];
+  const allTags: string[] = [...(legacyDetails?.tags ?? [])];
   const isThinkingTag = (t: string) => t.toLowerCase().startsWith("thinking:");
   if (!thinking) {
     const thinkingTag = allTags.find(isThinkingTag);
@@ -219,15 +360,8 @@ export function resolveSubagentView(params: {
       thinking = thinkingTag.slice("thinking:".length).trim();
     }
   }
-  // The thinking level is shown via the brain chip; don't duplicate it as a plain tag.
   const tags = allTags.filter((t) => !isThinkingTag(t));
 
-  // Without a result yet, the call is still streaming/pending — never default to "completed".
-  // For background runs (including SubagentWorkflow), a completed tool call means the agent was spawned;
-  // it stays in "background" status until a completion notification or result is indexed.
-  // No result and no live run: if the session is executing, the call is in flight but we missed its start
-  // (e.g. the transcript was rebuilt from disk); if the session is idle nothing is running it any more
-  // (interrupted / crashed), so don't claim it is "queued" forever.
   const hasFinished = !!(agentId && (subagentIndex?.notifications.has(agentId) || subagentIndex?.results.has(agentId)));
   const fallbackStatus: SubagentView["status"] = result
     ? result.isError
@@ -240,21 +374,60 @@ export function resolveSubagentView(params: {
       : sessionRunning === false && block.complete !== false
         ? "aborted"
         : "running";
-  let status = (details?.status ?? fallbackStatus) as SubagentView["status"];
-  let toolUses = details?.toolUses;
-  let turns = details?.turnCount;
-  let maxTurns = details?.maxTurns ?? (typeof args.max_turns === "number" ? args.max_turns : undefined);
-  let tokens = details?.tokens;
+
+  let status = (legacyDetails?.status ?? fallbackStatus) as SubagentView["status"];
+  let toolUses = legacyDetails?.toolUses;
+  let turns = legacyDetails?.turnCount;
+  let maxTurns = legacyDetails?.maxTurns ?? (typeof args.max_turns === "number" ? args.max_turns : undefined);
+  let tokens = legacyDetails?.tokens;
   const rawResult = result as unknown as { usage?: { totalTokens?: number } } | undefined;
   let totalTokens: number | undefined =
-    typeof details?.totalTokens === "number"
-      ? details.totalTokens
+    typeof legacyDetails?.totalTokens === "number"
+      ? legacyDetails.totalTokens
       : typeof rawResult?.usage?.totalTokens === "number"
       ? rawResult.usage.totalTokens
       : parseTokenCount(tokens);
-  let cost = details?.cost;
-  let durationMs = details?.durationMs;
-  let error = details?.error || (result?.isError ? result.text : undefined);
+  let cost = legacyDetails?.cost;
+  let durationMs = legacyDetails?.durationMs;
+  let error = legacyDetails?.error || (result?.isError ? result.text : undefined);
+  let activity = legacyDetails?.activity;
+  let messages: AnyMessage[] | undefined;
+
+  if (subagentDetails && Array.isArray(subagentDetails.results)) {
+    const resList = subagentDetails.results;
+    cost = resList.reduce((acc, r) => acc + (r.usage?.cost ?? 0), 0);
+    totalTokens = resList.reduce(
+      (acc, r) => acc + (r.usage?.input ?? 0) + (r.usage?.output ?? 0) + (r.usage?.cacheRead ?? 0) + (r.usage?.cacheWrite ?? 0),
+      0,
+    );
+    if (totalTokens > 0) {
+      tokens = totalTokens >= 1000 ? `${Math.round(totalTokens / 1000)}k` : String(totalTokens);
+    }
+    toolUses = resList.reduce((acc, r) => acc + countToolUsesInMessages(r.messages), 0);
+    turns = resList.reduce((acc, r) => acc + (r.usage?.turns ?? countTurnsInMessages(r.messages)), 0);
+
+    const anyRunning = resList.some((r) => r.exitCode === -1);
+    const anyFailed = resList.some((r) => r.errorMessage || (r.exitCode !== 0 && r.exitCode !== -1));
+    const firstErr = resList.find((r) => r.errorMessage)?.errorMessage || resList.find((r) => r.stderr)?.stderr;
+    if (firstErr) error = firstErr;
+
+    // A final result is authoritative: a placeholder exitCode -1 must not keep the call spinning.
+    if (!result && run?.status !== "error" && (anyRunning || run?.status === "running")) {
+      status = "running";
+      const runningRes = resList.find((r) => r.exitCode === -1) || resList[0];
+      activity = describeSubagentActivity(runningRes);
+    } else if (result?.isError || anyFailed || (run && run.status === "error")) {
+      status = "error";
+    } else if (result || (resList.length > 0 && resList.every((r) => r.exitCode === 0))) {
+      status = "completed";
+    } else if (sessionRunning === false && block.complete !== false) {
+      status = "aborted";
+    } else {
+      status = "running";
+    }
+
+    messages = subagentDetails.mode === "single" ? resList[0]?.messages ?? [] : resList.flatMap((r) => r.messages ?? []);
+  }
 
   // Check background completion notification
   if (agentId && subagentIndex?.notifications.has(agentId)) {
@@ -278,6 +451,7 @@ export function resolveSubagentView(params: {
 
   return {
     toolCallId: block.id,
+    unified: isSubagentToolCall,
     agentId,
     stopId,
     outputFile,
@@ -289,7 +463,7 @@ export function resolveSubagentView(params: {
     tags,
     background,
     status,
-    activity: details?.activity,
+    activity,
     toolUses,
     turns,
     maxTurns,
@@ -299,6 +473,8 @@ export function resolveSubagentView(params: {
     durationMs,
     error,
     resultText: result?.text,
+    subagentDetails,
+    messages,
   };
 }
 
@@ -342,7 +518,7 @@ export function hasActiveSubagents(timeline: Timeline): boolean {
     if (item.kind !== "assistant") continue;
     for (const block of item.blocks) {
       if (block.type !== "toolCall") continue;
-      if (block.name !== "Agent" && block.name !== "SubagentWorkflow") continue;
+      if (!isSubagentTool(block.name)) continue;
       const res = timeline.toolResults[block.id];
       if (!res) return true;
       if (res.isError) continue;
@@ -366,7 +542,7 @@ export function collectSubagents(timeline: Timeline, sessionRunning?: boolean): 
     if (item.kind !== "assistant") continue;
     for (const block of item.blocks) {
       if (block.type !== "toolCall") continue;
-      if (block.name === "Agent" || block.name === "SubagentWorkflow") {
+      if (isSubagentTool(block.name)) {
         const res = timeline.toolResults[block.id];
         const view = resolveSubagentView({ block, result: res, subagentIndex, sessionRunning });
         list.push(view);

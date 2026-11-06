@@ -957,8 +957,8 @@ const ToolCall: React.FC<{
     return <SkillLoadCard load={load} toolCallId={block.id} />;
   }
 
-  // 2. Subagent card (Agent / SubagentWorkflow)
-  if (block.name === "Agent" || block.name === "SubagentWorkflow") {
+  // 2. Subagent card (Agent / SubagentWorkflow / subagent)
+  if (block.name === "Agent" || block.name === "SubagentWorkflow" || block.name === "subagent") {
     const view = resolveSubagentView({
       block,
       run,

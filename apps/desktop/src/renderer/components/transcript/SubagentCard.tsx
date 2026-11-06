@@ -38,7 +38,8 @@ export const SubagentCard: React.FC<SubagentCardProps> = ({ view }) => {
     const t = setTimeout(() => setStopping(false), 6000);
     return () => clearTimeout(t);
   }, [stopping]);
-  const canStop = isRunning;
+  // The pi `subagent` tool has no stop RPC; legacy runs keep their id-or-name fallback.
+  const canStop = isRunning && !view.unified;
 
   const effectiveDuration = view.durationMs
     ? formatDuration(view.durationMs)

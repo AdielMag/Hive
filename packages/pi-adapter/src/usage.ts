@@ -43,7 +43,7 @@ export function parseUsageLine(line: string): { cwd: string } | UsageTurn | null
   }
 
   const isAssistantUsage = line.includes('"usage"') && line.includes('"role":"assistant"');
-  const isSubagentResult = line.includes('"toolName":"Agent"') || line.includes('"toolName":"SubagentWorkflow"');
+  const isSubagentResult = line.includes('"toolName":"Agent"') || line.includes('"toolName":"SubagentWorkflow"') || line.includes('"toolName":"subagent"');
   const isSubagentNotif = line.includes('"subagent-notification"');
 
   if (!isAssistantUsage && !isSubagentResult && !isSubagentNotif) return null;
@@ -105,13 +105,47 @@ export function parseUsageLine(line: string): { cwd: string } | UsageTurn | null
     // 2. Subagent tool result with cost / usage
     if (isSubagentResult && rec.type === "message" && rec.message?.role === "toolResult") {
       const msg = rec.message;
-      const details = msg.details;
+      const details = msg.details as {
+        cost?: number;
+        tokens?: string;
+        totalTokens?: number;
+        modelName?: string;
+        subagentType?: string;
+        results?: Array<{
+          agent?: string;
+          model?: string;
+          usage?: {
+            input?: number;
+            output?: number;
+            cacheRead?: number;
+            cacheWrite?: number;
+            cost?: number;
+          };
+        }>;
+      } | undefined;
       const u = msg.usage;
-      const cost = num(details?.cost) || num(u?.cost?.total);
-      if (cost <= 0 && !u) return null;
+      let cost = num(details?.cost) || num(u?.cost?.total);
+      let input = num(u?.input);
+      let output = num(u?.output);
+      let cacheRead = num(u?.cacheRead);
+      let cacheWrite = num(u?.cacheWrite);
+      let model = details?.modelName;
+
+      if (Array.isArray(details?.results)) {
+        for (const r of details.results) {
+          cost += num(r.usage?.cost);
+          input += num(r.usage?.input);
+          output += num(r.usage?.output);
+          cacheRead += num(r.usage?.cacheRead);
+          cacheWrite += num(r.usage?.cacheWrite);
+          if (!model && r.model) model = r.model;
+        }
+      }
+
+      if (cost <= 0 && !u && input <= 0 && output <= 0 && cacheRead <= 0 && cacheWrite <= 0) return null;
       const timestamp = num(msg.timestamp) || (rec.timestamp ? Date.parse(rec.timestamp) : 0);
       if (!timestamp) return null;
-      const model = details?.modelName || "subagent";
+      model = model || "subagent";
       const modelLower = model.toLowerCase();
       const provider = modelLower.includes("gemini")
         ? "google"
@@ -125,10 +159,10 @@ export function parseUsageLine(line: string): { cwd: string } | UsageTurn | null
         timestamp,
         provider,
         model,
-        input: num(u?.input) || (tok ? Math.round(tok * 0.7) : 0),
-        output: num(u?.output) || (tok ? Math.round(tok * 0.3) : 0),
-        cacheRead: num(u?.cacheRead),
-        cacheWrite: num(u?.cacheWrite),
+        input: input || (tok ? Math.round(tok * 0.7) : 0),
+        output: output || (tok ? Math.round(tok * 0.3) : 0),
+        cacheRead,
+        cacheWrite,
         cost,
       };
     }
