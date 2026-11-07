@@ -37,7 +37,7 @@ import {
 const settings: Settings = {
   apiKey: "k_test",
   model: "jev-latest",
-  compact: { enabled: true, floorPct: 40 },
+  compact: { enabled: true, floorPct: 40, mode: "hint", autoOnSubjectChange: true },
   askJev: { enabled: true },
   maxCallsPerDay: 500,
   maxInputTokens: 28_000,
@@ -539,8 +539,8 @@ describe("WP-A: binary detection, token budget, grep, git secrets", () => {
 
   describe("decideSubagentDispatch", () => {
     it("has valid noul question schema", () => {
-      expect(SUBAGENT_DISPATCH_QUESTIONS.should_fork.type).toBe("noul");
-      expect(SUBAGENT_DISPATCH_QUESTIONS.should_fork.criteria).toBeDefined();
+      expect(SUBAGENT_DISPATCH_QUESTIONS.should_fork?.type).toBe("noul");
+      expect(SUBAGENT_DISPATCH_QUESTIONS.should_fork?.criteria).toBeDefined();
     });
 
     it("uses fallback role policy when no API key is provided", async () => {
