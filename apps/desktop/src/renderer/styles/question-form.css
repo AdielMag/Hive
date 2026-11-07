@@ -1,35 +1,34 @@
-/* Question form modal (extension "ui:form" requests) */
-.qform__scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(2px);
-}
+/* Question form (inline in session, extension "ui:form" requests) */
 .qform {
   display: flex;
   flex-direction: column;
-  width: min(560px, calc(100vw - 48px));
-  max-height: min(680px, calc(100vh - 64px));
+  width: 100%;
+  max-height: min(380px, 45vh);
   border: 1px solid var(--border-prominent);
   border-radius: var(--radius-md);
-  background: var(--bg-elevated);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  background: var(--bg-card);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  margin-bottom: 8px;
+  animation: fade-up 0.18s ease;
+  overflow: hidden;
+  font-family: inherit;
 }
 .qform__head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-subtle);
+  background: rgba(var(--accent-rgb), 0.05);
   color: var(--text-primary);
+}
+.qform__icon {
+  flex-shrink: 0;
+  color: var(--accent-base);
 }
 .qform__title {
   flex: 1;
-  font-size: var(--fs-md);
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 .qform__progress {
@@ -37,12 +36,20 @@
   font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
 }
+.qform__close-btn {
+  margin-left: 4px;
+  color: var(--text-secondary);
+}
+.qform__close-btn:hover {
+  color: var(--text-primary);
+}
 .qform__body {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 16px 18px;
+  gap: 14px;
+  padding: 12px 14px;
   overflow-y: auto;
+  max-height: 280px;
 }
 .qform__q {
   min-width: 0;
@@ -85,7 +92,7 @@
   padding: 8px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  background: var(--bg-card);
+  background: var(--bg-elevated);
   color: var(--text-primary);
   font: inherit;
   text-align: left;
@@ -119,7 +126,7 @@
 .qform__opt[data-checked="true"] .qform__dot {
   border-color: var(--accent-base);
   background: var(--accent-base);
-  box-shadow: inset 0 0 0 2.5px var(--bg-elevated);
+  box-shadow: inset 0 0 0 2.5px var(--bg-card);
 }
 .qform__opt-text {
   display: flex;
@@ -171,8 +178,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 18px;
+  padding: 10px 14px;
   border-top: 1px solid var(--border-subtle);
+  background: var(--bg-card);
 }
 .qform__hint {
   flex: 1;

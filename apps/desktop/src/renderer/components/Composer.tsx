@@ -26,6 +26,7 @@ import { AttachmentTray } from "./AttachmentTray.tsx";
 import { MentionTextarea } from "./MentionTextarea.tsx";
 import { ReloadButton, ReloadStatusBar } from "./ReloadControls.tsx";
 import { RunTimeBar } from "./RunTimeBar.tsx";
+import { QuestionForm } from "./QuestionForm.tsx";
 import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/thinking.ts";
 import { toast } from "../modules/toast-store.ts";
 import { Slot } from "../modules/ModuleViews.tsx";
@@ -496,6 +497,9 @@ export const Composer: React.FC<ComposerProps> = ({ height, tabId }) => {
 
       {/* Module slots above composer (e.g. bash-guard approval card) */}
       <Slot name="composer.above" props={{ pendingUiDialog, respondDialog, activeKey }} />
+
+      {/* Multi-question form requested by an extension (e.g. questionnaire tool) */}
+      <QuestionForm tabId={tabId} />
 
       {/* Editor Box (Droppable area) */}
       <div

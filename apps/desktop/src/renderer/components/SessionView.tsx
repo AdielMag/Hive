@@ -24,6 +24,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
 
   // An inactive pane's composer is covered, so its pending dialog (e.g. the bash-guard approval) must surface here.
   const parkedDialog = useSessionStore((s) => (!isActivePane && targetTabId ? s.tabUi[targetTabId]?.pendingUiDialog ?? null : null));
+  const parkedForm = useSessionStore((s) => (!isActivePane && targetTabId ? s.tabUi[targetTabId]?.pendingForm ?? null : null));
   const respondTabDialog = useSessionStore((s) => s.respondTabDialog);
   const respondParked = React.useCallback(
     (response: Parameters<typeof respondTabDialog>[1]) => (targetTabId ? respondTabDialog(targetTabId, response) : Promise.resolve()),
@@ -59,7 +60,7 @@ export const SessionView: React.FC<SessionViewProps> = ({
             )}
             <button className="composer-inactive-overlay composer-inactive-overlay--static" onClick={onActivate} title="Click to activate session">
               <span className="composer-inactive-badge">
-                {parkedDialog ? "Waiting for your input: click to answer" : "Click to reply in this session"}
+                {parkedDialog || parkedForm ? "Waiting for your input: click to answer" : "Click to reply in this session"}
               </span>
             </button>
           </>
