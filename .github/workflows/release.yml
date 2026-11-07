@@ -22,7 +22,7 @@ jobs:
   verify:
     name: Verify (${{ matrix.os }})
     # The release job's own version-bump commit must not trigger another release.
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(release):') }}
     # Pushes to main ship straight to users, so gate them like PRs (incl. Windows, the primary platform).
     strategy:
       fail-fast: true
@@ -70,12 +70,35 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json apps/desktop/package.json CHANGELOG.md
-          git commit -m "chore(release): ${TAG} [skip ci]"
-          git tag -a "${TAG}" -m "Hive ${TAG}"
-          # If main is protected the commit push may be rejected; the tag (pointing at the release
-          # commit) is what the build uses, so push it regardless.
-          git push origin HEAD:main || echo "::warning::Could not push the release commit to main (branch protection?). Tag will still be published."
-          git push origin "${TAG}"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): ${TAG} [skip ci]"
+          fi
+          git tag -fa "${TAG}" -m "Hive ${TAG}"
+
+          # Push the release tag first (downstream build & publish only need the tag).
+          # Retry up to 3 times to absorb transient GitHub receive-pack / ref-lock glitches.
+          for i in 1 2 3; do
+            git push origin "${TAG}" && break || {
+              if [ "$i" -eq 3 ]; then
+                echo "Failed to push tag ${TAG} after 3 attempts"
+                exit 1
+              fi
+              echo "::warning::Tag push failed (attempt $i), retrying in 3s..."
+              sleep 3
+            }
+          done
+
+          # Then push the release commit to main. If main is protected the commit push may be rejected,
+          # but the tag is already published for the build and release jobs.
+          for i in 1 2 3; do
+            git push origin HEAD:main && break || {
+              if [ "$i" -eq 3 ]; then
+                echo "::warning::Could not push the release commit to main (branch protection?). Tag will still be published."
+              else
+                sleep 3
+              fi
+            }
+          done
 
       - name: Upload release notes
         if: steps.prepare.outputs.released == 'true'

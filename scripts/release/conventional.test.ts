@@ -47,5 +47,14 @@ describe("conventional commits", () => {
     expect(doc.startsWith("# Changelog")).toBe(true);
     const doc2 = prependChangelog(doc, "## v0.3.0 — x\n");
     expect(doc2.indexOf("v0.3.0")).toBeLessThan(doc2.indexOf("v0.2.0"));
+
+    // Replacing an existing section without duplicating
+    const updatedSection = "## v0.3.0 — updated\n\n- new commit";
+    const doc3 = prependChangelog(doc2, updatedSection);
+    const v030Count = (doc3.match(/## v0\.3\.0/g) || []).length;
+    expect(v030Count).toBe(1);
+    expect(doc3).toContain("## v0.3.0 — updated");
+    expect(doc3).toContain("- new commit");
+    expect(doc3).toContain("## v0.2.0");
   });
 });

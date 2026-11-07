@@ -91,6 +91,21 @@ export function renderChangelogSection({ version, date, commits, repoUrl, previo
 export function prependChangelog(existing, section) {
   const title = "# Changelog\n\nAll notable changes to Hive are documented here. This file is generated on every merge to `main`.\n";
   if (!existing || !existing.trim()) return `${title}\n${section}`;
+
+  // If the version section already exists (e.g. from a previous partial or failed release run),
+  // replace that section instead of prepending a duplicate.
+  const versionMatch = section.match(/^##\s+([^\s—]+)/m);
+  if (versionMatch) {
+    const versionHeader = `## ${versionMatch[1]}`;
+    const existingVersionIdx = existing.indexOf(`\n${versionHeader}`);
+    if (existingVersionIdx !== -1) {
+      const afterHeader = existingVersionIdx + 1 + versionHeader.length;
+      const nextSectionIdx = existing.indexOf("\n## ", afterHeader);
+      const rest = nextSectionIdx === -1 ? "" : existing.slice(nextSectionIdx + 1);
+      return `${existing.slice(0, existingVersionIdx + 1)}${section}\n${rest}`;
+    }
+  }
+
   const idx = existing.indexOf("\n## ");
   if (idx === -1) return `${existing.trimEnd()}\n\n${section}`;
   return `${existing.slice(0, idx + 1)}${section}\n${existing.slice(idx + 1)}`;
