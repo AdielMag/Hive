@@ -68,7 +68,7 @@ export const WindowMeter: React.FC<{ window: QuotaWindow; now: number }> = ({ wi
         </span>
       </div>
       <div className="quota-meter__bar" role="meter" aria-valuenow={Math.round(w.usedPercent)} aria-valuemin={0} aria-valuemax={100} aria-label={`${w.label} usage`}>
-        <div className={`quota-meter__fill is-${tone}`} style={{ width: `${Math.max(1.5, w.usedPercent)}%` }} />
+        <div className={`quota-meter__fill is-${tone}`} style={{ width: `${w.usedPercent > 0 ? Math.max(1.5, w.usedPercent) : 0}%` }} />
       </div>
       <div className="quota-meter__sub">
         <span>{Math.round(left)}% left</span>

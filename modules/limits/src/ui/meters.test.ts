@@ -23,6 +23,7 @@ describe("buildMeters", () => {
   it("splits antigravity into Gemini and Claude·GPT pools", () => {
     const m = buildMeters([agy]);
     expect(m.map((x) => x.pool)).toEqual(["Gemini", "Claude·GPT"]);
+    expect(m[0]!.icon).toBe("gemini");
     expect(m[0]!.w5?.usedPercent).toBe(100);
     expect(m[1]!.w5?.usedPercent).toBe(5);
     expect(m[1]!.active).toBeUndefined();
@@ -35,6 +36,11 @@ describe("buildMeters", () => {
     expect(gpt.map((x) => x.active)).toEqual([false, true]);
     const gem = buildMeters([agy], { provider: "antigravity", id: "gemini-3-pro" });
     expect(gem.map((x) => x.active)).toEqual([true, false]);
+    // Aliases: provider=google or id prefixed with antigravity/
+    const gemGoogle = buildMeters([agy], { provider: "google", id: "gemini-3.8-flash" });
+    expect(gemGoogle.map((x) => x.active)).toEqual([true, false]);
+    const gemPrefix = buildMeters([agy], { provider: "google", id: "antigravity/gemini-3.8-flash" });
+    expect(gemPrefix.map((x) => x.active)).toEqual([true, false]);
   });
 
   it("leaves active undefined when the model is on another provider", () => {

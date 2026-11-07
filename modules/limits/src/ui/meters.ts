@@ -15,6 +15,8 @@ export interface QuotaMeter {
   providerId: string;
   /** Suffix distinguishing quota pools of one provider (e.g. "Gemini", "Claude·GPT"). */
   pool?: string;
+  /** Provider icon name override for this pool (e.g. "gemini" for Gemini pool). */
+  icon?: string;
   w5?: QuotaWindow;
   wk?: QuotaWindow;
   /** True when this pool serves the active session model; undefined when it can't be determined. */
@@ -25,14 +27,20 @@ export interface QuotaMeter {
 
 const THIRD_PARTY_MODEL = /claude|gpt|sonnet|opus|haiku|codex|oss|3p/i;
 const THIRD_PARTY_GROUP = /claude|gpt|3p/i;
+const GOOGLE_AGY_RE = /antigravity|google|cloudcode|gemini/i;
 
 export const isThirdPartyModel = (id: string | undefined): boolean => THIRD_PARTY_MODEL.test(id ?? "");
 export const isThirdPartyGroup = (g: Pick<QuotaGroup, "id" | "label">): boolean => THIRD_PARTY_GROUP.test(`${g.id} ${g.label}`);
 
-/** Does the active model run on this provider's subscription? (Pi names the provider "antigravity" / "google-antigravity".) */
+/** Does the active model run on this provider's subscription? (Handles aliases like antigravity / google / gemini / google-antigravity.) */
 export function modelUsesProvider(model: ActiveModelLite | null | undefined, providerId: string): boolean {
   const p = (model?.provider ?? "").toLowerCase();
-  return !!p && (p === providerId || p.includes(providerId));
+  const id = (model?.id ?? "").toLowerCase();
+  const prov = (providerId ?? "").toLowerCase();
+  if (!p && !id) return false;
+  if (p === prov || p.includes(prov) || prov.includes(p)) return true;
+  if (GOOGLE_AGY_RE.test(prov) && (GOOGLE_AGY_RE.test(p) || GOOGLE_AGY_RE.test(id))) return true;
+  return false;
 }
 
 const worst = (windows: QuotaWindow[], kind: QuotaWindow["kind"]): QuotaWindow | undefined =>
@@ -47,7 +55,7 @@ export function buildMeters(providers: ProviderQuota[], model?: ActiveModelLite 
   const out: QuotaMeter[] = [];
   for (const p of providers) {
     if (p.status !== "ok") continue;
-    const isAgy = p.providerId === "antigravity" || p.providerId === "google-antigravity";
+    const isAgy = p.providerId === "antigravity" || p.providerId === "google-antigravity" || p.providerId === "google";
     const tp = p.groups.filter(isThirdPartyGroup);
     const own = p.groups.filter((g) => !isThirdPartyGroup(g));
     const cachedMeta = { cached: p.source === "cache", fetchedAt: p.fetchedAt };
@@ -58,7 +66,7 @@ export function buildMeters(providers: ProviderQuota[], model?: ActiveModelLite 
     const onProvider = modelUsesProvider(model, p.providerId);
     const modelIs3p = isThirdPartyModel(model?.id);
     if (own.length) {
-      out.push(meterOf(`${p.providerId}:gemini`, p.providerId, own, { pool: "Gemini", active: onProvider ? !modelIs3p : undefined, ...cachedMeta }));
+      out.push(meterOf(`${p.providerId}:gemini`, p.providerId, own, { pool: "Gemini", icon: "gemini", active: onProvider ? !modelIs3p : undefined, ...cachedMeta }));
     }
     if (tp.length) {
       out.push(meterOf(`${p.providerId}:3p`, p.providerId, tp, { pool: "Claude·GPT", active: onProvider ? modelIs3p : undefined, ...cachedMeta }));

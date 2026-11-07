@@ -8,7 +8,7 @@ import { ProviderQuotaCard, usageTone } from "./quota-ui.tsx";
 import { useHoverPopover } from "./useHoverPopover.ts";
 import { buildMeters } from "./meters.ts";
 
-const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "google-antigravity": "AGY", "openai-codex": "Codex" };
+const SHORT: Record<string, string> = { anthropic: "Claude", antigravity: "AGY", "google-antigravity": "AGY", google: "Google", "openai-codex": "Codex" };
 /** Antigravity quota pools: Gemini models vs. third-party (Claude + GPT-OSS) models. */
 const POOL_LABEL: Record<string, string> = { Gemini: "Gemini", "Claude·GPT": "Claude/GPT" };
 const TONE_COLOR = { ok: "var(--success)", warn: "var(--warning)", danger: "var(--danger)" } as const;
@@ -16,7 +16,14 @@ const TONE_COLOR = { ok: "var(--success)", warn: "var(--warning)", danger: "var(
 /** One thin track; the 5h bar sits above the 7d bar so a subscription costs ~one icon + 28px + a number. */
 const Track: React.FC<{ used?: number }> = ({ used }) => (
   <span className="sb-quota__track">
-    {used !== undefined && <i style={{ width: `${Math.min(100, Math.max(4, used))}%`, background: TONE_COLOR[usageTone(used)] }} />}
+    {used !== undefined && (
+      <i
+        style={{
+          width: `${used > 0 ? Math.min(100, Math.max(4, used)) : 0}%`,
+          background: TONE_COLOR[usageTone(used)],
+        }}
+      />
+    )}
   </span>
 );
 
@@ -36,14 +43,17 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
     [quota, model?.provider, model?.id],
   );
 
-  const exhausted = useMemo(
-    () =>
-      meters
-        .map((m) => ({ label: m.label, pct: Math.max(m.w5?.usedPercent ?? 0, m.wk?.usedPercent ?? 0), active: m.active }))
-        .filter((m) => m.pct >= 95 && m.active !== false)
-        .sort((a, b) => b.pct - a.pct)[0],
-    [meters],
-  );
+  const activeMeter = meters.find((m) => m.active === true);
+  const exhausted = useMemo(() => {
+    if (activeMeter) {
+      const pct = Math.max(activeMeter.w5?.usedPercent ?? 0, activeMeter.wk?.usedPercent ?? 0);
+      return pct >= 95 ? { label: activeMeter.label, pct } : undefined;
+    }
+    return meters
+      .map((m) => ({ label: m.label, pct: Math.max(m.w5?.usedPercent ?? 0, m.wk?.usedPercent ?? 0), active: m.active }))
+      .filter((m) => m.pct >= 95 && m.active !== false)
+      .sort((a, b) => b.pct - a.pct)[0];
+  }, [meters, activeMeter]);
 
   const subscriptions = useMemo(() => (quota?.providers ?? []).filter((p) => p.status !== "unsupported"), [quota]);
 
@@ -68,9 +78,10 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
             const worst = Math.max(used5 ?? 0, usedWk ?? 0);
             const tone = usageTone(worst);
             const detail = [used5 !== undefined && `5h ${Math.round(used5)}%`, usedWk !== undefined && `7d ${Math.round(usedWk)}%`].filter(Boolean).join(" · ");
-            const resetAt = (used5 !== undefined ? m.w5?.resetsAt : undefined) ?? m.wk?.resetsAt;
+            const worstWindow = (usedWk ?? 0) > (used5 ?? 0) ? m.wk : m.w5;
+            const resetAt = worstWindow?.resetsAt ?? m.w5?.resetsAt ?? m.wk?.resetsAt;
             const poolName = m.pool ? (POOL_LABEL[m.pool] ?? m.pool) : undefined;
-            const resets = resetAt ? `, resets in ${formatDuration(resetAt - now)}` : "";
+            const resets = worst > 0 && resetAt ? `, resets in ${formatDuration(resetAt - now)}` : "";
             const cachedHint = m.cached ? ` (cached${m.fetchedAt ? `, updated ${formatAgo(m.fetchedAt, now)}` : ""})` : "";
             const tip = (poolName
               ? `Quota pool: ${poolName} (${m.label}) — ${Math.round(worst)}% used${resets} · ${detail}${m.active === true ? " (active model)" : ""}`
@@ -81,7 +92,7 @@ export const QuotaStatusItem: React.FC<{ host: ModuleHost }> = ({ host }) => {
                 className={`sb-quota__item${m.cached ? " is-cached" : ""}${m.active === true ? " is-active-pool" : ""}${m.active === false ? " is-idle-pool" : ""}`}
                 title={tip}
               >
-                <ProviderIcon provider={m.providerId} size={12} />
+                <ProviderIcon provider={m.icon ?? (m.pool === "Gemini" ? "gemini" : m.providerId)} size={12} />
                 <span className="sb-quota__label">{m.pool ? (POOL_LABEL[m.pool] ?? m.pool) : (SHORT[m.providerId] ?? m.providerId)}</span>
                 <span className="sb-quota__tracks" aria-hidden>
                   <Track used={used5} />

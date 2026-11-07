@@ -123,6 +123,11 @@ describe("stored auth mapping", () => {
     expect(JSON.parse(key!)).toEqual({ token: "ya29.test2", projectId: "my-project2" });
   });
 
+  it("formats google apiKey payload as JSON with token and projectId", () => {
+    const key = apiKeyFromStoredAuth("google", { access: "ya29.test3", projectId: "my-project3" });
+    expect(JSON.parse(key!)).toEqual({ token: "ya29.test3", projectId: "my-project3" });
+  });
+
   it("extracts access token for anthropic", () => {
     expect(apiKeyFromStoredAuth("anthropic", { access: "sk-ant-oat-test" })).toBe("sk-ant-oat-test");
   });

@@ -188,7 +188,7 @@ export interface StoredAuthEntry {
 }
 
 export function apiKeyFromStoredAuth(providerId: string, entry: StoredAuthEntry): string | null {
-  if (providerId === "antigravity" || providerId === "google-antigravity") {
+  if (providerId === "antigravity" || providerId === "google-antigravity" || providerId === "google") {
     const token = entry.access ?? entry.token;
     if (!token) return null;
     return JSON.stringify({ token, projectId: entry.projectId ?? "aicode-consumers" });
