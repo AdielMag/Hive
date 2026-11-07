@@ -2,6 +2,25 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.45.0 — 2026-11-07 · [diff](https://github.com/AdielMag/Hive/compare/v0.44.0...v0.45.0)
+
+### ✨ Features
+
+- **limits:** support google provider alias and refine quota UI ([`5f97508`](https://github.com/AdielMag/Hive/commit/5f97508b9c7c20ee7d9bd9d07831763ea154971c))
+- **desktop:** add auto model router powered by Jev ([`c1c39bf`](https://github.com/AdielMag/Hive/commit/c1c39bf86398a6ca2692ae3e1f7873ee5480e629))
+- **jev:** add subagent dispatch evaluation for fork vs spawn ([`878331c`](https://github.com/AdielMag/Hive/commit/878331cb7405be399d5484a72c2d8ef171ed67b6))
+- **desktop:** render question forms inline above composer ([`b3ed3f4`](https://github.com/AdielMag/Hive/commit/b3ed3f48acccd384a0a0263675c0c655a73cfe4b))
+- **jev:** add auto-compaction mid-session on subject change ([`24243f4`](https://github.com/AdielMag/Hive/commit/24243f4dc34532345f237e132a0afe9f7cefded8))
+
+### 🧹 Other changes
+
+- **jev:** fix type errors in jev-extension tests ([`151b40e`](https://github.com/AdielMag/Hive/commit/151b40e696ea169d8337af0b473f3913c283ca2f))
+- Merge branch 'hive/the-subsription-limits-widget-now-wo-3d84eb' ([`2580676`](https://github.com/AdielMag/Hive/commit/258067680613fd20aa31562e281df8eeebc1a20e))
+- Merge branch 'hive/auto-router-using-jev-when-seelcted-5ef0e8' ([`0189a12`](https://github.com/AdielMag/Hive/commit/0189a1221265d18a107d4aebdab7a174e87df9f5))
+- Merge branch 'main' into hive/add-more-stuff-into-jev-allow-for-a-6ef210 ([`f8cf1a9`](https://github.com/AdielMag/Hive/commit/f8cf1a93964b8cca674b647ce50c342ace9ffa03))
+- Merge remote-tracking branch 'origin/main' into hive/add-more-stuff-into-jev-allow-for-a-6ef210 ([`2e66922`](https://github.com/AdielMag/Hive/commit/2e6692259b401e2f4dcf055c66afce893c99f3f6))
+- Merge branch 'hive/more-than-once-i-got-asked-a-questin-096ddd' ([`d37ac4a`](https://github.com/AdielMag/Hive/commit/d37ac4a6ccef4d812e5f18ce3a23d7ba0a3bbb78))
+
 ## v0.44.0 — 2026-11-06 · [diff](https://github.com/AdielMag/Hive/compare/v0.43.0...v0.44.0)
 
 ### ✨ Features
