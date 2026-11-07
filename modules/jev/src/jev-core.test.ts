@@ -19,7 +19,7 @@ describe("settings", () => {
     expect(normalizeSettings(null)).toEqual(DEFAULT_SETTINGS);
     const s = normalizeSettings({ apiKey: "  k ", compact: { floorPct: 500, enabled: "no" }, maxCallsPerDay: -4, pricePerMTokUsd: "x", model: " " });
     expect(s.apiKey).toBe("k");
-    expect(s.compact).toEqual({ enabled: true, floorPct: 95 });
+    expect(s.compact).toEqual({ enabled: true, floorPct: 95, mode: "hint", autoOnSubjectChange: true });
     expect(s.maxCallsPerDay).toBe(0);
     expect(s.pricePerMTokUsd).toBeNull();
     expect(s.model).toBe("jev-latest");
@@ -206,6 +206,23 @@ describe("tiering", () => {
   it("treats a switch of tasks as a boundary and explains itself", () => {
     const r = decideTier({ advice: advice({ signals: { atBoundary: 0.1, switchedGears: 0.95 } }), idleMs: CACHE_TTL_MS, floorPct: 40 });
     expect(r.reasons).toEqual(["you moved on to a new task", "prompt cache expired, so compacting is cheap now", "next step needs little of the earlier chat"]);
+  });
+
+  it("compacts on subject change even below floorPct when tokens are sufficient", () => {
+    const taskSwitchBelowFloor = advice({
+      usagePct: 25,
+      tokens: 30_000,
+      signals: { switchedGears: 0.9, atBoundary: 0.2, needsHistory: 0.2 },
+    });
+    expect(tier(taskSwitchBelowFloor, 0, 40)).toBe("recommend");
+
+    // But stays silent if the new task depends heavily on past context
+    const switchNeedsHistory = advice({
+      usagePct: 25,
+      tokens: 30_000,
+      signals: { switchedGears: 0.9, atBoundary: 0.2, needsHistory: 0.8 },
+    });
+    expect(tier(switchNeedsHistory, 0, 40)).toBe("silent");
   });
 });
 

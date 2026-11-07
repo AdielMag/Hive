@@ -46,7 +46,12 @@ export default defineRendererModule({
     // Hint funnel -> events.jsonl in main (fire and forget: telemetry must never surface errors).
     jevStore.setEventSink((event) => void host.ipc.invoke(JevMethods.logEvent, event).catch(() => {}));
     const offBridge = host.sessions.onBridgeEvent(({ key, data }) => {
-      if (isJevAdvice(data)) jevStore.setAdvice(key, data);
+      if (isJevAdvice(data)) {
+        jevStore.setAdvice(key, data);
+        if (data.autoCompact && jevStore.visibleTier(key) !== "silent") {
+          void requestJevCompact(host, key).catch(() => {});
+        }
+      }
     });
     const offEvents = host.sessions.onEvent(({ key, event }) => {
       // Log first: a finished compaction is either acting on a shown hint or a manual compaction.

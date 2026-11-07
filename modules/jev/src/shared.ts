@@ -53,6 +53,10 @@ export interface JevSettings {
     enabled: boolean;
     /** Skip Jev entirely below this share of the context window (saves calls). 0-95. */
     floorPct: number;
+    /** "hint" shows the advice bar above composer; "auto" automatically compacts without requiring confirmation. */
+    mode: "hint" | "auto";
+    /** When true, automatically evaluates and compacts on topic switch mid-session even if below floorPct. */
+    autoOnSubjectChange: boolean;
   };
   askJev: { enabled: boolean };
   /** Hard cap on Jev calls per local day, across all sessions. 0 = unlimited. */
@@ -80,7 +84,7 @@ export const MAIN_MODEL_PRICE_PER_MTOK_USD = 3;
 export const DEFAULT_SETTINGS: JevSettings = {
   apiKey: "",
   model: DEFAULT_MODEL,
-  compact: { enabled: true, floorPct: 40 },
+  compact: { enabled: true, floorPct: 40, mode: "hint", autoOnSubjectChange: true },
   askJev: { enabled: true },
   maxCallsPerDay: 500,
   maxInputTokens: 28_000,
@@ -107,6 +111,9 @@ export function normalizeSettings(raw: unknown): JevSettings {
     compact: {
       enabled: typeof compact.enabled === "boolean" ? compact.enabled : DEFAULT_SETTINGS.compact.enabled,
       floorPct: Math.round(num(compact.floorPct, DEFAULT_SETTINGS.compact.floorPct, 0, 95)),
+      mode: compact.mode === "auto" ? "auto" : "hint",
+      autoOnSubjectChange:
+        typeof compact.autoOnSubjectChange === "boolean" ? compact.autoOnSubjectChange : DEFAULT_SETTINGS.compact.autoOnSubjectChange,
     },
     askJev: { enabled: typeof askJev.enabled === "boolean" ? askJev.enabled : DEFAULT_SETTINGS.askJev.enabled },
     maxCallsPerDay: Math.round(num(r.maxCallsPerDay, DEFAULT_SETTINGS.maxCallsPerDay, 0, 1_000_000)),
@@ -426,6 +433,8 @@ export interface JevAdvice {
     /** Expected 0-2: how much earlier conversation the next step needs. */
     needsHistory: number;
   };
+  /** When true, extension recommends immediate autonomous compaction without waiting for user send. */
+  autoCompact?: boolean;
 }
 
 export function isJevAdvice(v: unknown): v is JevAdvice {

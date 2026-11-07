@@ -1279,4 +1279,113 @@ describe("failed sends and session lifecycle", () => {
       expect(useSessionStore.getState().activeProject?.id).toBe("pB");
     });
   });
+
+  describe("respondForm and respondTabForm", () => {
+    beforeEach(() => {
+      __test.setDisplayedTab(null);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      __test.setDisplayedTab(null);
+    });
+
+    it("emits form_result over bridge and clears pendingForm for displayed tab", async () => {
+      const bridgeEmits: any[] = [];
+      vi.stubGlobal("window", {
+        studio: {
+          bridgeEmit: vi.fn(async (key: string, topic: string, data: any) => {
+            bridgeEmits.push({ key, topic, data });
+          }),
+        },
+      });
+
+      const form = {
+        kind: "form" as const,
+        id: "f1",
+        questions: [{ id: "q1", label: "Q1", prompt: "Test?", allowOther: false, options: [{ value: "yes", label: "Yes" }] }],
+      };
+
+      useSessionStore.setState({
+        activeKey: "session-1",
+        pendingForm: form,
+      });
+
+      await useSessionStore.getState().respondForm({
+        id: "f1",
+        cancelled: false,
+        answers: [{ id: "q1", value: "yes", label: "Yes", wasCustom: false }],
+      });
+
+      expect(useSessionStore.getState().pendingForm).toBeNull();
+      expect(bridgeEmits).toEqual([
+        {
+          key: "session-1",
+          topic: "studio:from-gui",
+          data: {
+            kind: "form_result",
+            id: "f1",
+            cancelled: false,
+            answers: [{ id: "q1", value: "yes", label: "Yes", wasCustom: false }],
+          },
+        },
+      ]);
+    });
+
+    it("emits form_result for background tab via respondTabForm and clears tabUi", async () => {
+      const bridgeEmits: any[] = [];
+      vi.stubGlobal("window", {
+        studio: {
+          bridgeEmit: vi.fn(async (key: string, topic: string, data: any) => {
+            bridgeEmits.push({ key, topic, data });
+          }),
+        },
+      });
+
+      const form = {
+        kind: "form" as const,
+        id: "f2",
+        questions: [{ id: "q2", label: "Q2", prompt: "Choice?", allowOther: false, options: [{ value: "a", label: "A" }] }],
+      };
+
+      const tab1 = { id: "tab-1", activeKey: "key-1", sessionPath: "/s1.jsonl" } as any;
+      const tab2 = { id: "tab-2", activeKey: "key-2", sessionPath: "/s2.jsonl" } as any;
+
+      useSessionStore.setState({
+        tabs: [tab1, tab2],
+        activeTabId: "tab-1",
+        activeKey: "key-1",
+        tabUi: {
+          "tab-2": {
+            promptText: "",
+            attachments: [],
+            pendingUiDialog: null,
+            pendingForm: form,
+            extensionWidgets: {},
+            extensionStatus: {},
+          },
+        },
+      });
+
+      await useSessionStore.getState().respondTabForm("tab-2", {
+        id: "f2",
+        cancelled: true,
+        answers: [],
+      });
+
+      expect(useSessionStore.getState().tabUi["tab-2"]?.pendingForm).toBeNull();
+      expect(bridgeEmits).toEqual([
+        {
+          key: "key-2",
+          topic: "studio:from-gui",
+          data: {
+            kind: "form_result",
+            id: "f2",
+            cancelled: true,
+            answers: [],
+          },
+        },
+      ]);
+    });
+  });
 });

@@ -131,6 +131,89 @@ describe("turn_end compaction advice", () => {
     h.fromGui({ kind: "jev_compact", instructions: "keep the auth details" });
     expect(ctx.compact).toHaveBeenLastCalledWith({ customInstructions: "keep the auth details" });
   });
+
+  it("evaluates subject changes below floorPct when autoOnSubjectChange is enabled", async () => {
+    const switchSignals = {
+      switched_gears: { type: "noul", noul: 0.95 },
+      at_boundary: { type: "noul", noul: 0.2 },
+      mid_operation: { type: "noul", noul: 0.1 },
+      needs_history: { type: "score", score: 0.2, confidence: 0.9, legend: {}, probabilities: {} },
+    };
+    const fetchMock = vi.fn(async () => jsonRes(200, okBody(switchSignals)));
+    vi.stubGlobal("fetch", fetchMock);
+    const h = fakePi();
+    extension(h.pi);
+    // At 25% context with default floorPct: 40:
+    await h.handlers.turn_end!(turn("sub1"), ctxWith(25));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(h.emitted).toHaveLength(1);
+    expect(h.emitted[0].signals.switchedGears).toBe(0.95);
+  });
+
+  it("emits autoCompact in auto mode on high-confidence task switch", async () => {
+    writeConfig({ apiKey: "k", consentAt: 1, compact: { enabled: true, floorPct: 40, mode: "auto" } });
+    const switchSignals = {
+      switched_gears: { type: "noul", noul: 0.95 },
+      at_boundary: { type: "noul", noul: 0.3 },
+      mid_operation: { type: "noul", noul: 0.05 },
+      needs_history: { type: "score", score: 0.2, confidence: 0.9, legend: {}, probabilities: {} },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonRes(200, okBody(switchSignals))));
+    const h = fakePi();
+    extension(h.pi);
+    const ctx = ctxWith(30);
+    await h.handlers.turn_end!(turn("auto1"), ctx);
+    expect(h.emitted).toHaveLength(1);
+    expect(h.emitted[0].autoCompact).toBe(true);
+    expect(ctx.compact).not.toHaveBeenCalled();
+    h.fromGui({ kind: "jev_compact" });
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes no call below floorPct when autoOnSubjectChange is disabled", async () => {
+    writeConfig({ apiKey: "k", consentAt: 1, compact: { enabled: true, floorPct: 40, autoOnSubjectChange: false } });
+    const fetchMock = vi.fn(async () => jsonRes(200, okBody(signals)));
+    vi.stubGlobal("fetch", fetchMock);
+    const h = fakePi();
+    extension(h.pi);
+    await h.handlers.turn_end!(turn("sub_disabled"), ctxWith(25));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not emit advice below floorPct when turn was not a task switch", async () => {
+    // Normal turn finishing work (atBoundary 0.9, switchedGears 0.1)
+    const normalSignals = {
+      switched_gears: { type: "noul", noul: 0.1 },
+      at_boundary: { type: "noul", noul: 0.9 },
+      mid_operation: { type: "noul", noul: 0.05 },
+      needs_history: { type: "score", score: 0.2, confidence: 0.9, legend: {}, probabilities: {} },
+    };
+    const fetchMock = vi.fn(async () => jsonRes(200, okBody(normalSignals)));
+    vi.stubGlobal("fetch", fetchMock);
+    const h = fakePi();
+    extension(h.pi);
+    // 25% context with default floorPct 40:
+    await h.handlers.turn_end!(turn("no_switch"), ctxWith(25));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Non-switch advice must NOT be emitted below floorPct!
+    expect(h.emitted).toHaveLength(0);
+  });
+
+  it("auto mode does not compact when the next step needs history", async () => {
+    writeConfig({ apiKey: "k", consentAt: 1, compact: { enabled: true, floorPct: 40, mode: "auto" } });
+    const highHistorySignals = {
+      switched_gears: { type: "noul", noul: 0.95 },
+      at_boundary: { type: "noul", noul: 0.3 },
+      mid_operation: { type: "noul", noul: 0.05 },
+      needs_history: { type: "score", score: 0.8, confidence: 0.9, legend: {}, probabilities: {} },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonRes(200, okBody(highHistorySignals))));
+    const h = fakePi();
+    extension(h.pi);
+    const ctx = ctxWith(30);
+    await h.handlers.turn_end!(turn("auto_history"), ctx);
+    expect(ctx.compact).not.toHaveBeenCalled();
+  });
 });
 
 describe("ask_jev tool", () => {

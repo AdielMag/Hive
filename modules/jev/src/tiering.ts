@@ -30,7 +30,7 @@ export interface TierResult {
 export function decideTier({ advice, idleMs, floorPct }: TierInput): TierResult {
   const { usagePct, tokens, signals } = advice;
   const silent: TierResult = { tier: "silent", score: 0, reasons: [] };
-  if (tokens < MIN_TOKENS || usagePct < floorPct) return silent;
+  if (tokens < MIN_TOKENS) return silent;
   // Never interrupt a half-finished multi-step job: the summary would drop the details it needs.
   if (signals.midOperation > 0.5) return silent;
 
@@ -40,10 +40,17 @@ export function decideTier({ advice, idleMs, floorPct }: TierInput): TierResult 
   const cacheCold = idleMs >= CACHE_TTL_MS;
   const needsLittle = signals.needsHistory < 0.7;
 
+  // Below the context floor, only allow compaction if the user moved on to a new task that needs little prior context.
+  if (usagePct < floorPct && !(switched && needsLittle)) return silent;
+
   const reasons: string[] = [];
   let score = usagePct / 100;
-  if (switched) reasons.push("you moved on to a new task");
-  else if (finished) reasons.push("that task looks finished");
+  if (switched) {
+    reasons.push("you moved on to a new task");
+    if (needsLittle) score += 0.2;
+  } else if (finished) {
+    reasons.push("that task looks finished");
+  }
   if (boundary) score += 0.15;
   if (cacheCold) {
     reasons.push("prompt cache expired, so compacting is cheap now");

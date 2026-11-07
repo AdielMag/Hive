@@ -36,7 +36,12 @@ const PREVIEW_CHARS = 4_096;
 export interface Settings {
   apiKey: string;
   model: string;
-  compact: { enabled: boolean; floorPct: number };
+  compact: {
+    enabled: boolean;
+    floorPct: number;
+    mode: "hint" | "auto";
+    autoOnSubjectChange: boolean;
+  };
   askJev: { enabled: boolean };
   maxCallsPerDay: number;
   /** ask_jev refuses locally above this estimated input size (mirrored from JevSettings). */
@@ -60,6 +65,8 @@ export function loadSettings(env: Env = process.env): Settings | null {
       compact: {
         enabled: raw.compact?.enabled !== false,
         floorPct: typeof raw.compact?.floorPct === "number" ? raw.compact.floorPct : 40,
+        mode: raw.compact?.mode === "auto" ? "auto" : "hint",
+        autoOnSubjectChange: raw.compact?.autoOnSubjectChange !== false,
       },
       askJev: { enabled: raw.askJev?.enabled !== false },
       maxCallsPerDay: typeof raw.maxCallsPerDay === "number" ? raw.maxCallsPerDay : 500,
@@ -1110,7 +1117,16 @@ export default function (pi: ExtensionAPI) {
       const usage = ctx.getContextUsage?.();
       if (!usage || usage.tokens == null || !usage.contextWindow) return;
       const pct = (usage.tokens / usage.contextWindow) * 100;
-      if (pct < settings.compact.floorPct) return;
+
+      // Min tokens check: if total tokens are below MIN_TOKENS (8k), never compact
+      if (usage.tokens < 8_000) return;
+
+      // When autoOnSubjectChange is enabled, allow flexible evaluation below floorPct
+      const effectiveFloorPct =
+        settings.compact.autoOnSubjectChange !== false
+          ? Math.min(settings.compact.floorPct, Math.max(15, Math.round(settings.compact.floorPct / 2)))
+          : settings.compact.floorPct;
+      if (pct < effectiveFloorPct) return;
 
       const recent = buildRecentMessages(ctx.sessionManager.getBranch());
       if (recent.length < 2) return;
@@ -1125,7 +1141,28 @@ export default function (pi: ExtensionAPI) {
       if (!result.ok) return;
       const signals = extractSignals(result.answers);
       if (!signals) return;
-      pi.events.emit(TO_GUI, { kind: "jev_advice", entryId, at: Date.now(), usagePct: pct, tokens: usage.tokens, contextWindow: usage.contextWindow, signals });
+
+      // Gating for below floorPct: if below the user's floorPct, only proceed if a real task switch occurred.
+      // This prevents non-switch advice (e.g. atBoundary from normal finished work) from leaking below floorPct.
+      const isTaskSwitch = signals.switchedGears > 0.7 && signals.needsHistory < 0.7 && signals.midOperation <= 0.5;
+      if (pct < settings.compact.floorPct && !isTaskSwitch) return;
+
+      const autoCompact =
+        settings.compact.mode === "auto" &&
+        signals.switchedGears > 0.7 &&
+        signals.needsHistory < 0.5 &&
+        signals.midOperation <= 0.5;
+
+      pi.events.emit(TO_GUI, {
+        kind: "jev_advice",
+        entryId,
+        at: Date.now(),
+        usagePct: pct,
+        tokens: usage.tokens,
+        contextWindow: usage.contextWindow,
+        signals,
+        ...(autoCompact ? { autoCompact: true } : {}),
+      });
     } catch {
       // Advice is best-effort.
     } finally {

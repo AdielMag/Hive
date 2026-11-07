@@ -82,7 +82,7 @@ describe("loadSettings", () => {
     expect(loadSettings(env)).toEqual({
       apiKey: "abc",
       model: "jev-latest",
-      compact: { enabled: true, floorPct: 55 },
+      compact: { enabled: true, floorPct: 55, mode: "hint", autoOnSubjectChange: true },
       askJev: { enabled: true },
       maxCallsPerDay: 500,
       maxInputTokens: 28_000,
