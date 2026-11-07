@@ -1097,6 +1097,129 @@ const ASK_PARAMETERS = {
 } as const;
 
 // ---------------------------------------------------------------------------------------------------------
+// Model router
+// ---------------------------------------------------------------------------------------------------------
+
+export const ROUTER_QUESTIONS: Record<string, Question> = {
+  tier: {
+    type: "choice",
+    instructions: "Which capability tier is best suited to execute this coding/development task effectively and cost-efficiently?",
+    criteria: {
+      fast: "Simple query, small single-line edit, quick lookup, formatting, status triage, simple command, or routine explanation that does not require deep analysis.",
+      balanced: "Standard coding task, feature implementation, refactoring, writing unit tests, debugging ordinary issues, code review, or multi-step workflow.",
+      heavy: "Deep architectural design, very difficult bug diagnosis, complex algorithm implementation, high-stakes system restructuring, or difficult multi-step problem solving.",
+    },
+  },
+  reasoning: {
+    type: "choice",
+    instructions: "Does this task require extended internal reasoning/thinking?",
+    criteria: {
+      off: "Direct, straightforward task with obvious steps; extended thinking is unnecessary.",
+      low: "Moderate complexity task benefiting from brief internal reasoning.",
+      high: "Complex problem, tricky edge cases, deep debugging, or architectural tradeoffs requiring extensive reasoning.",
+    },
+  },
+};
+
+export type ModelTier = "fast" | "balanced" | "heavy";
+
+export function classifyModelTier(model: { id: string; provider?: string; name?: string; cost?: { input?: number } }): ModelTier {
+  const id = (model.id || "").toLowerCase();
+  const name = (model.name || "").toLowerCase();
+  const text = `${model.provider || ""}/${id} ${name}`;
+
+  if (
+    /\b(opus|heavy|deepseek-r1)\b/i.test(text) ||
+    /(^|[-_ /])(o1|o3|r1)([-_ /]|$)/i.test(id)
+  ) {
+    return "heavy";
+  }
+
+  const isMini = /(^|[-_ /])(mini|small)([-_ /]|$)/i.test(id) && !/(gemini|minimax)/i.test(id);
+  const isFlashOrHaiku = /\b(flash|haiku|instant|nano|lite)\b/i.test(text);
+  if (isMini || isFlashOrHaiku) {
+    return "fast";
+  }
+
+  const cost = model.cost?.input;
+  if (typeof cost === "number" && Number.isFinite(cost) && cost > 0) {
+    if (cost < 1.0) return "fast";
+    if (cost >= 5.0) return "heavy";
+  }
+  return "balanced";
+}
+
+export function selectModelForTier(
+  tier: ModelTier,
+  rawCandidates: Array<{ id: string; provider?: string; name?: string; cost?: { input?: number } }> = [],
+  preferredProvider?: string,
+): { id: string; provider?: string; name?: string } | null {
+  const candidates = rawCandidates.filter((m) => {
+    if (!m || !m.id) return false;
+    if (m.provider === "jev" && m.id === "auto") return false;
+    if (m.provider === "jev" && (m.id === "auto-jev" || m.id === "jev-auto")) return false;
+    return true;
+  });
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const grouped: Record<ModelTier, typeof candidates> = { fast: [], balanced: [], heavy: [] };
+  for (const m of candidates) grouped[classifyModelTier(m)].push(m);
+
+  grouped.fast.sort((a, b) => (a.cost?.input ?? 999) - (b.cost?.input ?? 999));
+  grouped.heavy.sort((a, b) => (b.cost?.input ?? 0) - (a.cost?.input ?? 0));
+
+  const fallbackOrder: Record<ModelTier, ModelTier[]> = {
+    fast: ["fast", "balanced", "heavy"],
+    balanced: ["balanced", "heavy", "fast"],
+    heavy: ["heavy", "balanced", "fast"],
+  };
+
+  for (const target of fallbackOrder[tier]) {
+    const list = grouped[target];
+    if (list.length > 0 && list[0]) {
+      if (preferredProvider) {
+        const pref = list.find((m) => m.provider?.toLowerCase() === preferredProvider.toLowerCase());
+        if (pref) return pref;
+      }
+      return list[0];
+    }
+  }
+
+  return candidates[0] ?? null;
+}
+
+export async function routeTaskWithJev(
+  task: string,
+  candidates: Array<{ id: string; provider?: string; name?: string }> = [],
+  preferredProvider?: string,
+  env = process.env,
+): Promise<{ id: string; provider?: string; name?: string; tier: ModelTier } | null> {
+  const settings = loadSettings(env);
+  if (!settings) return null;
+  try {
+    const res = await callJev({
+      settings,
+      feature: "router",
+      state: task.slice(0, 4_000),
+      questions: ROUTER_QUESTIONS,
+      timeoutMs: 4_000,
+      env,
+    });
+    if (!res.ok) return null;
+    const tierAns = res.answers?.tier;
+    const choice = tierAns && typeof tierAns === "object" ? String((tierAns as any).choice || "").toLowerCase() : "balanced";
+    const tier: ModelTier = choice === "fast" || choice === "heavy" || choice === "balanced" ? choice : "balanced";
+    const chosen = selectModelForTier(tier, candidates, preferredProvider);
+    return chosen ? { ...chosen, tier } : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // Extension entry
 // ---------------------------------------------------------------------------------------------------------
 

@@ -31,7 +31,7 @@ import { formatContextWindow, getSupportedThinkingLevels } from "../lib/models/t
 import { toast } from "../modules/toast-store.ts";
 import { Slot } from "../modules/ModuleViews.tsx";
 import { filterDisabledProviders } from "../lib/provider-filter.ts";
-import type { AttachedItem } from "@hive/protocol";
+import { AUTO_JEV_MODEL, isAutoJevModel, type AttachedItem } from "@hive/protocol";
 import { activePath } from "@hive/pi-adapter";
 import "../styles/composer.css";
 
@@ -104,17 +104,26 @@ export const Composer: React.FC<ComposerProps> = ({ height, tabId }) => {
 
   // Filter to only enabled models (if enabledModelKeys is specified)
   const visibleModels = useMemo(() => {
+    const autoModel = baseModels.find((m) => isAutoJevModel(m)) ?? (AUTO_JEV_MODEL as unknown as typeof models[0]);
+    let list: Array<typeof models[0]>;
     if (!enabledModelKeys || enabledModelKeys.length === 0) {
-      return baseModels;
+      list = baseModels;
+    } else {
+      const enabledSet = new Set(enabledModelKeys);
+      const filtered = baseModels.filter((m) => {
+        if (isAutoJevModel(m)) return true;
+        const fullKey = `${m.provider}/${m.id}`;
+        if (enabledSet.has(fullKey)) return true;
+        return enabledModelKeys.some((k) => !k.includes("/") && k === m.id);
+      });
+      list = filtered.length > 0 ? filtered : baseModels;
     }
-    const enabledSet = new Set(enabledModelKeys);
-    const filtered = baseModels.filter((m) => {
-      const fullKey = `${m.provider}/${m.id}`;
-      if (enabledSet.has(fullKey)) return true;
-      return enabledModelKeys.some((k) => !k.includes("/") && k === m.id);
-    });
-    return filtered.length > 0 ? filtered : baseModels;
-  }, [baseModels, enabledModelKeys]);
+    if (!disabledProviders.includes("jev")) {
+      const withoutAuto = list.filter((m) => !isAutoJevModel(m));
+      return [autoModel, ...withoutAuto];
+    }
+    return list;
+  }, [baseModels, enabledModelKeys, disabledProviders]);
 
   // User search filter
   const filteredModels = useMemo(() => {

@@ -1,6 +1,8 @@
 import { summarizeReload } from "../lib/reload-summary.ts";
 import { create } from "zustand";
 import {
+  AUTO_JEV_MODEL,
+  isAutoJevModel,
   BRIDGE_TOPICS,
   isCoreTabKind,
   isStudioFormCancel,
@@ -1027,7 +1029,10 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
     const tab = get().tabs.find((t) => t.id === tabId);
     let model = state.model ?? null;
     const wanted = tab?.model as Model<any> | undefined;
-    if (wanted && (!model || wanted.provider !== model.provider || wanted.id !== model.id)) {
+    if (wanted && isAutoJevModel(wanted)) {
+      model = wanted;
+      void window.studio.bridgeEmit(key, BRIDGE_TOPICS.fromGui, { kind: "auto_router", enabled: true, router: "jev" }).catch(() => {});
+    } else if (wanted && (!model || wanted.provider !== model.provider || wanted.id !== model.id)) {
       const setRes = await rpc(key, { type: "set_model", provider: wanted.provider, modelId: wanted.id });
       if (setRes.ok) model = setRes.data as Model<any>;
     }
@@ -2411,6 +2416,77 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
       if (activeTabId) restoreDraft(activeTabId, promptText, attachments);
       set({ error: `Couldn't send your message: ${reason || "Pi didn't accept it."}` });
     };
+
+    // Auto router using Jev: when Auto (Jev) is selected for this tab, ask Jev to route the prompt to the best model
+    const activeTab = get().tabs.find((t) => t.id === activeTabId);
+    const configuredModel = activeTab?.model ?? get().selectedModel;
+    if (!running && isAutoJevModel(configuredModel) && !promptText.trim().startsWith("/")) {
+      try {
+        void window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, { kind: "auto_router", enabled: true, router: "jev" }).catch(() => {});
+
+        const rawCandidates = get().models.length > 0 ? get().models : get().allCatalogModels;
+        const disabled = get().disabledProviders;
+        const enabledKeys = get().enabledModelKeys;
+        const candidates = rawCandidates.filter((m) => {
+          if (!m || isAutoJevModel(m)) return false;
+          if (disabled.includes(m.provider)) return false;
+          if (enabledKeys && enabledKeys.length > 0) {
+            const k = `${m.provider}/${m.id}`;
+            return enabledKeys.includes(k) || enabledKeys.includes(m.id);
+          }
+          return true;
+        });
+
+        if (candidates.length > 0) {
+          const routeRes = await window.studio.modules.invoke<{
+            ok: boolean;
+            tier?: string;
+            reasoning?: string;
+            confidence?: number;
+            model?: { id: string; provider: string; name?: string };
+            reason?: string;
+          }>("jev", "routeTask", {
+            task: promptText,
+            candidateModels: candidates.map((c) => ({
+              id: c.id,
+              provider: c.provider,
+              name: c.name,
+              reasoning: Boolean(c.reasoning),
+              cost: c.cost,
+            })),
+          }).catch(() => null);
+
+          if (routeRes?.ok && routeRes.model) {
+            const target = candidates.find(
+              (c) => c.provider === routeRes.model!.provider && c.id === routeRes.model!.id,
+            ) ?? candidates[0];
+
+            if (target) {
+              const setRes = await window.studio.rpc(activeKey, {
+                type: "set_model",
+                provider: target.provider,
+                modelId: target.id,
+              });
+
+              if (setRes?.ok && routeRes.reasoning && target.reasoning) {
+                const targetLevel = routeRes.reasoning === "high" ? "high" : routeRes.reasoning === "low" ? "low" : "off";
+                void window.studio.rpc(activeKey, {
+                  type: "set_thinking_level",
+                  level: targetLevel as any,
+                }).catch(() => {});
+              }
+
+              toast({
+                message: `Auto (Jev) routed to ${target.name || target.id} (${routeRes.tier ?? "balanced"})`,
+                kind: "info",
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[auto-router] Jev routing failed, continuing with current model", err);
+      }
+    }
     const sendRpc = async (command: Parameters<StudioApi["rpc"]>[1]) => {
       try {
         const res = await window.studio.rpc(activeKey, command);
@@ -2600,15 +2676,31 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   },
 
   setModel: async (provider: string, modelId: string) => {
+    const tabId = displayedSessionTabId;
+    const patchTab = (patch: Partial<TabItem>) =>
+      set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t)) }));
+
+    if (isAutoJevModel({ id: modelId, provider })) {
+      const autoTarget = AUTO_JEV_MODEL as unknown as Model<any>;
+      set({
+        selectedModel: autoTarget,
+        thinkingLevels: ["off"],
+        selectedThinkingLevel: "off",
+        error: null,
+      });
+      if (tabId) patchTab({ model: autoTarget, thinkingLevel: "off" });
+      const key = get().tabs.find((t) => t.id === tabId)?.activeKey;
+      if (key) {
+        void window.studio.bridgeEmit(key, BRIDGE_TOPICS.fromGui, { kind: "auto_router", enabled: true, router: "jev" }).catch(() => {});
+      }
+      return;
+    }
+
     const allKnown = [...get().models, ...get().allCatalogModels];
     const target =
       allKnown.find((m) => m.provider === provider && m.id === modelId) ??
       ({ id: modelId, provider, name: modelId, reasoning: false, input: ["text"] } as Model<any>);
 
-    // The choice belongs to the session tab it was made in, even if the user switches away mid-RPC.
-    const tabId = displayedSessionTabId;
-    const patchTab = (patch: Partial<TabItem>) =>
-      set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t)) }));
     const previousModel = get().selectedModel;
     const previousLevels = get().thinkingLevels;
     const previousLevel = get().selectedThinkingLevel;
@@ -2636,8 +2728,11 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     }
 
     try {
-      const res = await rpcLive({ type: "set_model", provider, modelId });
       const key = get().tabs.find((t) => t.id === tabId)?.activeKey;
+      if (key) {
+        void window.studio.bridgeEmit(key, BRIDGE_TOPICS.fromGui, { kind: "auto_router", enabled: false }).catch(() => {});
+      }
+      const res = await rpcLive({ type: "set_model", provider, modelId });
       if (!res || !key) return;
       if (res.ok) {
         const model = res.data as Model<any>;
@@ -2666,6 +2761,9 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         void refreshStats(key);
       } else {
         console.error("set_model RPC returned error:", res.error);
+        if (isAutoJevModel(previousModel)) {
+          void window.studio.bridgeEmit(key, BRIDGE_TOPICS.fromGui, { kind: "auto_router", enabled: true, router: "jev" }).catch(() => {});
+        }
         patchTab({ model: previousModel ?? undefined, thinkingLevel: previousLevel });
         if (isDisplayed(tabId)) {
           set({

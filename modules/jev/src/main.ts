@@ -27,10 +27,18 @@ import {
   type JevSettings,
   type JevSettingsPatch,
   type JevSettingsView,
+  type RouteTaskRequest,
+  type RouteTaskResult,
   type TestKeyResult,
   type UsageRecord,
   type UsageSummary,
 } from "./shared.ts";
+import {
+  extractRouterDecisions,
+  ROUTER_QUESTIONS,
+  routeTaskLocally,
+  selectModelForTier,
+} from "./router.ts";
 
 const MAX_LOG_BYTES = 2 * 1024 * 1024;
 const SCAN_WAIT_MS = 2_500;
@@ -209,6 +217,114 @@ export default defineMainModule({
       writeFileSync(usagePath, "", "utf8");
       events.clear();
       return summarizeUsage([], read());
+    });
+    let routerBreakerOpenUntil = 0;
+    let routerConsecutiveFailures = 0;
+
+    ctx.ipc.handle(JevMethods.routeTask, async (req: RouteTaskRequest): Promise<RouteTaskResult> => {
+      const task = (req?.task || "").trim();
+      const candidates = req?.candidateModels ?? [];
+      const preferredProvider = req?.preferredProvider;
+      const settings = read();
+
+      if (!settings.apiKey || !settings.consentAt) {
+        return routeTaskLocally(task, candidates, preferredProvider);
+      }
+
+      const started = Date.now();
+      if (started < routerBreakerOpenUntil) {
+        return routeTaskLocally(task, candidates, preferredProvider);
+      }
+
+      if (settings.maxCallsPerDay > 0) {
+        const usage = readUsage();
+        const startOfDay = new Date(started).setHours(0, 0, 0, 0);
+        const countToday = usage.filter((u) => u.ts >= startOfDay).length;
+        if (countToday >= settings.maxCallsPerDay) {
+          return routeTaskLocally(task, candidates, preferredProvider);
+        }
+      }
+
+      try {
+        const res = await fetch(`${JEV_API_URL}/v1/systemone`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${settings.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: settings.model || "jev-latest",
+            state: task.slice(0, 4_000),
+            questions: ROUTER_QUESTIONS,
+          }),
+          signal: AbortSignal.timeout(4_000),
+        });
+
+        if (!res.ok) {
+          routerConsecutiveFailures++;
+          if (res.status === 401 || res.status === 402 || res.status === 403) {
+            routerBreakerOpenUntil = Date.now() + 30 * 60_000;
+          } else if (routerConsecutiveFailures >= 3) {
+            routerBreakerOpenUntil = Date.now() + 5 * 60_000;
+          }
+          const failRecord: UsageRecord = {
+            ts: started,
+            feature: "router",
+            model: settings.model,
+            inputTokens: 0,
+            outputTokens: 0,
+            ms: Date.now() - started,
+            ok: false,
+            error: `HTTP ${res.status}`,
+          };
+          try {
+            appendFileSync(usagePath, `${JSON.stringify(failRecord)}\n`, "utf8");
+          } catch {}
+          return routeTaskLocally(task, candidates, preferredProvider);
+        }
+
+        const body = (await res.json()) as any;
+        if (!body || typeof body.answers !== "object" || body.answers === null) {
+          return routeTaskLocally(task, candidates, preferredProvider);
+        }
+
+        routerConsecutiveFailures = 0;
+        const decisions = extractRouterDecisions(body?.answers);
+        const chosen = selectModelForTier(decisions.tier, candidates, preferredProvider);
+        if (!chosen) {
+          return routeTaskLocally(task, candidates, preferredProvider);
+        }
+
+        const ms = Date.now() - started;
+        const record: UsageRecord = {
+          ts: started,
+          feature: "router",
+          model: typeof body?.model === "string" ? body.model : settings.model,
+          inputTokens: Number(body?.usage?.input_tokens) || 0,
+          outputTokens: Number(body?.usage?.output_tokens) || 0,
+          ms,
+          ok: true,
+          confidence: [decisions.confidence],
+        };
+        try {
+          appendFileSync(usagePath, `${JSON.stringify(record)}\n`, "utf8");
+        } catch {}
+
+        return {
+          ok: true,
+          tier: decisions.tier,
+          reasoning: decisions.reasoning,
+          confidence: decisions.confidence,
+          model: { id: chosen.id, provider: chosen.provider, name: chosen.name },
+          reason: `Jev classified task as ${decisions.tier} (${Math.round(decisions.confidence * 100)}% confidence)`,
+        };
+      } catch (err) {
+        routerConsecutiveFailures++;
+        if (routerConsecutiveFailures >= 3) {
+          routerBreakerOpenUntil = Date.now() + 5 * 60_000;
+        }
+        return routeTaskLocally(task, candidates, preferredProvider);
+      }
     });
   },
 });
