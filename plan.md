@@ -1,25 +1,26 @@
-# Restore Subagent Inspection for `subagent` Tool Invocations
+# Auto-Compaction Mid-Session on Subject Change in Jev
 
-Hive recently switched to the unified `subagent` tool (single, parallel, chain modes with isolated context windows), but the desktop UI, adapter, and viewer still hardcode legacy tool names (`Agent`, `SubagentWorkflow`) and expect `.output` files on disk. This breaks subagent inspection: `subagent` tool calls render as plain cards or get batched into tool rows, and the subagent viewer cannot display execution transcripts.
+Enable Jev to intelligently auto-compact conversation history mid-session whenever the user switches subjects, decoupled from rigid context-floor limits, so sessions stay lean and focused on the new task.
 
 ## Approach
-- Add `subagent` to tool classification, batch grouping exclusions, and transcript card routing so subagents render rich `SubagentCard` widgets.
-- Extend `resolveSubagentView` to parse single, parallel, and chain arguments (`args.agent`, `args.task`, `args.tasks`, `args.chain`) and extract structured `SubagentDetails` (messages, tool uses, turns, usage, and status) from tool results and live streaming partials.
-- Update `useSubagentOutput` to read in-memory messages directly from `SubagentView` and live store tool partials, falling back to disk `.output` files only for legacy `pi-subagents` sessions.
-- Enhance `SubagentViewer` with task-step switching for parallel and chain runs so users can inspect each agent's execution transcript, prompt, and output individually.
-- Update offline usage aggregation in `usage.ts` and tool inspection in `modules/tools` to recognize `subagent`.
+- Make subject-change compaction flexible: allow task switching (`switched_gears > 0.7` and `needs_history < 0.5`) to trigger compaction even below `floorPct`, as long as there is enough context to benefit from summarization (`tokens >= MIN_TOKENS`).
+- Pre-send prompt inspection: check incoming user prompts against recent conversation before starting the agent run, detecting subject divergence before heavy context is sent.
+- Configurable automation mode: support both the existing non-intrusive hint bar (`mode: "hint"`) and fully autonomous mid-session compaction (`mode: "auto"`), plus a dedicated `autoOnSubjectChange` toggle in Settings → Jev.
+- Update `tiering.ts` so subject switches produce actionable compaction tiers (`recommend`/`request`) even when context percentage is below `floorPct`.
+- Update `modules/jev/agent/extensions/jev.ts` so the `floorPct` check does not block subject-shift evaluation when subject-change compaction is enabled.
 
 ## Decisions
 
-> [!CHOICE] Transcript Data Source
-> **Question**: Where should the subagent viewer retrieve execution messages?
-> - (x) **In-memory from `SubagentDetails`**: Zero disk I/O, instant live streaming via `onUpdate` partials, works in sandbox. [Recommended]
-> - ( ) **Require scratch `.output` files on disk**: Adds file polling and disk overhead for data already in session state.
+> [!CHOICE] Subject Change Context Floor Policy
+> **Question**: How should subject-change compaction interact with context usage and `floorPct`?
+> - (x) **Flexible Subject-Change Bypass**: Allow subject switch to compact whenever `tokens >= MIN_TOKENS` (8k tokens) regardless of `floorPct`, while keeping `floorPct` as the floor for general/routine compaction. [Recommended]
+> - ( ) **Lower Subject-Specific Floor**: Add a dedicated lower floor (e.g. 15% or 10k tokens) specifically for subject changes.
+> - ( ) **Zero Floor**: Allow subject change compaction even on tiny conversations (< 5k tokens), regardless of token count.
 
-> [!CHOICE] Multi-Agent (Parallel / Chain) Inspection UX
-> **Question**: How should multiple concurrent or chained agents be presented in the viewer?
-> - (x) **Task-step pill switcher**: Display a pill strip for tasks/steps (e.g. `[1. scout] [2. worker]`) to view individual transcripts and prompts. [Recommended]
-> - ( ) **Flattened sequential transcript**: Merge all messages together, losing per-agent clarity and separate cost metrics.
+> [!CHOICE] Auto-Compaction Execution Strategy
+> **Question**: How should the compaction execute when a subject change is detected?
+> - (x) **Hold & Flush on Send**: In `auto` mode, hold the incoming prompt in `compactionHeld`, run compaction, and flush the prompt into the freshly compacted context. In `hint` mode, show the bar and compact on Send unless dismissed. [Recommended]
+> - ( ) **Background Turn-End Compaction**: Only compact in the background at turn boundaries when idle, leaving the composer untouched.
 
 <!-- MORE -->
 
@@ -27,22 +28,19 @@ Hive recently switched to the unified `subagent` tool (single, parallel, chain m
 
 | File | Change |
 |---|---|
-| `packages/pi-adapter/src/ai/classify.ts` | `[MODIFY]` Add `"subagent"` to `SUBAGENT_NAMES` set |
-| `packages/pi-adapter/src/ai/subagents.ts` | `[MODIFY]` Add `isSubagentTool` helper, export `SubagentDetails` types, update `indexSubagents`, `collectSubagents`, `hasRunningSubagents`, and enhance `resolveSubagentView` to parse `subagent` arguments and attach in-memory messages/details |
-| `packages/pi-adapter/src/usage.ts` | `[MODIFY]` Recognize `toolName: "subagent"` and parse usage from `details.results` |
-| `apps/desktop/src/renderer/components/Transcript.tsx` | `[MODIFY]` Route `block.name === "subagent"` to `SubagentCard` |
-| `apps/desktop/src/renderer/components/transcript/tool-batch.ts` | `[MODIFY]` Exclude `subagent` from `isBatchableTool` to prevent batching subagents into generic tool pills |
-| `apps/desktop/src/renderer/hooks/useSubagentOutput.ts` | `[MODIFY]` Consume `view.messages` / `view.subagentDetails` directly, listen for live streaming partials, and fallback to disk files only for legacy runs |
-| `apps/desktop/src/renderer/components/SubagentViewer.tsx` | `[MODIFY]` Add task/step selector when multiple results exist (parallel/chain mode) |
-| `apps/desktop/src/renderer/store/session-store.ts` | `[MODIFY]` Track `subagent` in `tool_execution_end` and running subagent status maps |
-| `modules/tools/src/ui/tool-usage.ts` | `[MODIFY]` Count `subagent` calls under the Subagents section in the Tools breakdown panel |
-| `packages/pi-adapter/test/subagents.test.ts` | `[MODIFY]` Add unit tests for `subagent` tool resolution in single, parallel, and chain modes |
+| `modules/jev/src/shared.ts` | `[MODIFY]` Add `mode: "hint" | "auto"` and `autoOnSubjectChange: boolean` (default true) to `JevSettings` and normalizeSettings |
+| `modules/jev/src/tiering.ts` | `[MODIFY]` Update `decideTier`: allow `switched` with low `needsHistory` to produce `recommend`/`request` even when `usagePct < floorPct` (provided `tokens >= MIN_TOKENS`) |
+| `modules/jev/agent/extensions/jev.ts` | `[MODIFY]` Update turn-end and pre-send evaluation to not drop subject-change checks when below `floorPct`; evaluate incoming user prompts for subject changes |
+| `modules/jev/src/renderer.tsx` | `[MODIFY]` Trigger immediate compaction on send when `autoOnSubjectChange` or `auto` mode is active and subject switch is detected |
+| `modules/jev/src/ui/JevSettings.tsx` | `[MODIFY]` Add Auto-compaction on subject change toggle and mode selector in Settings → Jev |
+| `modules/jev/src/jev-core.test.ts` | `[MODIFY]` Test `decideTier` below `floorPct` when `switchedGears` is high and `needsHistory` is low; test updated settings |
+| `modules/jev/src/jev-flow.test.ts` | `[MODIFY]` Test pre-send topic shift triggering compaction below floorPct |
 
 ## Risks
-- **Large message arrays in state**: `subagent` results contain full message histories. `messagesToTimeline` is fast and lightweight, but capping message rendering if a run exceeds 1,000 steps prevents DOM bloat.
-- **Backward compatibility**: Legacy sessions with `Agent` and `.output` files must continue to work without regression.
+- **Compacting very short chats**: Guarding with `tokens >= MIN_TOKENS` (8,000 tokens) prevents pointless compaction of tiny 1-2 turn chats.
+- **Latency on prompt send**: Compaction takes 5-10s; prompt stays safely queued in `compactionHeld` and UI shows busy spinner.
 
 ## Verify
-- `npm test`: Run existing test suite and verify no regressions across unit tests.
-- Add and run tests in `packages/pi-adapter/test/subagents.test.ts` verifying `resolveSubagentView` with `subagent` tool call parameters and `details.results`.
-- Test `useSubagentOutput` with both in-memory messages and legacy disk ref fallback.
+- `npm test -- modules/jev`: Verify all unit and flow tests pass with the new tiering rules.
+- Add unit tests verifying `decideTier` returns `recommend` for subject change at 20% context (below 40% floor).
+- Verify toggle in Settings → Jev persists cleanly to `config.json`.

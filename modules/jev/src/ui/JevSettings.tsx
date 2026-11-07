@@ -464,9 +464,36 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
             >
               <Switch label="Smart compaction hint" checked={settings.compact.enabled} onChange={(v) => void save({ compact: { enabled: v } })} />
             </Row>
-            <Row title="Only check above" hint="Below this share of the context window Jev is not called at all, which saves cost.">
-              <NumberField label="Context percentage floor" value={settings.compact.floorPct} max={95} onCommit={(v) => void save({ compact: { floorPct: v ?? 40 } })} prefix="%" />
-            </Row>
+            {settings.compact.enabled && (
+              <>
+                <Row
+                  title="Auto-compact on subject change"
+                  hint="When you switch to a new task mid-session, Jev evaluates compaction even below the context floor, preventing old task context from polluting the new task."
+                >
+                  <Switch
+                    label="Auto-compact on subject change"
+                    checked={settings.compact.autoOnSubjectChange !== false}
+                    onChange={(v) => void save({ compact: { autoOnSubjectChange: v } })}
+                  />
+                </Row>
+                <Row
+                  title="Full autonomous compaction"
+                  hint="When enabled, high-confidence subject switches compact automatically without waiting for confirmation. When off, Hive shows the hint bar and compacts on send."
+                >
+                  <Switch
+                    label="Full autonomous compaction"
+                    checked={settings.compact.mode === "auto"}
+                    onChange={(v) => void save({ compact: { mode: v ? "auto" : "hint" } })}
+                  />
+                </Row>
+                <Row
+                  title="Only check above"
+                  hint="Below this share of the context window Jev is not called for routine checks, which saves cost. Task switches can still be evaluated when auto-compact on subject change is on."
+                >
+                  <NumberField label="Context percentage floor" value={settings.compact.floorPct} max={95} onCommit={(v) => void save({ compact: { floorPct: v ?? 40 } })} prefix="%" />
+                </Row>
+              </>
+            )}
             <Row title="ask_jev tool" hint="Lets the agent ask Jev typed yes/no, choice or score questions about files or read-only command output without loading them into its own context. Applies to new sessions.">
               <Switch label="ask_jev tool" checked={settings.askJev.enabled} onChange={(v) => void save({ askJev: { enabled: v } })} />
             </Row>
