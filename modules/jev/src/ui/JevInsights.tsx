@@ -8,6 +8,7 @@ import { Check, Copy, Gauge, Loader2, RefreshCw } from "lucide-react";
 import type { ModuleHost, ModuleTab } from "@hive/module-sdk/renderer";
 import {
   DECISIVE_CONFIDENCE,
+  FEATURE_LABEL,
   JevMethods,
   type ImpactDay,
   type ImpactRecentCall,
@@ -41,7 +42,6 @@ export const pctPoints = (n: number | null | undefined): string => (n === null |
 export const msText = (n: number | null | undefined): string => (n === null || n === undefined ? "n/a" : n >= 1000 ? `${(n / 1000).toFixed(2)}s` : `${Math.round(n)}ms`);
 export const shortId = (id: string): string => id.slice(0, 8);
 
-const FEATURE_LABEL: Record<string, string> = { compact: "Compaction hints", ask_jev: "ask_jev tool" };
 const TYPE_LABEL: Record<JevQuestionType, string> = { noul: "Yes / no", choice: "Choice", score: "Score" };
 const ERROR_LABEL: Record<string, string> = {
   cap: "Daily cap",

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { ModuleHost } from "@hive/module-sdk/renderer";
 import {
+  FEATURE_LABEL,
   INSIGHTS_TAB_ID,
   INSIGHTS_TAB_KIND,
   JevMethods,
@@ -91,9 +92,7 @@ const Stat: React.FC<{ label: string; bucket: UsageBucket }> = ({ label, bucket 
   </div>
 );
 
-const FEATURE_LABEL: Record<string, string> = { compact: "Compaction hints", ask_jev: "ask_jev tool" };
-
-/** Per-feature split of the usage log (compaction hints vs ask_jev). */
+/** Per-feature split of the usage log (compaction hints, ask_jev, subagent dispatch). */
 export const FeatureSplit: React.FC<{ byFeature: Record<string, UsageBucket> }> = ({ byFeature }) => {
   const rows = Object.entries(byFeature).sort((a, b) => b[1].calls - a[1].calls);
   if (rows.length === 0) return null;

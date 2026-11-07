@@ -397,6 +397,108 @@ export function turnEndedForUser(event: any): boolean {
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// Subagent dispatch evaluation (fork vs spawn)
+// ---------------------------------------------------------------------------------------------------------
+
+export const SUBAGENT_DISPATCH_QUESTIONS: Record<string, Question> = {
+  should_fork: {
+    type: "noul",
+    instructions:
+      "Should this subagent task be forked from the parent session (reusing prompt cache and conversation history), or spawned in a fresh isolated session?",
+    criteria: {
+      true: "Fork: The task directly relies on recent conversation context, previous code edits, plan details, or decisions in this session, and reusing the prompt cache saves time and tokens.",
+      false: "Spawn: The task is independent, broad codebase reconnaissance, an isolated search, or better suited for a clean empty context without earlier conversation baggage.",
+    },
+  },
+};
+
+export interface SubagentDispatchCandidate {
+  agent: string;
+  task: string;
+  situation?: string;
+  recentMessages?: Array<{ role: string; text: string }>;
+  contextTokens?: number;
+}
+
+export interface SubagentDispatchDecision {
+  shouldFork: boolean;
+  reason: string;
+  confidence?: number;
+  ms: number;
+}
+
+export function fallbackForkDecision(agent: string): boolean {
+  // Scout is exploratory recon - prefers clean slate.
+  // Worker, reviewer, debugger, designer, planner benefit from current context & cache.
+  if (agent === "scout") return false;
+  return true;
+}
+
+export async function decideSubagentDispatch(
+  candidate: SubagentDispatchCandidate,
+  settings: Settings,
+  meta?: UsageMeta,
+  signal?: AbortSignal,
+  fetchImpl?: typeof fetch,
+  env?: Env,
+): Promise<SubagentDispatchDecision> {
+  const started = Date.now();
+  const agent = candidate?.agent ?? "";
+  if (!settings.apiKey) {
+    const shouldFork = fallbackForkDecision(agent);
+    return {
+      shouldFork,
+      reason: `No API key configured (fallback policy: ${agent} -> ${shouldFork ? "fork" : "spawn"})`,
+      ms: 0,
+    };
+  }
+
+  const state = {
+    target_agent: agent,
+    task_description: candidate?.task ?? "",
+    situation: candidate?.situation ?? "Evaluating whether subagent should fork from active session or spawn fresh.",
+    recent_messages: candidate?.recentMessages ?? [],
+    ...(candidate?.contextTokens ? { context_tokens: candidate.contextTokens } : {}),
+  };
+
+  const result = await callJev({
+    settings,
+    feature: "subagent_dispatch",
+    state,
+    questions: SUBAGENT_DISPATCH_QUESTIONS,
+    signal,
+    meta,
+    fetchImpl,
+    env,
+  });
+
+  if (!result.ok) {
+    const shouldFork = fallbackForkDecision(agent);
+    return {
+      shouldFork,
+      reason: `Jev call failed (${result.errorKind}): fallback to ${shouldFork ? "fork" : "spawn"}`,
+      ms: Date.now() - started,
+    };
+  }
+
+  const ans = result.answers?.should_fork;
+  let shouldFork = fallbackForkDecision(agent);
+  let confidence: number | undefined;
+
+  if (ans && typeof ans === "object" && ans.type === "noul" && typeof (ans as any).noul === "number") {
+    shouldFork = (ans as any).noul >= 0.5;
+    confidence = answerConfidence(ans) ?? Math.abs((ans as any).noul - 0.5) * 2;
+  }
+
+  return {
+    shouldFork,
+    confidence,
+    reason: `Jev evaluated ${shouldFork ? "fork" : "spawn"} (${confidence != null ? Math.round(confidence * 100) + "% confidence" : "evaluated"})`,
+    ms: Date.now() - started,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // ask_jev helpers
 // ---------------------------------------------------------------------------------------------------------
 
@@ -1036,6 +1138,34 @@ export default function (pi: ExtensionAPI) {
     try {
       lastCtx.compact(typeof data.instructions === "string" && data.instructions ? { customInstructions: data.instructions } : undefined);
     } catch {}
+  });
+
+  pi.events.on("jev:decide_subagent", async (data: any) => {
+    try {
+      const settings = loadSettings();
+      if (!settings) {
+        if (typeof data?.callback === "function") {
+          data.callback({
+            shouldFork: fallbackForkDecision(data?.candidate?.agent ?? ""),
+            reason: "Jev disabled or no config found (fallback policy)",
+            ms: 0,
+          });
+        }
+        return;
+      }
+      const decision = await decideSubagentDispatch(data?.candidate, settings, data?.meta, data?.signal);
+      if (typeof data?.callback === "function") {
+        data.callback(decision);
+      }
+    } catch (err) {
+      if (typeof data?.callback === "function") {
+        data.callback({
+          shouldFork: fallbackForkDecision(data?.candidate?.agent ?? ""),
+          reason: `Jev dispatch error: ${err instanceof Error ? err.message : String(err)}`,
+          ms: 0,
+        });
+      }
+    }
   });
 
   // ask_jev is only offered when a key is configured and the feature is on (re-checked on every call).

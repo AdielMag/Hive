@@ -7,6 +7,9 @@ import {
   answerConfidence,
   buildRecentMessages,
   callJev,
+  decideSubagentDispatch,
+  fallbackForkDecision,
+  SUBAGENT_DISPATCH_QUESTIONS,
   estimateSavedTokens,
   usageSources,
   checkCommandPaths,
@@ -532,5 +535,94 @@ describe("WP-A: binary detection, token budget, grep, git secrets", () => {
     await expect(runReadOnly("git cat-file -p HEAD:.npmrc", cwd)).rejects.toThrow(/secret/);
     await expect(runReadOnly("git show HEAD:sub/.env", cwd)).rejects.toThrow(/secret/);
     expect(await runReadOnly("git show HEAD:a.ts", cwd)).toContain("export const a = 1;");
+  });
+
+  describe("decideSubagentDispatch", () => {
+    it("has valid noul question schema", () => {
+      expect(SUBAGENT_DISPATCH_QUESTIONS.should_fork.type).toBe("noul");
+      expect(SUBAGENT_DISPATCH_QUESTIONS.should_fork.criteria).toBeDefined();
+    });
+
+    it("uses fallback role policy when no API key is provided", async () => {
+      expect(fallbackForkDecision("scout")).toBe(false);
+      expect(fallbackForkDecision("worker")).toBe(true);
+      expect(fallbackForkDecision("reviewer")).toBe(true);
+
+      const resScout = await decideSubagentDispatch(
+        { agent: "scout", task: "Find files" },
+        { ...settings, apiKey: "" },
+      );
+      expect(resScout.shouldFork).toBe(false);
+      expect(resScout.reason).toContain("fallback policy");
+
+      const resWorker = await decideSubagentDispatch(
+        { agent: "worker", task: "Implement feature" },
+        { ...settings, apiKey: "" },
+      );
+      expect(resWorker.shouldFork).toBe(true);
+      expect(resWorker.reason).toContain("fallback policy");
+    });
+
+    it("evaluates fork decision when Jev API responds with noul answer", async () => {
+      const { env } = tmpEnv();
+      const fetchFork = vi.fn().mockResolvedValue(
+        jsonRes(200, okBody({ should_fork: { type: "noul", noul: 0.85 } })),
+      );
+
+      const decisionFork = await decideSubagentDispatch(
+        {
+          agent: "worker",
+          task: "Apply edits from plan",
+          recentMessages: [{ role: "user", text: "Please apply plan" }],
+        },
+        { ...settings, apiKey: "k_test" },
+        undefined,
+        undefined,
+        fetchFork as any,
+        env,
+      );
+
+      expect(decisionFork.shouldFork).toBe(true);
+      expect(decisionFork.confidence).toBeGreaterThan(0.6);
+      expect(decisionFork.reason).toContain("Jev evaluated fork");
+
+      const fetchSpawn = vi.fn().mockResolvedValue(
+        jsonRes(200, okBody({ should_fork: { type: "noul", noul: 0.15 } })),
+      );
+
+      const decisionSpawn = await decideSubagentDispatch(
+        {
+          agent: "worker",
+          task: "Standalone exploration",
+          recentMessages: [],
+        },
+        { ...settings, apiKey: "k_test" },
+        undefined,
+        undefined,
+        fetchSpawn as any,
+        env,
+      );
+
+      expect(decisionSpawn.shouldFork).toBe(false);
+      expect(decisionSpawn.confidence).toBeGreaterThan(0.6);
+      expect(decisionSpawn.reason).toContain("Jev evaluated spawn");
+    });
+
+    it("falls back to role policy on API failure", async () => {
+      const { env } = tmpEnv();
+      const fail = vi.fn().mockResolvedValue(jsonRes(500, { detail: "Server error" }));
+
+      const res = await decideSubagentDispatch(
+        { agent: "scout", task: "Search" },
+        { ...settings, apiKey: "k_test" },
+        undefined,
+        undefined,
+        fail as any,
+        env,
+      );
+
+      expect(res.shouldFork).toBe(false);
+      expect(res.reason).toContain("fallback to spawn");
+    });
   });
 });

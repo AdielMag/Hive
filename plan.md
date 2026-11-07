@@ -1,48 +1,39 @@
-# Restore Subagent Inspection for `subagent` Tool Invocations
+# Jev-Guided Subagent Session Forking for Prompt Cache Reuse
 
-Hive recently switched to the unified `subagent` tool (single, parallel, chain modes with isolated context windows), but the desktop UI, adapter, and viewer still hardcode legacy tool names (`Agent`, `SubagentWorkflow`) and expect `.output` files on disk. This breaks subagent inspection: `subagent` tool calls render as plain cards or get batched into tool rows, and the subagent viewer cannot display execution transcripts.
+Allow subagents to fork from the active parent session instead of always spawning with `--no-session`, utilizing prompt cache and conversational context. When dispatching, ask Jev whether to fork or spawn fresh.
 
 ## Approach
-- Add `subagent` to tool classification, batch grouping exclusions, and transcript card routing so subagents render rich `SubagentCard` widgets.
-- Extend `resolveSubagentView` to parse single, parallel, and chain arguments (`args.agent`, `args.task`, `args.tasks`, `args.chain`) and extract structured `SubagentDetails` (messages, tool uses, turns, usage, and status) from tool results and live streaming partials.
-- Update `useSubagentOutput` to read in-memory messages directly from `SubagentView` and live store tool partials, falling back to disk `.output` files only for legacy `pi-subagents` sessions.
-- Enhance `SubagentViewer` with task-step switching for parallel and chain runs so users can inspect each agent's execution transcript, prompt, and output individually.
-- Update offline usage aggregation in `usage.ts` and tool inspection in `modules/tools` to recognize `subagent`.
+- Add `subagent_dispatch` capability and decision heuristics to Jev in `modules/jev`.
+- Add `fork?: boolean` option to subagent parameters (`SubagentParams`, `TaskItem`, `ChainItem`).
+- In `subagent` extension, if `fork` is not explicitly set, ask Jev (`ask_jev` via `ctx.executeTool`) whether the task should fork or spawn fresh based on task description and recent context.
+- When forking, launch child process with `--fork <sessionFile>` and `--name <agent>#<8-hex>` so Hive groups it under the parent session and LLMs hit prompt cache for the parent message prefix.
+- Gracefully fall back to spawn if Jev is unavailable or if current session has no file on disk.
 
 ## Decisions
 
-> [!CHOICE] Transcript Data Source
-> **Question**: Where should the subagent viewer retrieve execution messages?
-> - (x) **In-memory from `SubagentDetails`**: Zero disk I/O, instant live streaming via `onUpdate` partials, works in sandbox. [Recommended]
-> - ( ) **Require scratch `.output` files on disk**: Adds file polling and disk overhead for data already in session state.
-
-> [!CHOICE] Multi-Agent (Parallel / Chain) Inspection UX
-> **Question**: How should multiple concurrent or chained agents be presented in the viewer?
-> - (x) **Task-step pill switcher**: Display a pill strip for tasks/steps (e.g. `[1. scout] [2. worker]`) to view individual transcripts and prompts. [Recommended]
-> - ( ) **Flattened sequential transcript**: Merge all messages together, losing per-agent clarity and separate cost metrics.
+> [!CHOICE] Default Subagent Routing Policy
+> **Question**: How should subagent dispatch decide between fork and spawn when not explicitly forced?
+> - (x) **Jev with role heuristics fallback**: Consult Jev system-one classifier; if Jev is disabled or offline, fallback to role defaults (scout=spawn, worker/reviewer=fork) [Recommended]
+> - ( ) **Jev only**: Consult Jev; if Jev is offline, default all subagents to spawn
+> - ( ) **Explicit flag only**: Always spawn unless caller explicitly sets fork: true in subagent call
 
 <!-- MORE -->
 
 ## Changes
-
 | File | Change |
 |---|---|
-| `packages/pi-adapter/src/ai/classify.ts` | `[MODIFY]` Add `"subagent"` to `SUBAGENT_NAMES` set |
-| `packages/pi-adapter/src/ai/subagents.ts` | `[MODIFY]` Add `isSubagentTool` helper, export `SubagentDetails` types, update `indexSubagents`, `collectSubagents`, `hasRunningSubagents`, and enhance `resolveSubagentView` to parse `subagent` arguments and attach in-memory messages/details |
-| `packages/pi-adapter/src/usage.ts` | `[MODIFY]` Recognize `toolName: "subagent"` and parse usage from `details.results` |
-| `apps/desktop/src/renderer/components/Transcript.tsx` | `[MODIFY]` Route `block.name === "subagent"` to `SubagentCard` |
-| `apps/desktop/src/renderer/components/transcript/tool-batch.ts` | `[MODIFY]` Exclude `subagent` from `isBatchableTool` to prevent batching subagents into generic tool pills |
-| `apps/desktop/src/renderer/hooks/useSubagentOutput.ts` | `[MODIFY]` Consume `view.messages` / `view.subagentDetails` directly, listen for live streaming partials, and fallback to disk files only for legacy runs |
-| `apps/desktop/src/renderer/components/SubagentViewer.tsx` | `[MODIFY]` Add task/step selector when multiple results exist (parallel/chain mode) |
-| `apps/desktop/src/renderer/store/session-store.ts` | `[MODIFY]` Track `subagent` in `tool_execution_end` and running subagent status maps |
-| `modules/tools/src/ui/tool-usage.ts` | `[MODIFY]` Count `subagent` calls under the Subagents section in the Tools breakdown panel |
-| `packages/pi-adapter/test/subagents.test.ts` | `[MODIFY]` Add unit tests for `subagent` tool resolution in single, parallel, and chain modes |
+| `modules/jev/agent/extensions/jev.ts` | `[MODIFY]` Add `SUBAGENT_DISPATCH_QUESTIONS` and subagent routing evaluation helpers |
+| `modules/jev/src/shared.ts` | `[MODIFY]` Register `subagent_dispatch` in feature labels and usage types |
+| `modules/jev/src/ui/JevInsights.tsx` | `[MODIFY]` Support `subagent_dispatch` in feature breakdown view |
+| `modules/jev/src/jev-extension.test.ts` | `[MODIFY]` Add unit tests for subagent dispatch feature and questions |
+| `packages/pi-adapter/src/ai/subagents.ts` | `[MODIFY]` Add `forked` and `dispatchReason` to `SingleSubagentResult` |
+| `C:/Users/Adiel/.pi/agent/extensions/subagent/index.ts` | `[MODIFY]` Add `fork` parameter, Jev query logic, and `--fork <sessionFile> --name <agent>#<hex>` CLI spawn logic |
 
 ## Risks
-- **Large message arrays in state**: `subagent` results contain full message histories. `messagesToTimeline` is fast and lightweight, but capping message rendering if a run exceeds 1,000 steps prevents DOM bloat.
-- **Backward compatibility**: Legacy sessions with `Agent` and `.output` files must continue to work without regression.
+- Very large parent sessions could cause forked subagents to inherit large contexts; Jev evaluation ensures broad exploratory tasks (like scout) spawn fresh instead of inheriting bloat.
+- Ephemeral parent sessions (started with `--no-session`) lack a session file on disk; code checks `fs.existsSync(sessionFile)` and falls back to spawn.
 
 ## Verify
-- `npm test`: Run existing test suite and verify no regressions across unit tests.
-- Add and run tests in `packages/pi-adapter/test/subagents.test.ts` verifying `resolveSubagentView` with `subagent` tool call parameters and `details.results`.
-- Test `useSubagentOutput` with both in-memory messages and legacy disk ref fallback.
+- `npm test modules/jev` passes with new subagent dispatch tests.
+- `npm test subagent` passes for adapter types and session grouping.
+- Dry-run verification of subagent parameter parsing with explicit `fork: true`, `fork: false`, and automatic Jev evaluation.

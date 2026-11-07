@@ -39,6 +39,12 @@ export const JevMethods = {
 export const JEV_ADVICE_KIND = "jev_advice";
 export const JEV_COMPACT_KIND = "jev_compact";
 
+export const FEATURE_LABEL: Record<string, string> = {
+  compact: "Compaction hints",
+  ask_jev: "ask_jev tool",
+  subagent_dispatch: "Subagent dispatch",
+};
+
 export interface JevSettings {
   /** TypeSafe API key (never sent to the renderer; see JevSettingsView). */
   apiKey: string;

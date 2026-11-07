@@ -45,6 +45,8 @@ export interface SingleSubagentResult {
   step?: number;
   retriedWith?: string;
   firstError?: string;
+  forked?: boolean;
+  dispatchReason?: string;
 }
 
 export interface SubagentDetails {
@@ -353,6 +355,9 @@ export function resolveSubagentView(params: {
   const model = subagentDetails?.results?.find((r) => r.model)?.model || legacyDetails?.modelName || (args.model as string | undefined);
   let thinking = args.thinking as string | undefined;
   const allTags: string[] = [...(legacyDetails?.tags ?? [])];
+  if (subagentDetails?.results?.some((r) => r.forked) && !allTags.includes("forked")) {
+    allTags.push("forked");
+  }
   const isThinkingTag = (t: string) => t.toLowerCase().startsWith("thinking:");
   if (!thinking) {
     const thinkingTag = allTags.find(isThinkingTag);
