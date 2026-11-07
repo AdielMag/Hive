@@ -161,8 +161,8 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
     );
   }
 
-  // 8. Jev / TypeSafe
-  if (normalized === "jev" || normalized === "typesafe") {
+  // 8. Jev / TypeSafe / Auto
+  if (normalized === "jev" || normalized === "typesafe" || normalized === "auto") {
     return <Gauge size={size} color="var(--accent-base)" className={className} style={{ flexShrink: 0, ...style }} />;
   }
 

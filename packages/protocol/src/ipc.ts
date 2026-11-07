@@ -469,6 +469,27 @@ export type LibraryDeleteResult =
   | { ok: true }
   | { ok: false; error: string };
 
+export const AUTO_JEV_PROVIDER = "jev";
+export const AUTO_JEV_MODEL_ID = "auto";
+
+export const AUTO_JEV_MODEL: ModelCatalogItem = {
+  id: AUTO_JEV_MODEL_ID,
+  name: "Auto (Jev)",
+  provider: AUTO_JEV_PROVIDER,
+  contextWindow: 200_000,
+  maxTokens: 16_384,
+  reasoning: true,
+  input: ["text", "image"],
+};
+
+export function isAutoJevModel(model: { id?: string; provider?: string } | null | undefined): boolean {
+  if (!model) return false;
+  return (
+    model.provider === AUTO_JEV_PROVIDER &&
+    (model.id === AUTO_JEV_MODEL_ID || model.id === "auto-jev" || model.id === "jev-auto")
+  );
+}
+
 export interface ModelCatalogItem {
   id: string;
   name: string;

@@ -33,7 +33,40 @@ export const JevMethods = {
   logEvent: "logEvent",
   /** Renderer → main: JevInsights ({ impact, scan }). `scan` is null until the first session scan finishes (it is cached). */
   getInsights: "getInsights",
+  /** Classify a prompt or subagent task and select an optimal model tier/candidate. */
+  routeTask: "routeTask",
 } as const;
+
+export type ModelTier = "fast" | "balanced" | "heavy";
+export type ReasoningPreference = "off" | "low" | "medium" | "high";
+
+export interface CandidateModel {
+  id: string;
+  provider: string;
+  name?: string;
+  contextWindow?: number;
+  reasoning?: boolean;
+  cost?: {
+    input?: number;
+    output?: number;
+  };
+}
+
+export interface RouteTaskRequest {
+  task: string;
+  candidateModels?: CandidateModel[];
+  preferredProvider?: string;
+}
+
+export interface RouteTaskResult {
+  ok: boolean;
+  tier: ModelTier;
+  reasoning: ReasoningPreference;
+  confidence: number;
+  model: { id: string; provider: string; name?: string };
+  reason?: string;
+  error?: string;
+}
 
 /** Bridge records on `pi.events` topics studio:to-gui / studio:from-gui (mirrored in the extension). */
 export const JEV_ADVICE_KIND = "jev_advice";

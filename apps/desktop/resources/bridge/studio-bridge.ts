@@ -255,6 +255,15 @@ export default function studioBridge(pi: ExtensionAPI): void {
     if (msg.type === "config") {
       linkedProjects = msg.linkedProjects ?? [];
     } else if (msg.type === "emit") {
+      const payload = msg.data as { kind?: string; enabled?: boolean; router?: string } | undefined;
+      if (msg.topic === "hive:auto-router" || (msg.topic === BRIDGE_TOPICS.fromGui && payload?.kind === "auto_router")) {
+        if (payload?.enabled) {
+          process.env.HIVE_AUTO_ROUTER = payload.router || "jev";
+        } else {
+          delete process.env.HIVE_AUTO_ROUTER;
+        }
+        pi.events.emit("hive:auto-router", payload);
+      }
       pi.events.emit(msg.topic, msg.data);
     } else if (msg.type === "checkpoint_done") {
       if (resolvePendingCheckpoint) {
