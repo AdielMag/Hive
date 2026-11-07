@@ -97,5 +97,6 @@ export const QUOTA_FETCHERS: Record<string, (apiKey: string) => Promise<QuotaGro
   anthropic: fetchAnthropic,
   antigravity: fetchAntigravity,
   "google-antigravity": fetchAntigravity,
+  google: fetchAntigravity,
   "openai-codex": fetchCodex,
 };

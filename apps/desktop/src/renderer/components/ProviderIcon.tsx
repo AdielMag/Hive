@@ -79,7 +79,7 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
   }
 
   // 4. Google Antigravity
-  if (normalized === "antigravity" || normalized === "agy") {
+  if (normalized === "antigravity" || normalized === "agy" || normalized === "google-antigravity") {
     return (
       <svg
         viewBox="0 0 24 24"
