@@ -12,6 +12,10 @@ All notable changes to Hive are documented here. This file is generated on every
 - **desktop:** render question forms inline above composer ([`b3ed3f4`](https://github.com/AdielMag/Hive/commit/b3ed3f48acccd384a0a0263675c0c655a73cfe4b))
 - **jev:** add auto-compaction mid-session on subject change ([`24243f4`](https://github.com/AdielMag/Hive/commit/24243f4dc34532345f237e132a0afe9f7cefded8))
 
+### 🔧 CI / build
+
+- **release:** retry git pushes and support workflow_dispatch ([`6a9cbaf`](https://github.com/AdielMag/Hive/commit/6a9cbafbac04372772650a84d56a1982ffa5541d))
+
 ### 🧹 Other changes
 
 - **jev:** fix type errors in jev-extension tests ([`151b40e`](https://github.com/AdielMag/Hive/commit/151b40e696ea169d8337af0b473f3913c283ca2f))
