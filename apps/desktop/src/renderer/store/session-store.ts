@@ -479,6 +479,8 @@ export interface SessionStoreState {
   respondTabDialog: (tabId: string, response: RpcExtensionUIResponse) => Promise<void>;
   /** Answer (or cancel) the displayed tab's pending question form. */
   respondForm: (result: Omit<StudioFormResult, "kind">) => Promise<void>;
+  /** Answer (or cancel) a specific tab's pending question form. */
+  respondTabForm: (tabId: string, result: Omit<StudioFormResult, "kind">) => Promise<void>;
   /** Ask the runner to terminate a running or queued subagent. Failures surface via `error`. */
   stopSubagent: (target: { agentId?: string; type?: string; description?: string }) => Promise<boolean>;
   deleteSessionFile: (sessionPath: string) => Promise<void>;
@@ -2754,6 +2756,23 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
     }
+  },
+
+  respondTabForm: async (tabId, result) => {
+    if (isDisplayed(tabId) && get().pendingForm?.id === result.id) {
+      return get().respondForm(result);
+    }
+    const key = get().tabs.find((t) => t.id === tabId)?.activeKey ?? (isDisplayed(tabId) ? get().activeKey : null);
+    if (!key) {
+      updateTabUi(tabId, () => ({ pendingForm: null }));
+      return;
+    }
+    try {
+      await window.studio.bridgeEmit(key, BRIDGE_TOPICS.fromGui, { kind: "form_result", ...result });
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+    }
+    updateTabUi(tabId, (ui) => (ui.pendingForm?.id === result.id ? { pendingForm: null } : {}));
   },
 
   stopSubagent: async (target) => {

@@ -11,7 +11,6 @@ import { OnboardingGate } from "./OnboardingGate.tsx";
 import { AppTitleBar } from "./AppTitleBar.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { ExtensionDialogModal } from "./ExtensionDialogModal.tsx";
-import { QuestionFormModal } from "./QuestionFormModal.tsx";
 import { ImagePreviewModal } from "./ImagePreviewModal.tsx";
 import { ProjectSettingsHost } from "./ProjectSettingsModal.tsx";
 import { ChoiceDialogHost } from "./ChoiceDialog.tsx";
@@ -298,7 +297,6 @@ export const WorkbenchLayout: React.FC = () => {
 
       <StatusBar />
       <ExtensionDialogModal />
-      <QuestionFormModal />
       <ImagePreviewModal />
       <ProjectSettingsHost />
       <ChoiceDialogHost />
