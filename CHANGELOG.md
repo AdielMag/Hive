@@ -2,6 +2,16 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.47.0 — 2026-11-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.46.0...v0.47.0)
+
+### ✨ Features
+
+- **desktop:** show status row while Auto (Jev) selects model ([`c6c71ec`](https://github.com/AdielMag/Hive/commit/c6c71ec86ab8c7cc2e7a16243ded6225d4e38132))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`f614cf6`](https://github.com/AdielMag/Hive/commit/f614cf60a34099ffff348ccd0c29aa2a06ee4f23))
+
 ## v0.46.0 — 2026-11-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.45.0...v0.46.0)
 
 ### ✨ Features
