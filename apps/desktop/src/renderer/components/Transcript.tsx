@@ -193,6 +193,7 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
   const tabTranscript = targetTabId ? transcriptsByTab[targetTabId] : undefined;
   const transcript = isDisplayed ? storeTranscript : tabTranscript ?? EMPTY_TRANSCRIPT;
   const pendingStart = useSessionStore((s) => (targetTabId ? s.pendingStarts[targetTabId] : undefined));
+  const autoJevRouting = useSessionStore((s) => s.autoJevRouting);
 
   useEffect(() => {
     if (!isDisplayed && targetTabId && !tabTranscript && targetTab?.sessionPath) {
@@ -313,6 +314,13 @@ export const Transcript: React.FC<{ tabId?: string }> = ({ tabId }) => {
                   <Loader2 size={13} className="spin" /> {PENDING_START_LABELS[pendingStart.step]}
                 </div>
               </>
+            )}
+            {autoJevRouting && (
+              <div className="msg-agent-action-row" data-testid="auto-jev-routing-row">
+                <Loader2 size={14} className="msg-agent-action-row__icon spin" />
+                <span className="msg-agent-action-row__label">Auto (Jev):</span>
+                <span className="msg-agent-action-row__target">Determining best model…</span>
+              </div>
             )}
             {transcript.running && !transcript.streaming && (
               <div className="transcript__working">

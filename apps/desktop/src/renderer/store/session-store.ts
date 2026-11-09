@@ -427,6 +427,8 @@ export interface SessionStoreState {
   promptText: string;
   attachments: AttachedItem[];
   isLoadingModels: boolean;
+  /** True while Jev is determining which model to route to (Auto mode). */
+  autoJevRouting: boolean;
   /** Per live-session-key reload progress/result, so each session shows (and is locked by) its own reload. */
   reloadStates: Record<string, ReloadState>;
   /** Bumped after every successful reload; views that cache registry-derived data re-fetch on change. */
@@ -1174,6 +1176,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   promptText: "",
   attachments: [],
   isLoadingModels: false,
+  autoJevRouting: false,
   reloadStates: {},
   reloadEpoch: 0,
   compactionStates: {},
@@ -2444,6 +2447,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     const configuredModel = activeTab?.model ?? get().selectedModel;
     if (!running && isAutoJevModel(configuredModel) && !promptText.trim().startsWith("/")) {
       try {
+        set({ autoJevRouting: true });
         void window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, { kind: "auto_router", enabled: true, router: "jev" }).catch(() => {});
 
         const rawCandidates = get().models.length > 0 ? get().models : get().allCatalogModels;
@@ -2517,6 +2521,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
         }
       } catch (err) {
         console.warn("[auto-router] Jev routing failed, continuing with current model", err);
+      } finally {
+        set({ autoJevRouting: false });
       }
     }
     const sendRpc = async (command: Parameters<StudioApi["rpc"]>[1]) => {
