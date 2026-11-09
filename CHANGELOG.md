@@ -2,6 +2,18 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.46.0 — 2026-11-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.45.0...v0.46.0)
+
+### ✨ Features
+
+- **desktop:** pass context and preferred provider to auto-routing ([`65f2da6`](https://github.com/AdielMag/Hive/commit/65f2da638b6af714d1be931106d8175b7d6a364b))
+- **desktop:** record and display auto-route notes in transcript ([`91e3f83`](https://github.com/AdielMag/Hive/commit/91e3f830c5db8cd1f8941026cf6bfa63c709845a))
+
+### 🧹 Other changes
+
+- Merge branch 'hive/create-an-eval-cenhamrk-to-the-auto-e31ef9' ([`d49103a`](https://github.com/AdielMag/Hive/commit/d49103a6094848a33d0acab8ad37c6e612c6baa7))
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`cc0761f`](https://github.com/AdielMag/Hive/commit/cc0761f323bf7e54823eb94ad069f96e8318fc1f))
+
 ## v0.45.0 — 2026-11-07 · [diff](https://github.com/AdielMag/Hive/compare/v0.44.0...v0.45.0)
 
 ### ✨ Features
