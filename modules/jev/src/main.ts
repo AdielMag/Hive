@@ -34,7 +34,8 @@ import {
   type UsageSummary,
 } from "./shared.ts";
 import {
-  extractRouterDecisions,
+  buildRouterState,
+  resolveRouterDecision,
   ROUTER_QUESTIONS,
   routeTaskLocally,
   selectModelForTier,
@@ -254,7 +255,7 @@ export default defineMainModule({
           },
           body: JSON.stringify({
             model: settings.model || "jev-latest",
-            state: task.slice(0, 4_000),
+            state: buildRouterState(task, req?.context),
             questions: ROUTER_QUESTIONS,
           }),
           signal: AbortSignal.timeout(4_000),
@@ -289,7 +290,7 @@ export default defineMainModule({
         }
 
         routerConsecutiveFailures = 0;
-        const decisions = extractRouterDecisions(body?.answers);
+        const decisions = resolveRouterDecision(body?.answers);
         const chosen = selectModelForTier(decisions.tier, candidates, preferredProvider);
         if (!chosen) {
           return routeTaskLocally(task, candidates, preferredProvider);
@@ -316,7 +317,10 @@ export default defineMainModule({
           reasoning: decisions.reasoning,
           confidence: decisions.confidence,
           model: { id: chosen.id, provider: chosen.provider, name: chosen.name },
-          reason: `Jev classified task as ${decisions.tier} (${Math.round(decisions.confidence * 100)}% confidence)`,
+          reason:
+            decisions.rawTier === decisions.tier
+              ? `Jev classified task as ${decisions.tier} (${Math.round(decisions.confidence * 100)}% confidence)`
+              : `Jev was unsure (${Math.round(decisions.confidence * 100)}%), so ${decisions.rawTier} was raised to ${decisions.tier}`,
         };
       } catch (err) {
         routerConsecutiveFailures++;

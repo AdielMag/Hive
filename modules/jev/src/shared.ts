@@ -54,6 +54,8 @@ export interface CandidateModel {
 
 export interface RouteTaskRequest {
   task: string;
+  /** Short tail of the conversation (oldest first, "user: ..." / "assistant: ..."), used to resolve follow-ups like "yes". */
+  context?: string;
   candidateModels?: CandidateModel[];
   preferredProvider?: string;
 }
