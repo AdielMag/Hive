@@ -476,7 +476,6 @@ export const AUTO_JEV_MODEL: ModelCatalogItem = {
   id: AUTO_JEV_MODEL_ID,
   name: "Auto (Jev)",
   provider: AUTO_JEV_PROVIDER,
-  contextWindow: 200_000,
   maxTokens: 16_384,
   reasoning: true,
   input: ["text", "image"],

@@ -2476,6 +2476,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
                 }).catch(() => {});
               }
 
+              void window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, {
+                kind: "auto_route_note",
+                model: `${target.provider}/${target.id}`,
+                tier: routeRes.tier,
+                reason: routeRes.reason || `Routed as ${routeRes.tier ?? "balanced"} task`,
+              }).catch(() => {});
               toast({
                 message: `Auto (Jev) routed to ${target.name || target.id} (${routeRes.tier ?? "balanced"})`,
                 kind: "info",

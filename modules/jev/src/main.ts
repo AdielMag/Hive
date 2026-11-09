@@ -316,7 +316,7 @@ export default defineMainModule({
           reasoning: decisions.reasoning,
           confidence: decisions.confidence,
           model: { id: chosen.id, provider: chosen.provider, name: chosen.name },
-          reason: `Jev classified task as ${decisions.tier} (${Math.round(decisions.confidence * 100)}% confidence)`,
+          reason: `Task looks ${decisions.tier} (${Math.round(decisions.confidence * 100)}% confidence)${decisions.reasoning ? `, thinking ${decisions.reasoning}` : ""}, so ${chosen.name || chosen.id} fits best`,
         };
       } catch (err) {
         routerConsecutiveFailures++;

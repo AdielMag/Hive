@@ -425,8 +425,9 @@ const TimelineRow = memo(
             </span>
           </div>
         );
-      case "marker":
+      case "marker": {
         return <div className="msg-marker" data-item-key={item.key}>{item.text}</div>;
+      }
       case "summary":
         return (
           <SummaryMessage
@@ -437,6 +438,19 @@ const TimelineRow = memo(
           />
         );
       case "custom": {
+        if (item.customType === "auto-route") {
+          const d = item.details as { model?: string; tier?: string; reason?: string } | undefined;
+          return (
+            <div className="msg-agent-action-row" data-item-key={item.key}>
+              <Bot size={14} className="msg-agent-action-row__icon" />
+              <span className="msg-agent-action-row__label">Auto picked:</span>
+              <span className="msg-agent-action-row__target" title={d?.reason}>
+                {d?.model} — {d?.reason}
+              </span>
+              {d?.tier && <span className="ui-chip ui-chip--ok">{d.tier}</span>}
+            </div>
+          );
+        }
         if (item.customType === "subagent-notification") {
           const notif = item.details as NotificationDetails | undefined;
           const targetCard = notif?.id && ctx ? ctx.annotations.subagents.cards.get(notif.id) : undefined;

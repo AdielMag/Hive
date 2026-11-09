@@ -337,7 +337,11 @@ export default function studioBridge(pi: ExtensionAPI): void {
     // Subagent termination: relay to the pi-subagents extension's cross-extension RPC and report back.
     unsubFromGui?.();
     unsubFromGui = pi.events.on(BRIDGE_TOPICS.fromGui, (data) => {
-      const req = data as { kind?: unknown; id?: unknown; agentId?: unknown; type?: unknown; description?: unknown } | null;
+      const req = data as { kind?: unknown; id?: unknown; agentId?: unknown; type?: unknown; description?: unknown; model?: unknown; tier?: unknown; reason?: unknown } | null;
+      if (req?.kind === "auto_route_note" && typeof req.model === "string") {
+        pi.appendEntry("auto-route", { model: req.model, tier: req.tier, reason: req.reason });
+        return;
+      }
       if (!req || req.kind !== "subagent_stop" || typeof req.id !== "string") return;
       const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
       stopSubagent(req.id, { agentId: str(req.agentId), type: str(req.type), description: str(req.description) });

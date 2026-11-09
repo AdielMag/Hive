@@ -704,6 +704,13 @@ export function buildTimeline(state: TranscriptState): Timeline {
       case "model_change":
         setPendingChange("model", { kind: "marker", key, text: `Model → ${entry.provider}/${entry.modelId}` });
         break;
+      case "custom": {
+        const c = entry as { customType?: string; data?: { model?: string; reason?: string } };
+        if (c.customType === "auto-route") {
+          setPendingChange("model", { kind: "custom", key, customType: "auto-route", text: `${c.data?.model ?? ""}: ${c.data?.reason ?? ""}`, images: [], details: c.data });
+        }
+        break;
+      }
       case "thinking_level_change":
         setPendingChange("thinking", { kind: "marker", key, text: `Thinking → ${entry.thinkingLevel}` });
         break;
