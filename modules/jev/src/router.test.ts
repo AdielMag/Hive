@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildRouterState,
+  resolveRouterDecision,
   classifyModelTier,
   extractRouterDecisions,
   filterRealCandidates,
@@ -106,5 +108,60 @@ describe("router", () => {
     const heavyRes = routeTaskLocally("architect and redesign entire authentication system", candidates);
     expect(heavyRes.tier).toBe("heavy");
     expect(heavyRes.model.id).toBe("claude-opus-4-6");
+  });
+});
+
+describe("router quality policy", () => {
+  const m = (provider: string, id: string, cost?: number, extra: Partial<CandidateModel> = {}): CandidateModel => ({
+    provider,
+    id,
+    name: id,
+    ...(cost != null ? { cost: { input: cost } } : {}),
+    ...extra,
+  });
+
+  it("classifies real-world flagship / fast ids", () => {
+    expect(classifyModelTier(m("openai", "gpt-5-pro", 15))).toBe("heavy");
+    expect(classifyModelTier(m("deepseek", "deepseek-reasoner"))).toBe("heavy");
+    expect(classifyModelTier(m("moonshot", "kimi-k2-thinking"))).toBe("heavy");
+    expect(classifyModelTier(m("xai", "grok-4-fast"))).toBe("fast");
+    expect(classifyModelTier(m("openai", "gpt-5-codex"))).toBe("balanced");
+    expect(classifyModelTier(m("openai", "gpt-5"))).toBe("balanced");
+  });
+
+  it("picks the strongest balanced and heavy models, cheapest fast model", () => {
+    const pool = [
+      m("openai", "gpt-5-nano", 0.05),
+      m("google", "gemini-3-flash", 0.3),
+      m("openai", "gpt-5", 1.25),
+      m("anthropic", "claude-sonnet-4-6", 3),
+      m("anthropic", "claude-opus-4-6", 15, { reasoning: true }),
+      m("openai", "gpt-5-pro", 20, { reasoning: true }),
+    ];
+    expect(selectModelForTier("fast", pool)?.id).toBe("gpt-5-nano");
+    expect(selectModelForTier("balanced", pool)?.id).toBe("claude-sonnet-4-6");
+    expect(selectModelForTier("heavy", pool)?.id).toBe("gpt-5-pro");
+    expect(selectModelForTier("balanced", pool, "openai")?.id).toBe("gpt-5");
+  });
+
+  it("promotes unsure fast verdicts and floors reasoning by tier", () => {
+    const ans = (tier: string, conf: number, reasoning = "off") => ({
+      tier: { choice: tier, confidence: conf },
+      reasoning: { choice: reasoning },
+    });
+    expect(resolveRouterDecision(ans("fast", 0.95)).tier).toBe("fast");
+    expect(resolveRouterDecision(ans("fast", 0.5)).tier).toBe("balanced");
+    expect(resolveRouterDecision(ans("balanced", 0.2)).tier).toBe("balanced");
+    expect(resolveRouterDecision(ans("balanced", 0.9, "off")).reasoning).toBe("low");
+    expect(resolveRouterDecision(ans("heavy", 0.9, "low")).reasoning).toBe("high");
+    expect(resolveRouterDecision(ans("fast", 0.9, "off")).reasoning).toBe("off");
+  });
+
+  it("builds router state with optional conversation context", () => {
+    expect(buildRouterState("hi")).toBe("hi");
+    expect(buildRouterState("yes", "assistant: patch it?")).toEqual({
+      recent_conversation: "assistant: patch it?",
+      new_user_message: "yes",
+    });
   });
 });

@@ -44,6 +44,7 @@ import { clampThinkingLevel, getSupportedThinkingLevels } from "../lib/models/th
 import { parseAgentResultText, type SubagentView } from "../lib/ai/subagents.ts";
 import { getStoredItem, setStoredItem } from "../lib/storage.ts";
 import { filterDisabledProviders, withProviderDisabled } from "../lib/provider-filter.ts";
+import { getTimeline } from "../lib/transcript-timeline.ts";
 
 export interface SubagentModalTarget {
   view: SubagentView;
@@ -205,6 +206,27 @@ export function setCompactionState(key: string, state: CompactionState | null): 
       }, COMPACTION_ERROR_MS),
     );
   }
+}
+
+/** Provider Auto last routed to per session; keeps a conversation on one provider (warm cache) when the tier allows. */
+const lastAutoProvider = new Map<string, string>();
+
+/** Last few conversation turns as plain text, so Jev can route short follow-ups ("yes", "go ahead") correctly. */
+function buildRoutingContext(items: ReadonlyArray<{ kind: string; text?: string; blocks?: Array<{ type: string; text?: string }> }>): string {
+  const lines: string[] = [];
+  for (const item of items.slice(-4)) {
+    if (item.kind === "user" && item.text) {
+      lines.push(`user: ${item.text.slice(0, 400)}`);
+    } else if (item.kind === "assistant" && item.blocks) {
+      const text = item.blocks
+        .filter((b) => b.type === "text" && b.text)
+        .map((b) => b.text)
+        .join("\n")
+        .trim();
+      if (text) lines.push(`assistant: ${text.slice(-600)}`);
+    }
+  }
+  return lines.join("\n");
 }
 
 export const __resetCompactionStates = () => {
@@ -2447,6 +2469,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
             reason?: string;
           }>("jev", "routeTask", {
             task: promptText,
+            context: buildRoutingContext(getTimeline(get().transcript).items),
+            preferredProvider: lastAutoProvider.get(activeKey),
             candidateModels: candidates.map((c) => ({
               id: c.id,
               provider: c.provider,
@@ -2475,6 +2499,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
                   level: targetLevel as any,
                 }).catch(() => {});
               }
+
+              lastAutoProvider.set(activeKey, target.provider);
 
               void window.studio.bridgeEmit(activeKey, BRIDGE_TOPICS.fromGui, {
                 kind: "auto_route_note",
