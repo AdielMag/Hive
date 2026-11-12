@@ -8,6 +8,7 @@ import {
   EyeOff,
   Gauge,
   Loader2,
+  Route,
   Trash2,
   TrendingUp,
 } from "lucide-react";
@@ -18,12 +19,17 @@ import {
   INSIGHTS_TAB_KIND,
   JevMethods,
   MAIN_MODEL_PRICE_PER_MTOK_USD,
+  MODEL_TIERS,
+  type CandidateModel,
+  type ModelTier,
+  type RouterSettings,
   type JevSettingsPatch,
   type JevSettingsView,
   type TestKeyResult,
   type UsageBucket,
   type UsageSummary,
 } from "../shared.ts";
+import { candidateKey, classifyModelTier, enabledCandidates, pickRoutedModel } from "../router.ts";
 import "./jev.css";
 
 const usd = (n: number | null, digits = 4): string => (n === null ? "n/a" : `$${n.toFixed(n >= 1 ? 2 : n > 0 && n < 0.0001 ? 6 : digits)}`);
@@ -109,6 +115,137 @@ export const FeatureSplit: React.FC<{ byFeature: Record<string, UsageBucket> }> 
         </div>
       ))}
     </div>
+  );
+};
+
+const TIER_LABEL: Record<ModelTier, string> = { fast: "Fast", balanced: "Balanced", heavy: "Heavy" };
+const TIER_HINT: Record<ModelTier, string> = {
+  fast: "Lookups, status checks, renames, mechanical edits.",
+  balanced: "Features, tests, ordinary bug fixes, reviews.",
+  heavy: "Hard debugging, architecture, security, migrations.",
+};
+const modelLabel = (m: CandidateModel): string => `${m.name || m.id} · ${m.provider}`;
+
+/** Auto (Jev) router: tier pins, the model pool, and the decision policy. */
+export const RouterCard: React.FC<{
+  host: ModuleHost;
+  router: RouterSettings;
+  save: (patch: JevSettingsPatch) => Promise<void>;
+  hasJev: boolean;
+}> = ({ host, router, save, hasJev }) => {
+  const read = useCallback(() => enabledCandidates(host.models.catalog(), host.models.enabledKeys()), [host]);
+  const [models, setModels] = useState<CandidateModel[]>(read);
+  useEffect(() => {
+    let alive = true;
+    if (read().length === 0) host.models.loadCatalog().then(() => alive && setModels(read()), () => {});
+    return () => void (alive = false);
+  }, [host, read]);
+
+  const excluded = new Set(router.excluded);
+  const byTier: Record<ModelTier, CandidateModel[]> = { fast: [], balanced: [], heavy: [] };
+  for (const m of models) byTier[classifyModelTier(m)].push(m);
+  const save$ = (patch: JevSettingsPatch["router"]) => void save({ router: patch });
+  // Latest list, so quick successive clicks don't overwrite each other before the save round-trip returns.
+  const excludedRef = useRef(router.excluded);
+  useEffect(() => void (excludedRef.current = router.excluded), [router.excluded]);
+  const toggle = (key: string, include: boolean) => {
+    const next = include ? excludedRef.current.filter((k) => k !== key) : [...excludedRef.current, key];
+    excludedRef.current = next;
+    // Excluding a pinned model also unpins it: a pin the router would ignore is just confusing.
+    const unpin = include ? {} : Object.fromEntries(MODEL_TIERS.filter((t) => router.tierModels[t] === key).map((t) => [t, null]));
+    save$({ excluded: next, ...(Object.keys(unpin).length ? { tierModels: unpin } : {}) });
+  };
+
+  return (
+    <section className="jev-card">
+      <div className="jev-card__head">
+        <span className="jev-icon">
+          <Route size={18} />
+        </span>
+        <div>
+          <h3 className="jev-card__title">Auto (Jev) routing</h3>
+          <p className="jev-card__desc">
+            When <code>Auto (Jev)</code> is the selected model, each prompt (and each subagent task) is classified as fast, balanced or heavy and sent to a
+            model for that tier. Pin a model per tier, or leave it on Automatic to pick from your enabled models.
+          </p>
+        </div>
+      </div>
+
+      <h4 className="jev-card__sub">Model per tier</h4>
+      {MODEL_TIERS.map((tier) => {
+        const auto = pickRoutedModel(tier, models, undefined, { excluded: router.excluded });
+        const pin = router.tierModels[tier];
+        const stale = pin && models.length > 0 && !models.some((m) => candidateKey(m) === pin);
+        return (
+          <Row key={tier} title={TIER_LABEL[tier]} hint={TIER_HINT[tier]}>
+            <select
+              className="jev-input jev-select"
+              aria-label={`${TIER_LABEL[tier]} tier model`}
+              value={pin ?? ""}
+              onChange={(e) => save$({ tierModels: { [tier]: e.target.value || null } })}
+            >
+              <option value="">{`Automatic${auto ? ` (${auto.name || auto.id})` : ""}`}</option>
+              {stale && <option value={pin}>{`${pin} (unavailable)`}</option>}
+              {MODEL_TIERS.filter((t) => byTier[t].length > 0).map((t) => (
+                <optgroup key={t} label={`${TIER_LABEL[t]} models`}>
+                  {byTier[t].map((m) => (
+                    <option key={candidateKey(m)} value={candidateKey(m)}>
+                      {modelLabel(m)}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </Row>
+        );
+      })}
+
+      <h4 className="jev-card__sub">Models Auto may use</h4>
+      {models.length === 0 ? (
+        <p className="jev-card__desc">No enabled models found. Enable models in the model picker first.</p>
+      ) : (
+        <div className="jev-modellist" role="group" aria-label="Models Auto may use">
+          {models.map((m) => {
+            const key = candidateKey(m);
+            const tier = classifyModelTier(m);
+            return (
+              <label key={key} className="jev-modellist__item">
+                <input type="checkbox" checked={!excluded.has(key)} onChange={(e) => toggle(key, e.target.checked)} />
+                <span className="jev-modellist__name">{modelLabel(m)}</span>
+                <span className={`ui-chip ui-chip--muted jev-modellist__tier jev-modellist__tier--${tier}`}>{TIER_LABEL[tier]}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      <h4 className="jev-card__sub">Decisions</h4>
+      <Row
+        title="Classify with Jev"
+        hint={
+          hasJev
+            ? "Off uses a free offline keyword heuristic instead of a Jev call per prompt (less accurate, no cost)."
+            : "Needs a saved key and the accepted privacy notice above; until then the offline heuristic is used."
+        }
+      >
+        <Switch label="Classify with Jev" checked={router.useJev} onChange={(v) => save$({ useJev: v })} />
+      </Row>
+      <Row title="Promote unsure fast verdicts" hint="A fast verdict below this confidence is raised to balanced, since under-serving a task costs more than over-serving it.">
+        <NumberField
+          label="Minimum confidence for fast"
+          prefix="%"
+          max={100}
+          value={Math.round(router.minConfidence * 100)}
+          onCommit={(v) => save$({ minConfidence: (v ?? 70) / 100 })}
+        />
+      </Row>
+      <Row title="Set thinking level" hint="Let the router raise or lower the session's thinking level to match the task. Off keeps your own setting.">
+        <Switch label="Set thinking level" checked={router.applyThinking} onChange={(v) => save$({ applyThinking: v })} />
+      </Row>
+      <Row title="Announce routes" hint="Show a toast naming the model each prompt was routed to.">
+        <Switch label="Announce routes" checked={router.notify} onChange={(v) => save$({ notify: v })} />
+      </Row>
+    </section>
   );
 };
 
@@ -497,6 +634,8 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
               <Switch label="ask_jev tool" checked={settings.askJev.enabled} onChange={(v) => void save({ askJev: { enabled: v } })} />
             </Row>
           </section>
+
+          <RouterCard host={host} router={settings.router} save={save} hasJev={settings.hasKey && Boolean(settings.consentAt)} />
         </div>
       )}
     </div>

@@ -506,6 +506,190 @@ export async function decideSubagentDispatch(
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// Auto (Jev) model routing for subagents (mirrored from src/router.ts; router-settings.test.ts checks parity)
+// ---------------------------------------------------------------------------------------------------------
+
+export type RouteTier = "fast" | "balanced" | "heavy";
+
+export interface RouteCandidate {
+  id: string;
+  provider: string;
+  name?: string;
+  contextWindow?: number;
+  reasoning?: boolean;
+  cost?: { input?: number; output?: number };
+}
+
+/** Mirrored subset of JevSettings.router. */
+export interface RouterPrefs {
+  useJev: boolean;
+  tierModels: Record<RouteTier, string | null>;
+  excluded: string[];
+  minConfidence: number;
+}
+
+const ROUTER_DEFAULTS: RouterPrefs = { useJev: true, tierModels: { fast: null, balanced: null, heavy: null }, excluded: [], minConfidence: 0.7 };
+const routerKey = (v: unknown): string | null => (typeof v === "string" && /^[^/\s]+\/\S/.test(v.trim()) ? v.trim() : null);
+
+/** Router prefs straight from config.json: they apply even without an API key (pins and exclusions are local). */
+export function loadRouterPrefs(env: Env = process.env): RouterPrefs {
+  try {
+    const file = env.HIVE_JEV_CONFIG;
+    if (!file || !fs.existsSync(file)) return { ...ROUTER_DEFAULTS, tierModels: { ...ROUTER_DEFAULTS.tierModels }, excluded: [] };
+    const r = (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, any>)?.router ?? {};
+    const pins = r.tierModels ?? {};
+    return {
+      useJev: r.useJev !== false,
+      tierModels: { fast: routerKey(pins.fast), balanced: routerKey(pins.balanced), heavy: routerKey(pins.heavy) },
+      excluded: Array.isArray(r.excluded) ? r.excluded.map(routerKey).filter((k: string | null): k is string => k !== null) : [],
+      minConfidence:
+        typeof r.minConfidence === "number" && Number.isFinite(r.minConfidence) ? Math.min(1, Math.max(0, r.minConfidence)) : ROUTER_DEFAULTS.minConfidence,
+    };
+  } catch {
+    return { ...ROUTER_DEFAULTS, tierModels: { ...ROUTER_DEFAULTS.tierModels }, excluded: [] };
+  }
+}
+
+export const ROUTER_QUESTIONS: Record<string, Question> = {
+  tier: {
+    type: "choice",
+    instructions:
+      "Which model capability tier does this coding task need? Judge the DIFFICULTY and the COST OF A WRONG ANSWER, not the length of the message. " +
+      "The input holds the new user message and, when present, the recent conversation; use the conversation only to understand short follow-ups such as 'yes' or 'go ahead'. " +
+      "Prefer the weakest tier that will reliably do the job, but never under-serve hard or risky work.",
+    criteria: {
+      fast: "Trivial and fully specified: lookups, status checks, listing or reading files, a typo or rename, a purely mechanical edit (even across many files), formatting, simple git operations such as commit or delete a branch, a greeting, or explaining a basic concept.",
+      balanced: "Ordinary engineering with a clear scope: implementing a feature or endpoint, writing standard unit tests, fixing an ordinary bug or an error from a stack trace, refactoring one module, resolving merge conflicts, writing docs, code review, or adding retry, logging or a flag.",
+      heavy: "Hard or high-stakes work where a wrong answer is costly: vague or open-ended 'why is it broken' or 'make it much faster' problems, root-causing races, deadlocks, memory leaks or flaky behaviour, architecture and system design, data migrations, non-trivial algorithms and concurrency or sync logic, security, authentication or cryptography (even when the change is small), property-based or formal verification, large new features, and performance profiling and optimisation. If unsure between balanced and heavy for risky or ambiguous work, choose heavy.",
+    },
+  },
+};
+
+export function classifyRouteTier(model: RouteCandidate): RouteTier {
+  const id = (model.id || "").toLowerCase();
+  const name = (model.name || "").toLowerCase();
+  const text = `${model.provider || ""}/${id} ${name}`;
+  if (
+    /\b(opus|heavy|deepseek-r1|deepseek-reasoner)\b/i.test(text) ||
+    /(^|[-_ /])(o1|o3|o4|r1)([-_ /]|$)/i.test(id) ||
+    /(^|[-_ /])(gpt|o\d)[\w.]*-pro\b/i.test(id) ||
+    /kimi-k\d+(\.\d+)?-thinking/i.test(id)
+  ) {
+    return "heavy";
+  }
+  const isMini = /(^|[-_ /])(mini|small)([-_ /]|$)/i.test(id) && !/(gemini|minimax)/i.test(id);
+  if (isMini || /\b(flash|haiku|instant|nano|lite|fast)\b/i.test(text)) return "fast";
+  const cost = model.cost?.input;
+  if (typeof cost === "number" && Number.isFinite(cost) && cost > 0) {
+    if (cost < 1.0) return "fast";
+    if (cost >= 5.0) return "heavy";
+  }
+  return "balanced";
+}
+
+const isRealCandidate = (m: RouteCandidate): boolean =>
+  Boolean(m && m.id && m.provider) && !(m.provider === "jev" && (m.id === "auto" || m.id === "auto-jev" || m.id === "jev-auto"));
+
+export function selectRouteModel(tier: RouteTier, raw: RouteCandidate[] = [], preferredProvider?: string): RouteCandidate | null {
+  const candidates = raw.filter(isRealCandidate);
+  if (candidates.length === 0) return null;
+  const grouped: Record<RouteTier, RouteCandidate[]> = { fast: [], balanced: [], heavy: [] };
+  for (const m of candidates) grouped[classifyRouteTier(m)].push(m);
+  grouped.fast.sort((a, b) => (a.cost?.input ?? 999) - (b.cost?.input ?? 999));
+  grouped.balanced.sort((a, b) => (b.cost?.input ?? 0) - (a.cost?.input ?? 0) || (b.contextWindow ?? 0) - (a.contextWindow ?? 0));
+  grouped.heavy.sort(
+    (a, b) => (b.reasoning ? 1 : 0) - (a.reasoning ? 1 : 0) || (b.cost?.input ?? 0) - (a.cost?.input ?? 0) || (b.contextWindow ?? 0) - (a.contextWindow ?? 0),
+  );
+  const order: Record<RouteTier, RouteTier[]> = { fast: ["fast", "balanced", "heavy"], balanced: ["balanced", "heavy", "fast"], heavy: ["heavy", "balanced", "fast"] };
+  for (const t of order[tier]) {
+    const list = grouped[t];
+    if (list.length > 0 && list[0]) {
+      const pref = preferredProvider ? list.find((m) => m.provider.toLowerCase() === preferredProvider.toLowerCase()) : undefined;
+      return pref ?? list[0];
+    }
+  }
+  return candidates[0] ?? null;
+}
+
+/** Exclusions and per-tier pins on top of selectRouteModel (mirrors pickRoutedModel). */
+export function pickRouteModel(
+  tier: RouteTier,
+  raw: RouteCandidate[] = [],
+  preferredProvider?: string,
+  prefs?: Partial<Pick<RouterPrefs, "tierModels" | "excluded">>,
+): RouteCandidate | null {
+  const all = raw.filter(isRealCandidate);
+  const excluded = new Set(prefs?.excluded ?? []);
+  const pool = excluded.size ? all.filter((m) => !excluded.has(`${m.provider}/${m.id}`)) : all;
+  const candidates = pool.length > 0 ? pool : all;
+  const pin = prefs?.tierModels?.[tier];
+  const pinned = pin ? candidates.find((m) => `${m.provider}/${m.id}` === pin) : undefined;
+  return pinned ?? selectRouteModel(tier, candidates, preferredProvider);
+}
+
+/** Offline tier guess (mirrors routeTaskLocally's keyword heuristic). */
+export function localRouteTier(task: string): RouteTier {
+  const text = (task || "").toLowerCase();
+  const isLookup = /\b(search|find|grep|locate|where is|list files?|check status|git status|pwd|cat)\b/i.test(text);
+  const isComplex = /\b(architect|refactor entire|redesign|deep bug|hard bug|root cause|concurrency|race condition)\b/i.test(text);
+  return isComplex ? "heavy" : isLookup ? "fast" : "balanced";
+}
+
+export interface RouteTaskOutcome extends RouteCandidate {
+  tier: RouteTier;
+  reason: string;
+}
+
+/**
+ * Picks a model for a subagent task (called by the subagent extension when Auto (Jev) is on). Honours the user's
+ * router settings: pinned models are added to the pool so a pin always wins (the pin is trusted: this file cannot see
+ * Hive's enabled-model list, and Settings unpins a model when it is excluded), excluded models are dropped, and
+ * `useJev: false` (or no key/consent) uses the offline heuristic. Never throws; null = keep the agent's own model.
+ */
+export async function routeTaskWithJev(
+  task: string,
+  candidates: RouteCandidate[] = [],
+  opts: { env?: Env; fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
+): Promise<RouteTaskOutcome | null> {
+  try {
+    const env = opts.env ?? process.env;
+    const prefs = loadRouterPrefs(env);
+    const pool = [...candidates];
+    for (const pin of Object.values(prefs.tierModels)) {
+      if (!pin || pool.some((m) => `${m.provider}/${m.id}` === pin)) continue;
+      const slash = pin.indexOf("/");
+      pool.push({ provider: pin.slice(0, slash), id: pin.slice(slash + 1), name: pin });
+    }
+    let tier = localRouteTier(task);
+    let reason = `Heuristic route to ${tier} tier`;
+    const settings = prefs.useJev ? loadSettings(env) : null;
+    if (settings) {
+      const r = await callJev({
+        settings,
+        feature: "router",
+        state: (task || "").slice(0, 4_000),
+        questions: ROUTER_QUESTIONS,
+        timeoutMs: 4_000,
+        signal: opts.signal,
+        fetchImpl: opts.fetchImpl,
+        env,
+      });
+      const ans = r.ok ? (r.answers?.tier as any) : null;
+      const choice = String(ans?.choice ?? "").toLowerCase();
+      if (choice === "fast" || choice === "balanced" || choice === "heavy") {
+        const conf = typeof ans.confidence === "number" && Number.isFinite(ans.confidence) ? Math.max(0, Math.min(1, ans.confidence)) : 0.8;
+        tier = choice === "fast" && conf < prefs.minConfidence ? "balanced" : choice;
+        reason = `Jev classified task as ${tier} (${Math.round(conf * 100)}% confidence)`;
+      }
+    }
+    const model = pickRouteModel(tier, pool, undefined, prefs);
+    return model ? { ...model, tier, reason } : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // ask_jev helpers
 // ---------------------------------------------------------------------------------------------------------
 

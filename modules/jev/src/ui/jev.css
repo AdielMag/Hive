@@ -352,6 +352,53 @@
 .jev-row__control {
   flex-shrink: 0;
 }
+.jev-select {
+  width: 260px;
+  max-width: 40vw;
+  font-family: inherit;
+  cursor: pointer;
+}
+.jev-select option,
+.jev-select optgroup {
+  background: var(--bg-elevated, #1b1b1f);
+  color: var(--text-primary);
+}
+.jev-modellist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 2px 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 6px 2px;
+}
+.jev-modellist__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.jev-modellist__item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.jev-modellist__item input {
+  accent-color: rgb(var(--accent-rgb));
+  flex-shrink: 0;
+}
+.jev-modellist__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jev-modellist__tier {
+  flex-shrink: 0;
+}
 .jev-actions {
   display: flex;
   justify-content: flex-end;

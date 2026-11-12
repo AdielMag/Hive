@@ -2471,6 +2471,8 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
             confidence?: number;
             model?: { id: string; provider: string; name?: string };
             reason?: string;
+            applyThinking?: boolean;
+            notify?: boolean;
           }>("jev", "routeTask", {
             task: promptText,
             context: buildRoutingContext(getTimeline(get().transcript).items),
@@ -2480,6 +2482,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
               provider: c.provider,
               name: c.name,
               reasoning: Boolean(c.reasoning),
+              contextWindow: c.contextWindow,
               cost: c.cost,
             })),
           }).catch(() => null);
@@ -2496,7 +2499,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
                 modelId: target.id,
               });
 
-              if (setRes?.ok && routeRes.reasoning && target.reasoning) {
+              if (setRes?.ok && routeRes.applyThinking !== false && routeRes.reasoning && target.reasoning) {
                 const targetLevel = routeRes.reasoning === "high" ? "high" : routeRes.reasoning === "low" ? "low" : "off";
                 void window.studio.rpc(activeKey, {
                   type: "set_thinking_level",
@@ -2512,10 +2515,12 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
                 tier: routeRes.tier,
                 reason: routeRes.reason || `Routed as ${routeRes.tier ?? "balanced"} task`,
               }).catch(() => {});
-              toast({
-                message: `Auto (Jev) routed to ${target.name || target.id} (${routeRes.tier ?? "balanced"})`,
-                kind: "info",
-              });
+              if (routeRes.notify !== false) {
+                toast({
+                  message: `Auto (Jev) routed to ${target.name || target.id} (${routeRes.tier ?? "balanced"})`,
+                  kind: "info",
+                });
+              }
             }
           }
         }

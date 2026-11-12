@@ -1,4 +1,9 @@
-import type { CandidateModel, ModelTier, ReasoningPreference, RouteTaskResult } from "./shared.ts";
+import type { CandidateModel, ModelTier, ReasoningPreference, RouterSettings, RouteTaskResult } from "./shared.ts";
+
+export const candidateKey = (m: Pick<CandidateModel, "provider" | "id">): string => `${m.provider}/${m.id}`;
+
+/** Router settings that affect model selection (all optional, so callers without settings keep the old behaviour). */
+export type RouterPrefs = Partial<Pick<RouterSettings, "tierModels" | "excluded" | "minConfidence">>;
 
 export const ROUTER_QUESTIONS = {
   tier: {
@@ -131,6 +136,50 @@ export function selectModelForTier(
   return candidates[0] ?? null;
 }
 
+/** The models Auto (Jev) can route to: the catalog limited to the user's enabled models (same rule as the composer). */
+export function enabledCandidates(catalog: readonly any[] = [], enabledKeys: readonly string[] = []): CandidateModel[] {
+  const out: CandidateModel[] = [];
+  const seen = new Set<string>();
+  for (const m of catalog) {
+    if (!m || typeof m.id !== "string" || typeof m.provider !== "string") continue;
+    const key = `${m.provider}/${m.id}`;
+    if (seen.has(key)) continue;
+    if (enabledKeys.length > 0 && !enabledKeys.includes(key) && !enabledKeys.includes(m.id)) continue;
+    seen.add(key);
+    out.push({
+      id: m.id,
+      provider: m.provider,
+      name: typeof m.name === "string" ? m.name : undefined,
+      reasoning: Boolean(m.reasoning),
+      contextWindow: typeof m.contextWindow === "number" ? m.contextWindow : undefined,
+      cost: m.cost && typeof m.cost === "object" ? { input: m.cost.input, output: m.cost.output } : undefined,
+    });
+  }
+  return filterRealCandidates(out);
+}
+
+/**
+ * Applies the user's router settings on top of `selectModelForTier`: excluded models leave the pool (unless that would
+ * empty it), and a pinned model for the tier wins when it is still a candidate. Never fails because of a stale pin.
+ */
+export function pickRoutedModel(
+  tier: ModelTier,
+  rawCandidates: CandidateModel[] = [],
+  preferredProvider?: string,
+  prefs?: RouterPrefs,
+): CandidateModel | null {
+  const all = filterRealCandidates(rawCandidates);
+  const excluded = new Set(prefs?.excluded ?? []);
+  const pool = excluded.size ? all.filter((m) => !excluded.has(candidateKey(m))) : all;
+  const candidates = pool.length > 0 ? pool : all;
+  const pin = prefs?.tierModels?.[tier];
+  if (pin) {
+    const pinned = candidates.find((m) => candidateKey(m) === pin);
+    if (pinned) return pinned;
+  }
+  return selectModelForTier(tier, candidates, preferredProvider);
+}
+
 /** Parses Jev raw answers into clean typed router decisions. */
 export function extractRouterDecisions(answers: Record<string, any> | undefined | null): {
   tier: ModelTier;
@@ -174,7 +223,7 @@ const REASONING_RANK: Record<ReasoningPreference, number> = { off: 0, low: 1, me
  * Jev's raw answers + the safety policy used in production: promote the tier when Jev is unsure, and never
  * let the thinking level sit below what the final tier warrants.
  */
-export function resolveRouterDecision(answers: Record<string, any> | undefined | null): {
+export function resolveRouterDecision(answers: Record<string, any> | undefined | null, minConfidence: number = LOW_CONFIDENCE): {
   tier: ModelTier;
   reasoning: ReasoningPreference;
   confidence: number;
@@ -182,7 +231,7 @@ export function resolveRouterDecision(answers: Record<string, any> | undefined |
 } {
   const raw = extractRouterDecisions(answers);
   let tier = raw.tier;
-  if (tier === "fast" && raw.confidence < LOW_CONFIDENCE) tier = "balanced";
+  if (tier === "fast" && raw.confidence < minConfidence) tier = "balanced";
   const floor = TIER_MIN_REASONING[tier];
   const reasoning = REASONING_RANK[raw.reasoning] >= REASONING_RANK[floor] ? raw.reasoning : floor;
   return { tier, reasoning, confidence: raw.confidence, rawTier: raw.tier };
@@ -193,6 +242,7 @@ export function routeTaskLocally(
   task: string,
   candidates: CandidateModel[] = [],
   preferredProvider?: string,
+  prefs?: RouterPrefs,
 ): RouteTaskResult {
   const text = (task || "").toLowerCase();
   let tier: ModelTier = "balanced";
@@ -208,7 +258,7 @@ export function routeTaskLocally(
     reasoning = "high";
   }
 
-  const model = selectModelForTier(tier, candidates, preferredProvider);
+  const model = pickRoutedModel(tier, candidates, preferredProvider, prefs);
 
   if (!model) {
     return {

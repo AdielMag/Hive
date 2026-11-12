@@ -68,6 +68,54 @@ export interface RouteTaskResult {
   model: { id: string; provider: string; name?: string };
   reason?: string;
   error?: string;
+  /** False when the user turned off "Set thinking level" in the router settings: keep the session's thinking level. */
+  applyThinking?: boolean;
+  /** False when the user turned off route toasts. */
+  notify?: boolean;
+}
+
+export const MODEL_TIERS: readonly ModelTier[] = ["fast", "balanced", "heavy"];
+
+/** Auto (Jev) router preferences. Model references are `provider/id` keys. Mirrored in the Pi extension. */
+export interface RouterSettings {
+  /** Ask Jev to classify each task. Off = the free offline heuristic only. */
+  useJev: boolean;
+  /** Pin a model per tier; null = pick automatically from the enabled models. */
+  tierModels: Record<ModelTier, string | null>;
+  /** Models never chosen by the router. */
+  excluded: string[];
+  /** Let the router set the session's thinking level. */
+  applyThinking: boolean;
+  /** A "fast" verdict below this confidence (0-1) is promoted to balanced. */
+  minConfidence: number;
+  /** Show a toast naming the routed model. */
+  notify: boolean;
+}
+
+export const DEFAULT_ROUTER_SETTINGS: RouterSettings = {
+  useJev: true,
+  tierModels: { fast: null, balanced: null, heavy: null },
+  excluded: [],
+  applyThinking: true,
+  minConfidence: 0.7,
+  notify: true,
+};
+
+const modelKey = (v: unknown): string | null => (typeof v === "string" && /^[^/\s]+\/\S/.test(v.trim()) ? v.trim() : null);
+
+export function normalizeRouterSettings(raw: unknown): RouterSettings {
+  const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  const pins = typeof r.tierModels === "object" && r.tierModels !== null ? (r.tierModels as Record<string, unknown>) : {};
+  const d = DEFAULT_ROUTER_SETTINGS;
+  const conf = typeof r.minConfidence === "number" && Number.isFinite(r.minConfidence) ? Math.min(1, Math.max(0, r.minConfidence)) : d.minConfidence;
+  return {
+    useJev: typeof r.useJev === "boolean" ? r.useJev : d.useJev,
+    tierModels: { fast: modelKey(pins.fast), balanced: modelKey(pins.balanced), heavy: modelKey(pins.heavy) },
+    excluded: Array.isArray(r.excluded) ? [...new Set(r.excluded.map(modelKey).filter((k): k is string => k !== null))] : [],
+    applyThinking: typeof r.applyThinking === "boolean" ? r.applyThinking : d.applyThinking,
+    minConfidence: Math.round(conf * 100) / 100,
+    notify: typeof r.notify === "boolean" ? r.notify : d.notify,
+  };
 }
 
 /** Bridge records on `pi.events` topics studio:to-gui / studio:from-gui (mirrored in the extension). */
@@ -78,6 +126,7 @@ export const FEATURE_LABEL: Record<string, string> = {
   compact: "Compaction hints",
   ask_jev: "ask_jev tool",
   subagent_dispatch: "Subagent dispatch",
+  router: "Auto (Jev) routing",
 };
 
 export interface JevSettings {
@@ -94,6 +143,8 @@ export interface JevSettings {
     autoOnSubjectChange: boolean;
   };
   askJev: { enabled: boolean };
+  /** Auto (Jev) model router preferences. */
+  router: RouterSettings;
   /** Hard cap on Jev calls per local day, across all sessions. 0 = unlimited. */
   maxCallsPerDay: number;
   /** ask_jev refuses locally when the estimated input exceeds this many tokens (the API returns HTTP 400 max_tokens_exceeded above its limit). */
@@ -121,6 +172,7 @@ export const DEFAULT_SETTINGS: JevSettings = {
   model: DEFAULT_MODEL,
   compact: { enabled: true, floorPct: 40, mode: "hint", autoOnSubjectChange: true },
   askJev: { enabled: true },
+  router: DEFAULT_ROUTER_SETTINGS,
   maxCallsPerDay: 500,
   maxInputTokens: 28_000,
   pricePerMTokUsd: null,
@@ -151,6 +203,7 @@ export function normalizeSettings(raw: unknown): JevSettings {
         typeof compact.autoOnSubjectChange === "boolean" ? compact.autoOnSubjectChange : DEFAULT_SETTINGS.compact.autoOnSubjectChange,
     },
     askJev: { enabled: typeof askJev.enabled === "boolean" ? askJev.enabled : DEFAULT_SETTINGS.askJev.enabled },
+    router: normalizeRouterSettings(r.router),
     maxCallsPerDay: Math.round(num(r.maxCallsPerDay, DEFAULT_SETTINGS.maxCallsPerDay, 0, 1_000_000)),
     maxInputTokens: Math.round(num(r.maxInputTokens, DEFAULT_SETTINGS.maxInputTokens, 1_000, 1_000_000)),
     pricePerMTokUsd: optNum(r.pricePerMTokUsd),
@@ -174,9 +227,11 @@ export function toView(s: JevSettings): JevSettingsView {
 }
 
 /** Renderer → main patch. `apiKey: ""` removes the key; `undefined` keeps it. */
-export type JevSettingsPatch = Partial<Omit<JevSettings, "compact" | "askJev">> & {
+export type JevSettingsPatch = Partial<Omit<JevSettings, "compact" | "askJev" | "router">> & {
   compact?: Partial<JevSettings["compact"]>;
   askJev?: Partial<JevSettings["askJev"]>;
+  /** `tierModels` merges per tier; `excluded` replaces the list. */
+  router?: Partial<Omit<RouterSettings, "tierModels">> & { tierModels?: Partial<RouterSettings["tierModels"]> };
 };
 
 export function applyPatch(current: JevSettings, patch: JevSettingsPatch): JevSettings {
@@ -185,6 +240,11 @@ export function applyPatch(current: JevSettings, patch: JevSettingsPatch): JevSe
     ...patch,
     compact: { ...current.compact, ...patch.compact },
     askJev: { ...current.askJev, ...patch.askJev },
+    router: {
+      ...current.router,
+      ...patch.router,
+      tierModels: { ...current.router.tierModels, ...patch.router?.tierModels },
+    },
   };
   // Re-anchor the credit estimate whenever the user types a new credit figure.
   if (patch.creditUsd !== undefined && patch.creditUsd !== current.creditUsd) merged.creditSince = Date.now();

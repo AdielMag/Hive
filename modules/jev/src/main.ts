@@ -37,8 +37,8 @@ import {
   buildRouterState,
   resolveRouterDecision,
   ROUTER_QUESTIONS,
+  pickRoutedModel,
   routeTaskLocally,
-  selectModelForTier,
 } from "./router.ts";
 
 const MAX_LOG_BYTES = 2 * 1024 * 1024;
@@ -227,14 +227,17 @@ export default defineMainModule({
       const candidates = req?.candidateModels ?? [];
       const preferredProvider = req?.preferredProvider;
       const settings = read();
+      const prefs = settings.router;
+      const flags = { applyThinking: prefs.applyThinking, notify: prefs.notify };
+      const local = (): RouteTaskResult => ({ ...routeTaskLocally(task, candidates, preferredProvider, prefs), ...flags });
 
-      if (!settings.apiKey || !settings.consentAt) {
-        return routeTaskLocally(task, candidates, preferredProvider);
+      if (!prefs.useJev || !settings.apiKey || !settings.consentAt) {
+        return local();
       }
 
       const started = Date.now();
       if (started < routerBreakerOpenUntil) {
-        return routeTaskLocally(task, candidates, preferredProvider);
+        return local();
       }
 
       if (settings.maxCallsPerDay > 0) {
@@ -242,7 +245,7 @@ export default defineMainModule({
         const startOfDay = new Date(started).setHours(0, 0, 0, 0);
         const countToday = usage.filter((u) => u.ts >= startOfDay).length;
         if (countToday >= settings.maxCallsPerDay) {
-          return routeTaskLocally(task, candidates, preferredProvider);
+          return local();
         }
       }
 
@@ -281,19 +284,19 @@ export default defineMainModule({
           try {
             appendFileSync(usagePath, `${JSON.stringify(failRecord)}\n`, "utf8");
           } catch {}
-          return routeTaskLocally(task, candidates, preferredProvider);
+          return local();
         }
 
         const body = (await res.json()) as any;
         if (!body || typeof body.answers !== "object" || body.answers === null) {
-          return routeTaskLocally(task, candidates, preferredProvider);
+          return local();
         }
 
         routerConsecutiveFailures = 0;
-        const decisions = resolveRouterDecision(body?.answers);
-        const chosen = selectModelForTier(decisions.tier, candidates, preferredProvider);
+        const decisions = resolveRouterDecision(body?.answers, prefs.minConfidence);
+        const chosen = pickRoutedModel(decisions.tier, candidates, preferredProvider, prefs);
         if (!chosen) {
-          return routeTaskLocally(task, candidates, preferredProvider);
+          return local();
         }
 
         const ms = Date.now() - started;
@@ -317,6 +320,7 @@ export default defineMainModule({
           reasoning: decisions.reasoning,
           confidence: decisions.confidence,
           model: { id: chosen.id, provider: chosen.provider, name: chosen.name },
+          ...flags,
           reason:
             decisions.rawTier === decisions.tier
               ? `Jev classified task as ${decisions.tier} (${Math.round(decisions.confidence * 100)}% confidence)`
@@ -327,7 +331,7 @@ export default defineMainModule({
         if (routerConsecutiveFailures >= 3) {
           routerBreakerOpenUntil = Date.now() + 5 * 60_000;
         }
-        return routeTaskLocally(task, candidates, preferredProvider);
+        return local();
       }
     });
   },
