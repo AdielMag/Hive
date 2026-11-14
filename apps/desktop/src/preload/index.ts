@@ -289,6 +289,12 @@ const api: StudioApi = {
   saveDisabledProviders(disabledProviders: string[]) {
     return ipcRenderer.invoke(IPC.modelsSaveDisabledProviders, { disabledProviders });
   },
+  syncDiscoveredModels(keys: string[]) {
+    return ipcRenderer.invoke(IPC.modelsSyncDiscovered, { keys });
+  },
+  saveAutoEnableNewModels(autoEnable: boolean) {
+    return ipcRenderer.invoke(IPC.modelsSaveAutoEnable, { autoEnable });
+  },
   getCompactionSettings() {
     return ipcRenderer.invoke(IPC.settingsGetCompaction);
   },

@@ -355,6 +355,8 @@ export const IPC = {
   modelsGetCatalog: "models:get-catalog",
   modelsSaveEnabled: "models:save-enabled",
   modelsSaveDisabledProviders: "models:save-disabled-providers",
+  modelsSyncDiscovered: "models:sync-discovered",
+  modelsSaveAutoEnable: "models:save-auto-enable",
   // Insights
   // Shell
   openExternal: "shell:open-external",
@@ -513,6 +515,8 @@ export interface ModelsCatalogResponse {
   disabledProviders: string[];
   defaultModel?: string;
   defaultProvider?: string;
+  /** Newly discovered models (except aggregators like openrouter) are added to `enabledModels` automatically. */
+  autoEnableNewModels?: boolean;
 }
 
 /** API exposed on `window.studio` by the preload script. */
@@ -647,6 +651,9 @@ export interface StudioApi {
   getModelsCatalog(): Promise<ModelsCatalogResponse>;
   saveEnabledModels(enabledModels: string[]): Promise<{ success: boolean }>;
   saveDisabledProviders(disabledProviders: string[]): Promise<{ success: boolean }>;
+  /** Report `provider/id` keys a live session sees; new eligible ones get auto-enabled. */
+  syncDiscoveredModels(keys: string[]): Promise<{ enabledModels: string[]; added: string[] }>;
+  saveAutoEnableNewModels(autoEnable: boolean): Promise<{ success: boolean }>;
 
   // Insights
   /** Subscription limits for every connected account. `force` bypasses the short-lived cache. */
