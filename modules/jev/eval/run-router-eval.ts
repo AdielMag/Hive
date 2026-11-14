@@ -5,7 +5,7 @@
  *
  *   node modules/jev/eval/run-router-eval.ts --dry     # validate cases + baseline only, no API
  *   node modules/jev/eval/run-router-eval.ts           # live run (needs HIVE_JEV_CONFIG)
- *   flags: --json  --limit=N  --concurrency=N
+ *   flags: --json  --limit=N  --concurrency=N  --settings=<config.json> (use that file's router.jevModel + router.prompt)
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -13,12 +13,12 @@ import { callJev, loadSettings } from "../agent/extensions/jev.ts";
 import {
   buildRouterState,
   classifyModelTier,
+  buildRouterQuestions,
   resolveRouterDecision,
-  ROUTER_QUESTIONS,
   routeTaskLocally,
   selectModelForTier,
 } from "../src/router.ts";
-import type { CandidateModel } from "../src/shared.ts";
+import { normalizeRouterSettings, type CandidateModel } from "../src/shared.ts";
 import { ROUTER_CASES, type RouterCase } from "./router-cases.ts";
 import { computeRouterMetrics, TIERS, type RouterMetrics, type RouterResult } from "./router-metrics.ts";
 
@@ -34,7 +34,7 @@ export const CANDIDATES: CandidateModel[] = [
   { id: "gemini-3-pro", provider: "google", name: "Gemini 3 Pro", cost: { input: 2 }, reasoning: true, contextWindow: 1000000 },
 ];
 
-const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
+const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
 function print(title: string, m: RouterMetrics) {
@@ -104,6 +104,16 @@ async function main() {
     process.exit(1);
   }
 
+  // Optional config file: benchmark a custom router prompt / Jev model without touching the app's settings.
+  const settingsPath = arg("settings") ?? (() => { const i = process.argv.indexOf("--settings"); return i >= 0 ? process.argv[i + 1] : undefined; })();
+  let questions = buildRouterQuestions();
+  if (settingsPath) {
+    const router = normalizeRouterSettings((JSON.parse(fs.readFileSync(settingsPath, "utf8")) as { router?: unknown }).router);
+    questions = buildRouterQuestions(router.prompt);
+    if (router.jevModel) settings.model = router.jevModel;
+    console.error(`[RouterEval] Using router prompt/model from ${settingsPath}`);
+  }
+
   const results: RouterResult[] = new Array(cases.length);
   let idx = 0;
   const concurrency = Number(arg("concurrency")) || 4;
@@ -131,7 +141,7 @@ async function main() {
           settings: settings!,
           feature: "eval",
           state: buildRouterState(c.task, c.context),
-          questions: ROUTER_QUESTIONS,
+          questions,
           timeoutMs: 8_000,
         });
         const ms = Date.now() - started;

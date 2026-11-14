@@ -1,4 +1,4 @@
-import type { CandidateModel, ModelTier, ReasoningPreference, RouterSettings, RouteTaskResult } from "./shared.ts";
+import type { CandidateModel, ModelTier, ReasoningPreference, RouterPromptOverrides, RouterSettings, RouteTaskResult } from "./shared.ts";
 
 export const candidateKey = (m: Pick<CandidateModel, "provider" | "id">): string => `${m.provider}/${m.id}`;
 
@@ -28,6 +28,40 @@ export const ROUTER_QUESTIONS = {
     },
   },
 };
+
+type PromptPatch = Partial<Omit<RouterPromptOverrides, "tierCriteria" | "reasoningCriteria">> & {
+  tierCriteria?: Partial<RouterPromptOverrides["tierCriteria"]>;
+  reasoningCriteria?: Partial<RouterPromptOverrides["reasoningCriteria"]>;
+};
+
+/** An override wins unless it is null/undefined/blank. */
+const pick = (override: string | null | undefined, fallback: string): string => (typeof override === "string" && override.trim() ? override.trim() : fallback);
+
+/** `ROUTER_QUESTIONS` with the user's prompt overrides merged on top (null/blank = built-in default). Option keys never change. */
+export function buildRouterQuestions(prompt?: PromptPatch | null): typeof ROUTER_QUESTIONS {
+  const t = ROUTER_QUESTIONS.tier;
+  const r = ROUTER_QUESTIONS.reasoning;
+  return {
+    tier: {
+      type: "choice",
+      instructions: pick(prompt?.tierInstructions, t.instructions),
+      criteria: {
+        fast: pick(prompt?.tierCriteria?.fast, t.criteria.fast),
+        balanced: pick(prompt?.tierCriteria?.balanced, t.criteria.balanced),
+        heavy: pick(prompt?.tierCriteria?.heavy, t.criteria.heavy),
+      },
+    },
+    reasoning: {
+      type: "choice",
+      instructions: pick(prompt?.reasoningInstructions, r.instructions),
+      criteria: {
+        off: pick(prompt?.reasoningCriteria?.off, r.criteria.off),
+        low: pick(prompt?.reasoningCriteria?.low, r.criteria.low),
+        high: pick(prompt?.reasoningCriteria?.high, r.criteria.high),
+      },
+    },
+  };
+}
 
 /** Build the `state` sent to Jev: the new message plus (optionally) a short transcript tail for follow-ups. */
 export function buildRouterState(task: string, context?: string): string | { recent_conversation: string; new_user_message: string } {

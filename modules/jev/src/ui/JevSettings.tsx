@@ -8,6 +8,7 @@ import {
   EyeOff,
   Gauge,
   Loader2,
+  RotateCcw,
   Route,
   Trash2,
   TrendingUp,
@@ -19,6 +20,9 @@ import {
   INSIGHTS_TAB_KIND,
   JevMethods,
   MAIN_MODEL_PRICE_PER_MTOK_USD,
+  MAX_ROUTER_CRITERION_CHARS,
+  MAX_ROUTER_INSTRUCTIONS_CHARS,
+  MAX_ROUTER_MODEL_CHARS,
   MODEL_TIERS,
   type CandidateModel,
   type ModelTier,
@@ -29,7 +33,7 @@ import {
   type UsageBucket,
   type UsageSummary,
 } from "../shared.ts";
-import { candidateKey, classifyModelTier, enabledCandidates, pickRoutedModel } from "../router.ts";
+import { candidateKey, classifyModelTier, enabledCandidates, pickRoutedModel, ROUTER_QUESTIONS } from "../router.ts";
 import "./jev.css";
 
 const usd = (n: number | null, digits = 4): string => (n === null ? "n/a" : `$${n.toFixed(n >= 1 ? 2 : n > 0 && n < 0.0001 ? 6 : digits)}`);
@@ -87,6 +91,87 @@ const NumberField: React.FC<{
   );
 };
 
+/** Text input that commits on blur/Enter. Empty commits "" (callers map that to "use the default"). */
+const TextField: React.FC<{
+  value: string;
+  /** Resolve false when the save failed, so the field reverts to the stored value. */
+  onCommit: (v: string) => void | Promise<boolean>;
+  placeholder?: string;
+  maxLength?: number;
+  label: string;
+}> = ({ value, onCommit, placeholder, maxLength, label }) => {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  const commit = () => {
+    const trimmed = text.trim();
+    setText(trimmed);
+    if (trimmed !== value) void Promise.resolve(onCommit(trimmed)).then((ok) => ok === false && setText(value));
+  };
+  return (
+    <input
+      className="jev-input jev-input--text"
+      aria-label={label}
+      placeholder={placeholder}
+      maxLength={maxLength}
+      spellCheck={false}
+      autoComplete="off"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+    />
+  );
+};
+
+/** One prompt text: shows the override (or the built-in default), marks modified, commits on blur. null = default. */
+const PromptField: React.FC<{
+  label: string;
+  value: string | null;
+  fallback: string;
+  maxLength: number;
+  rows?: number;
+  onCommit: (v: string | null) => void | Promise<boolean>;
+}> = ({ label, value, fallback, maxLength, rows = 3, onCommit }) => {
+  const shown = value ?? fallback;
+  const [text, setText] = useState(shown);
+  useEffect(() => setText(shown), [shown]);
+  const commit = () => {
+    const trimmed = text.trim();
+    // Blank or identical to the default means "use the built-in text".
+    const next = trimmed === "" || trimmed === fallback ? null : trimmed;
+    if (next !== value) void Promise.resolve(onCommit(next)).then((ok) => ok === false && setText(shown));
+    else setText(shown);
+  };
+  return (
+    <div className="jev-prompt__field">
+      <div className="jev-prompt__label">
+        <span>{label}</span>
+        {value !== null && <span className="ui-chip ui-chip--muted jev-prompt__modified">modified</span>}
+        <button
+          type="button"
+          className="jev-link jev-prompt__reset"
+          disabled={value === null}
+          aria-label={`Reset ${label} to default`}
+          title="Reset to the built-in text"
+          onClick={() => onCommit(null)}
+        >
+          <RotateCcw size={11} /> Reset
+        </button>
+      </div>
+      <textarea
+        className="jev-input jev-textarea"
+        aria-label={label}
+        rows={rows}
+        maxLength={maxLength}
+        spellCheck={false}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+      />
+    </div>
+  );
+};
+
 const Stat: React.FC<{ label: string; bucket: UsageBucket }> = ({ label, bucket }) => (
   <div className="jev-stat">
     <div className="jev-stat__label">{label}</div>
@@ -126,13 +211,93 @@ const TIER_HINT: Record<ModelTier, string> = {
 };
 const modelLabel = (m: CandidateModel): string => `${m.name || m.id} · ${m.provider}`;
 
+const REASONING_KEYS = ["off", "low", "high"] as const;
+
+/** Collapsible editor for the questions the router asks Jev. Option keys are fixed; only the text is editable. */
+export const RouterPromptEditor: React.FC<{ prompt: RouterSettings["prompt"]; save$: (patch: JevSettingsPatch["router"]) => void | Promise<boolean> }> = ({ prompt, save$ }) => {
+  const tier = ROUTER_QUESTIONS.tier;
+  const reasoning = ROUTER_QUESTIONS.reasoning;
+  const modified =
+    prompt.tierInstructions !== null ||
+    prompt.reasoningInstructions !== null ||
+    MODEL_TIERS.some((t) => prompt.tierCriteria[t] !== null) ||
+    REASONING_KEYS.some((k) => prompt.reasoningCriteria[k] !== null);
+  const resetAll = () =>
+    save$({
+      prompt: {
+        tierInstructions: null,
+        tierCriteria: { fast: null, balanced: null, heavy: null },
+        reasoningInstructions: null,
+        reasoningCriteria: { off: null, low: null, high: null },
+      },
+    });
+  return (
+    <details className="jev-prompt">
+      <summary className="jev-prompt__summary">
+        <span>Router prompt</span>
+        {modified && <span className="ui-chip ui-chip--muted jev-prompt__modified">modified</span>}
+      </summary>
+      <p className="jev-card__desc">
+        The questions Jev answers for each task. Edit the wording to tune how tasks are classified; the options (fast/balanced/heavy, off/low/high) are fixed.
+        Blank text, or text equal to the default, uses the built-in wording.
+      </p>
+      <h5 className="jev-prompt__group">Capability tier</h5>
+      <PromptField
+        label="Tier instructions"
+        value={prompt.tierInstructions}
+        fallback={tier.instructions}
+        maxLength={MAX_ROUTER_INSTRUCTIONS_CHARS}
+        rows={5}
+        onCommit={(v) => save$({ prompt: { tierInstructions: v } })}
+      />
+      {MODEL_TIERS.map((t) => (
+        <PromptField
+          key={t}
+          label={`${TIER_LABEL[t]} criteria`}
+          value={prompt.tierCriteria[t]}
+          fallback={tier.criteria[t]}
+          maxLength={MAX_ROUTER_CRITERION_CHARS}
+          onCommit={(v) => save$({ prompt: { tierCriteria: { [t]: v } } })}
+        />
+      ))}
+      <h5 className="jev-prompt__group">Thinking level</h5>
+      <p className="jev-card__desc">Main session only: subagent routing asks the tier question alone.</p>
+      <PromptField
+        label="Reasoning instructions"
+        value={prompt.reasoningInstructions}
+        fallback={reasoning.instructions}
+        maxLength={MAX_ROUTER_INSTRUCTIONS_CHARS}
+        onCommit={(v) => save$({ prompt: { reasoningInstructions: v } })}
+      />
+      {REASONING_KEYS.map((k) => (
+        <PromptField
+          key={k}
+          label={`Reasoning ${k} criteria`}
+          value={prompt.reasoningCriteria[k]}
+          fallback={reasoning.criteria[k]}
+          maxLength={MAX_ROUTER_CRITERION_CHARS}
+          rows={2}
+          onCommit={(v) => save$({ prompt: { reasoningCriteria: { [k]: v } } })}
+        />
+      ))}
+      <div className="jev-actions">
+        <button className="jev-btn jev-btn--ghost" type="button" disabled={!modified} onClick={resetAll}>
+          <RotateCcw size={13} /> Reset all
+        </button>
+      </div>
+    </details>
+  );
+};
+
 /** Auto (Jev) router: tier pins, the model pool, and the decision policy. */
 export const RouterCard: React.FC<{
   host: ModuleHost;
   router: RouterSettings;
-  save: (patch: JevSettingsPatch) => Promise<void>;
+  /** The global Jev model, shown as the router's fallback. */
+  globalModel?: string;
+  save: (patch: JevSettingsPatch) => Promise<boolean>;
   hasJev: boolean;
-}> = ({ host, router, save, hasJev }) => {
+}> = ({ host, router, globalModel = "jev-latest", save, hasJev }) => {
   const read = useCallback(() => enabledCandidates(host.models.catalog(), host.models.enabledKeys()), [host]);
   const [models, setModels] = useState<CandidateModel[]>(read);
   useEffect(() => {
@@ -144,7 +309,7 @@ export const RouterCard: React.FC<{
   const excluded = new Set(router.excluded);
   const byTier: Record<ModelTier, CandidateModel[]> = { fast: [], balanced: [], heavy: [] };
   for (const m of models) byTier[classifyModelTier(m)].push(m);
-  const save$ = (patch: JevSettingsPatch["router"]) => void save({ router: patch });
+  const save$ = (patch: JevSettingsPatch["router"]) => save({ router: patch });
   // Latest list, so quick successive clicks don't overwrite each other before the save round-trip returns.
   const excludedRef = useRef(router.excluded);
   useEffect(() => void (excludedRef.current = router.excluded), [router.excluded]);
@@ -239,12 +404,23 @@ export const RouterCard: React.FC<{
           onCommit={(v) => save$({ minConfidence: (v ?? 70) / 100 })}
         />
       </Row>
+      <Row title="Jev model" hint={`Jev model that classifies tasks. Empty uses the global Jev model (${globalModel}).`}>
+        <TextField
+          label="Router Jev model"
+          value={router.jevModel ?? ""}
+          placeholder={`Use global (${globalModel})`}
+          maxLength={MAX_ROUTER_MODEL_CHARS}
+          onCommit={(v) => save$({ jevModel: v || null })}
+        />
+      </Row>
       <Row title="Set thinking level" hint="Let the router raise or lower the session's thinking level to match the task. Off keeps your own setting.">
         <Switch label="Set thinking level" checked={router.applyThinking} onChange={(v) => save$({ applyThinking: v })} />
       </Row>
       <Row title="Announce routes" hint="Show a toast naming the model each prompt was routed to.">
         <Switch label="Announce routes" checked={router.notify} onChange={(v) => save$({ notify: v })} />
       </Row>
+
+      <RouterPromptEditor prompt={router.prompt} save$={save$} />
     </section>
   );
 };
@@ -288,7 +464,7 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
   }, [host, refreshUsage]);
 
   const save = useCallback(
-    async (patch: JevSettingsPatch) => {
+    async (patch: JevSettingsPatch): Promise<boolean> => {
       try {
         const next = await host.ipc.invoke<JevSettingsView>(JevMethods.saveSettings, patch);
         if (alive.current) {
@@ -296,8 +472,10 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
           setError(null);
         }
         refreshUsage();
+        return true;
       } catch (e) {
         if (alive.current) setError(e instanceof Error ? e.message : String(e));
+        return false;
       }
     },
     [host, refreshUsage],
@@ -510,6 +688,16 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
               )}
             </div>
 
+            <Row title="Jev model" hint="Model used by ask_jev and compaction hints, and by Auto routing unless it has its own model below. Empty restores jev-latest.">
+              <TextField
+                label="Jev model"
+                value={settings.model}
+                placeholder="jev-latest"
+                maxLength={MAX_ROUTER_MODEL_CHARS}
+                onCommit={(v) => save({ model: v })}
+              />
+            </Row>
+
             <div className="jev-status" role="status">
               {test === "testing" && (
                 <>
@@ -635,7 +823,7 @@ export const JevSettings: React.FC<JevSettingsProps> = ({ host, focus }) => {
             </Row>
           </section>
 
-          <RouterCard host={host} router={settings.router} save={save} hasJev={settings.hasKey && Boolean(settings.consentAt)} />
+          <RouterCard host={host} router={settings.router} globalModel={settings.model} save={save} hasJev={settings.hasKey && Boolean(settings.consentAt)} />
         </div>
       )}
     </div>

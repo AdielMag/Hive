@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildRouterQuestions,
   buildRouterState,
+  ROUTER_QUESTIONS,
   resolveRouterDecision,
   classifyModelTier,
   extractRouterDecisions,
@@ -155,6 +157,30 @@ describe("router quality policy", () => {
     expect(resolveRouterDecision(ans("balanced", 0.9, "off")).reasoning).toBe("low");
     expect(resolveRouterDecision(ans("heavy", 0.9, "low")).reasoning).toBe("high");
     expect(resolveRouterDecision(ans("fast", 0.9, "off")).reasoning).toBe("off");
+  });
+
+  it("buildRouterQuestions returns the defaults without overrides", () => {
+    expect(buildRouterQuestions()).toEqual(ROUTER_QUESTIONS);
+    expect(buildRouterQuestions(null)).toEqual(ROUTER_QUESTIONS);
+    expect(
+      buildRouterQuestions({ tierInstructions: null, tierCriteria: { fast: null, balanced: "   " }, reasoningInstructions: "", reasoningCriteria: {} }),
+    ).toEqual(ROUTER_QUESTIONS);
+  });
+
+  it("buildRouterQuestions merges overrides over the defaults and keeps option keys fixed", () => {
+    const q = buildRouterQuestions({
+      tierInstructions: "  Be strict.  ",
+      tierCriteria: { heavy: "Only security work." },
+      reasoningCriteria: { high: "Always think hard." },
+    });
+    expect(q.tier.instructions).toBe("Be strict.");
+    expect(q.tier.criteria).toEqual({ ...ROUTER_QUESTIONS.tier.criteria, heavy: "Only security work." });
+    expect(q.reasoning.instructions).toBe(ROUTER_QUESTIONS.reasoning.instructions);
+    expect(q.reasoning.criteria).toEqual({ ...ROUTER_QUESTIONS.reasoning.criteria, high: "Always think hard." });
+    expect(Object.keys(q.tier.criteria)).toEqual(["fast", "balanced", "heavy"]);
+    expect(Object.keys(q.reasoning.criteria)).toEqual(["off", "low", "high"]);
+    // The defaults are never mutated.
+    expect(ROUTER_QUESTIONS.tier.criteria.heavy).not.toBe("Only security work.");
   });
 
   it("builds router state with optional conversation context", () => {

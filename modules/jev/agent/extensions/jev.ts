@@ -61,7 +61,7 @@ export function loadSettings(env: Env = process.env): Settings | null {
     if (typeof raw.consentAt !== "number" || !(raw.consentAt > 0)) return null;
     return {
       apiKey,
-      model: typeof raw.model === "string" && raw.model.trim() ? raw.model.trim() : "jev-latest",
+      model: typeof raw.model === "string" && raw.model.trim() && raw.model.trim().length <= 100 ? raw.model.trim() : "jev-latest",
       compact: {
         enabled: raw.compact?.enabled !== false,
         floorPct: typeof raw.compact?.floorPct === "number" ? raw.compact.floorPct : 40,
@@ -526,27 +526,66 @@ export interface RouterPrefs {
   tierModels: Record<RouteTier, string | null>;
   excluded: string[];
   minConfidence: number;
+  /** Jev model for the router call; null = the global model. */
+  jevModel: string | null;
+  prompt: RouterPromptPrefs;
 }
 
-const ROUTER_DEFAULTS: RouterPrefs = { useJev: true, tierModels: { fast: null, balanced: null, heavy: null }, excluded: [], minConfidence: 0.7 };
+/** Mirrored from RouterPromptOverrides (shared.ts): null = built-in default text. */
+export interface RouterPromptPrefs {
+  tierInstructions: string | null;
+  tierCriteria: Record<RouteTier, string | null>;
+  reasoningInstructions: string | null;
+  reasoningCriteria: Record<"off" | "low" | "high", string | null>;
+}
+
+const emptyPrompt = (): RouterPromptPrefs => ({
+  tierInstructions: null,
+  tierCriteria: { fast: null, balanced: null, heavy: null },
+  reasoningInstructions: null,
+  reasoningCriteria: { off: null, low: null, high: null },
+});
+const routerDefaults = (): RouterPrefs => ({
+  useJev: true,
+  tierModels: { fast: null, balanced: null, heavy: null },
+  excluded: [],
+  minConfidence: 0.7,
+  jevModel: null,
+  prompt: emptyPrompt(),
+});
+const ROUTER_DEFAULT_CONFIDENCE = 0.7;
+const promptText = (v: unknown, max: number): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
 const routerKey = (v: unknown): string | null => (typeof v === "string" && /^[^/\s]+\/\S/.test(v.trim()) ? v.trim() : null);
 
 /** Router prefs straight from config.json: they apply even without an API key (pins and exclusions are local). */
 export function loadRouterPrefs(env: Env = process.env): RouterPrefs {
   try {
     const file = env.HIVE_JEV_CONFIG;
-    if (!file || !fs.existsSync(file)) return { ...ROUTER_DEFAULTS, tierModels: { ...ROUTER_DEFAULTS.tierModels }, excluded: [] };
-    const r = (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, any>)?.router ?? {};
-    const pins = r.tierModels ?? {};
+    if (!file || !fs.existsSync(file)) return routerDefaults();
+    const rawRouter = (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, any>)?.router;
+    const r: Record<string, any> = typeof rawRouter === "object" && rawRouter !== null ? rawRouter : {};
+    const pins = typeof r.tierModels === "object" && r.tierModels !== null ? r.tierModels : {};
+    const p: Record<string, any> = typeof r.prompt === "object" && r.prompt !== null ? r.prompt : {};
+    const obj = (v: unknown): Record<string, any> => (typeof v === "object" && v !== null ? (v as Record<string, any>) : {});
+    const tc = obj(p.tierCriteria);
+    const rc = obj(p.reasoningCriteria);
+    const crit = (v: unknown) => promptText(v, 1_000);
     return {
       useJev: r.useJev !== false,
       tierModels: { fast: routerKey(pins.fast), balanced: routerKey(pins.balanced), heavy: routerKey(pins.heavy) },
       excluded: Array.isArray(r.excluded) ? r.excluded.map(routerKey).filter((k: string | null): k is string => k !== null) : [],
       minConfidence:
-        typeof r.minConfidence === "number" && Number.isFinite(r.minConfidence) ? Math.min(1, Math.max(0, r.minConfidence)) : ROUTER_DEFAULTS.minConfidence,
+        typeof r.minConfidence === "number" && Number.isFinite(r.minConfidence) ? Math.min(1, Math.max(0, r.minConfidence)) : ROUTER_DEFAULT_CONFIDENCE,
+      jevModel: typeof r.jevModel === "string" && r.jevModel.trim() && r.jevModel.trim().length <= 100 ? r.jevModel.trim() : null,
+      prompt: {
+        tierInstructions: promptText(p.tierInstructions, 2_000),
+        tierCriteria: { fast: crit(tc.fast), balanced: crit(tc.balanced), heavy: crit(tc.heavy) },
+        reasoningInstructions: promptText(p.reasoningInstructions, 2_000),
+        reasoningCriteria: { off: crit(rc.off), low: crit(rc.low), high: crit(rc.high) },
+      },
     };
   } catch {
-    return { ...ROUTER_DEFAULTS, tierModels: { ...ROUTER_DEFAULTS.tierModels }, excluded: [] };
+    return routerDefaults();
   }
 }
 
@@ -564,6 +603,25 @@ export const ROUTER_QUESTIONS: Record<string, Question> = {
     },
   },
 };
+
+const pickText = (override: string | null | undefined, fallback: string): string =>
+  typeof override === "string" && override.trim() ? override.trim() : fallback;
+
+/** ROUTER_QUESTIONS with the user's prompt overrides merged on top (mirrors buildRouterQuestions in src/router.ts, tier question only). */
+export function buildRouterQuestions(prompt?: Partial<RouterPromptPrefs> | null): Record<string, Question> {
+  const t = ROUTER_QUESTIONS.tier as Extract<Question, { type: "choice" }>;
+  return {
+    tier: {
+      type: "choice",
+      instructions: pickText(prompt?.tierInstructions, t.instructions),
+      criteria: {
+        fast: pickText(prompt?.tierCriteria?.fast, t.criteria.fast!),
+        balanced: pickText(prompt?.tierCriteria?.balanced, t.criteria.balanced!),
+        heavy: pickText(prompt?.tierCriteria?.heavy, t.criteria.heavy!),
+      },
+    },
+  };
+}
 
 export function classifyRouteTier(model: RouteCandidate): RouteTier {
   const id = (model.id || "").toLowerCase();
@@ -665,10 +723,10 @@ export async function routeTaskWithJev(
     const settings = prefs.useJev ? loadSettings(env) : null;
     if (settings) {
       const r = await callJev({
-        settings,
+        settings: { ...settings, model: prefs.jevModel ?? settings.model },
         feature: "router",
         state: (task || "").slice(0, 4_000),
-        questions: ROUTER_QUESTIONS,
+        questions: buildRouterQuestions(prefs.prompt),
         timeoutMs: 4_000,
         signal: opts.signal,
         fetchImpl: opts.fetchImpl,

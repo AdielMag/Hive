@@ -221,6 +221,64 @@
 .jev-input--key {
   flex: 1;
 }
+.jev-input--text {
+  width: 240px;
+  max-width: 100%;
+}
+.jev-textarea {
+  height: auto;
+  min-height: 56px;
+  padding: 7px 10px;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.45;
+}
+.jev-prompt {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+.jev-prompt__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: var(--fs-base);
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.jev-prompt__group {
+  margin: 12px 0 4px;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--text-secondary);
+}
+.jev-prompt__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.jev-prompt__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.jev-prompt__modified {
+  color: var(--accent-base);
+}
+.jev-prompt__reset {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.jev-prompt__reset:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .jev-input--num {
   width: 84px;
   text-align: right;

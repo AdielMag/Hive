@@ -90,7 +90,30 @@ export interface RouterSettings {
   minConfidence: number;
   /** Show a toast naming the routed model. */
   notify: boolean;
+  /** Jev model the router calls; null = the global Jev model (`JevSettings.model`). */
+  jevModel: string | null;
+  /** Overrides for the router prompt; null = the built-in default text. */
+  prompt: RouterPromptOverrides;
 }
+
+/** User overrides for the router's questions (`ROUTER_QUESTIONS` in router.ts). Option keys stay fixed; each text null = built-in default. */
+export interface RouterPromptOverrides {
+  tierInstructions: string | null;
+  tierCriteria: Record<ModelTier, string | null>;
+  reasoningInstructions: string | null;
+  reasoningCriteria: Record<"off" | "low" | "high", string | null>;
+}
+
+export const MAX_ROUTER_INSTRUCTIONS_CHARS = 2_000;
+export const MAX_ROUTER_CRITERION_CHARS = 1_000;
+export const MAX_ROUTER_MODEL_CHARS = 100;
+
+export const DEFAULT_ROUTER_PROMPT: RouterPromptOverrides = {
+  tierInstructions: null,
+  tierCriteria: { fast: null, balanced: null, heavy: null },
+  reasoningInstructions: null,
+  reasoningCriteria: { off: null, low: null, high: null },
+};
 
 export const DEFAULT_ROUTER_SETTINGS: RouterSettings = {
   useJev: true,
@@ -99,9 +122,27 @@ export const DEFAULT_ROUTER_SETTINGS: RouterSettings = {
   applyThinking: true,
   minConfidence: 0.7,
   notify: true,
+  jevModel: null,
+  prompt: DEFAULT_ROUTER_PROMPT,
 };
 
 const modelKey = (v: unknown): string | null => (typeof v === "string" && /^[^/\s]+\/\S/.test(v.trim()) ? v.trim() : null);
+
+const promptText = (v: unknown, max: number): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+
+export function normalizeRouterPrompt(raw: unknown): RouterPromptOverrides {
+  const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  const obj = (v: unknown): Record<string, unknown> => (typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {});
+  const tc = obj(r.tierCriteria);
+  const rc = obj(r.reasoningCriteria);
+  const c = (v: unknown) => promptText(v, MAX_ROUTER_CRITERION_CHARS);
+  return {
+    tierInstructions: promptText(r.tierInstructions, MAX_ROUTER_INSTRUCTIONS_CHARS),
+    tierCriteria: { fast: c(tc.fast), balanced: c(tc.balanced), heavy: c(tc.heavy) },
+    reasoningInstructions: promptText(r.reasoningInstructions, MAX_ROUTER_INSTRUCTIONS_CHARS),
+    reasoningCriteria: { off: c(rc.off), low: c(rc.low), high: c(rc.high) },
+  };
+}
 
 export function normalizeRouterSettings(raw: unknown): RouterSettings {
   const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
@@ -115,6 +156,8 @@ export function normalizeRouterSettings(raw: unknown): RouterSettings {
     applyThinking: typeof r.applyThinking === "boolean" ? r.applyThinking : d.applyThinking,
     minConfidence: Math.round(conf * 100) / 100,
     notify: typeof r.notify === "boolean" ? r.notify : d.notify,
+    jevModel: typeof r.jevModel === "string" && r.jevModel.trim() && r.jevModel.trim().length <= MAX_ROUTER_MODEL_CHARS ? r.jevModel.trim() : null,
+    prompt: normalizeRouterPrompt(r.prompt),
   };
 }
 
@@ -194,7 +237,7 @@ export function normalizeSettings(raw: unknown): JevSettings {
   const askJev = rec(r.askJev);
   return {
     apiKey: typeof r.apiKey === "string" ? r.apiKey.trim() : "",
-    model: typeof r.model === "string" && r.model.trim() ? r.model.trim() : DEFAULT_SETTINGS.model,
+    model: typeof r.model === "string" && r.model.trim() && r.model.trim().length <= MAX_ROUTER_MODEL_CHARS ? r.model.trim() : DEFAULT_SETTINGS.model,
     compact: {
       enabled: typeof compact.enabled === "boolean" ? compact.enabled : DEFAULT_SETTINGS.compact.enabled,
       floorPct: Math.round(num(compact.floorPct, DEFAULT_SETTINGS.compact.floorPct, 0, 95)),
@@ -230,8 +273,16 @@ export function toView(s: JevSettings): JevSettingsView {
 export type JevSettingsPatch = Partial<Omit<JevSettings, "compact" | "askJev" | "router">> & {
   compact?: Partial<JevSettings["compact"]>;
   askJev?: Partial<JevSettings["askJev"]>;
-  /** `tierModels` merges per tier; `excluded` replaces the list. */
-  router?: Partial<Omit<RouterSettings, "tierModels">> & { tierModels?: Partial<RouterSettings["tierModels"]> };
+  /** `tierModels` and `prompt` merge per field (criteria per option); `excluded` replaces the list. */
+  router?: Partial<Omit<RouterSettings, "tierModels" | "prompt">> & {
+    tierModels?: Partial<RouterSettings["tierModels"]>;
+    prompt?: RouterPromptPatch;
+  };
+};
+
+export type RouterPromptPatch = Partial<Omit<RouterPromptOverrides, "tierCriteria" | "reasoningCriteria">> & {
+  tierCriteria?: Partial<RouterPromptOverrides["tierCriteria"]>;
+  reasoningCriteria?: Partial<RouterPromptOverrides["reasoningCriteria"]>;
 };
 
 export function applyPatch(current: JevSettings, patch: JevSettingsPatch): JevSettings {
@@ -244,6 +295,12 @@ export function applyPatch(current: JevSettings, patch: JevSettingsPatch): JevSe
       ...current.router,
       ...patch.router,
       tierModels: { ...current.router.tierModels, ...patch.router?.tierModels },
+      prompt: {
+        ...current.router.prompt,
+        ...patch.router?.prompt,
+        tierCriteria: { ...current.router.prompt.tierCriteria, ...patch.router?.prompt?.tierCriteria },
+        reasoningCriteria: { ...current.router.prompt.reasoningCriteria, ...patch.router?.prompt?.reasoningCriteria },
+      },
     },
   };
   // Re-anchor the credit estimate whenever the user types a new credit figure.

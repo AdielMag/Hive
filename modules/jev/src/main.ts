@@ -36,7 +36,7 @@ import {
 import {
   buildRouterState,
   resolveRouterDecision,
-  ROUTER_QUESTIONS,
+  buildRouterQuestions,
   pickRoutedModel,
   routeTaskLocally,
 } from "./router.ts";
@@ -249,6 +249,7 @@ export default defineMainModule({
         }
       }
 
+      const routerModel = prefs.jevModel ?? (settings.model || "jev-latest");
       try {
         const res = await fetch(`${JEV_API_URL}/v1/systemone`, {
           method: "POST",
@@ -257,9 +258,9 @@ export default defineMainModule({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: settings.model || "jev-latest",
+            model: routerModel,
             state: buildRouterState(task, req?.context),
-            questions: ROUTER_QUESTIONS,
+            questions: buildRouterQuestions(prefs.prompt),
           }),
           signal: AbortSignal.timeout(4_000),
         });
@@ -274,7 +275,7 @@ export default defineMainModule({
           const failRecord: UsageRecord = {
             ts: started,
             feature: "router",
-            model: settings.model,
+            model: routerModel,
             inputTokens: 0,
             outputTokens: 0,
             ms: Date.now() - started,
@@ -303,7 +304,7 @@ export default defineMainModule({
         const record: UsageRecord = {
           ts: started,
           feature: "router",
-          model: typeof body?.model === "string" ? body.model : settings.model,
+          model: typeof body?.model === "string" ? body.model : routerModel,
           inputTokens: Number(body?.usage?.input_tokens) || 0,
           outputTokens: Number(body?.usage?.output_tokens) || 0,
           ms,

@@ -6,11 +6,13 @@ import {
   classifyRouteTier,
   loadRouterPrefs,
   pickRouteModel,
+  buildRouterQuestions as extBuildRouterQuestions,
   ROUTER_QUESTIONS as EXT_ROUTER_QUESTIONS,
   routeTaskWithJev,
   selectRouteModel,
 } from "../agent/extensions/jev.ts";
 import {
+  buildRouterQuestions,
   classifyModelTier,
   enabledCandidates,
   pickRoutedModel,
@@ -19,7 +21,7 @@ import {
   routeTaskLocally,
   selectModelForTier,
 } from "./router.ts";
-import { applyPatch, DEFAULT_ROUTER_SETTINGS, DEFAULT_SETTINGS, normalizeRouterSettings, normalizeSettings, type CandidateModel } from "./shared.ts";
+import { applyPatch, DEFAULT_ROUTER_PROMPT, DEFAULT_ROUTER_SETTINGS, DEFAULT_SETTINGS, normalizeRouterSettings, normalizeSettings, type CandidateModel } from "./shared.ts";
 
 const flash: CandidateModel = { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "google", cost: { input: 0.15 } };
 const haiku: CandidateModel = { id: "claude-haiku-4-5", name: "Claude Haiku", provider: "anthropic", cost: { input: 1 } };
@@ -48,7 +50,54 @@ describe("router settings", () => {
       applyThinking: false,
       minConfidence: 1,
       notify: true,
+      jevModel: null,
+      prompt: DEFAULT_ROUTER_PROMPT,
     });
+  });
+
+  it("normalizes jevModel: trimmed, non-empty, at most 100 chars", () => {
+    expect(normalizeRouterSettings({ jevModel: "  jev-1.13.0 " }).jevModel).toBe("jev-1.13.0");
+    expect(normalizeRouterSettings({ jevModel: "   " }).jevModel).toBeNull();
+    expect(normalizeRouterSettings({ jevModel: "x".repeat(100) }).jevModel).toBe("x".repeat(100));
+    expect(normalizeRouterSettings({ jevModel: "x".repeat(101) }).jevModel).toBeNull();
+    expect(normalizeRouterSettings({ jevModel: 5 }).jevModel).toBeNull();
+    expect(normalizeRouterSettings({}).jevModel).toBeNull();
+  });
+
+  it("normalizes prompt overrides: trim, cap, blank and non-strings become null", () => {
+    const r = normalizeRouterSettings({
+      prompt: {
+        tierInstructions: `  ${"i".repeat(2_500)}  `,
+        tierCriteria: { fast: "  quick  ", balanced: "   ", heavy: "h".repeat(1_500), extra: "ignored" },
+        reasoningInstructions: 42,
+        reasoningCriteria: { off: null, low: ["x"], high: "deep" },
+      },
+    }).prompt;
+    expect(r.tierInstructions).toBe("i".repeat(2_000));
+    expect(r.tierCriteria).toEqual({ fast: "quick", balanced: null, heavy: "h".repeat(1_000) });
+    expect(r.reasoningInstructions).toBeNull();
+    expect(r.reasoningCriteria).toEqual({ off: null, low: null, high: "deep" });
+    for (const bad of [null, "x", 3, [], { tierCriteria: "x", reasoningCriteria: 7 }]) {
+      expect(normalizeRouterSettings({ prompt: bad }).prompt).toEqual(DEFAULT_ROUTER_PROMPT);
+    }
+  });
+
+  it("merges prompt patches per field and per criterion, and null resets", () => {
+    let s = applyPatch(DEFAULT_SETTINGS, { router: { jevModel: "jev-x", prompt: { tierInstructions: "T", tierCriteria: { heavy: "H" } } } });
+    s = applyPatch(s, { router: { prompt: { reasoningInstructions: "R", tierCriteria: { fast: "F" }, reasoningCriteria: { high: "HI" } } } });
+    expect(s.router.jevModel).toBe("jev-x");
+    expect(s.router.prompt).toEqual({
+      tierInstructions: "T",
+      tierCriteria: { fast: "F", balanced: null, heavy: "H" },
+      reasoningInstructions: "R",
+      reasoningCriteria: { off: null, low: null, high: "HI" },
+    });
+    s = applyPatch(s, { router: { jevModel: null, prompt: { tierCriteria: { heavy: null } } } });
+    expect(s.router.jevModel).toBeNull();
+    expect(s.router.prompt.tierCriteria).toEqual({ fast: "F", balanced: null, heavy: null });
+    expect(s.router.prompt.tierInstructions).toBe("T");
+    expect(applyPatch(s, { router: { useJev: false } }).router.prompt).toEqual(s.router.prompt);
+    expect(DEFAULT_SETTINGS.router.prompt).toEqual(DEFAULT_ROUTER_PROMPT);
   });
 
   it("patches tier pins per tier and replaces the exclusion list", () => {
@@ -108,6 +157,13 @@ describe("enabledCandidates", () => {
 });
 
 describe("extension router mirror", () => {
+  const envWith = (config: unknown) => {
+    const dir = mkdtempSync(join(tmpdir(), "jev-router-"));
+    const file = join(dir, "config.json");
+    writeFileSync(file, JSON.stringify(config));
+    return { HIVE_JEV_CONFIG: file, HIVE_JEV_USAGE: join(dir, "usage.jsonl") };
+  };
+
   const named = [...all, { id: "o3-mini", provider: "openai" }, { id: "gpt-5-pro", provider: "openai" }, { id: "kimi-k2-thinking", provider: "moonshot" }];
 
   it("classifies and selects exactly like src/router.ts", () => {
@@ -124,17 +180,51 @@ describe("extension router mirror", () => {
     expect(EXT_ROUTER_QUESTIONS.tier).toEqual(ROUTER_QUESTIONS.tier);
   });
 
-  const envWith = (config: unknown) => {
-    const dir = mkdtempSync(join(tmpdir(), "jev-router-"));
-    const file = join(dir, "config.json");
-    writeFileSync(file, JSON.stringify(config));
-    return { HIVE_JEV_CONFIG: file, HIVE_JEV_USAGE: join(dir, "usage.jsonl") };
-  };
+  const overrides = [
+    {},
+    { tierInstructions: "Be strict.", tierCriteria: { heavy: "Only security." } },
+    { tierInstructions: "   ", tierCriteria: { fast: "", balanced: null } },
+    { tierCriteria: { fast: "F", balanced: "B", heavy: "H" }, reasoningInstructions: "ignored by subagents" },
+  ];
+
+  it("builds the same tier question as src/router.ts for any overrides", () => {
+    expect(extBuildRouterQuestions().tier).toEqual(ROUTER_QUESTIONS.tier);
+    for (const o of overrides) {
+      const prompt = normalizeRouterSettings({ prompt: o }).prompt;
+      expect(extBuildRouterQuestions(prompt).tier).toEqual(buildRouterQuestions(prompt).tier);
+    }
+  });
+
+  it("loadRouterPrefs and normalizeRouterSettings agree on jevModel and prompt", () => {
+    const configs: unknown[] = [
+      {},
+      { jevModel: " jev-x " },
+      { jevModel: "x".repeat(101), prompt: null },
+      { jevModel: 3, prompt: "nope" },
+      {
+        jevModel: "m",
+        prompt: {
+          tierInstructions: ` ${"i".repeat(2_500)} `,
+          tierCriteria: { fast: "  f ", balanced: " ", heavy: "h".repeat(1_200), junk: 1 },
+          reasoningInstructions: "r",
+          reasoningCriteria: { off: 1, low: "l", high: "x".repeat(1_200) },
+        },
+      },
+      { prompt: { tierCriteria: "x", reasoningCriteria: [] } },
+    ];
+    for (const router of configs) {
+      const ext = loadRouterPrefs(envWith({ router }));
+      const core = normalizeRouterSettings(router);
+      expect(ext.jevModel).toBe(core.jevModel);
+      expect(ext.prompt).toEqual(core.prompt);
+    }
+    expect(loadRouterPrefs({})).toMatchObject({ jevModel: null, prompt: DEFAULT_ROUTER_PROMPT });
+  });
 
   it("loads router prefs without an API key", () => {
     const env = envWith({ router: { useJev: false, tierModels: { heavy: "anthropic/claude-opus-4-5" }, excluded: ["a/b", "bad"] } });
-    expect(loadRouterPrefs(env)).toEqual({ useJev: false, tierModels: { fast: null, balanced: null, heavy: "anthropic/claude-opus-4-5" }, excluded: ["a/b"], minConfidence: 0.7 });
-    expect(loadRouterPrefs({})).toEqual({ useJev: true, tierModels: { fast: null, balanced: null, heavy: null }, excluded: [], minConfidence: 0.7 });
+    expect(loadRouterPrefs(env)).toEqual({ useJev: false, tierModels: { fast: null, balanced: null, heavy: "anthropic/claude-opus-4-5" }, excluded: ["a/b"], minConfidence: 0.7, jevModel: null, prompt: DEFAULT_ROUTER_PROMPT });
+    expect(loadRouterPrefs({})).toEqual({ useJev: true, tierModels: { fast: null, balanced: null, heavy: null }, excluded: [], minConfidence: 0.7, jevModel: null, prompt: DEFAULT_ROUTER_PROMPT });
   });
 
   it("routeTaskWithJev uses a pinned model even when it is not a candidate, offline", async () => {
@@ -151,6 +241,33 @@ describe("extension router mirror", () => {
     const r = await routeTaskWithJev("rename foo to bar", [flash, sonnet], { env, fetchImpl });
     expect(fetchImpl).toHaveBeenCalledOnce();
     expect(r).toMatchObject({ id: sonnet.id, tier: "balanced" });
+  });
+
+  it("routeTaskWithJev sends the router's Jev model and overridden questions", async () => {
+    const env = envWith({
+      apiKey: "k",
+      consentAt: 1,
+      maxCallsPerDay: 0,
+      model: "global-model",
+      router: { jevModel: "router-model", prompt: { tierInstructions: "Custom instructions", tierCriteria: { heavy: "Custom heavy" } } },
+    });
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ answers: { tier: { type: "choice", choice: "heavy", confidence: 0.9, probabilities: {} } }, usage: {} }), { status: 200 }),
+    ) as unknown as typeof fetch;
+    await routeTaskWithJev("rename foo to bar", [flash, sonnet, opus], { env, fetchImpl });
+    const body = JSON.parse((vi.mocked(fetchImpl).mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.model).toBe("router-model");
+    expect(body.questions.tier.instructions).toBe("Custom instructions");
+    expect(body.questions.tier.criteria).toEqual({ ...ROUTER_QUESTIONS.tier.criteria, heavy: "Custom heavy" });
+  });
+
+  it("routeTaskWithJev falls back to the global model and default questions", async () => {
+    const env = envWith({ apiKey: "k", consentAt: 1, maxCallsPerDay: 0, model: "global-model", router: {} });
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ answers: {}, usage: {} }), { status: 200 })) as unknown as typeof fetch;
+    await routeTaskWithJev("rename foo to bar", [flash, sonnet], { env, fetchImpl });
+    const body = JSON.parse((vi.mocked(fetchImpl).mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.model).toBe("global-model");
+    expect(body.questions.tier).toEqual(ROUTER_QUESTIONS.tier);
   });
 
   it("routeTaskWithJev skips the API when useJev is off", async () => {
