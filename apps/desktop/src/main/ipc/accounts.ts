@@ -47,6 +47,10 @@ export function registerAccountIpc(ctx: AppContext): void {
   handle(IPC.modelsSaveDisabledProviders, ({ disabledProviders }: { disabledProviders: string[] }) =>
     ctx.models.saveDisabledProviders(disabledProviders),
   );
+  handle(IPC.modelsSyncDiscovered, ({ keys }: { keys: string[] }) => ctx.models.syncDiscoveredModels(keys));
+  handle(IPC.modelsSaveAutoEnable, ({ autoEnable }: { autoEnable: boolean }) =>
+    ctx.models.saveAutoEnableNewModels(autoEnable),
+  );
   handle(IPC.settingsGetCompaction, () => ctx.models.getCompactionSettings());
   handle(IPC.settingsSaveCompaction, (settings: CompactionSettings) =>
     ctx.models.saveCompactionSettings(settings),

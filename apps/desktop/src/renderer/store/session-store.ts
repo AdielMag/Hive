@@ -399,6 +399,8 @@ export interface SessionStoreState {
   enabledModelKeys: string[];
   /** Providers switched off in Settings; their models are filtered out of every picker. */
   disabledProviders: string[];
+  /** Newly discovered models get added to the enabled list automatically (Settings > Models switch). */
+  autoEnableNewModels: boolean;
   defaultModel?: string;
   defaultProvider?: string;
   selectedModel: Model<any> | null;
@@ -460,6 +462,7 @@ export interface SessionStoreState {
   loadModelsCatalog: () => Promise<void>;
   saveEnabledModels: (keys: string[]) => Promise<void>;
   setProviderDisabled: (provider: string, disabled: boolean) => Promise<void>;
+  setAutoEnableNewModels: (enabled: boolean) => Promise<void>;
   ensureActiveSession: (targetTabId?: string, opts?: { title?: string }) => Promise<string | null>;
   renameWorktreeBranch: (tabId: string, newTitle: string) => Promise<void>;
   addAttachments: (items: AttachedItem[]) => void;
@@ -997,6 +1000,26 @@ async function refreshModels(key: string): Promise<void> {
     const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
     return { models, ...(additions.length ? { allCatalogModels: [...s.allCatalogModels, ...additions] } : {}) };
   });
+  void syncDiscoveredModels(models);
+}
+
+/**
+ * Tell main about the models a live session reports. Ones Hive has never seen before (and that aren't
+ * from an aggregator like openrouter) are auto-added to the enabled list, so new models such as fresh
+ * Gemini releases show up in the picker without being ticked by hand.
+ */
+async function syncDiscoveredModels(models: Array<Model<any>>): Promise<void> {
+  if (!models.length || typeof window.studio.syncDiscoveredModels !== "function") return;
+  try {
+    const keys = models
+      .filter((m) => !isAutoJevModel(m) && (m as { type?: string }).type !== "image")
+      .map((m) => `${m.provider}/${m.id}`);
+    if (!keys.length) return;
+    const res = await window.studio.syncDiscoveredModels(keys);
+    if (res.added.length > 0) useSessionStore.setState({ enabledModelKeys: res.enabledModels });
+  } catch (err) {
+    console.error("Failed to sync discovered models", err);
+  }
 }
 
 const hydratedSessionKeys = new Set<string>();
@@ -1027,6 +1050,7 @@ async function hydrateSession(key: string, tabId: string): Promise<void> {
         const additions = models.filter((m) => !existing.has(`${m.provider}/${m.id}`));
         return { models, ...(additions.length ? { allCatalogModels: [...s.allCatalogModels, ...additions] } : {}) };
       });
+      void syncDiscoveredModels(models);
     }
     if (!stateRes.ok) return;
     const state = stateRes.data as {
@@ -1152,6 +1176,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
   allCatalogModels: [],
   enabledModelKeys: [],
   disabledProviders: [],
+  autoEnableNewModels: true,
   defaultModel: undefined,
   defaultProvider: undefined,
   selectedModel: null,
@@ -1561,6 +1586,7 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
           allCatalogModels: catalogModels,
           enabledModelKeys: enabledKeys,
           disabledProviders: catalog.disabledProviders ?? [],
+          autoEnableNewModels: catalog.autoEnableNewModels ?? true,
           defaultModel: catalog.defaultModel,
           defaultProvider: catalog.defaultProvider,
         });
@@ -1609,6 +1635,17 @@ export const useSessionStore = create<SessionStoreState>((set, get) => ({
     } catch (err) {
       console.error("Failed to save disabled providers", err);
       set({ disabledProviders: previous });
+    }
+  },
+
+  setAutoEnableNewModels: async (enabled: boolean) => {
+    const previous = get().autoEnableNewModels;
+    set({ autoEnableNewModels: enabled });
+    try {
+      await window.studio.saveAutoEnableNewModels(enabled);
+    } catch (err) {
+      console.error("Failed to save auto-enable setting", err);
+      set({ autoEnableNewModels: previous });
     }
   },
 

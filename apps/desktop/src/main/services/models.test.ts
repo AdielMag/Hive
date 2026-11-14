@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ModelsService } from "./models.ts";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -127,5 +127,129 @@ describe("ModelsService", () => {
         rmSync(tmp, { recursive: true, force: true });
       }
     });
+  });
+
+  describe("auto-enabling newly discovered models", () => {
+    const writeStore = (dir: string, byProvider: Record<string, string[]>) =>
+      writeFileSync(
+        join(dir, "models-store.json"),
+        JSON.stringify(
+          Object.fromEntries(Object.entries(byProvider).map(([p, ids]) => [p, { models: ids.map((id) => ({ id, provider: p })) }])),
+        ),
+      );
+    const enabledOnDisk = (dir: string) => JSON.parse(readFileSync(join(dir, "settings.json"), "utf8")).enabledModels;
+
+    const withTmp = (fn: (dir: string) => void) => {
+      const tmp = mkdtempSync(join(tmpdir(), "pi-models-test-"));
+      try {
+        fn(tmp);
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    };
+
+    it("first run only seeds the ledger, then auto-enables models that appear later", () =>
+      withTmp((tmp) => {
+        writeFileSync(join(tmp, "settings.json"), JSON.stringify({ theme: "dark", enabledModels: ["antigravity/gemini-3.8-flash"] }));
+        writeStore(tmp, { antigravity: ["gemini-3.8-flash", "gemini-3.7-flash"] });
+        const service = new ModelsService(tmp);
+        expect(service.getModelsCatalog().enabledModels).toEqual(["antigravity/gemini-3.8-flash"]);
+
+        writeStore(tmp, { antigravity: ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-4-argon"] });
+        const catalog = new ModelsService(tmp).getModelsCatalog();
+        expect(catalog.enabledModels).toEqual(["antigravity/gemini-3.8-flash", "antigravity/gemini-4-argon"]);
+        expect(catalog.autoEnableNewModels).toBe(true);
+        expect(enabledOnDisk(tmp)).toEqual(["antigravity/gemini-3.8-flash", "antigravity/gemini-4-argon"]);
+        expect(JSON.parse(readFileSync(join(tmp, "settings.json"), "utf8")).theme).toBe("dark");
+      }));
+
+    it("never re-enables a model the user unticked", () =>
+      withTmp((tmp) => {
+        writeFileSync(join(tmp, "settings.json"), JSON.stringify({ enabledModels: ["antigravity/a"] }));
+        writeStore(tmp, { antigravity: ["a"] });
+        const service = new ModelsService(tmp);
+        service.getModelsCatalog();
+        writeStore(tmp, { antigravity: ["a", "b"] });
+        expect(service.getModelsCatalog().enabledModels).toEqual(["antigravity/a", "antigravity/b"]);
+        service.saveEnabledModels(["antigravity/a"]);
+        expect(service.getModelsCatalog().enabledModels).toEqual(["antigravity/a"]);
+      }));
+
+    it("skips openrouter, '-disabled' variants, and brand-new providers", () =>
+      withTmp((tmp) => {
+        writeFileSync(join(tmp, "settings.json"), JSON.stringify({ enabledModels: ["antigravity/a"] }));
+        writeStore(tmp, { antigravity: ["a"], openrouter: ["google/x"] });
+        const service = new ModelsService(tmp);
+        service.getModelsCatalog();
+        writeStore(tmp, { antigravity: ["a", "gemini-4-argon-disabled"], openrouter: ["google/x", "google/y"], zai: ["glm-9"] });
+        expect(service.getModelsCatalog().enabledModels).toEqual(["antigravity/a"]);
+        // zai is now known, so its next release is auto-enabled
+        writeStore(tmp, { antigravity: ["a"], zai: ["glm-9", "glm-10"] });
+        expect(service.getModelsCatalog().enabledModels).toEqual(["antigravity/a", "zai/glm-10"]);
+      }));
+
+    it("leaves an empty enabledModels (= show all) empty", () =>
+      withTmp((tmp) => {
+        writeStore(tmp, { antigravity: ["a"] });
+        const service = new ModelsService(tmp);
+        service.getModelsCatalog();
+        writeStore(tmp, { antigravity: ["a", "b"] });
+        expect(service.getModelsCatalog().enabledModels).toEqual([]);
+        expect(existsSync(join(tmp, "settings.json"))).toBe(false);
+      }));
+
+    it("respects the switch, and turning it back on doesn't enable the backlog", () =>
+      withTmp((tmp) => {
+        writeFileSync(join(tmp, "settings.json"), JSON.stringify({ enabledModels: ["antigravity/a"] }));
+        writeStore(tmp, { antigravity: ["a"] });
+        const service = new ModelsService(tmp);
+        service.getModelsCatalog();
+        service.saveAutoEnableNewModels(false);
+        writeStore(tmp, { antigravity: ["a", "b"] });
+        expect(service.getModelsCatalog()).toMatchObject({ enabledModels: ["antigravity/a"], autoEnableNewModels: false });
+        service.saveAutoEnableNewModels(true);
+        expect(service.getModelsCatalog().enabledModels).toEqual(["antigravity/a"]);
+      }));
+
+    it("syncDiscoveredModels enables models a live session reports before the store has them", () =>
+      withTmp((tmp) => {
+        writeFileSync(join(tmp, "settings.json"), JSON.stringify({ enabledModels: ["antigravity/a"] }));
+        writeStore(tmp, { antigravity: ["a"] });
+        const service = new ModelsService(tmp);
+        service.getModelsCatalog();
+        expect(service.syncDiscoveredModels(["antigravity/a", "antigravity/gemini-5-flash"])).toEqual({
+          enabledModels: ["antigravity/a", "antigravity/gemini-5-flash"],
+          added: ["antigravity/gemini-5-flash"],
+        });
+        expect(service.syncDiscoveredModels(["antigravity/gemini-5-flash"]).added).toEqual([]);
+      }));
+
+    it("a live-session sync before the first catalog load seeds from the full store (no later flood)", () =>
+      withTmp((tmp) => {
+        writeFileSync(join(tmp, "settings.json"), JSON.stringify({ enabledModels: ["antigravity/a"] }));
+        writeStore(tmp, { antigravity: ["a", "b", "c"] });
+        const service = new ModelsService(tmp);
+        expect(service.syncDiscoveredModels(["antigravity/a"]).added).toEqual([]);
+        expect(service.getModelsCatalog().enabledModels).toEqual(["antigravity/a"]);
+      }));
+
+    it("an unreadable settings.json doesn't mark new models as seen", () =>
+      withTmp((tmp) => {
+        writeFileSync(join(tmp, "settings.json"), JSON.stringify({ enabledModels: ["antigravity/a"] }));
+        writeStore(tmp, { antigravity: ["a"] });
+        const service = new ModelsService(tmp);
+        service.getModelsCatalog();
+        writeStore(tmp, { antigravity: ["a", "b"] });
+        writeFileSync(join(tmp, "settings.json"), "{half-written");
+        expect(service.getModelsCatalog().enabledModels).toEqual([]);
+        writeFileSync(join(tmp, "settings.json"), JSON.stringify({ enabledModels: ["antigravity/a"] }));
+        expect(service.getModelsCatalog().enabledModels).toEqual(["antigravity/a", "antigravity/b"]);
+      }));
+
+    it("does not seed the ledger from hard-coded fallback models", () =>
+      withTmp((tmp) => {
+        new ModelsService(tmp).getModelsCatalog();
+        expect(existsSync(join(tmp, "hive-seen-models.json"))).toBe(false);
+      }));
   });
 });

@@ -31,6 +31,27 @@ function formatContext(tokens?: number): string {
   return `${tokens} ctx`;
 }
 
+/** Settings switch: newly discovered models (e.g. new Gemini releases) show up in pickers without ticking them. */
+const AutoEnableNewModelsToggle: React.FC = () => {
+  const enabled = useSessionStore((s) => s.autoEnableNewModels);
+  const setEnabled = useSessionStore((s) => s.setAutoEnableNewModels);
+  return (
+    <label
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, cursor: "pointer", color: "var(--text-secondary)" }}
+      title="When a provider releases a new model, add it to the enabled list automatically. OpenRouter is excluded (too many models)."
+    >
+      <input
+        type="checkbox"
+        checked={enabled}
+        aria-label="Auto-enable new models"
+        onChange={(e) => void setEnabled(e.target.checked)}
+        style={{ accentColor: "var(--accent-base)", cursor: "pointer", margin: 0 }}
+      />
+      <span>Auto-enable newly released models (except OpenRouter)</span>
+    </label>
+  );
+};
+
 export const ModelsSettingsContent: React.FC = () => {
   const aiFeatures = useContributions("aiFeatures");
   const hasGitCommit = aiFeatures.some((f) => f.id === "gitCommit");
@@ -632,6 +653,8 @@ export const ModelsSettingsContent: React.FC = () => {
             </button>
           </div>
         </div>
+
+        <AutoEnableNewModelsToggle />
 
         {/* Provider Chips */}
         {providers.length > 1 && (
