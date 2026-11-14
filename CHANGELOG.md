@@ -2,6 +2,19 @@
 
 All notable changes to Hive are documented here. This file is generated on every merge to `main`.
 
+## v0.48.0 — 2026-11-14 · [diff](https://github.com/AdielMag/Hive/compare/v0.47.0...v0.48.0)
+
+### ✨ Features
+
+- **models:** auto-enable newly discovered models ([`18e6913`](https://github.com/AdielMag/Hive/commit/18e691354f37d3270445dd78afabe22bea6f5bc3))
+- **jev:** allow custom router model and prompt overrides ([`46bde1a`](https://github.com/AdielMag/Hive/commit/46bde1a69ca5ec1dd852e3a11b8ed7c2babc41a1))
+- **jev:** make Auto (Jev) model routing configurable ([`58b60fd`](https://github.com/AdielMag/Hive/commit/58b60fd177d76568057470edd40eb40a9672fe08))
+
+### 🧹 Other changes
+
+- Merge branch 'main' of https://github.com/AdielMag/Hive ([`86dda31`](https://github.com/AdielMag/Hive/commit/86dda3109b405390fe0495135dc81767f6827f1a))
+- Merge branch 'hive/add-new-gmini-models-into-hive-list-f01ac6' ([`0692a6a`](https://github.com/AdielMag/Hive/commit/0692a6a3c73ac5b162c371ec7656becbfad5ee3c))
+
 ## v0.47.0 — 2026-11-09 · [diff](https://github.com/AdielMag/Hive/compare/v0.46.0...v0.47.0)
 
 ### ✨ Features
